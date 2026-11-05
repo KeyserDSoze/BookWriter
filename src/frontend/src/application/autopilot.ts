@@ -556,6 +556,8 @@ export async function requestRevision(bookId: string, instruction: string): Prom
   if (!book) throw new Error("Libro non trovato.");
   if (!instruction.trim()) throw new Error("Scrivi la modifica che desideri.");
   if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
+  if (book.editorialCycle)
+    throw new Error("La redazione del capitolo è attiva o bloccata. Completa il ciclo o usa la riapertura nel pannello Redazione.");
   if (book.editorialReviewSceneIds?.length)
     throw new Error("Conferma le scene fuse nel Lettore prima di richiedere altre revisioni AI.");
   book.authorConstraints = [...(book.authorConstraints ?? []), instruction.trim()];
