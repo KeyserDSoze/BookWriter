@@ -301,6 +301,8 @@ export async function pushGitHubBook(
   const token = await tokenFromVault();
   const current = await getBook(bookId);
   if (!current?.remote) throw new Error("Collega prima una repository a questo libro.");
+  if (current.editorialReviewSceneIds?.length)
+    throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
   if (current.status === "running" && !options.automatic)
     throw new Error("Metti in pausa l'autopilot prima della sincronizzazione GitHub.");
   if (options.automatic && !current.remote.autoSync)
@@ -395,6 +397,10 @@ export async function pushGitHubBook(
   // Check the HEAD immediately before producing new Git objects.
   if (await headSha(token, remote) !== head)
     throw new RemoteConflict("GitHub è cambiato durante la preparazione; ripeti la verifica.");
+  const verifiedLocal = await getBook(bookId);
+  if (!verifiedLocal || verifiedLocal.updatedAt !== current.updatedAt ||
+      verifiedLocal.editorialReviewSceneIds?.length)
+    throw new RemoteConflict("Il libro locale è cambiato o attende conferma editoriale: push annullato.");
   const tree = await request<{ sha?: string }>(
     token, apiPath(remote, "/git/trees"),
     { method: "POST", body: { base_tree: baseTree, tree: treeEntries } },
