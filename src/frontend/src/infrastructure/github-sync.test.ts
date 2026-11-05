@@ -124,6 +124,7 @@ describe("GitHub sync conservativa", () => {
   it("riconosce un commit remoto già riuscito quando il browser ha perso la risposta", async () => {
     const book = await sampleBook();
     book.remote!.lastSyncedCommit = BEFORE;
+    book.remote!.autoSync = true;
     await saveBook(book);
     const operationId = crypto.randomUUID();
     const remoteRevision = "2026-11-05T13:00:00.123Z";
