@@ -100,7 +100,7 @@ describe("Dossier storico verificabile nel processo editoriale",()=>{
     const b=sample(),cycle=createEditorialCycle("c1"),seg=chapterSegments(b.chapters[0]!)[0]!;
     const undecided={
       claim:"Un personaggio usa un mezzo non documentato nell'anno della storia.",
-      assessment:"unverified",sourceIds:[],
+      assessment:"unverified" as const,sourceIds:[],
     };
     expect(validateReport(cycle,"historical",seg,1,finding(undecided),b.chapters[0]!).findings).toHaveLength(1);
     expect(()=>validateHistoricalClaim({...undecided,sourceIds:["itwiki:42:210"]},
