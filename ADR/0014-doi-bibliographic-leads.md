@@ -1,6 +1,6 @@
 # ADR 0014 — Bibliografia DOI per capitolo: metadati Crossref separati dalle prove storiche
 
-- **Stato:** Accettato per v0.9.1 (PR #25, CI da completare)
+- **Stato:** Implementato e integrato in main (v0.9.1, PR #25 merged, CI desktop/mobile verde)
 - **Data:** 2026-11-05
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **PR:** [#25](https://github.com/KeyserDSoze/BookWriter/pull/25)
