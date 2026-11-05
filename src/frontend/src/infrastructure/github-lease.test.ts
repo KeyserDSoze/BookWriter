@@ -37,7 +37,7 @@ function githubServer() {
     if (method === "GET" && path === "/git/ref/heads/main")
       return jsonResponse({ object: { sha: MAIN } });
     if (method === "GET" && path.startsWith(refPath)) {
-      const found = lockRefs.get(path.slice(refPath.length));
+      const found = lockRefs.get("bookwriter-lock/" + path.slice(refPath.length));
       return found ? jsonResponse({ object: { sha: found } }) : jsonResponse({ message: "Not Found" }, 404);
     }
     if (method === "GET" && path.startsWith("/git/commits/")) {
