@@ -1,6 +1,7 @@
 import { openDB, type IDBPDatabase } from "idb";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import { DEFAULT_SETTINGS } from "../domain/types";
+import { enqueueCheckpoint } from "./outbox";
 
 const DB_NAME = "bookwriter";
 const DB_VERSION = 1;
@@ -39,10 +40,13 @@ export async function getBook(id: string): Promise<BookProject | undefined> {
   return (await db.get("books", id)) as BookProject | undefined;
 }
 
-export async function saveBook(book: BookProject): Promise<void> {
+export async function saveBook(book: BookProject, queueSync = true): Promise<void> {
   book.updatedAt = new Date().toISOString();
   const db = await getDb();
-  await db.put("books", book, book.id);
+  const tx = db.transaction(["books", "outbox"], "readwrite");
+  await tx.objectStore("books").put(book, book.id);
+  if (queueSync) await enqueueCheckpoint(book, tx.objectStore("outbox"));
+  await tx.done;
 }
 
 export async function saveActivity(activity: Activity): Promise<void> {
@@ -53,11 +57,15 @@ export async function saveActivity(activity: Activity): Promise<void> {
 export async function saveBookAndActivity(book: BookProject, activity: Activity): Promise<void> {
   const db = await getDb();
   book.updatedAt = new Date().toISOString();
-  const tx = db.transaction(["books", "activities"], "readwrite");
-  await Promise.all([
-    tx.objectStore("books").put(book, book.id),
-    tx.objectStore("activities").put(activity, activity.id),
-  ]);
+  const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
+  await tx.objectStore("books").put(book, book.id);
+  await tx.objectStore("activities").put(activity, activity.id);
+  // Keep a durable sync request in the same transaction as the narrative result.
+  // Do not create a GitHub commit for every intermediate AI planning operation.
+  if (activity.status === "succeeded" &&
+      ["outline", "review", "consolidate", "revision"].includes(activity.phase)) {
+    await enqueueCheckpoint(book, tx.objectStore("outbox"));
+  }
   await tx.done;
 }
 
