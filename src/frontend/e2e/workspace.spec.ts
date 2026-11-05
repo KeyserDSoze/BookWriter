@@ -49,7 +49,7 @@ test("ZIP di contenuto esportabile e reimportabile senza sovrascrivere", async (
     });
     console.log("Mobile bottom-nav metrics after book creation:", JSON.stringify(metrics));
   }
-  await page.getByRole("button", { name: "Archivio" }).click();
+  await page.getByRole("button", { name: "Archivio", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Backup ZIP", exact: true })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Scarica backup ZIP" }).click();
