@@ -333,6 +333,7 @@ function nextWork(book: BookProject): Work | null {
             current.summaryCursor = (current.summaryCursor ?? 0) + 1;
             if (current.summaryCursor >= segments.length) {
               ch.summary = data.chapterSummary;
+              ch.bookSummaryAtFreeze = data.bookSummary;
               b.bookSummary = data.bookSummary;
               ch.frozenAt = new Date().toISOString();
               ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, {
@@ -372,11 +373,15 @@ function nextWork(book: BookProject): Work | null {
                 if (chapter.number >= earliestChapter.number) {
                   chapter.frozenAt = undefined;
                   chapter.summary = undefined;
+                  chapter.bookSummaryAtFreeze = undefined;
                 }
               }
               b.editorialCycle = undefined;
-              b.bookSummary = b.chapters.filter(ch => ch.frozenAt)
-                .map(ch => ch.summary ?? "").join("\n").slice(-8000);
+              const earlier = b.chapters.filter(ch => ch.frozenAt)
+                .sort((a, z) => a.number - z.number);
+              const old = earlier.map(ch => ch.summary ?? "").join("\n");
+              b.bookSummary = earlier.at(-1)?.bookSummaryAtFreeze ??
+                (old.length <= 8000 ? old : undefined);
             }
             request.impactAnalysis = impact.rationale;
             request.cursor = 0;
