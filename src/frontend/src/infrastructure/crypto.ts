@@ -30,9 +30,9 @@ export async function encryptLocal(plaintext: string): Promise<EncryptedSecret> 
 
 export async function decryptLocal(value: EncryptedSecret): Promise<string> {
   const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: unbase64(value.iv) },
+    { name: "AES-GCM", iv: Uint8Array.from(unbase64(value.iv)) },
     await deviceKey(),
-    unbase64(value.data),
+    Uint8Array.from(unbase64(value.data)),
   );
   return new TextDecoder().decode(decrypted);
 }
