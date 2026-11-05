@@ -32,6 +32,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 - Export EPUB, DOCX, PDF delle scene canoniche, senza servizi esterni.
 - **PR #8**: sincronizzazione GitHub manuale, PAT cifrato, proiezione Markdown Narrarium, commit multi-file, import sicuro.
 - **PR #9**: autosync opt-in a checkpoint con outbox transazionale, Web Locks tra tab, retry/backoff e recovery dei commit senza risposta.
+- **PR #12**: GitHub writer lease per libri collegati, acquisizione prima dell'AI, heartbeat, verifiche pre/post generazione, recupero manuale di lock scaduti. Consulta ADR 0007.
 
 ## Come provare GitHub
 
