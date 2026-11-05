@@ -80,7 +80,9 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
   await expect.poll(() => commits).toBe(1);
   const toggle = page.getByRole("checkbox", { name: /Sincronizzazione automatica ai checkpoint/ });
-  await toggle.check();
+  // Enabling performs async permission checks; do not require the controlled input
+  // to be checked synchronously before the state commit has completed.
+  await toggle.click();
   await expect(toggle).toBeChecked();
   await expect.poll(() => commits, { timeout: 25_000 }).toBe(2);
   await expect(page.getByText(/Nessuna modifica in attesa/)).toBeVisible({ timeout: 15_000 });
