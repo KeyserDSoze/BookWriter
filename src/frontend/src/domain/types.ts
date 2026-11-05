@@ -61,6 +61,7 @@ export interface BookProject {
   brief: string;
   writingStyle: string;
   audience: string;
+  authorConstraints: string[];
   createdAt: string;
   updatedAt: string;
   status: RunStatus;
@@ -109,7 +110,7 @@ export function newBook(brief: string, title: string, writingStyle: string, audi
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(), title: title.trim() || "Nuovo libro", brief,
-    writingStyle, audience, createdAt: now, updatedAt: now,
+    writingStyle, audience, authorConstraints: [], createdAt: now, updatedAt: now,
     status: "idle", phase: "brainstorm", audienceReviews: [],
     chapters: [], memory: structuredClone(EMPTY_MEMORY),
   };
