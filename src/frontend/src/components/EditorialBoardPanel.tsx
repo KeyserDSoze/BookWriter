@@ -52,7 +52,7 @@ function RoundDetails({ round, reports, judgment, sources = [] }: {
                           rel="noopener noreferrer" target="_blank">{source.title}</a>
                         {" "}(revisione {source.revisionId ?? "non nota"})</p>
                       {evidence && <p className="mt-1 whitespace-pre-wrap"><b>Citazione associata:</b> “{evidence.quote}”</p>}
-                      {!evidence && f.historical?.sourceIds.length > 1 &&
+                      {!evidence && (f.historical?.sourceIds.length ?? 0) > 1 &&
                         <p className="text-amber-700 dark:text-amber-300">
                           Report precedente privo di citazione individuale: non considerare questa fonte corroborante.
                         </p>}
