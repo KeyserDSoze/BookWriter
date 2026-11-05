@@ -10,7 +10,8 @@ Questa funzione è accessibile in **Archivio → Confronto e recupero delle vers
 4. Nell'editor **Bozza modificabile**, scrivi la tua fusione o adatta il testo locale, poi premi **Salva nuova bozza manuale**. La bozza viene conservata in IndexedDB con la revisione locale e il commit GitHub esaminati.
 5. Seleziona una bozza dallo **Storico bozze locali**, rileggila e premi **Usa questa proposta per la scena**. La selezione è reversibile e non modifica ancora il libro.
 6. Premi **Applica scelte con doppio backup**, conferma e controlla nella sezione **Libro** che la scena risulti **draft**, non canon.
-7. Rivedi continuità, personaggi, cronologia e segreti; usa le normali revisioni editoriali prima di riprendere l'autopilot. Dopo il recupero l'autosync è **disattivato**: rileggi il libro, esegui un push manuale e poi, se desideri, riattivalo.
+7. L'autopilot, le revisioni AI e la sincronizzazione GitHub sono **bloccati** finché non confermi ogni scena fusa. Nel **Lettore**, rileggi interamente la prosa e premi **Conferma scena come canonica**. L'app chiede una seconda conferma e aggiunge un audit. Ripeti su tutte le scene in sospeso.
+8. Controlla continuità, personaggi, cronologia e segreti prima di riprendere l'autopilot. Dopo il recupero l'autosync è **disattivato**: effettua un push manuale solo dopo la rilettura, e poi, se desideri, riattivalo.
 
 ## Proposta AI facoltativa
 
@@ -28,7 +29,7 @@ La risposta viene salvata come **bozza** e rimane modificabile. Puoi scegliere t
 - `rejected`: bozza esplicitamente rifiutata; la scena principale non cambia.
 - `accepted`: bozza applicata soltanto dopo approvazione e recupero con doppio backup. Il testo della scena resta in stato **draft**.
 - Il registro attività conserva il modello, l'endpoint e i token di input/output **solo se restituiti dal provider**. Non viene inventato il costo in euro.
-- L'approvazione crea due copie complete in IndexedDB (originale locale e originale GitHub), conserva l'ultima versione editoriale scelta, invalida i riassunti obsoleti e disattiva autosync.
+- L'approvazione crea due copie complete in IndexedDB (originale locale e originale GitHub), conserva l'ultima versione editoriale scelta, invalida i riassunti obsoleti e disattiva autosync. Autopilot e push GitHub rimangono bloccati finché l'autore non conferma ogni scena nel Lettore.
 - I testi degli originali e le proposte restano visibili nello storico delle bozze del browser. Lo **ZIP di soli contenuti** include lo storico; quando lo importi su un altro dispositivo le vecchie bozze non vengono riconosciute automaticamente come approvate.
 
 ## Privacy e sicurezza
