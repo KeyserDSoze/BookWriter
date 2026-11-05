@@ -120,6 +120,60 @@ describe("GitHub sync conservativa", () => {
     expect(fake).toHaveBeenCalled();
   });
 
+
+  it("riconosce un commit remoto già riuscito quando il browser ha perso la risposta", async () => {
+    const book = await sampleBook();
+    book.remote!.lastSyncedCommit = BEFORE;
+    await saveBook(book);
+    const operationId = crypto.randomUUID();
+    const remoteRevision = "2026-11-05T13:00:00.123Z";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, request?: RequestInit) => {
+      const path = new URL(String(url)).pathname;
+      calls.push((request?.method ?? "GET") + " " + path);
+      if (path === "/repos/test-owner/book-repo")
+        return reply({ private: true, permissions: { push: true } });
+      if (path.endsWith("/git/ref/heads/main"))
+        return reply({ object: { sha: NEXT } });
+      if (path.endsWith("/git/commits/" + NEXT))
+        return reply({ message: "bookwriter: sync " + operationId });
+      if (path.endsWith("/contents/.bookwriter/sync.json"))
+        return reply({ type: "file", encoding: "base64", content: btoa(JSON.stringify({
+          operationId, sourceRevision: remoteRevision, bookId: book.id,
+        })) });
+      return reply({ message: "Unexpected URL" }, 500);
+    }));
+    const result = await pushGitHubBook(book.id, false, {
+      automatic: true, operationId,
+    });
+    expect(result.recovered).toBe(true);
+    expect(result.sourceRevision).toBe(remoteRevision);
+    expect(result.commit).toBe(NEXT);
+    expect(calls.some(call => call.startsWith("POST") || call.startsWith("PATCH"))).toBe(false);
+    expect((await getBook(book.id))?.remote?.lastSyncedCommit).toBe(NEXT);
+  });
+
+  it("non scambia un commit estraneo per un ACK automatico e non forza il branch", async () => {
+    const book = await sampleBook();
+    book.remote!.lastSyncedCommit = BEFORE;
+    await saveBook(book);
+    const operationId = crypto.randomUUID();
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, request?: RequestInit) => {
+      const path = new URL(String(url)).pathname;
+      calls.push((request?.method ?? "GET") + " " + path);
+      if (path === "/repos/test-owner/book-repo")
+        return reply({ private: true, permissions: { push: true } });
+      if (path.endsWith("/git/ref/heads/main")) return reply({ object: { sha: NEXT } });
+      if (path.endsWith("/git/commits/" + NEXT))
+        return reply({ message: "bookwriter: sync " + crypto.randomUUID() });
+      return reply({ message: "Unexpected URL" }, 500);
+    }));
+    await expect(pushGitHubBook(book.id, false, { automatic: true, operationId }))
+      .rejects.toBeInstanceOf(RemoteConflict);
+    expect(calls.some(call => call.startsWith("POST") || call.startsWith("PATCH"))).toBe(false);
+  });
+
   it("rifiuta path GitHub costruiti con branch o nome ostile", () => {
     expect(() => validateRemote({ owner: "a", repository: "../other", branch: "main" })).toThrow();
     expect(() => validateRemote({ owner: "a", repository: "repo", branch: "../../main" })).toThrow();
