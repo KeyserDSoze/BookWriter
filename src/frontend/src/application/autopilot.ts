@@ -5,6 +5,7 @@ import { getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } fr
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
 import { acceptedRepairs, adjudicationPrompt, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { synopsisBeforeChapter } from "../domain/editorial-summary";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -377,11 +378,7 @@ function nextWork(book: BookProject): Work | null {
                 }
               }
               b.editorialCycle = undefined;
-              const earlier = b.chapters.filter(ch => ch.frozenAt)
-                .sort((a, z) => a.number - z.number);
-              const old = earlier.map(ch => ch.summary ?? "").join("\n");
-              b.bookSummary = earlier.at(-1)?.bookSummaryAtFreeze ??
-                (old.length <= 8000 ? old : undefined);
+              b.bookSummary = synopsisBeforeChapter(b.chapters, earliestChapter.number);
             }
             request.impactAnalysis = impact.rationale;
             request.cursor = 0;
