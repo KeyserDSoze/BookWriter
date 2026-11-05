@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { AutopilotRunner, requestRevision } from "./application/autopilot";
+import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind } from "./domain/types";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { fetchModels, normalizeEndpoint } from "./infrastructure/ai";
@@ -143,6 +144,21 @@ export default function App() {
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Feedback non applicabile."); }
   }
+  async function approveEditorialScene(sceneId: string) {
+    if (!current) return;
+    if (!window.confirm(
+      "Hai riletto la scena fusa e verificato indizi, segreti, continuità e stile? " +
+      "Confermando diventerà canonica nel browser, ma NON sarà pubblicata automaticamente su GitHub.",
+    )) return;
+    try {
+      await confirmEditorialScene(current.id, sceneId, current.updatedAt);
+      await refresh();
+      setNotice("Scena canonizzata dopo conferma dell'autore. Verifica la continuità prima del push manuale.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Conferma scena non riuscita.");
+    }
+  }
+
   async function persistSettings(next: AppSettings) {
     await saveSettings(next); setSettings(next); setNotice("Impostazioni salvate in IndexedDB.");
   }
@@ -280,8 +296,9 @@ export default function App() {
         </div>
         <div className="flex gap-2">
           {current.status === "running" ? <Button onClick={pause} variant="secondary"><Pause size={17} /> Pausa</Button>
-            : current.status !== "completed" || current.revision ? <Button onClick={() => void execute()}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
+            : current.status !== "completed" || current.revision ? <Button disabled={(current.editorialReviewSceneIds?.length ?? 0) > 0} onClick={() => void execute()}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
           <Button variant="outline" onClick={() => setPage("activities")}><ListChecks size={17} /> Log</Button>
+          {(current.editorialReviewSceneIds?.length ?? 0) > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({current.editorialReviewSceneIds?.length})</Button>}
         </div>
       </div>}
 
@@ -386,6 +403,13 @@ export default function App() {
             {ch.scenes.map(s => <section key={s.id} className="mb-6">
               <h4 className="mb-2 font-semibold">{s.number}. {s.title} <span className="muted text-xs">({s.status})</span></h4>
               {s.text ? <p className="whitespace-pre-wrap break-words text-[1rem] leading-8">{s.text}</p> : <p className="muted text-sm">Scena non ancora scritta.</p>}
+              {current.editorialReviewSceneIds?.includes(s.id) && <div className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3">
+                <p className="text-sm">Questa scena fusa richiede la tua rilettura e conferma prima di riprendere l'autopilot.</p>
+                <Button variant="outline" disabled={busy || current.status === "running"}
+                  onClick={() => void approveEditorialScene(s.id)}>
+                  <CheckCircle2 size={16}/> Conferma scena come canonica
+                </Button>
+              </div>}
             </section>)}
           </article>)}
       </Section>}
