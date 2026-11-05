@@ -17,6 +17,7 @@ import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
 import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
+import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
@@ -334,7 +335,7 @@ export default function App() {
           {current?.ideas && <Section title="Idee long / mid / short term"><div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6">{current.ideas}</div></Section>}
           {current?.previousError && <Section title="Attenzione">
             <p className="flex items-start gap-2 text-sm text-red-600 dark:text-red-300"><AlertTriangle size={18} className="shrink-0" /> {current.previousError}</p>
-            <p className="muted mt-2 text-xs">Il flusso è fermo. Correggi l'endpoint, la chiave o il modello e premi Riprendi.</p>
+            <p className="muted mt-2 text-xs">Il flusso è fermo. Controlla il registro e la Redazione multi-agente: potrebbero essere necessari interventi, crediti AI o una nuova tornata.</p>
           </Section>}
         </div>
         <div className="space-y-4">
@@ -349,6 +350,7 @@ export default function App() {
               <Button variant="outline" onClick={() => setPage("activities")}>Apri registro attività</Button>
             </div> : <Empty>Nessuna operazione registrata.</Empty>}
           </Section>
+          {current && <EditorialBoardPanel book={current} onRefresh={refresh}/>}
           {current && <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>}
           <Section title="Memoria narrativa">
             <div className="grid grid-cols-2 gap-2 text-sm">
