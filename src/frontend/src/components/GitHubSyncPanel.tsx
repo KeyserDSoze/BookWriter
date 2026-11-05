@@ -7,6 +7,10 @@ import { getBook, saveBook } from "../infrastructure/db";
 import { acknowledgeOutbox, getOutbox, retryBlockedSync } from "../infrastructure/outbox";
 import { drainGitHubOutbox } from "../application/auto-sync";
 import {
+  inspectWriterLease, isLeaseRecoverable, recoverExpiredWriterLease,
+  type WriterLeaseStatus,
+} from "../infrastructure/github-lease";
+import {
   importGitHubBook, inspectRepository, pushGitHubBook, validateRemote,
   type RepoInfo,
 } from "../infrastructure/github-sync";
@@ -41,6 +45,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [outbox, setOutbox] = useState<SyncOutboxItem | undefined>();
+  const [writerLease, setWriterLease] = useState<WriterLeaseStatus | null>(null);
+  const [leaseCheckError, setLeaseCheckError] = useState("");
 
   useEffect(() => {
     setOwner(book?.remote?.owner ?? "");
@@ -60,6 +66,38 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     const timer = setInterval(refresh, 4000);
     return () => { active = false; clearInterval(timer); };
   }, [book?.id, book?.updatedAt, book?.remote?.lastSyncedCommit]);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkLease = () => {
+      if (!book?.remote || !settings.githubToken) {
+        if (mounted) { setWriterLease(null); setLeaseCheckError(""); }
+        return;
+      }
+      void inspectWriterLease(book.remote, book.id).then(value => {
+        if (mounted) { setWriterLease(value); setLeaseCheckError(""); }
+      }).catch(() => {
+        if (mounted) setLeaseCheckError("Impossibile verificare il lock GitHub; non presumere che il libro sia libero.");
+      });
+    };
+    checkLease();
+    const timer = setInterval(checkLease, 20_000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, [book?.id, book?.remote?.branch, book?.remote?.repository, book?.remote?.owner, settings.githubToken]);
+
+  async function recoverWriter() {
+    return doWork(async () => {
+      if (!book?.remote) throw new Error("Collega prima una repository GitHub.");
+      if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
+      if (!writerLease || !isLeaseRecoverable(writerLease))
+        throw new Error("Il lease non è ancora scaduto con il margine di sicurezza.");
+      if (!window.confirm("Recuperare la scrittura su questo libro? Un altro dispositivo potrebbe avere la pagina sospesa. Il suo autopilot si arresterà quando ritrova la connessione. Procedere?"))
+        return "Recupero annullato.";
+      await recoverExpiredWriterLease(book.remote, book.id);
+      setWriterLease(await inspectWriterLease(book.remote, book.id));
+      return "Lease remoto recuperato e rilasciato. Ora puoi avviare l'autopilot da questo dispositivo.";
+    });
+  }
 
   function remote(): GitHubRemote {
     return validateRemote({ owner, repository, branch });
@@ -242,6 +280,22 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         <p className="muted">Stato: {dirty ? "Modifiche locali da sincronizzare" : "Checkpoint locale sincronizzato"}</p>
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
+        <p className="font-semibold">Scrittura protetta tra dispositivi</p>
+        {!leaseCheckError && !writerLease && <p className="muted mt-2">Nessun lock remoto attivo. L'autopilot ne acquisisce uno prima di chiamare i modelli AI.</p>}
+        {writerLease && <div className="mt-2 space-y-1">
+          <p><b>Lease:</b> {writerLease.state === "released" ? "Rilasciato" :
+            isLeaseRecoverable(writerLease) ? "Scaduto: recupero manuale possibile" :
+            Date.parse(writerLease.expiresAt) <= Date.now() ? "Scaduto, in attesa del margine di sicurezza" : "Scrittura in uso"}</p>
+          <p className="muted text-xs">Sessione: {writerLease.sessionId.slice(0, 8)} · Scadenza: {new Date(writerLease.expiresAt).toLocaleString("it-IT")}</p>
+          {isLeaseRecoverable(writerLease) &&
+            <Button variant="outline" size="sm" disabled={busy || book?.status === "running"} onClick={() => void recoverWriter()}>
+              Recupera lease scaduto
+            </Button>}
+        </div>}
+        {leaseCheckError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">{leaseCheckError}</p>}
+        <p className="muted mt-2 text-xs">Ogni attività AI richiede un lease GitHub valido per i libri collegati. Il lock viene rinnovato finché la pagina scrive, e liberato al termine. In assenza di rete l'autopilot si arresta.</p>
+      </div>}
+      {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <label className="flex items-center gap-3">
           <input type="checkbox" className="size-5 accent-emerald-600"
             checked={!!connected.autoSync} disabled={busy}
@@ -268,7 +322,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       </div>
       {message && <p role="status" className="rounded-lg border border-amber-500/40 p-3 text-sm">{message}</p>}
       <p className="muted text-xs">
-        Il salvataggio automatico usa una coda persistente e Web Locks tra schede dello stesso browser. Su dispositivi diversi usa soltanto il controllo SHA: non avviare due autopilot per lo stesso libro. Lease multi-dispositivo e risoluzione dei conflitti restano in sviluppo.
+        Il salvataggio automatico usa una coda persistente e Web Locks tra schede dello stesso browser. I modelli AI sono protetti da un lease GitHub con heartbeat. La risoluzione automatica di capitoli divergenti resta disabilitata. Lease multi-dispositivo e risoluzione dei conflitti restano in sviluppo.
       </p>
     </div>
   </section>;

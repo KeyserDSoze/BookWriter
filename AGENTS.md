@@ -72,6 +72,17 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## Writer lease v0.5.0 — invarianti
+
+- Per un libro con `remote`, l'AI può partire solo dopo acquisizione del lease nel ramo `bookwriter-lock/<bookId>` (ADR 0007). Non avviare `callModel` se GitHub è irraggiungibile, manca il PAT o il lock è in mano a un altro writer.
+- La branch di lease è separata dal canon e contiene solo ID sessione/libro e date, mai credenziali, prosa o metadati personali.
+- La sequenza Git **deve** usare commit discendenti e aggiornamenti `force:false`; vietato cancellare o forzare la branch per recuperare un lock.
+- Ownership GitHub verificata prima e dopo l'AI e prima di salvare i risultati; heartbeat periodico e arresto quando rete/ownership sono incerti. Un token AI già consumato non è recuperabile.
+- L'altro dispositivo non può subentrare automaticamente a un lock attivo; recupero solo esplicito dopo scadenza + grace. Release best effort in `finally`.
+- Le tab dello stesso browser sono coordinate anche da Web Locks. Se assenti e libro collegato, non avviare AI senza protezione.
+- Non confondere il lease **AI** con il merge di modifiche manuali: conflitti su canon Git e checkout locali vanno ancora gestiti esplicitamente.
+- Testare corsa fra due sessioni, perdita lock a metà risposta, rilascio, recovery e assenza di PAT nel payload.
+
 ## Autosync v0.4.0 — regole obbligatorie
 
 - L'outbox è **durabile e transazionale** con lo stato narrativo: `saveBookAndActivity` accoda solo fasi canoniche significative; ogni libro ha un operationId stabile fino all'ACK.

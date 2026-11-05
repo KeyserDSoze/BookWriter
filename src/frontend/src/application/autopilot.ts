@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import { callModel } from "../infrastructure/ai";
 import { getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
+import { withWriterGuard } from "./writer-guard";
+import { RemoteWriterLost } from "../infrastructure/github-lease";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -248,17 +250,23 @@ export class AutopilotRunner {
   async run(bookId: string, onUpdate: () => Promise<void>): Promise<void> {
     if (this.active) return;
     this.active = true;
-    this.abort = new AbortController();
-    const signal = this.abort.signal;
+    const controller = new AbortController();
+    this.abort = controller;
+    const signal = controller.signal;
     const runId = crypto.randomUUID();
+    let sessionStarted = false;
     try {
+      await withWriterGuard(bookId, runId, controller, async guard => {
       const initial = await getBook(bookId);
       if (!initial) throw new Error("Libro non trovato.");
       initial.status = "running"; initial.previousError = undefined;
+      await guard.assertActive();
       await saveBook(initial, false); // A run start is not a narrative checkpoint.
+      sessionStarted = true;
       await onUpdate();
 
       while (!signal.aborted) {
+        await guard.assertActive();
         const book = await getBook(bookId);
         if (!book || book.status !== "running") break;
         const work = nextWork(book);
@@ -279,8 +287,9 @@ export class AutopilotRunner {
         await saveActivity(started);
         await onUpdate();
         try {
+          await guard.assertActive(); // Do not charge credits without verified ownership.
           const result = await callModel(work.kind, "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.", work.prompt, settings, book, signal);
-          if (signal.aborted) throw new DOMException("Interrotto", "AbortError");
+          await guard.assertActive(); // Discard result if the lease was lost during the AI call.
           const latest = await getBook(bookId);
           if (!latest || latest.status !== "running" || latest.phase !== work.phase)
             throw new DOMException("La sessione è cambiata.", "AbortError");
@@ -289,13 +298,17 @@ export class AutopilotRunner {
           started.endpointId = result.endpointId; started.modelId = result.modelId;
           started.inputTokens = result.inputTokens; started.outputTokens = result.outputTokens;
           started.summary = shortSummary(result.text); started.output = result.text;
-          // Output e avanzamento vengono scritti nella stessa transazione.
+          // One more fencing check before canonizing output in IndexedDB.
+          await guard.assertActive();
           await saveBookAndActivity(latest, started);
           await onUpdate();
         } catch (error) {
-          const aborted = signal.aborted || error instanceof DOMException && error.name === "AbortError";
+          const leaseFailure = guard.failure();
+          const aborted = !leaseFailure && (signal.aborted || error instanceof DOMException && error.name === "AbortError");
           started.status = aborted ? "cancelled" : "failed";
-          started.error = aborted ? "Attività interrotta; nessun output canonizzato." : error instanceof Error ? error.message : "Errore sconosciuto.";
+          started.error = leaseFailure?.message ?? (aborted
+            ? "Attività interrotta; nessun output canonizzato."
+            : error instanceof Error ? error.message : "Errore sconosciuto.");
           started.endedAt = new Date().toISOString();
           const latest = await getBook(bookId);
           if (latest) {
@@ -307,6 +320,31 @@ export class AutopilotRunner {
           break;
         }
       }
+      }); // release the GitHub writer lease and the browser Web Lock
+    } catch (error) {
+      // Acquisition errors happen before any task is started and must not change
+      // another tab's running status. Once started, preserve a readable error.
+      const message = (error instanceof Error ? error.message : "Lock remoto non disponibile.")
+        .replace(/github_pat_[A-Za-z0-9_-]+/g, "[PAT redatto]")
+        .replace(/sk-[A-Za-z0-9_-]+/g, "[chiave redatta]");
+      const current = await getBook(bookId);
+      if (sessionStarted && current?.status === "running") {
+        current.status = signal.aborted && !(error instanceof RemoteWriterLost) ? "paused" : "error";
+        current.previousError = message;
+        await saveBook(current, false);
+      }
+      if (current) {
+        const now = new Date().toISOString();
+        await saveActivity({
+          id: crypto.randomUUID(), bookId, runId, phase: current.phase,
+          title: "Verifica scrittura esclusiva",
+          reason: "Controllo di concorrenza locale e lease remoto prima della generazione AI.",
+          nextStep: "Verifica lo stato del lock in Archivio prima di riprendere.",
+          status: signal.aborted && !(error instanceof RemoteWriterLost) ? "cancelled" : "failed",
+          error: message, createdAt: now, endedAt: now,
+        });
+      }
+      throw error;
     } finally {
       this.active = false;
       this.abort = undefined;
