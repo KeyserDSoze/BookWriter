@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newBook } from "../domain/types";
 import { getBook, getDb, listActivities, saveBook } from "../infrastructure/db";
 import { confirmEditorialScene } from "./editorial-review";
+import { AutopilotRunner, requestRevision } from "./autopilot";
 
 beforeEach(async () => {
   const db = await getDb();
@@ -64,6 +65,19 @@ describe("Conferma umana delle proposte di scena", () => {
     await saveBook(latest!, false);
     await expect(confirmEditorialScene(book.id, "scene1", latest!.updatedAt))
       .rejects.toThrow(/non puoi/i);
+  });
+
+  it("non avvia il runner AI o una revisione prima della canonizzazione, anche bypassando la UI", async () => {
+    const book = await readyBook();
+    book.remote = undefined; // Local book avoids remote test networking.
+    await saveBook(book, false);
+    const runner = new AutopilotRunner();
+    const update = vi.fn(async () => undefined);
+    await expect(runner.run(book.id, update)).rejects.toThrow(/Rileggi e conferma/);
+    await expect(requestRevision(book.id, "Riscrivi tutto")).rejects.toThrow(/Conferma le scene/);
+    const untouched = await getBook(book.id);
+    expect(untouched?.status).toBe("paused");
+    expect(untouched?.chapters[0]?.scenes[0]?.status).toBe("draft");
   });
 
   it("rifiuta conferma mentre un'altra scheda scrive il libro", async () => {
