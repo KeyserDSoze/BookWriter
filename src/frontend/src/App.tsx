@@ -32,6 +32,7 @@ const LABELS: Record<TaskKind, string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience (5 profili)",
   adversarial: "Adversarial review", outline: "Piano capitoli", prose: "Scrittura",
   continuity: "Review continuità", consolidate: "Consolidamento", summarize: "Riassunti", revision: "Revisioni", merge: "Fusione di scene",
+  chapterAudit: "Specialisti capitolo", chapterReaders: "Cinque lettori", chapterJudge: "Direttore editoriale", chapterRepair: "Remediation mirata",
 };
 const statusText: Record<BookProject["status"], string> = {
   idle: "Da avviare", running: "In esecuzione", paused: "In pausa",
@@ -40,7 +41,7 @@ const statusText: Record<BookProject["status"], string> = {
 const phaseText: Record<BookProject["phase"], string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience review",
   adversarial: "Adversarial review", outline: "Outline", prose: "Scrittura scena",
-  review: "Review scena", consolidate: "Consolidamento canon", revision: "Revisione autore", completed: "Completato",
+  review: "Review scena", consolidate: "Consolidamento canon", chapterReview: "Redazione indipendente del capitolo", revision: "Revisione autore", completed: "Completato",
 };
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -525,7 +526,7 @@ export default function App() {
         </Section>
         {current && <Section title={`Override del libro: ${current.title}`} description="Il modello scelto qui sostituisce quello globale soltanto per il libro attivo.">
           <div className="grid gap-3 md:grid-cols-2">
-            {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge"] as TaskKind[]).map(kind => {
+            {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge","chapterAudit","chapterReaders","chapterJudge","chapterRepair"] as TaskKind[]).map(kind => {
               const configured = current.modelRoutes?.[kind];
               return <div className="space-y-2" key={kind}>
                 <p className="text-sm font-semibold">{LABELS[kind]}</p>
