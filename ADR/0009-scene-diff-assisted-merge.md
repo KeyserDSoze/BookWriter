@@ -22,7 +22,10 @@ La v0.6.0 permette di scegliere per singola scena una versione locale o GitHub, 
 8. **Approvazione esplicita in due azioni.** Una proposta può essere selezionata tramite **Usa questa proposta per la scena**, ma non viene applicata finché non si conferma **Applica scelte con doppio backup**. La selezione propone un testo solo se entrambe le versioni della scena esistono e la bozza corrisponde esattamente alle revisioni visualizzate. L'input dell'autore è validato e limitato. Non sono ammesse proposte su campi generici, segreti o capitoli.
 9. **Risoluzione transazionale.** La conferma riusa ADR 0008: dentro la transazione IndexedDB che crea due copie complete del libro, verifica nuovamente lo stato delle bozze, marca `accepted`, conserva il testo finale scelto, aggiorna la singola scena del libro principale, elimina il suo sommario obsoleto, imposta `status: draft`, lascia il libro `paused`, cancella l'outbox obsoleta e disattiva autosync. L'accettazione **non è canonizzazione** e non pubblica su GitHub.
 10. **Backup compatibile.** Estendere il formato ZIP esistente con il campo opzionale `mergeDrafts`, mantenendo l'importazione degli ZIP v1 precedenti. Le bozze importate vengono rimappate con nuovi UUID e restano consultabili; le bozze `proposed` importate diventano `rejected` per impedire che una scelta precedente autorizzi modifiche a un nuovo libro.
-11. **Audit e trasparenza.** Registrare ogni generazione/bozza manuale nei log con modello, endpoint, input/output token se riportati dal provider (non inventare costi), evitando di copiare credenziali nei log. Registrare l'accettazione e l'associazione al doppio backup. UI accessibile da mobile, con anteprima diff e possibilità di espandere i testi completi.
+11. **Seconda conferma editoriale e blocco delle esecuzioni.** Una fusione accettata aggiunge l'ID della scena a `editorialReviewSceneIds` (campo persistito nel libro). L'autopilot non può avviarsi da UI **né da API/runner** mentre esistono elementi in attesa; anche le richieste di revisione e i push GitHub manuali/automatici sono respinti lato servizio. Il Lettore mostra le scene da rileggere e offre **Conferma scena come canonica**, con consenso separato, controllo revisione e Web Locks. La conferma aggiorna la singola scena da `draft` a `canon`, annota l'audit, ma non invia alcun commit remoto. Con più scene, tutte devono essere confermate prima di riprendere il lavoro. L'autosync resta disabilitato fino a una successiva scelta esplicita.
+12. **Integrità delle sincronizzazioni.** `pushGitHubBook` blocca in modo conservativo qualsiasi invio quando vi sono scene in revisione, anche se chiamato direttamente e anche con `automatic:true`. Rilegge inoltre la revisione locale prima di costruire il commit GitHub, evitando di pubblicare un manoscritto che il browser abbia modificato durante il push.
+
+13. **Audit e trasparenza.** Registrare ogni generazione/bozza manuale nei log con modello, endpoint, input/output token se riportati dal provider (non inventare costi), evitando di copiare credenziali nei log. Registrare l'accettazione e l'associazione al doppio backup. UI accessibile da mobile, con anteprima diff e possibilità di espandere i testi completi.
 
 ## Limiti
 
@@ -39,9 +42,9 @@ La v0.6.0 permette di scegliere per singola scena una versione locale o GitHub, 
 - Diff che ricostruisce esattamente i testi originale/remoto e fallback su scene lunghe.
 - Prompt e limiti del contesto, fallimenti HTTP, riconoscimento di cambi locali/HEAD, lease rifiutato.
 - Generazione e rifiuto non modificano il canon; la proposta non viene accettata senza selezione esplicita.
-- Accettazione produce una scena **draft**, due copie originali, audit, outbox disabilitata e nessun GitHub POST/PATCH.
+- Accettazione produce una scena **draft**, due copie originali, audit, outbox disabilitata e nessun GitHub POST/PATCH; ripresa AI e push bloccati finché l'autore non conferma nel Lettore.
 - Backup ZIP conserva il log bozze, ma le bozze importate non possono essere riutilizzate come approvazioni.
-- Playwright desktop/mobile: diff, salvataggio bozza, reload, selezione, conferma, lettura finale e verifica larghezza mobile.
+- Playwright desktop/mobile: diff, salvataggio bozza, reload, selezione, doppio backup, ripresa AI disabilitata, canonizzazione umana, ripresa riabilitata e verifica larghezza mobile.
 - CI verde sulla HEAD prima del merge.
 
 ## Evoluzioni successive
