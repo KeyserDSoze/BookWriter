@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, GitCompareArrows, GitBranch, Save, ShieldCheck } from "lucide-react";
-import type { BookProject } from "../domain/types";
+import type { AppSettings, BookProject } from "../domain/types";
+import type { AcceptedSceneDraft } from "../domain/scene-merge";
+import { SceneMergeWorkspace } from "./SceneMergeWorkspace";
 import {
   shortConflictPreview,
   type ConflictUnit, type ResolutionChoice,
@@ -14,6 +16,7 @@ import { Button } from "./ui/button";
 interface Props {
   book?: BookProject;
   hasGitHubToken: boolean;
+  settings: AppSettings;
   onRefresh: () => Promise<void>;
   onSelectBook: (bookId: string) => void;
 }
@@ -25,8 +28,16 @@ const originLabels = {
 };
 
 function UnitRow({
-  unit, selected, onSelect,
-}: { unit: ConflictUnit; selected: ResolutionChoice; onSelect: (choice: ResolutionChoice) => void }) {
+  unit, review, settings, selected, accepted, onSelect, onAccept,
+}: {
+  unit: ConflictUnit;
+  review: ConflictReview;
+  settings: AppSettings;
+  selected: ResolutionChoice;
+  accepted?: AcceptedSceneDraft;
+  onSelect: (choice: ResolutionChoice) => void;
+  onAccept: (proposal: AcceptedSceneDraft) => void;
+}) {
   return <details className="min-w-0 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
     <summary className="cursor-pointer text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -41,6 +52,7 @@ function UnitRow({
           value={selected} onChange={e => onSelect(e.target.value as ResolutionChoice)}>
           <option value="local">Mantieni la versione locale</option>
           <option value="remote">Usa la versione GitHub</option>
+          {accepted && <option value="proposal">Usa la proposta editoriale selezionata</option>}
         </select>
       </label>
       <div className="grid min-w-0 gap-3 lg:grid-cols-2">
@@ -71,6 +83,9 @@ function UnitRow({
       </div>
       {(unit.local === undefined || unit.remote === undefined) &&
         <p className="text-xs text-amber-700 dark:text-amber-300">Una delle versioni non contiene questo elemento: scegliendola potresti eliminarlo dal libro principale. Le copie di sicurezza lo conserveranno.</p>}
+      {unit.kind === "scene" && <SceneMergeWorkspace
+        review={review} unit={unit} settings={settings} selected={accepted}
+        onChoose={onAccept} onClear={() => onSelect("local")}/>}
     </div>
   </details>;
 }
@@ -79,20 +94,22 @@ function UnitRow({
  * Non-destructive conflict inspector: the remote repository is read-only here.
  * Applying requires a paused runner, a fresh remote HEAD and two safety copies.
  */
-export function ConflictReviewPanel({ book, hasGitHubToken, onRefresh, onSelectBook }: Props) {
+export function ConflictReviewPanel({ book, hasGitHubToken, settings, onRefresh, onSelectBook }: Props) {
   const [review, setReview] = useState<ConflictReview | null>(null);
   const [choices, setChoices] = useState<Record<string, ResolutionChoice>>({});
+  const [acceptedDrafts, setAcceptedDrafts] = useState<Record<string, AcceptedSceneDraft>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    setReview(null); setChoices({}); setMessage(""); setError("");
+    setReview(null); setChoices({}); setAcceptedDrafts({}); setMessage(""); setError("");
   }, [book?.id]);
 
   const remoteSelections = useMemo(
     () => review?.units.filter(unit => choices[unit.id] === "remote").length ?? 0,
     [review, choices],
   );
+  const proposalCount = review?.units.filter(unit => choices[unit.id] === "proposal").length ?? 0;
   const groups = useMemo(() => {
     if (!review) return [];
     const items = new Map<string, ConflictUnit[]>();
@@ -115,7 +132,7 @@ export function ConflictReviewPanel({ book, hasGitHubToken, onRefresh, onSelectB
     if (!book) return;
     void perform(async () => {
       const result = await inspectBookConflict(book.id);
-      setReview(result); setChoices({});
+      setReview(result); setChoices({}); setAcceptedDrafts({});
       return "Confronto pronto: " + result.units.length +
         " differenze tra browser e commit " + result.headSha.slice(0, 12) + ". Nessun dato modificato.";
     });
@@ -136,8 +153,8 @@ export function ConflictReviewPanel({ book, hasGitHubToken, onRefresh, onSelectB
       "L'autosync verrà disattivato e nessun commit sarà inviato finché non farai un push manuale. Procedere?",
     )) return;
     void perform(async () => {
-      const outcome = await applyBookConflictResolution(review, choices);
-      setReview(null); setChoices({});
+      const outcome = await applyBookConflictResolution(review, choices, acceptedDrafts);
+      setReview(null); setChoices({}); setAcceptedDrafts({});
       await onRefresh();
       return "Risoluzione applicata (" + outcome.remoteSelections + " elementi GitHub). " +
         "Backup locale " + outcome.localBackupId.slice(0, 8) +
@@ -173,15 +190,29 @@ export function ConflictReviewPanel({ book, hasGitHubToken, onRefresh, onSelectB
         <p><b>Baseline:</b> {review.baseAvailable ? "Disponibile (confronto a tre versioni)" :
           "Non disponibile (confronto a due versioni)"}</p>
         {review.baselineWarning && <p className="text-xs text-amber-700 dark:text-amber-300">{review.baselineWarning}</p>}
-        <p><b>Differenze:</b> {review.units.length} · <b>Scelte da GitHub:</b> {remoteSelections}</p>
+        <p><b>Differenze:</b> {review.units.length} · <b>Scelte da GitHub:</b> {remoteSelections} · <b>Bozze editoriali scelte:</b> {proposalCount}</p>
         <p className="muted text-xs">Tutti gli elementi inizialmente mantengono la versione locale. Le modifiche non si applicano finché non confermi.</p>
       </div>
 
       {groups.map(([group, units]) => <section key={group} className="space-y-2">
         <h3 className="font-semibold">{group} ({units.length})</h3>
         {units.map(unit => <UnitRow key={unit.id} unit={unit}
+          review={review} settings={settings} accepted={acceptedDrafts[unit.id]}
           selected={choices[unit.id] ?? "local"}
-          onSelect={choice => setChoices(prev => ({ ...prev, [unit.id]: choice }))}/>)}
+          onSelect={choice => {
+            if (choice !== "proposal") {
+              setAcceptedDrafts(previous => {
+                const next = { ...previous };
+                delete next[unit.id];
+                return next;
+              });
+            }
+            setChoices(previous => ({ ...previous, [unit.id]: choice }));
+          }}
+          onAccept={proposal => {
+            setAcceptedDrafts(previous => ({ ...previous, [unit.id]: proposal }));
+            setChoices(previous => ({ ...previous, [unit.id]: "proposal" }));
+          }}/>)}
       </section>)}
 
       {!review.units.length &&
