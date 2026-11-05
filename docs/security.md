@@ -33,6 +33,14 @@ Il confronto legge soltanto snapshot GitHub a commit SHA. La risoluzione crea du
 
 Il browser controlla i Web Locks, il commit GitHub e il timestamp locale prima della sostituzione. La transazione IndexedDB è atomica **solo nello stesso browser**; un dispositivo differente può avanzare GitHub subito dopo la verifica, nel qual caso il successivo push viene respinto per conflitto SHA. La copia di sicurezza rimane locale: esportare anche uno ZIP esterno. Niente force push, niente fusione cieca di prosa.
 
+## Revisione editoriale indipendente e congelamento (ADR 0011)
+
+Il panel usa richieste separate ai modelli AI: sette specialisti hanno contesti canonici necessari, mentre cinque lettori vedono solo prosa e sinossi pubbliche. Ogni rapporto contiene prova, motivo e remediation verificabile; il direttore editoriale è libero di respingere un rilievo infondato motivando, ma non può ometterlo.
+
+Un capitolo con scene scritte, ma non congelato, impedisce il push manuale e il normale autosync del canon. La riapertura di capitoli prende Web Locks, disabilita l'autosync e invalida le revisioni successive; un browser differente resta vincolato al lease best effort e ai controlli SHA. Non inviare segreti ai lettori ciechi. La review storica NON consulta fonti esterne, quindi i rilievi sono ipotesi e non verifiche certificate.
+
+Questa pipeline può consumare molte chiamate AI (12 per segmento, più giudizio, correzioni e riassunti). Il ledger v0.7.1 mostra token osservati, non saldo residuo né limite economico. Documenta il rischio e non iniziare test su provider reali senza consenso.
+
 ## Telemetria dei consumi AI (ADR 0010)
 
 Il pannello `Consumi AI registrati` legge i token e i modelli già memorizzati negli Activity del browser. Non invia alcuna telemetria a server esterni, non legge API key o PAT e non inventa saldi crediti. Dati di attività fallite/interrotte possono essere incompleti anche se una chiamata AI è stata fatturata: mostrare sempre questo limite.
