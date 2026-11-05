@@ -259,7 +259,8 @@ export async function renewWriterLease(current: WriterLeaseHandle): Promise<Writ
     throw new RemoteWriterLost();
   const now = new Date().toISOString();
   const updated: LeasePayload = {
-    ...previous, state: "active", renewedAt: now,
+    schemaVersion: 1, bookId: previous.bookId, sessionId: previous.sessionId,
+    acquiredAt: previous.acquiredAt, state: "active", renewedAt: now,
     expiresAt: new Date(Date.now() + LEASE_TTL_MS).toISOString(),
   };
   const commit = await writeLease(secret, current.remote, current.bookId, sha, updated);
@@ -283,7 +284,8 @@ export async function releaseWriterLease(current: WriterLeaseHandle): Promise<vo
     if (previous.sessionId !== current.sessionId || previous.state !== "active") return;
     const now = new Date().toISOString();
     const commit = await writeLease(secret, current.remote, current.bookId, sha, {
-      ...previous, state: "released", renewedAt: now, expiresAt: now,
+      schemaVersion: 1, bookId: previous.bookId, sessionId: previous.sessionId,
+      acquiredAt: previous.acquiredAt, state: "released", renewedAt: now, expiresAt: now,
     });
     await api(secret, patchPath(current.remote, current.bookId), "PATCH", { sha: commit, force: false });
   } catch { /* A dead browser cannot release: expiry + explicit takeover handles recovery. */ }
