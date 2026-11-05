@@ -56,6 +56,7 @@ export function isTrustedHistoricalUrl(value: string): boolean {
 export function validateHistoricalSource(s: HistoricalSource): boolean {
   return s.provider === "it.wikipedia.org" && Number.isSafeInteger(s.pageId) &&
     s.pageId > 0 && !!s.id.match(/^itwiki:\d+:\d+$/) &&
+    s.id === "itwiki:" + s.pageId + ":" + (s.revisionId ?? 0) &&
     (s.revisionId === undefined || Number.isSafeInteger(s.revisionId) && s.revisionId > 0) &&
     isTrustedHistoricalUrl(s.url) &&
     s.title.length > 0 && s.title.length <= 220 &&
