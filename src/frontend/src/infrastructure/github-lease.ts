@@ -136,6 +136,23 @@ function canTakeover(status: WriterLeaseStatus): boolean {
     Date.now() > Date.parse(status.expiresAt) + LEASE_TAKEOVER_GRACE_MS;
 }
 
+export function isLeaseRecoverable(status: WriterLeaseStatus): boolean {
+  return status.state === "active" &&
+    Date.now() > Date.parse(status.expiresAt) + LEASE_TAKEOVER_GRACE_MS;
+}
+
+export async function recoverExpiredWriterLease(remote: GitHubRemote, bookId: string): Promise<void> {
+  const before = await inspectWriterLease(remote, bookId);
+  if (!before || !isLeaseRecoverable(before))
+    throw new Error("Il lease è ancora attivo oppure non ha superato il tempo di sicurezza.");
+  const session = await acquireWriterLease(remote, bookId, crypto.randomUUID(), true);
+  await releaseWriterLease(session);
+  const final = await inspectWriterLease(remote, bookId);
+  if (!final || final.sessionId !== session.sessionId || final.state !== "released")
+    throw new Error("Il rilascio del lease non è stato confermato da GitHub. Verifica prima di ripartire.");
+}
+
+
 /** Read-only status, used by the UI and to diagnose recovery. */
 export async function inspectWriterLease(remote: GitHubRemote, bookId: string): Promise<WriterLeaseStatus | null> {
   const secret = await token();
