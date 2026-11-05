@@ -1,7 +1,6 @@
 import type { BookProject, SyncOutboxItem } from "../domain/types";
 import { getDb } from "./db";
 
-type OutboxStore = ReturnType<Awaited<ReturnType<typeof getDb>>["transaction"]>;
 // All outbox writes happen within an IndexedDB readwrite transaction owned by the caller.
 export async function enqueueCheckpoint(
   book: BookProject,
@@ -54,14 +53,17 @@ export async function markAttempt(item: SyncOutboxItem): Promise<boolean> {
 }
 
 export async function acknowledgeOutbox(
-  bookId: string, operationId: string, syncedRevision: number,
+  bookId: string, operationId: string, syncedBookUpdatedAt: string,
 ): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction("outbox", "readwrite");
+  // Verify the actual book timestamp atomically with outbox ACK. The user/AI
+  // may have produced another checkpoint WHILE GitHub was receiving our commit.
+  const tx = db.transaction(["books", "outbox"], "readwrite");
   const store = tx.objectStore("outbox");
   const current = await store.get(bookId) as SyncOutboxItem | undefined;
   if (current?.operationId === operationId) {
-    if (current.revision <= syncedRevision) await store.delete(bookId);
+    const local = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+    if (local?.updatedAt === syncedBookUpdatedAt) await store.delete(bookId);
     else await store.put({
       ...current, operationId: crypto.randomUUID(),
       attempts: 0, retryAfter: undefined, lastError: undefined,
