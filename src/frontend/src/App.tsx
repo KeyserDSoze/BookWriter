@@ -221,6 +221,12 @@ export default function App() {
       <p className="muted mt-8 text-xs">v0.1.0 · Dati locali al browser</p>
     </aside>
 
+    <nav className="mobile-tabs" aria-label="Navigazione mobile">
+      {navigation.map(({id,label,icon:Icon}) => <button key={id} aria-label={label} aria-current={page===id ? "page" : undefined}
+        className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-2 text-[10px] ${page===id ? "text-emerald-500 font-bold" : "muted"}`}
+        onClick={() => setPage(id)}><Icon size={19}/>{label}</button>)}
+    </nav>
+
     <main className="min-w-0 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -490,10 +496,6 @@ export default function App() {
       <footer className="muted mt-10 flex flex-wrap items-center gap-2 text-xs"><BrainCircuit size={14} /> Autopilot nel browser aperto: nessuna attività garantita in background. <FileText size={14} /> Versione iniziale.</footer>
     </main>
 
-    <nav className="mobile-tabs" aria-label="Navigazione mobile">
-      {navigation.map(({id,label,icon:Icon}) => <button key={id} aria-label={label} aria-current={page===id ? "page" : undefined}
-        className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-2 text-[10px] ${page===id ? "text-emerald-500 font-bold" : "muted"}`}
-        onClick={() => setPage(id)}><Icon size={19}/>{label}</button>)}
-    </nav>
+
   </div>;
 }
