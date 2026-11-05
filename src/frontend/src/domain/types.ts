@@ -1,6 +1,6 @@
 export const TASK_KINDS = [
   "brainstorm", "validate", "audience", "adversarial", "outline",
-  "prose", "continuity", "consolidate", "summarize", "revision",
+  "prose", "continuity", "consolidate", "summarize", "revision", "merge",
 ] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
