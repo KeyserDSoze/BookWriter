@@ -2,7 +2,7 @@
 
 ## Stato
 
-Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Non sono ancora disponibili il lease cross-device, la risoluzione visuale dei conflitti, l'import di repository Narrarium generiche, il vault Google/Microsoft e gli ZIP automatici remoti.
+Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Il lease GitHub per l'autopilot è disponibile (best effort) e la PR #14 aggiunge il confronto visuale dei conflitti. Non sono ancora disponibili l'import di repository Narrarium generiche, il vault Google/Microsoft e gli ZIP automatici remoti.
 
 ## Per iniziare (senza token nel repository del sito)
 
@@ -32,7 +32,15 @@ L'operazione GitHub salva un marker `.bookwriter/sync.json` e l'identificatore n
 
 La UI in Archivio mostra **in attesa**, **invio in corso**, **bloccata**, **retry** e ultimo SHA. Gli errori di rete vengono ritentati con intervalli crescenti fino a sei tentativi, mentre i conflitti non vengono ritentati automaticamente.
 
-**Limite fondamentale:** Web Locks protegge le tab dello *stesso browser*, NON due computer. Non avviare lo stesso libro in autopilot contemporaneamente da due dispositivi finché non ci sarà il lease distribuito. Il browser chiuso/sospeso non continua a inviare; la coda riprende quando si torna sul sito.
+**Limite fondamentale:** Web Locks protegge le tab dello *stesso browser*. Il lease GitHub v0.5.0 prova a coordinare anche due dispositivi per la scrittura AI, ma non è un blocco transazionale perfetto. Il browser chiuso/sospeso non continua a inviare; la coda riprende quando si torna sul sito.
+
+## Confronto e recupero dei conflitti (v0.6.0)
+
+In **Archivio → Confronto e recupero delle versioni** puoi leggere il commit remoto e la baseline dell'ultimo salvataggio (quando disponibile), confrontare singole scene, capitoli, segreti, personaggi, timeline e brief, quindi scegliere esplicitamente la versione locale o GitHub. Le differenze partono sempre dalla scelta locale.
+
+**Salva GitHub come copia separata** recupera il remoto senza modificare l'originale. **Applica scelte con doppio backup** conserva **due copie di sicurezza** in IndexedDB prima di aggiornare il libro originale. Controlla che HEAD GitHub e revisione locale non siano cambiati e **non pubblica nulla** sul server. Dopo il recupero l'autosync è disabilitato: devi rileggere e poi fare un push manuale.
+
+Guida: `docs/conflict-recovery.md`. Decisione: `ADR/0008-conflict-review-and-recovery.md`. Esporta anche uno ZIP esterno: le due copie restano nello stesso browser.
 
 ## Proiezione remota
 
@@ -73,9 +81,9 @@ Il JSON è necessario per recuperare senza perdita tutte le strutture del worksp
 
 ## Cosa manca
 
-- Autosync e outbox sono disponibili; manca il lease distribuito e il recupero visuale dei conflitti.
-- Lease / single writer distribuito; evita nel frattempo di scrivere lo stesso romanzo contemporaneamente su due browser.
-- Risoluzione dei conflitti base/locale/remoto e aggiornamento della baseline.
+- Autosync, outbox e lease AI best effort sono disponibili; la PR #14 aggiunge confronto e recupero visuale esplicito. Manca il merge semantico automatico per la prosa.
+- Il lease AI tra dispositivi è conservativo; serve ancora hardening del fencing transazionale e gestione delle modifiche manuali concorrenti.
+- Il recupero seleziona scene ed entità per versione e aggiorna la baseline locale; manca il diff testuale fine e la riconciliazione automatica.
 - ZIP snapshot periodici su GitHub, retenzione e bootstrap incrementale.
 - OAuth Google/Microsoft e vault portabile delle credenziali senza richiedere un PAT manuale a ogni browser.
 - Evoluzione del canon a schema Narrarium completo con metadata di scena e tracking dei segreti verificabile.
