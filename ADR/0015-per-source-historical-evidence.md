@@ -1,6 +1,6 @@
 # ADR 0015 — Citazioni storiche vincolate a ciascuna fonte
 
-- **Stato:** proposto per v0.9.2; verifica CI e merge ancora necessari
+- **Stato:** Accettato per v0.9.2 (PR #27)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **PR:** [#27](https://github.com/KeyserDSoze/BookWriter/pull/27)

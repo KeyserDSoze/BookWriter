@@ -2,7 +2,7 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
-## 0.9.2 — 2026-11-06 (PR #27, in verifica)
+## 0.9.2 — 2026-11-06 (PR #27)
 
 **Verifica delle citazioni storiche per singola fonte (anti-falsa corroborazione)**
 
@@ -11,7 +11,7 @@ Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il co
 - Il direttore riceve `citedQuote` e `quoteMatches` per ciascuna fonte per valutare criticamente pertinenza e possibili contraddizioni. La Dashboard mostra ciascuna citazione accanto alla relativa fonte e segnala i report vecchi privi di prove individuali.
 - Nuove regressioni Vitest su falsa corroborazione, citazioni scambiate, revisione duplicata e separazione dei contesti. ADR 0015, issue #23.
 
-**Limiti:** Wikipedia è terziaria; corrispondenza letterale non prova verità, indipendenza delle voci o accuratezza del giudizio storico. Nessuna consultazione di fonti primarie o studi DOI integrali. Non considerare questa release pubblicata finché PR #27 non supera CI e merge.
+**Limiti:** Wikipedia è terziaria; corrispondenza letterale non prova verità, indipendenza delle voci o accuratezza del giudizio storico. Nessuna consultazione di fonti primarie o studi DOI integrali.
 
 ## 0.9.1 — 2026-11-05 (PR #25)
 
