@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { z } from "zod";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
+import type { SceneMergeDraft } from "../domain/scene-merge";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
@@ -57,12 +58,24 @@ const activitySchema = z.object({
   reason: z.string(), nextStep: z.string(), status: z.enum(["running", "succeeded", "cancelled", "failed"]),
   createdAt: z.string(),
 }).passthrough();
+const mergeDraftSchema = z.object({
+  id: zId, bookId: zId, chapterId: zId, sceneId: zId,
+  localRevision: z.string(), remoteHead: z.string().max(100),
+  localText: z.string().max(200_000), remoteText: z.string().max(200_000),
+  proposedText: z.string().max(200_000), acceptedText: z.string().max(200_000).optional(),
+  instruction: z.string().max(3000),
+  status: z.enum(["proposed", "accepted", "rejected"]),
+  source: z.enum(["ai", "manual"]), createdAt: z.string(),
+  endpointId: z.string().optional(), modelId: z.string().optional(),
+  inputTokens: z.number().optional(), outputTokens: z.number().optional(),
+});
 const backupSchema = z.object({
   version: z.literal(VERSION),
   kind: z.enum(["content", "full"]),
   createdAt: z.string(),
   books: z.array(bookSchema).max(100),
   activities: z.array(activitySchema).max(50_000),
+  mergeDrafts: z.array(mergeDraftSchema).max(5000).optional(),
   settings: z.object({
     theme: z.enum(["dark", "light", "system"]),
     endpoints: z.array(z.object({
@@ -80,6 +93,7 @@ type BackupData = {
   createdAt: string;
   books: BookProject[];
   activities: Activity[];
+  mergeDrafts?: SceneMergeDraft[];
   settings?: {
     theme: AppSettings["theme"];
     endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null }>;
@@ -177,10 +191,13 @@ function validateZipStructure(bytes: Uint8Array): void {
 async function snapshot(mode: BackupMode): Promise<BackupData> {
   const books = await listBooks();
   const activities = (await Promise.all(books.map(book => listActivities(book.id)))).flat();
+  const mergeDrafts = await (await getDb()).getAll("mergeDrafts") as SceneMergeDraft[];
+  const bookIds = new Set(books.map(b => b.id));
   const data: BackupData = {
     version: VERSION, kind: mode, createdAt: new Date().toISOString(),
     books: books.map(b => ({ ...b, status: b.status === "running" ? "paused" : b.status })),
     activities: activities.map(a => a.status === "running" ? { ...a, status: "cancelled" } : a),
+    mergeDrafts: mergeDrafts.filter(d => bookIds.has(d.bookId)),
   };
   if (mode === "full") {
     const settings = await loadSettings();
@@ -277,6 +294,13 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
       id: crypto.randomUUID(), bookId: idMap.get(activity.bookId)!,
       status: activity.status === "running" ? "cancelled" : activity.status,
     })) as Activity[];
+  const safeDrafts: SceneMergeDraft[] = (data.mergeDrafts ?? [])
+    .filter(draft => idMap.has(draft.bookId))
+    .map(draft => ({
+      ...draft, id: crypto.randomUUID(), bookId: idMap.get(draft.bookId)!,
+      // Imported history is reference material, not an approval for a new GitHub branch.
+      status: draft.status === "proposed" ? "rejected" as const : draft.status,
+    }));
   let importedSettings: AppSettings | undefined;
   if (withSettings && data.settings) {
     importedSettings = {
@@ -289,9 +313,10 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
       }))),
     };
   }
-  const tx = db.transaction(["books", "activities", "settings"], "readwrite");
+  const tx = db.transaction(["books", "activities", "settings", "mergeDrafts"], "readwrite");
   for (const book of safeBooks) await tx.objectStore("books").put(book, book.id);
   for (const activity of safeActivities) await tx.objectStore("activities").put(activity, activity.id);
+  for (const draft of safeDrafts) await tx.objectStore("mergeDrafts").put(draft, draft.id);
   if (importedSettings) await tx.objectStore("settings").put(importedSettings, "global");
   await tx.done;
   return safeBooks.length;
