@@ -34,6 +34,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 - **PR #9**: autosync opt-in a checkpoint con outbox transazionale, Web Locks tra tab, retry/backoff e recovery dei commit senza risposta.
 - **PR #12**: GitHub writer lease per libri collegati, acquisizione prima dell'AI, heartbeat, verifiche pre/post generazione, recupero manuale di lock scaduti. Consulta ADR 0007.
 - **PR #14**: confronto visuale base/locale/GitHub e recupero di scene/entità con doppio backup IndexedDB, controllo SHA e pause autosync. Consulta ADR 0008.
+- **PR #16**: diff parole/paragrafi, modello `merge` configurabile per libro, proposte AI opzionali con lease, bozze in IndexedDB v2 e nello ZIP, approvazione solo a doppio backup. Consulta ADR 0009 e `docs/scene-merge.md`.
 
 ## Come provare GitHub
 
