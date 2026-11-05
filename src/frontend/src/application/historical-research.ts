@@ -1,5 +1,5 @@
 import { createEditorialCycle } from "../domain/editorial-board";
-import { extendHistoricalDossier, normalizeResearchQueries, type HistoricalSource } from "../domain/historical-research";
+import { extendHistoricalDossier, normalizeResearchQueries } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import type { BookProject, Activity } from "../domain/types";
 import { searchHistoricalWikipedia } from "../infrastructure/historical-sources";
@@ -36,11 +36,12 @@ export async function researchHistoricalChapter(
       const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
       const book = await tx.objectStore("books").get(bookId) as BookProject | undefined;
       if (!book || book.updatedAt !== originalRevision || book.status === "running" || book.editorialCycle) {
-        tx.abort();
+        // No stores were modified yet: let the transaction settle cleanly.
+        await tx.done;
         throw new Error("Libro modificato durante la ricerca: il dossier non è stato applicato.");
       }
       const chapter = book.chapters.find(ch => ch.id === chapterId);
-      if (!chapter) { tx.abort(); throw new Error("Capitolo non disponibile."); }
+      if (!chapter) { await tx.done; throw new Error("Capitolo non disponibile."); }
       const searchedAt = new Date().toISOString();
       const dossier = extendHistoricalDossier(chapter.historicalDossier, queries, retrieved, searchedAt);
       // Recompute the previous public synopsis BEFORE invalidating any freeze.
