@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encryptLocal } from "./crypto";
 import { getBook, saveBook, saveSettings } from "./db";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
-import { pushGitHubBook, RemoteConflict, validateRemote } from "./github-sync";
+import { importGitHubBook, pushGitHubBook, RemoteConflict, validateRemote } from "./github-sync";
 
 const BEFORE = "a".repeat(40);
 const TREE = "b".repeat(40);
@@ -94,6 +94,30 @@ describe("GitHub sync conservativa", () => {
     const { calls } = fakeGitHub({ isPrivate: false });
     await expect(pushGitHubBook(book.id)).rejects.toThrow(/PUBBLICA/);
     expect(calls.some(call => call.method === "POST")).toBe(false);
+  });
+
+  it("importa uno snapshot GitHub come nuovo libro senza modificare quelli esistenti", async () => {
+    const remoteBook = newBook("Trama remota", "Un libro trovato su GitHub", "Realista", "Adulti");
+    const source = JSON.stringify(remoteBook);
+    const fake = vi.fn(async (url: string | URL, request?: RequestInit): Promise<Response> => {
+      const u = new URL(String(url));
+      expect(u.origin).toBe("https://api.github.com");
+      const path = u.pathname;
+      if (path.endsWith("/git/ref/heads/main")) return reply({ object: { sha: BEFORE } });
+      if (path.endsWith("/contents/.bookwriter/project.json"))
+        return reply({ type: "file", encoding: "base64", content: btoa(source) });
+      if (path.endsWith("/contents/.bookwriter/activities.json"))
+        return reply({ type: "file", encoding: "base64", content: btoa("[]") });
+      return reply({ message: "not mocked" }, 500);
+    });
+    vi.stubGlobal("fetch", fake);
+    const remote = { owner: "test-owner", repository: "book-repo", branch: "main" };
+    const result = await importGitHubBook(remote);
+    expect(result.id).toBe(remoteBook.id);
+    expect(result.remote?.lastSyncedCommit).toBe(BEFORE);
+    expect((await getBook(remoteBook.id))?.title).toBe("Un libro trovato su GitHub");
+    await expect(importGitHubBook(remote)).rejects.toBeInstanceOf(RemoteConflict);
+    expect(fake).toHaveBeenCalled();
   });
 
   it("rifiuta path GitHub costruiti con branch o nome ostile", () => {
