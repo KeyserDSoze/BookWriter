@@ -60,6 +60,7 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(updated?.chapters[0]?.editorialRounds?.[0]?.reports).toHaveLength(12);
     expect(updated?.chapters[0]?.editorialRounds?.[0]?.judgment.verdict).toBe("freeze");
     expect(updated?.bookSummary).toContain("Mara");
+    expect(updated?.chapters[0]?.bookSummaryAtFreeze).toBe(updated?.bookSummary);
     expect(prompts.filter(x=>x.kind==="chapterAudit")).toHaveLength(7);
     expect(prompts.filter(x=>x.kind==="chapterReaders")).toHaveLength(5);
     expect(prompts.filter(x=>x.kind==="chapterJudge")).toHaveLength(1);
