@@ -43,6 +43,7 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
         }
       }
       if (instruction.trim()) book.authorConstraints.push(instruction.trim());
+      if (book.remote) book.remote.autoSync = false;
       for (const ch of book.chapters) if (ch.number >= target.number) {
         ch.frozenAt = undefined;
         ch.summary = undefined;
