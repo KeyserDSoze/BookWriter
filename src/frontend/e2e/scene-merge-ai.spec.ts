@@ -135,7 +135,7 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
       ? "Navigazione mobile" : "Navigazione principale",
   });
   await nav.getByRole("button", { name: "Impostazioni" }).click();
-  await page.getByRole("textbox", { name: "API key" }).fill("sk-test-merge-provider-not-real");
+  await page.getByLabel("API key").fill("sk-test-merge-provider-not-real");
   await page.getByRole("textbox", { name: "Modello predefinito" }).fill("demo-merge-model");
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
 
@@ -166,6 +166,8 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await nav.getByRole("button", { name: "Libro" }).click();
   await expect(page.getByText(/lascia dietro di sé la traccia/)).toBeVisible();
   await nav.getByRole("button", { name: "Archivio", exact: true }).click();
+  await page.getByRole("button", { name: "Confronta locale e GitHub" }).click();
+  await page.getByText("Scena: Il segreto", { exact: true }).click();
   // A generated proposal is NOT selected or accepted automatically.
   await expect(page.getByRole("combobox", { name: /Versione da conservare: scene:/ }))
     .toHaveValue("local");
