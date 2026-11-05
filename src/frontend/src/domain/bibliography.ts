@@ -38,6 +38,11 @@ export function normalizeDois(values: readonly string[]): string[] {
 }
 export function isValidBibliographicWork(work: BibliographicWork): boolean {
   try {
+    if (!work || typeof work !== "object" || typeof work.doi !== "string" ||
+        typeof work.id !== "string" || typeof work.title !== "string" ||
+        typeof work.workType !== "string" || typeof work.url !== "string" ||
+        typeof work.retrievedAt !== "string" || !Array.isArray(work.authors) ||
+        work.authors.some(a => typeof a !== "string")) return false;
     const doi = normalizeDoi(work.doi);
     return work.provider === "crossref" && doi === work.doi &&
       work.id === "crossref:" + doi + ":" + Date.parse(work.retrievedAt) &&
@@ -54,8 +59,10 @@ export function isValidBibliographicWork(work: BibliographicWork): boolean {
 }
 export function activeBibliography(dossier?: ChapterHistoricalDossier): BibliographicWork[] {
   if (!dossier?.bibliography) return [];
+  if (!Array.isArray(dossier.bibliography.works) ||
+      !Array.isArray(dossier.bibliography.activeWorkIds)) return [];
   const active = new Set(dossier.bibliography.activeWorkIds);
-  return dossier.bibliography.works.filter(w => active.has(w.id) && isValidBibliographicWork(w));
+  return dossier.bibliography.works.filter(w => isValidBibliographicWork(w) && active.has(w.id));
 }
 export function extendChapterBibliography(
   previous: ChapterHistoricalDossier | undefined,
