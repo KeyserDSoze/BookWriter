@@ -8,6 +8,7 @@ import {
   inspectBookConflict, applyBookConflictResolution, preserveRemoteVersion,
 } from "./conflict-recovery";
 import { RemoteConflict } from "./github-sync";
+import { getSceneMergeDraft, rejectSceneMergeDraft, saveManualSceneMergeDraft } from "../application/scene-merge";
 
 const BASE = "a".repeat(40), HEAD = "b".repeat(40), NEXT = "c".repeat(40);
 const PAT = "github_pat_mock_for_conflict_test_2026";
@@ -77,7 +78,7 @@ async function originalBook() {
 }
 beforeEach(async () => {
   const db = await getDb();
-  await db.clear("books"); await db.clear("activities"); await db.clear("outbox");
+  await db.clear("books"); await db.clear("activities"); await db.clear("outbox"); await db.clear("mergeDrafts");
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.githubToken = await encryptLocal(PAT);
   await saveSettings(settings);
@@ -139,6 +140,51 @@ describe("Recupero narrativo non distruttivo", () => {
     expect(await getOutbox(book.id)).toBeUndefined();
     expect((await listActivities(book.id)).some(x => /Risoluzione manuale/.test(x.title))).toBe(true);
     expect(github.calls.every(call => call.method === "GET")).toBe(true);
+  });
+
+  it("applica solo una proposta approvata come BOZZA, conservando le versioni originali", async () => {
+    const book = await originalBook();
+    const base = structuredClone(book);
+    const remote = structuredClone(book);
+    remote.chapters[0]!.scenes[0]!.text = "Scena remota differente.";
+    const github = githubSnapshots(base, remote);
+    const review = await inspectBookConflict(book.id);
+    const scene = review.units.find(u => u.kind === "scene")!;
+    const draft = await saveManualSceneMergeDraft(
+      review, "chapter:001", "scene:001:001", "Testo proposto fra due versioni.",
+    );
+    expect((await getBook(book.id))?.chapters[0]?.scenes[0]?.status).toBe("canon");
+    const result = await applyBookConflictResolution(
+      review, { [scene.id]: "proposal" },
+      { [scene.id]: { draftId: draft.id, text: "Testo proposto corretto dall'autore." } },
+    );
+    const merged = await getBook(book.id);
+    expect(merged?.chapters[0]?.scenes[0]?.text).toBe("Testo proposto corretto dall'autore.");
+    expect(merged?.chapters[0]?.scenes[0]?.status).toBe("draft");
+    expect(merged?.chapters[0]?.scenes[0]?.summary).toBeUndefined();
+    expect(merged?.remote?.autoSync).toBe(false);
+    expect((await getBook(result.localBackupId))?.chapters[0]?.scenes[0]?.text).toBe("Testo originale locale.");
+    expect((await getBook(result.remoteBackupId))?.chapters[0]?.scenes[0]?.text).toBe("Scena remota differente.");
+    expect((await getSceneMergeDraft(draft.id))?.status).toBe("accepted");
+    expect((await getSceneMergeDraft(draft.id))?.acceptedText).toBe("Testo proposto corretto dall'autore.");
+    expect(github.calls.every(request => request.method === "GET")).toBe(true);
+  });
+
+  it("non accetta una bozza rifiutata e non crea alcuna copia in caso di errore", async () => {
+    const book = await originalBook();
+    const remote = structuredClone(book);
+    remote.chapters[0]!.scenes[0]!.text = "La scena GitHub";
+    githubSnapshots(structuredClone(book), remote);
+    const review = await inspectBookConflict(book.id);
+    const scene = review.units.find(u => u.kind === "scene")!;
+    const draft = await saveManualSceneMergeDraft(review, "chapter:001", "scene:001:001", "Bozza da rifiutare");
+    await rejectSceneMergeDraft(draft.id);
+    await expect(applyBookConflictResolution(
+      review, { [scene.id]: "proposal" },
+      { [scene.id]: { draftId: draft.id, text: "Prova non autorizzata" } },
+    )).rejects.toThrow(/bozza/i);
+    expect(await listBooks()).toHaveLength(1);
+    expect((await getBook(book.id))?.chapters[0]?.scenes[0]?.text).toBe("Testo originale locale.");
   });
 
   it("blocca l'applicazione se il commit GitHub è cambiato, lasciando intatto il libro", async () => {

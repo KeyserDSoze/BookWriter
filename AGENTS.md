@@ -72,6 +72,18 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## Merge v0.7.0 — bozze non canoniche obbligatorie
+
+- `TASK_KINDS` include `merge`: route per endpoint/modello globale o per libro. Nessun ID di modello hardcodato.
+- Diff parole/paragrafi solo **informativo**, con limite di memoria/tempo per browser mobile. Conservarne i token e la ricostruzione esatta senza tagliare porzioni dei testi.
+- Ogni chiamata AI di fusione richiede consenso al trasferimento di **due scene + memoria segreti**. Validare il contesto, usare testo remoto come dato non attendibile, non inviare token o API key nei prompt.
+- Generazione sotto `withWriterGuard` e controllo HEAD/revisione locale prima di salvare bozza; nessun risultato AI non verificato entra nel canon.
+- IndexedDB v2 `mergeDrafts`: bozze con storico/stato, scene originali, modello e token quando disponibili; mai PAT/API key. Salvare il draft senza cambiare il libro o la coda di sync.
+- Una proposta `proposed` deve essere selezionata **esplicitamente**, e applicata solo dalla transazione a doppio backup ADR 0008; la scena accettata è `draft`, riassunto azzerato, autosync disattivato e ID inserito in `editorialReviewSceneIds`.
+- Finché la lista `editorialReviewSceneIds` non è vuota, **runner AI, richiesta di revisione e push GitHub** (anche automatico) devono fallire lato applicazione/infrastruttura, non solo disabilitando il pulsante. Il Lettore deve dare conferma canonica esplicita per scena con Web Locks e audit; nessun push implicito.
+- Rifiutare e annullare non modificano prosa canonica. Le bozze importate da ZIP non possono restare `proposed`: impedire approvazione cross-identity.
+- Testare provider falliti, lease perso, staleness, backup ZIP e E2E mobile/desktop prima del merge.
+
 ## Conflitti v0.6.0 — recovery conservativo
 
 - `domain/conflicts.ts` confronta progetti con ID identico, baseline GitHub immutabile se disponibile e unità atomiche: scene, capitoli, entità e sezioni. Il default di ogni decisione è **locale**, mai una fusione AI silenziosa.

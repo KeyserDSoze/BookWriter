@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { AutopilotRunner, requestRevision } from "./application/autopilot";
+import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind } from "./domain/types";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { fetchModels, normalizeEndpoint } from "./infrastructure/ai";
@@ -29,7 +30,7 @@ const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
 const LABELS: Record<TaskKind, string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience (5 profili)",
   adversarial: "Adversarial review", outline: "Piano capitoli", prose: "Scrittura",
-  continuity: "Review continuità", consolidate: "Consolidamento", summarize: "Riassunti", revision: "Revisioni",
+  continuity: "Review continuità", consolidate: "Consolidamento", summarize: "Riassunti", revision: "Revisioni", merge: "Fusione di scene",
 };
 const statusText: Record<BookProject["status"], string> = {
   idle: "Da avviare", running: "In esecuzione", paused: "In pausa",
@@ -143,6 +144,21 @@ export default function App() {
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Feedback non applicabile."); }
   }
+  async function approveEditorialScene(sceneId: string) {
+    if (!current) return;
+    if (!window.confirm(
+      "Hai riletto la scena fusa e verificato indizi, segreti, continuità e stile? " +
+      "Confermando diventerà canonica nel browser, ma NON sarà pubblicata automaticamente su GitHub.",
+    )) return;
+    try {
+      await confirmEditorialScene(current.id, sceneId, current.updatedAt);
+      await refresh();
+      setNotice("Scena canonizzata dopo conferma dell'autore. Verifica la continuità prima del push manuale.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Conferma scena non riuscita.");
+    }
+  }
+
   async function persistSettings(next: AppSettings) {
     await saveSettings(next); setSettings(next); setNotice("Impostazioni salvate in IndexedDB.");
   }
@@ -280,8 +296,9 @@ export default function App() {
         </div>
         <div className="flex gap-2">
           {current.status === "running" ? <Button onClick={pause} variant="secondary"><Pause size={17} /> Pausa</Button>
-            : current.status !== "completed" || current.revision ? <Button onClick={() => void execute()}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
+            : current.status !== "completed" || current.revision ? <Button disabled={(current.editorialReviewSceneIds?.length ?? 0) > 0} onClick={() => void execute()}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
           <Button variant="outline" onClick={() => setPage("activities")}><ListChecks size={17} /> Log</Button>
+          {(current.editorialReviewSceneIds?.length ?? 0) > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({current.editorialReviewSceneIds?.length})</Button>}
         </div>
       </div>}
 
@@ -307,7 +324,7 @@ export default function App() {
           {current && <Section title="Intervieni sull'autopilot" description="Una correzione diventa un vincolo persistente. L'IA analizzerà l'impatto e riscriverà la parte interessata e le scene successive.">
             <textarea className="field min-h-28" value={intervention} onChange={e => setIntervention(e.target.value)} placeholder="No, così non va bene: modifica assolutamente..." aria-label="Istruzione di revisione" />
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button disabled={!intervention.trim() || current.status === "running"} onClick={() => void sendFeedback()}><WandSparkles size={16} /> Richiedi revisione</Button>
+              <Button disabled={!intervention.trim() || current.status === "running" || !!current.editorialReviewSceneIds?.length} onClick={() => void sendFeedback()}><WandSparkles size={16} /> Richiedi revisione</Button>
               {current.status === "running" && <span className="muted text-xs">Premi prima Pausa.</span>}
             </div>
             {current.revision && <p className="mt-3 text-sm">Revisione in corso: {current.revision.instruction} ({current.revision.cursor}/{current.revision.affectedSceneIds.length})</p>}
@@ -386,6 +403,13 @@ export default function App() {
             {ch.scenes.map(s => <section key={s.id} className="mb-6">
               <h4 className="mb-2 font-semibold">{s.number}. {s.title} <span className="muted text-xs">({s.status})</span></h4>
               {s.text ? <p className="whitespace-pre-wrap break-words text-[1rem] leading-8">{s.text}</p> : <p className="muted text-sm">Scena non ancora scritta.</p>}
+              {current.editorialReviewSceneIds?.includes(s.id) && <div className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3">
+                <p className="text-sm">Questa scena fusa richiede la tua rilettura e conferma prima di riprendere l'autopilot.</p>
+                <Button variant="outline" disabled={busy || current.status === "running"}
+                  onClick={() => void approveEditorialScene(s.id)}>
+                  <CheckCircle2 size={16}/> Conferma scena come canonica
+                </Button>
+              </div>}
             </section>)}
           </article>)}
       </Section>}
@@ -408,7 +432,7 @@ export default function App() {
             onSaveSettings={persistSettings} onSelectBook={setSelectedId}/>
         </div>
         <div className="lg:col-span-2">
-          <ConflictReviewPanel book={current} hasGitHubToken={!!settings.githubToken}
+          <ConflictReviewPanel book={current} settings={settings} hasGitHubToken={!!settings.githubToken}
             onRefresh={refresh} onSelectBook={setSelectedId}/>
         </div>
         <Section title="Backup ZIP" description="Copia portabile di tutti i libri presenti su questo browser, con log, riassunti e checkpoint.">
@@ -499,7 +523,7 @@ export default function App() {
         </Section>
         {current && <Section title={`Override del libro: ${current.title}`} description="Il modello scelto qui sostituisce quello globale soltanto per il libro attivo.">
           <div className="grid gap-3 md:grid-cols-2">
-            {(["brainstorm","prose","continuity","revision","consolidate","summarize"] as TaskKind[]).map(kind => {
+            {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge"] as TaskKind[]).map(kind => {
               const configured = current.modelRoutes?.[kind];
               return <div className="space-y-2" key={kind}>
                 <p className="text-sm font-semibold">{LABELS[kind]}</p>

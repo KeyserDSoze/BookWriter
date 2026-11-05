@@ -3,7 +3,7 @@ import type { BookProject, Chapter, Scene } from "./types";
 type Field = "title" | "brief" | "writingStyle" | "audience" |
   "authorConstraints" | "ideas" | "validation" | "audienceReviews" | "adversarial";
 type EntityKind = "characters" | "locations" | "factions" | "items" | "secrets";
-export type ResolutionChoice = "local" | "remote";
+export type ResolutionChoice = "local" | "remote" | "proposal";
 export type ConflictOrigin = "only-local" | "only-remote" | "both-changed" | "unknown";
 
 export type ConflictUnit =
@@ -159,11 +159,30 @@ function updateScene(chapter: Chapter, sceneId: string, value: Scene | undefined
 export function assembleBookResolution(
   local: BookProject, remote: BookProject,
   entries: ConflictUnit[], selections: Record<string, ResolutionChoice>,
+  acceptedSceneTexts: Record<string, string> = {},
 ): BookProject {
   if (local.id !== remote.id) throw new Error("Le versioni non appartengono allo stesso libro.");
   const result = clone(local);
   for (const unit of entries) {
-    if (selections[unit.id] !== "remote") continue;
+    const choice = selections[unit.id] ?? "local";
+    if (choice === "local") continue;
+    if (choice === "proposal") {
+      if (unit.kind !== "scene") throw new Error("Le proposte AI sono ammesse solo sulle scene.");
+      const scene = result.chapters.find(ch => ch.id === unit.chapterId)
+        ?.scenes.find(s => s.id === unit.sceneId);
+      if (!scene || !remote.chapters.find(ch => ch.id === unit.chapterId)
+        ?.scenes.some(s => s.id === unit.sceneId)) {
+        throw new Error("La proposta richiede due versioni presenti della scena.");
+      }
+      const text = acceptedSceneTexts[unit.id];
+      if (!text?.trim() || text.length > 180_000)
+        throw new Error("La proposta di scena non è valida o non è stata approvata.");
+      scene.text = text;
+      scene.summary = undefined; // Old summary no longer represents this draft.
+      scene.status = "draft"; // Explicit review needed before it becomes canon.
+      continue;
+    }
+    if (choice !== "remote") throw new Error("Scelta di recupero non riconosciuta.");
     switch (unit.kind) {
       case "field": {
         const value = remote[unit.field];
@@ -213,6 +232,12 @@ export function assembleBookResolution(
     }
   }
   result.chapters.sort((a, b) => a.number - b.number || a.id.localeCompare(b.id));
+  const pending = new Set(result.editorialReviewSceneIds ?? []);
+  for (const unit of entries) {
+    if (unit.kind === "scene" && selections[unit.id] === "proposal") pending.add(unit.sceneId);
+  }
+  const sceneIds = new Set(result.chapters.flatMap(ch => ch.scenes.map(scene => scene.id)));
+  result.editorialReviewSceneIds = [...pending].filter(id => sceneIds.has(id));
   result.authorConstraints = result.authorConstraints ?? [];
   result.audienceReviews = result.audienceReviews ?? [];
   // Runtime state cannot be safely merged structurally with two AI pipelines.

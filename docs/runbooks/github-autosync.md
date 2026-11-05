@@ -40,6 +40,10 @@ Dalla v0.6.0 puoi confrontare il libro locale con l'ultima versione GitHub, sceg
 
 Prima del ripristino il sistema verifica che HEAD GitHub e la versione locale non siano cambiati e crea **due backup IndexedDB** in transazione, poi disattiva autosync. **Nessun push avviene durante il recupero.** Leggi `docs/conflict-recovery.md` e scarica uno ZIP per backup esterno.
 
+## Bozze di fusione dopo un conflitto (ADR 0009)
+
+Nell'editor di confronto seleziona una scena e apri il diff. Puoi salvare manualmente una nuova bozza senza chiamare l'AI, oppure autorizzare il modello `merge`. Ogni proposta conserva testo locale e GitHub, revisione, modello e token se disponibili, non credenziali. Seleziona **Usa questa proposta per la scena** e conferma **Applica scelte con doppio backup**; la scena accettata resta draft, quindi rileggila prima del push. Lo ZIP content-only conserva le bozze ma contiene testi in chiaro. Guida `docs/scene-merge.md`.
+
 ## Recupero dopo chiusura browser
 
 - Non presumere che un task AI o il sync lavori mentre il browser è chiuso o sospeso.

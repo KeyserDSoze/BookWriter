@@ -9,7 +9,8 @@
 - [x] PR #9: autosync opt-in con outbox IndexedDB atomica, retry, Web Locks tra tab, recupero dei commit ambigui; CI e Playwright desktop/mobile superati.
 - [x] PR #12: writer lease GitHub con heartbeat e recupero manuale, CI e Playwright desktop/mobile superati.
 - [ ] PR #14: confronto visuale base/locale/remoto con scelta per scena/entità, doppio backup e recupero conservativo, in verifica CI.
-- [ ] Hardening del lease, diff parola per parola e merge AI assistito (#10), OAuth Google/Microsoft (#2).
+- [ ] PR #16: diff parole/paragrafi con fallback mobile, task AI `merge`, bozza manuale, storico ZIP e approvazione solo con doppio backup; in CI.
+- [ ] Hardening del lease e revisione automatica del canon delle proposte (#10), OAuth Google/Microsoft (#2).
 - [ ] Completezza canon Narrarium e controlli rigorosi sui segreti (#5).
 - [ ] Budget, modelli per riassunti dedicati e test con provider reali (#6).
 

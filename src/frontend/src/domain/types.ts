@@ -1,6 +1,6 @@
 export const TASK_KINDS = [
   "brainstorm", "validate", "audience", "adversarial", "outline",
-  "prose", "continuity", "consolidate", "summarize", "revision",
+  "prose", "continuity", "consolidate", "summarize", "revision", "merge",
 ] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
@@ -85,6 +85,7 @@ export interface BookProject {
   status: RunStatus;
   phase: Phase;
   previousError?: string;
+  editorialReviewSceneIds?: string[]; // Explicit canon confirmation before autopilot can resume.
   ideas?: string;
   validation?: string;
   audienceReviews: string[];

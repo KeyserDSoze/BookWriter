@@ -1,0 +1,133 @@
+import type { Activity, BookProject } from "../domain/types";
+import {
+  assertDraftMatchesReview, buildSceneMergePrompt,
+  validateSceneProposal, type SceneMergeDraft,
+} from "../domain/scene-merge";
+import type { ConflictReview } from "../infrastructure/conflict-recovery";
+import { callModel } from "../infrastructure/ai";
+import { confirmGitHubHead, RemoteConflict } from "../infrastructure/github-sync";
+import { getBook, getDb, loadSettings } from "../infrastructure/db";
+import { withWriterGuard } from "./writer-guard";
+
+export async function listSceneMergeDrafts(
+  review: ConflictReview, chapterId: string, sceneId: string,
+): Promise<SceneMergeDraft[]> {
+  const db = await getDb();
+  const all = await db.getAll("mergeDrafts") as SceneMergeDraft[];
+  return all.filter(d => d.bookId === review.bookId &&
+    d.chapterId === chapterId && d.sceneId === sceneId &&
+    d.localRevision === review.localUpdatedAt && d.remoteHead === review.headSha)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+export async function getSceneMergeDraft(id: string): Promise<SceneMergeDraft | undefined> {
+  return (await (await getDb()).get("mergeDrafts", id)) as SceneMergeDraft | undefined;
+}
+async function assertReviewFresh(review: ConflictReview): Promise<BookProject> {
+  const local = await getBook(review.bookId);
+  if (!local?.remote || local.status === "running" ||
+      local.updatedAt !== review.localUpdatedAt ||
+      local.remote.owner !== review.local.remote?.owner ||
+      local.remote.repository !== review.local.remote?.repository ||
+      local.remote.branch !== review.local.remote?.branch ||
+      local.remote.lastSyncedCommit !== review.localSyncedCommit)
+    throw new RemoteConflict("Il libro o la repository sono cambiati. Ricarica il confronto prima di generare la bozza.");
+  return local;
+}
+async function persistDraft(review: ConflictReview, draft: SceneMergeDraft): Promise<SceneMergeDraft> {
+  assertDraftMatchesReview(draft, review);
+  validateSceneProposal(draft.proposedText);
+  const book = await assertReviewFresh(review);
+  if (!book.remote) throw new RemoteConflict("Repository non più collegata.");
+  await confirmGitHubHead(book.remote, review.headSha);
+  const db = await getDb();
+  const tx = db.transaction(["books", "mergeDrafts", "activities"], "readwrite");
+  const actual = await tx.objectStore("books").get(review.bookId) as BookProject | undefined;
+  if (!actual?.remote || actual.status === "running" ||
+      actual.updatedAt !== review.localUpdatedAt ||
+      actual.remote.lastSyncedCommit !== review.localSyncedCommit) {
+    await tx.done;
+    throw new RemoteConflict("Il libro locale è cambiato. Proposta non salvata.");
+  }
+  await tx.objectStore("mergeDrafts").put(draft, draft.id);
+  const now = new Date().toISOString();
+  const audit: Activity = {
+    id: crypto.randomUUID(), bookId: review.bookId, runId: crypto.randomUUID(),
+    phase: "revision", status: "succeeded",
+    title: draft.source === "ai" ? "Bozza AI di fusione scena" : "Bozza manuale di fusione scena",
+    reason: "Confronto di due versioni della stessa scena, senza consolidamento automatico.",
+    nextStep: "Apri Archivio, confronta la bozza e approva o rifiuta la proposta.",
+    summary: "Bozza " + draft.id.slice(0, 8) + " salvata solo localmente; nessuna modifica al canon.",
+    modelId: draft.modelId, endpointId: draft.endpointId,
+    inputTokens: draft.inputTokens, outputTokens: draft.outputTokens,
+    createdAt: now, endedAt: now,
+  };
+  await tx.objectStore("activities").put(audit, audit.id);
+  await tx.done;
+  return draft;
+}
+
+/** A proposal always remains a non-canon draft, even when the model succeeds. */
+export async function generateSceneMergeDraft(
+  review: ConflictReview, chapterId: string, sceneId: string,
+  instruction: string, controller: AbortController,
+): Promise<SceneMergeDraft> {
+  const prompt = buildSceneMergePrompt(review, chapterId, sceneId, instruction);
+  await assertReviewFresh(review);
+  return withWriterGuard(review.bookId, crypto.randomUUID(), controller, async guard => {
+    await guard.assertActive();
+    const current = await assertReviewFresh(review);
+    if (!current.remote) throw new RemoteConflict("Repository non configurata.");
+    await confirmGitHubHead(current.remote, review.headSha);
+    const settings = await loadSettings();
+    const response = await callModel("merge", prompt.system, prompt.prompt,
+      settings, current, controller.signal);
+    await guard.assertActive();
+    const text = validateSceneProposal(response.text);
+    const original = review.local.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
+    const remote = review.remote.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
+    if (!original || !remote) throw new Error("Scena non trovata durante la generazione.");
+    const draft: SceneMergeDraft = {
+      id: crypto.randomUUID(), bookId: review.bookId,
+      chapterId, sceneId,
+      localRevision: review.localUpdatedAt, remoteHead: review.headSha,
+      localText: original.text, remoteText: remote.text, proposedText: text,
+      instruction, status: "proposed", source: "ai",
+      createdAt: new Date().toISOString(),
+      endpointId: response.endpointId, modelId: response.modelId,
+      inputTokens: response.inputTokens, outputTokens: response.outputTokens,
+    };
+    await guard.assertActive();
+    return persistDraft(review, draft);
+  });
+}
+
+export async function saveManualSceneMergeDraft(
+  review: ConflictReview, chapterId: string, sceneId: string, text: string,
+): Promise<SceneMergeDraft> {
+  // Manual drafts must still serialize with any active AI/autosync editing.
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks?.request) throw new Error("Web Locks non disponibile per il salvataggio delle bozze.");
+  return locks.request("bookwriter:writer:" + review.bookId, { ifAvailable: true }, async lock => {
+    if (!lock) throw new Error("Un'altra scheda sta scrivendo il libro.");
+    const original = review.local.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
+    const remote = review.remote.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
+    if (!original || !remote) throw new Error("La scena richiede entrambe le versioni.");
+    return persistDraft(review, {
+      id: crypto.randomUUID(), bookId: review.bookId, chapterId, sceneId,
+      localRevision: review.localUpdatedAt, remoteHead: review.headSha,
+      localText: original.text, remoteText: remote.text,
+      proposedText: validateSceneProposal(text), instruction: "",
+      status: "proposed", source: "manual", createdAt: new Date().toISOString(),
+    });
+  });
+}
+export async function rejectSceneMergeDraft(id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction("mergeDrafts", "readwrite");
+  const draft = await tx.store.get(id) as SceneMergeDraft | undefined;
+  if (!draft || draft.status !== "proposed") {
+    await tx.done; throw new Error("Bozza assente o già conclusa.");
+  }
+  await tx.store.put({ ...draft, status: "rejected" }, id);
+  await tx.done;
+}

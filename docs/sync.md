@@ -30,6 +30,10 @@
 
 Per ogni libro una sola sessione autopilot remota alla volta. `.bookwriter/lease.json` contiene `holderId`, `runId`, `expiresAt`, `baseSha`. Acquisizione/rinnovo in GitHub con optimistic concurrency su SHA e heartbeat ragionevole; controllo lease **prima di ogni write remoto e generazione costosa**. Nessun lavoro remoto quando offline o lease incerto. Un lease scaduto può essere riassegnato con rilettura e conferma all'utente; nessun last-write-wins.
 
+## Proposte non canoniche di fusione (ADR 0009)
+
+La v0.7.0 introduce un task AI `merge` per proporre il testo combinato di una singola scena divergente. La creazione richiede lease GitHub attivo e controlli della revisione locale/HEAD Git; l'output è una bozza in IndexedDB, non una scrittura del canone. L'utente può scrivere senza AI, rifiutare o selezionare una proposta da storico, ma l'applicazione richiede la transazione a doppio backup ADR 0008 e mantiene lo stato `draft`. Il provider non riceve PAT e API key; l'invio di prosa e segreti richiede un consenso esplicito.
+
 ## Gestione conflitti
 
 **Implementazione v0.6.0:** l'autore può confrontare scene, sezioni del progetto ed entità canoniche rispetto alla baseline GitHub; per ogni differenza seleziona locale o remoto. Una transazione conserva copie complete di entrambe le versioni, aggiorna il libro locale, azzera l'outbox obsoleta e disattiva autosync. Il commit GitHub non viene modificato fino a un push manuale successivo. Guida `docs/conflict-recovery.md` e ADR 0008. Le regole seguenti includono anche target futuri:

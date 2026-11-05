@@ -33,6 +33,14 @@ Il confronto legge soltanto snapshot GitHub a commit SHA. La risoluzione crea du
 
 Il browser controlla i Web Locks, il commit GitHub e il timestamp locale prima della sostituzione. La transazione IndexedDB è atomica **solo nello stesso browser**; un dispositivo differente può avanzare GitHub subito dopo la verifica, nel qual caso il successivo push viene respinto per conflitto SHA. La copia di sicurezza rimane locale: esportare anche uno ZIP esterno. Niente force push, niente fusione cieca di prosa.
 
+## Laboratorio editoriale con AI (ADR 0009)
+
+Le proposte di fusione delle scene usano l'endpoint/modello `merge` configurato dall'autore. La UI richiede consenso esplicito prima di inviare le due versioni della scena, i vincoli del libro e **la memoria con i segreti** all'endpoint terzo. Le scene remote sono trattate come testo non attendibile nei prompt; il modello può sbagliare nonostante questa barriera, quindi la proposta resta **draft**.
+
+Le proposte sono salvate in `mergeDrafts` (IndexedDB v2), con testi originali e attributi di audit ma senza PAT o API key. Il backup ZIP di contenuti include **scene e segreti in chiaro**, comprese le bozze; va mantenuto privato. Il backup cifrato completo protegge il payload solo se l'autore imposta una passphrase.
+
+L'AI usa Web Locks e lease GitHub, ricontrolla SHA e revisione locale, poi salva la proposta senza modificare il canon. L'approvazione richiede doppio backup e marca la scena come `draft`; nessun push automatico.
+
 ## PAT e chiavi modello
 
 - Raccomandare credenziali limitate per repository e revocabili; per GitHub fine-grained PAT con **Contents R/W** sul solo gruppo di repository del libro. Le chiavi OpenAI-compatible possono fatturare: evitare log e invio a domini inattesi.
