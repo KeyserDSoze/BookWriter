@@ -80,6 +80,18 @@ describe("GitHub sync conservativa", () => {
     expect(updated?.remote?.lastSyncedCommit).toBe(NEXT);
   });
 
+  it("blocca il push manuale e automatico finché le scene fuse non sono state approvate", async () => {
+    const book = await sampleBook();
+    book.editorialReviewSceneIds = ["scene-needs-review"];
+    book.remote!.autoSync = true;
+    await saveBook(book, false);
+    const { calls } = fakeGitHub();
+    await expect(pushGitHubBook(book.id)).rejects.toThrow(/conferma nel Lettore/);
+    await expect(pushGitHubBook(book.id, false, { automatic: true, operationId: crypto.randomUUID() }))
+      .rejects.toThrow(/conferma nel Lettore/);
+    expect(calls).toHaveLength(0);
+  });
+
   it("ferma il sync se il branch si è spostato dopo l'ultimo commit", async () => {
     const book = await sampleBook();
     book.remote!.lastSyncedCommit = "e".repeat(40);
