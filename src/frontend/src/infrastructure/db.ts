@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from "../domain/types";
 import { enqueueCheckpoint } from "./outbox";
 
 const DB_NAME = "bookwriter";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let database: Promise<IDBPDatabase> | undefined;
 
 function revisionTimestamp(previous?: BookProject): string {
@@ -17,7 +17,7 @@ function revisionTimestamp(previous?: BookProject): string {
 export function getDb(): Promise<IDBPDatabase> {
   database ??= openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
-      for (const store of ["books", "activities", "settings", "meta", "outbox"]) {
+      for (const store of ["books", "activities", "settings", "meta", "outbox", "mergeDrafts"]) {
         if (!db.objectStoreNames.contains(store)) db.createObjectStore(store);
       }
     },
