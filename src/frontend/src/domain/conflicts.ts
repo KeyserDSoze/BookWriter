@@ -1,4 +1,5 @@
 import type { BookProject, Chapter, Scene } from "./types";
+import { synopsisBeforeChapter } from "./editorial-summary";
 
 type Field = "title" | "brief" | "writingStyle" | "audience" |
   "authorConstraints" | "ideas" | "validation" | "audienceReviews" | "adversarial";
@@ -250,10 +251,10 @@ export function assembleBookResolution(
       if (chapter.number >= firstAffected) {
         chapter.frozenAt = undefined;
         chapter.summary = undefined;
+        chapter.bookSummaryAtFreeze = undefined;
       }
     }
-    result.bookSummary = result.chapters.filter(ch => ch.frozenAt)
-      .map(ch => ch.summary ?? "").join("\n").slice(-8000);
+    result.bookSummary = synopsisBeforeChapter(result.chapters, firstAffected);
     result.editorialCycle = undefined;
   }
   const pending = new Set(result.editorialReviewSceneIds ?? []);
