@@ -123,11 +123,14 @@ export default function App() {
   }
   async function saveEndpointSettings() {
     try {
-      const endpoints = await Promise.all(settings.endpoints.map(async e => ({
-        ...e,
-        baseUrl: normalizeEndpoint(e.baseUrl),
-        secret: keyDrafts[e.id] ? await encryptLocal(keyDrafts[e.id]) : e.secret,
-      })));
+      const endpoints = await Promise.all(settings.endpoints.map(async e => {
+        const newKey = keyDrafts[e.id];
+        return {
+          ...e,
+          baseUrl: normalizeEndpoint(e.baseUrl),
+          secret: newKey ? await encryptLocal(newKey) : e.secret,
+        };
+      }));
       await persistSettings({ ...settings, endpoints });
       setKeyDrafts({});
     } catch (e) { setNotice(e instanceof Error ? e.message : "Impossibile salvare la configurazione."); }
