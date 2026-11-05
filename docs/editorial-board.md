@@ -33,13 +33,13 @@ La schermata **Dashboard → Redazione multi-agente** mostra quali verifiche son
 6. **Nuova analisi:** gli stessi dodici ruoli riesaminano il capitolo, da capo, per trovare nuovi problemi o effetti collaterali delle correzioni.
 7. **Esito:** quando il direttore non ritiene necessarie altre modifiche, il sistema aggiorna le sinossi del capitolo e del libro, archivia i rapporti e marca il capitolo **congelato**. Soltanto ora l'autopilot passa al prossimo capitolo.
 
-Un rilievo respinto con motivazione non obbliga a riscrivere una buona scena. Il registro conserva il **perché** della decisione. Questo è consenso editoriale **risolto criticamente**, non l'obbligo di obbedire a qualunque commento.
+Un rilievo respinto con motivazione non obbliga a riscrivere una buona scena. Il direttore non deve basarsi soltanto sull'opinione del revisore: vede anche **estratti originali della scena e il canone pertinente**, e viene avvisato quando una citazione non è trovata nel testo. Il registro conserva il **perché** della decisione. Questo è consenso editoriale **risolto criticamente**, non l'obbligo di obbedire a qualunque commento.
 
 ## Cosa succede se i revisori non si accordano
 
 L'autopilot può tentare fino a **tre cicli completi di remediation**. Se continuano a emergere correzioni accettate, si mette **in pausa** e indica che serve l'autore; **non inventa un'approvazione**. Nel pannello apri i resoconti, leggi le proposte accettate e respinte e scrivi la tua nuova istruzione: il vincolo verrà salvato e potrai avviare una nuova tornata dal pulsante **Riprendi**.
 
-Il browser salva un checkpoint dopo **ogni chiamata**; un riavvio riprende dal punto successivo, non dalla prima lettura. Chiusura e sospensione del browser **non** permettono al sistema di lavorare in background.
+Se nel frattempo l'autore cambia il libro, un output AI appartenente alla revisione precedente viene scartato invece di prevalere sul nuovo testo. Il browser salva un checkpoint dopo **ogni chiamata**; un riavvio riprende dal punto successivo, non dalla prima lettura. Chiusura e sospensione del browser **non** permettono al sistema di lavorare in background.
 
 ## Riaprire un capitolo dopo averne scritti altri
 
@@ -50,7 +50,7 @@ Dalla stessa Dashboard, il pulsante **Rivaluta** riapre un capitolo già congela
 - conserva i rapporti precedenti nell'archivio e avvia un nuovo ciclo;
 - richiede che ogni capitolo toccato venga nuovamente congelato prima che l'autopilot avanzi.
 
-Le revisioni impartite da **Intervieni sull'autopilot** possono analizzare l'impatto sui capitoli precedenti e successivi. La sequenza di approvazioni non si presume più valida dopo modifiche retroattive.
+Le revisioni impartite da **Intervieni sull'autopilot** possono analizzare l'impatto sui capitoli precedenti e successivi. La sequenza di approvazioni non si presume più valida dopo modifiche retroattive. Per evitare perdite di contesto, ogni capitolo congelato conserva anche una **fotografia del riassunto globale** a quel punto del romanzo. Riavviando il capitolo 3, il contesto riparte dalla fotografia del capitolo 2: non viene tagliato arbitrariamente. Per vecchi libri importati che non possiedono fotografie, se le sinossi precedenti non sono ricostruibili integralmente l'operazione viene **bloccata prima di alterare dati o sincronizzazione**, con invito a fare un backup e riassumere.
 
 ## Contesti, riassunti e crediti
 
