@@ -33,8 +33,24 @@ test("workspace responsive e accessibile, anche dopo reload", async ({ page }, t
 
 test("ZIP di contenuto esportabile e reimportabile senza sovrascrivere", async ({ page }) => {
   await createBook(page);
+  const mobile = test.info().project.name === "mobile-chromium";
+  if (mobile) {
+    const metrics = await page.evaluate(() => {
+      const nav = document.querySelector(".mobile-tabs");
+      const rect = nav?.getBoundingClientRect();
+      return {
+        innerWidth: innerWidth, innerHeight: innerHeight, scrollY: scrollY,
+        docHeight: document.documentElement.scrollHeight,
+        rect: rect ? { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right } : null,
+        position: nav ? getComputedStyle(nav).position : "missing",
+        visualHeight: visualViewport?.height,
+        visualOffsetTop: visualViewport?.offsetTop,
+      };
+    });
+    console.log("Mobile bottom-nav metrics after book creation:", JSON.stringify(metrics));
+  }
   await page.getByRole("button", { name: "Archivio" }).click();
-  await expect(page.getByRole("heading", { name: "Backup ZIP" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Backup ZIP", exact: true })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Scarica backup ZIP" }).click();
   const download = await downloadPromise;
