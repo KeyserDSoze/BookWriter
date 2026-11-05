@@ -54,11 +54,13 @@ function entriesById<T extends { id: string }>(items: T[] | undefined): Map<stri
 function meta(chapter?: Chapter) {
   return chapter && { title: chapter.title, number: chapter.number, purpose: chapter.purpose };
 }
-function pushUnit<T extends ConflictUnit>(
-  output: ConflictUnit[], item: Omit<T, "origin">, base: unknown, hasBase: boolean,
+type UnitInput<T> = T extends ConflictUnit ? Omit<T, "origin"> : never;
+type ConflictUnitInput = UnitInput<ConflictUnit>;
+function pushUnit(
+  output: ConflictUnit[], item: ConflictUnitInput, base: unknown, hasBase: boolean,
 ): void {
   if (sameContent(item.local, item.remote)) return;
-  output.push({ ...item, origin: classification(item.local, item.remote, base, hasBase) } as T);
+  output.push({ ...item, origin: classification(item.local, item.remote, base, hasBase) } as ConflictUnit);
 }
 
 /**
