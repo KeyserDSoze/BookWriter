@@ -3,6 +3,7 @@ import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRe
 import { callModel } from "../infrastructure/ai";
 import { getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
+import { RemoteWriterLost } from "../infrastructure/github-lease";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -326,7 +327,7 @@ export class AutopilotRunner {
       if (sessionStarted) {
         const current = await getBook(bookId);
         if (current?.status === "running") {
-          current.status = signal.aborted ? "paused" : "error";
+          current.status = signal.aborted && !(error instanceof RemoteWriterLost) ? "paused" : "error";
           current.previousError = error instanceof Error ? error.message : "Lock remoto non disponibile.";
           await saveBook(current, false);
         }
