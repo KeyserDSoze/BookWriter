@@ -59,6 +59,8 @@ export interface Chapter {
   purpose: string;
   scenes: Scene[];
   summary?: string;
+  /** Rolling, public book synopsis at this chapter freeze: supports safe rewind. */
+  bookSummaryAtFreeze?: string;
   frozenAt?: string;
   editorialRounds?: EditorialRound[];
 }
