@@ -9,6 +9,7 @@ export type RunStatus = "idle" | "running" | "paused" | "error" | "completed";
 export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "outline" | "prose" | "review" | "consolidate" | "chapterReview" | "revision" | "completed";
 
 import type { ChapterEditorialCycle, EditorialRound } from "./editorial-board";
+import type { ChapterHistoricalDossier } from "./historical-research";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -80,6 +81,7 @@ export interface Chapter {
   bookSummaryAtFreeze?: string;
   frozenAt?: string;
   editorialRounds?: EditorialRound[];
+  historicalDossier?: ChapterHistoricalDossier;
 }
 export interface NarrativeMemory {
   characters: Record<string, string>;
