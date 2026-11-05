@@ -197,6 +197,9 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       if (!book?.remote) throw new Error("Collega prima il libro a GitHub.");
       if (enabled && book.editorialReviewSceneIds?.length)
         throw new Error("Conferma prima tutte le scene fuse nel Lettore, poi riattiva autosync.");
+      if (enabled && (book.editorialCycle || book.chapters.some(ch =>
+        !ch.frozenAt && ch.scenes.some(s => s.status !== "planned"))))
+        throw new Error("Completa e congela tutti i capitoli in review prima di riattivare autosync.");
       if (enabled && !book.remote.lastSyncedCommit)
         throw new Error("Esegui prima una sincronizzazione manuale del libro.");
       if (enabled && !navigator.locks?.request)
@@ -300,7 +303,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <label className="flex items-center gap-3">
           <input type="checkbox" className="size-5 accent-emerald-600"
-            checked={!!connected.autoSync} disabled={busy || (!!book?.editorialReviewSceneIds?.length && !connected.autoSync)}
+            checked={!!connected.autoSync} disabled={busy || (!connected.autoSync && (!!book?.editorialReviewSceneIds?.length || !!book?.editorialCycle))}
             onChange={e => void toggleAutoSync(e.target.checked)}/>
           <span className="font-semibold">Sincronizzazione automatica ai checkpoint</span>
         </label>
@@ -319,7 +322,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         {book.editorialReviewSceneIds.length} scene fuse attendono conferma nel Lettore: push e riattivazione autosync bloccati.
       </p>}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync || !!book.editorialReviewSceneIds?.length}
+        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync || !!book.editorialReviewSceneIds?.length || !!book.editorialCycle || book.chapters.some(ch => !ch.frozenAt && ch.scenes.some(s => s.status !== "planned"))}
           onClick={() => void push()}><Cloud size={17}/> Sincronizza su GitHub</Button>
         <Button variant="secondary" disabled={!settings.githubToken || busy} onClick={() => void importRemote()}>
           <Download size={17}/> Importa un libro remoto
