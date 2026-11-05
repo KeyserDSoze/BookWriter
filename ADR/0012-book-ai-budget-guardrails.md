@@ -1,6 +1,6 @@
 # ADR 0012 — Budget AI per libro: tariffe dichiarate, riserva preventiva e arresto conservativo
 
-- **Stato:** Accettato per v0.8.1 (PR #21; merge subordinato a CI)
+- **Stato:** Implementato e integrato in main (v0.8.1, PR #21 merged, CI desktop/mobile verde)
 - **Data:** 2026-11-05
 - **Issue:** [#17](https://github.com/KeyserDSoze/BookWriter/issues/17)
 - **PR:** [#21](https://github.com/KeyserDSoze/BookWriter/pull/21)
