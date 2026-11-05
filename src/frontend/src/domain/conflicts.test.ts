@@ -87,6 +87,54 @@ describe("Confronto strutturato e risoluzione esplicita", () => {
     expect(local.memory.characters.Mara).toBe("Mara possiede la chiave.");
   });
 
+  it("un recupero remoto riapre il capitolo modificato e ripristina la fotografia narrativa precedente", () => {
+    const { local, remote } = sample();
+    const priorSynopsis = "La chiave di Mara deve restare segreta. ".repeat(280);
+    local.chapters[0]!.frozenAt = "2026-11-05T10:00:00.000Z";
+    local.chapters[0]!.summary = "Riassunto capitolo uno";
+    local.chapters[0]!.bookSummaryAtFreeze = priorSynopsis;
+    const second = {
+      id: "ch:002", number: 2, title: "Il ritorno", purpose: "Secondo conflitto",
+      scenes: [{ id: "s:002", number: 1, title: "Il sentiero",
+        objective: "Seguire l'indizio", text: "Mara torna al ponte.",
+        summary: "Mara cammina", status: "canon" as const }],
+      frozenAt: "2026-11-05T11:00:00.000Z",
+      summary: "Il ritorno al ponte", bookSummaryAtFreeze: priorSynopsis + " Mara ritorna.",
+    };
+    local.chapters.push(second);
+    local.bookSummary = second.bookSummaryAtFreeze;
+    remote.chapters = structuredClone(local.chapters);
+    remote.chapters[1]!.scenes[0]!.text = "Mara trova un messaggio sul ponte.";
+    const entries = compareBookVersions(local, remote);
+    const scene = entries.find(x => x.kind === "scene" && x.sceneId === "s:002");
+    expect(scene).toBeDefined();
+    const merged = assembleBookResolution(local, remote, entries, { [scene!.id]: "remote" });
+    expect(merged.bookSummary).toBe(priorSynopsis);
+    expect(merged.chapters[0]?.frozenAt).toBeDefined();
+    expect(merged.chapters[0]?.bookSummaryAtFreeze).toBe(priorSynopsis);
+    expect(merged.chapters[1]?.frozenAt).toBeUndefined();
+    expect(merged.chapters[1]?.bookSummaryAtFreeze).toBeUndefined();
+  });
+
+  it("il recupero di un libro legacy non tronca una sinossi lunga non ricostruibile", () => {
+    const { local, remote } = sample();
+    local.chapters[0]!.frozenAt = "2026-11-05T10:00:00.000Z";
+    local.chapters[0]!.summary = "Indizio necessario. ".repeat(600);
+    const second = structuredClone(local.chapters[0]!);
+    second.id = "ch:002"; second.number = 2;
+    second.scenes[0]!.id = "s:002";
+    second.frozenAt = "2026-11-05T11:00:00.000Z";
+    local.chapters.push(second);
+    remote.chapters = structuredClone(local.chapters);
+    remote.chapters[1]!.scenes[0]!.text = "Scena remota modificata.";
+    const entries = compareBookVersions(local, remote);
+    const scene = entries.find(x => x.kind === "scene" && x.sceneId === "s:002");
+    expect(() => assembleBookResolution(local, remote, entries, {
+      [scene!.id]: "remote",
+    })).toThrow(/non verranno troncate/);
+    expect(local.chapters[1]?.frozenAt).toBeDefined();
+  });
+
   it("protegge il nome __proto__ nel canon remoto", () => {
     const { local, remote } = sample();
     Object.defineProperty(remote.memory.characters, "__proto__", {
