@@ -1,4 +1,5 @@
 import type { Activity, BookProject, GitHubRemote } from "../domain/types";
+import { assertDraftMatchesReview, validateSceneProposal, type AcceptedSceneDraft, type SceneMergeDraft } from "../domain/scene-merge";
 import {
   assembleBookResolution, compareBookVersions,
   type ConflictUnit, type ResolutionChoice,
@@ -128,6 +129,7 @@ export interface ConflictResolutionResult {
  */
 export async function applyBookConflictResolution(
   review: ConflictReview, selections: Record<string, ResolutionChoice>,
+  acceptedDrafts: Record<string, AcceptedSceneDraft> = {},
 ): Promise<ConflictResolutionResult> {
   const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
   if (!locks?.request)
@@ -148,7 +150,22 @@ export async function applyBookConflictResolution(
       const activityHistory = await listActivities(review.bookId);
       const backupLocal = createSafetyCopy(before, "locale");
       const backupRemote = createSafetyCopy(review.remote, "GitHub", review.headSha);
-      const merged = assembleBookResolution(before, review.remote, review.units, selections);
+      const requestedProposals = review.units.filter(unit => selections[unit.id] === "proposal");
+      const db = await getDb();
+      const acceptedTexts: Record<string, string> = {};
+      for (const unit of requestedProposals) {
+        if (unit.kind !== "scene") throw new Error("Solo le scene possono usare proposte AI.");
+        const choice = acceptedDrafts[unit.id];
+        if (!choice?.draftId) throw new Error("Scegli una bozza prima di applicare il risultato.");
+        const draft = await db.get("mergeDrafts", choice.draftId) as SceneMergeDraft | undefined;
+        if (!draft || draft.status !== "proposed" ||
+            draft.chapterId !== unit.chapterId || draft.sceneId !== unit.sceneId) {
+          throw new Error("La bozza scelta non è disponibile.");
+        }
+        assertDraftMatchesReview(draft, review);
+        acceptedTexts[unit.id] = validateSceneProposal(choice.text);
+      }
+      const merged = assembleBookResolution(before, review.remote, review.units, selections, acceptedTexts);
       merged.updatedAt = nowGreater(before.updatedAt);
       merged.remote = {
         ...before.remote,
@@ -166,14 +183,14 @@ export async function applyBookConflictResolution(
         reason: "Confronto locale/GitHub con due copie di sicurezza create prima di applicare la selezione.",
         nextStep: "Rileggi la prosa, i segreti e la timeline. Poi esegui un push manuale da Archivio.",
         status: "succeeded", createdAt: now, endedAt: now,
-        summary: remoteSelections + " differenze selezionate dal remoto su " + review.units.length +
+        summary: remoteSelections + " differenze GitHub e " + requestedProposals.length +
+          " proposte editoriali accettate su " + review.units.length +
           "; backup locale " + backupLocal.id.slice(0, 8) +
           ", backup GitHub " + backupRemote.id.slice(0, 8) +
           "; SHA " + review.headSha.slice(0, 12),
       };
 
-      const db = await getDb();
-      const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
+      const tx = db.transaction(["books", "activities", "outbox", "mergeDrafts"], "readwrite");
       const books = tx.objectStore("books");
       const actual = await books.get(review.bookId) as BookProject | undefined;
       if (!actual?.remote || actual.status === "running" ||
@@ -182,6 +199,20 @@ export async function applyBookConflictResolution(
           !repositoryMatches(actual.remote, review.local.remote)) {
         await tx.done;
         throw new RemoteConflict("La revisione locale è cambiata prima del salvataggio: nessun dato sostituito.");
+      }
+      // Recheck selected draft state in the same transaction as both backups.
+      const draftStore = tx.objectStore("mergeDrafts");
+      for (const unit of requestedProposals) {
+        const id = acceptedDrafts[unit.id]!.draftId;
+        const record = await draftStore.get(id) as SceneMergeDraft | undefined;
+        if (!record || record.status !== "proposed") {
+          await tx.done;
+          throw new RemoteConflict("Una bozza selezionata è cambiata. Nessun dato sostituito.");
+        }
+        assertDraftMatchesReview(record, review);
+        await draftStore.put({
+          ...record, status: "accepted", acceptedText: acceptedTexts[unit.id],
+        }, id);
       }
       await books.put(backupLocal, backupLocal.id);
       await books.put(backupRemote, backupRemote.id);
