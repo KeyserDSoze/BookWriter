@@ -54,6 +54,30 @@ describe("Riapertura conservativa di capitoli congelati",()=>{
     expect(result?.chapters[1]?.frozenAt).toBeUndefined();
     expect(result?.bookSummary).toBe("Riassunto del capitolo 1");
   });
+  it("riapre un capitolo usando la sinossi globale esatta salvata al freeze precedente",async()=>{
+    const book=await sample();
+    const clue="La promessa iniziale torna negli indizi del castello. ".repeat(210);
+    book.chapters[0]!.bookSummaryAtFreeze=clue;
+    book.chapters[1]!.bookSummaryAtFreeze=clue+"Segue il capitolo due.";
+    await saveBook(book,false);
+    await reopenChapterReview(book.id,"ch-2");
+    const updated=await getBook(book.id);
+    expect(updated?.bookSummary).toBe(clue);
+    expect(updated?.chapters[0]?.bookSummaryAtFreeze).toBe(clue);
+    expect(updated?.chapters[1]?.bookSummaryAtFreeze).toBeUndefined();
+    expect(updated?.chapters[1]?.frozenAt).toBeUndefined();
+  });
+  it("rifiuta il rewind di molte sinossi legacy senza snapshot prima di toccare libri o outbox",async()=>{
+    const book=await sample();
+    book.chapters[0]!.summary="Indizio non eliminabile. ".repeat(390);
+    await saveBook(book,false);
+    const before=await getOutbox(book.id);
+    await expect(reopenChapterReview(book.id,"ch-2")).rejects.toThrow(/non verranno troncate/);
+    const after=await getBook(book.id);
+    expect(after?.chapters[1]?.frozenAt).toBeDefined();
+    expect(after?.remote?.autoSync).toBe(true);
+    expect((await getOutbox(book.id))?.operationId).toBe(before?.operationId);
+  });
   it("dopo tre round bloccati richiede istruzione autore e mantiene i rapporti",async()=>{
     const book=await sample();
     book.editorialCycle=createEditorialCycle("ch-1");
