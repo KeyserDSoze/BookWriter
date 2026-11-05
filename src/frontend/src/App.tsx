@@ -290,6 +290,7 @@ export default function App() {
               {(item.inputTokens !== undefined || item.outputTokens !== undefined) && <p>Token: input {item.inputTokens ?? "N/D"}, output {item.outputTokens ?? "N/D"}</p>}
               {item.error && <p className="text-red-600 dark:text-red-300">{item.error}</p>}
               {item.output && <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-100 p-3 text-xs dark:bg-slate-900">{item.output}</pre>}
+              <Button variant="outline" onClick={() => { setIntervention(`Correggi il lavoro "${item.title}" (${item.phase}): `); setPage("dashboard"); }}><WandSparkles size={16} /> Intervieni su questa attività</Button>
             </div>
           </details>)}</div>}
       </Section>}
