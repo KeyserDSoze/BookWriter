@@ -96,6 +96,67 @@ describe("Dossier storico verificabile nel processo editoriale",()=>{
     expect(()=>validateReport(cycle,"style",seg,1,finding(confirmed()),b.chapters[0]!))
       .toThrow(/Solo il revisore storico/);
   });
+  it("impedisce che una sola citazione venga attribuita a due fonti",()=>{
+    const primary=source();
+    const secondary:HistoricalSource={
+      ...source(),id:"itwiki:43:311",pageId:43,revisionId:311,
+      title:"Ferrovie",url:"https://it.wikipedia.org/wiki/Ferrovia",
+      excerpt:"La rete ferroviaria europea aveva già collegamenti importanti prima del 1850.",
+    };
+    const dossier=extendHistoricalDossier(undefined,["Telegrafo elettrico nel 1848"],
+      [primary,secondary],new Date().toISOString());
+    const claimed={
+      claim:"Nel XIX secolo erano disponibili collegamenti tecnologici in Europa.",
+      assessment:"consistent_with_excerpt" as const,
+      sourceIds:[primary.id,secondary.id],
+    };
+    // Old single-quote reports are still readable, but can no longer claim
+    // that two sources are corroborating the same statement.
+    expect(()=>validateHistoricalClaim({...claimed,
+      sourceQuote:"Il telegrafo elettrico cominciò a diffondersi"},dossier))
+      .toThrow(/ogni fonte/i);
+    expect(()=>validateHistoricalClaim({...claimed,sourceEvidence:[
+      {sourceId:primary.id,quote:"Il telegrafo elettrico cominciò a diffondersi"},
+    ]},dossier)).toThrow(/ogni fonte/i);
+    expect(()=>validateHistoricalClaim({...claimed,sourceEvidence:[
+      {sourceId:primary.id,quote:"La rete ferroviaria europea aveva già collegamenti"},
+      {sourceId:secondary.id,quote:"Il telegrafo elettrico cominciò a diffondersi"},
+    ]},dossier)).toThrow(/fonte associata/i);
+    const perSource=[
+      {sourceId:primary.id,quote:"Il telegrafo elettrico cominciò a diffondersi"},
+      {sourceId:secondary.id,quote:"La rete ferroviaria europea aveva già collegamenti"},
+    ];
+    expect(()=>validateHistoricalClaim({...claimed,sourceEvidence:perSource},dossier)).not.toThrow();
+    const book=sample(),cycle=createEditorialCycle("c1");
+    book.chapters[0]!.historicalDossier=dossier;
+    const seg=chapterSegments(book.chapters[0]!)[0]!;
+    const report=validateReport(cycle,"historical",seg,1,
+      finding({...claimed,sourceEvidence:perSource}),book.chapters[0]!);
+    cycle.reports.push(report);
+    const judge=adjudicationPrompt(book,cycle);
+    expect(judge.prompt).toContain('"citedQuote":"La rete ferroviaria europea aveva già collegamenti"');
+    expect(judge.prompt).toContain('"quoteMatches":true');
+    expect(reviewerPrompt(book,cycle,"historical",seg,1).system).toContain("CIASCUN sourceId");
+    expect(reviewerPrompt(book,cycle,"readerCasual",seg,1).prompt)
+      .not.toContain("La rete ferroviaria europea");
+  });
+  it("non spaccia due revisioni della stessa voce per fonti indipendenti",()=>{
+    const versions=[source(),source(211)];
+    const dossier=extendHistoricalDossier(undefined,["Telegrafo elettrico nel 1848"],
+      versions,new Date().toISOString());
+    expect(()=>validateHistoricalClaim({
+      claim:"I telegrafi elettrici si diffusero nell'Ottocento.",
+      assessment:"consistent_with_excerpt",sourceIds:versions.map(s=>s.id),
+      sourceEvidence:versions.map(s=>({
+        sourceId:s.id,quote:"Il telegrafo elettrico cominciò a diffondersi",
+      })),
+    },dossier)).toThrow(/non sono fonti indipendenti/);
+    expect(()=>validateHistoricalClaim({
+      claim:"I telegrafi elettrici si diffusero nell'Ottocento.",
+      assessment:"unverified",sourceIds:[],
+      sourceEvidence:[{sourceId:versions[0]!.id,quote:"Il telegrafo elettrico cominciò a diffondersi"}],
+    },dossier)).toThrow(/non verificata/);
+  });
   it("un dubbio senza riscontri resta unverified e non può fingere citazioni",()=>{
     const b=sample(),cycle=createEditorialCycle("c1"),seg=chapterSegments(b.chapters[0]!)[0]!;
     const undecided={
