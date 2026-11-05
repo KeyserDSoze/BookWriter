@@ -33,6 +33,8 @@
 
 **Bibliografia DOI v0.9.1 (PR #25):** ogni capitolo può conservare pubblicazioni identificabili tramite Crossref, ricercate solo dopo conferma dell'autore, con autori, anno, editore e link DOI. I metadati aiutano lo specialista storico a individuare studi da leggere, **ma non sono prove del loro contenuto**: il giudice distingue scheda bibliografica e citazione documentale. Guida `docs/crossref-bibliography.md`, ADR 0014, issue #23.
 
+**Integrità delle citazioni v0.9.2 (PR #27, in revisione):** le evidenze storiche di un rilievo devono riportare una citazione letterale distinta per ogni fonte attiva; il giudice vede il legame fra estratto e citazione. Versione non ancora distribuita finché la PR non è integrata. ADR 0015.
+
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
