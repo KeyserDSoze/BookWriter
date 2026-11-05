@@ -20,14 +20,14 @@ function sample() {
   return { base, local, remote };
 }
 function sceneText(book: BookProject) {
-  return book.chapters[0].scenes[0]?.text;
+  return book.chapters[0]!.scenes[0]!?.text;
 }
 
 describe("Confronto strutturato e risoluzione esplicita", () => {
   it("riconosce i conflitti bidirezionali e conserva la prosa non selezionata", () => {
     const { base, local, remote } = sample();
-    local.chapters[0].scenes[0].text = "Scena riscritta localmente.";
-    remote.chapters[0].scenes[0].text = "Scena riscritta su GitHub.";
+    local.chapters[0]!.scenes[0]!.text = "Scena riscritta localmente.";
+    remote.chapters[0]!.scenes[0]!.text = "Scena riscritta su GitHub.";
     remote.memory.secrets.lettera = "La lettera è stata bruciata.";
     const entries = compareBookVersions(local, remote, base);
     const scene = entries.find(x => x.kind === "scene");
@@ -58,7 +58,7 @@ describe("Confronto strutturato e risoluzione esplicita", () => {
 
   it("permette di recuperare una scena eliminata e un capitolo aggiunto", () => {
     const { base, local, remote } = sample();
-    local.chapters[0].scenes = [];
+    local.chapters[0]!.scenes = [];
     remote.chapters.push({
       id: "ch:002", number: 2, title: "Il capitolo nuovo",
       purpose: "Un nuovo conflitto", scenes: [],
@@ -71,7 +71,7 @@ describe("Confronto strutturato e risoluzione esplicita", () => {
     ).map(x => [x.id, "remote" as const]));
     const merged = assembleBookResolution(local, remote, entries, selections);
     expect(merged.chapters.map(ch => ch.id)).toEqual(["ch:001", "ch:002"]);
-    expect(merged.chapters[0].scenes).toHaveLength(1);
+    expect(merged.chapters[0]!.scenes).toHaveLength(1);
   });
 
   it("l'eliminazione selezionata dal remoto non rende irrecuperabile la copia locale", () => {
