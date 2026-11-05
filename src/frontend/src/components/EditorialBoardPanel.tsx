@@ -45,7 +45,7 @@ function RoundDetails({ round, reports, judgment, sources = [] }: {
                   {f.historical.sourceIds.map(id => {
                     const source = sources.find(s => s.id === id);
                     return source ? <p key={id}><b>Fonte terziaria:</b>{" "}
-                      <a className="text-blue-700 underline dark:text-blue-300" href={source.url}
+                      <a className="text-blue-700 underline dark:text-blue-300" href={source.revisionId ? "https://it.wikipedia.org/w/index.php?oldid=" + source.revisionId : source.url}
                         rel="noopener noreferrer" target="_blank">{source.title}</a>
                       {" "}(revisione {source.revisionId ?? "non nota"})</p>
                       : <p key={id} className="text-amber-700 dark:text-amber-300">
