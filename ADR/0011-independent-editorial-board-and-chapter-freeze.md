@@ -33,7 +33,7 @@ Il controllo preliminare della singola scena rimane, ma **non autorizza l'avanza
 
 ### Direttore responsabile
 
-Dopo **tutti e dodici i revisori**, il direttore riceve i soli report strutturati e giudica **ogni ID di rilievo una volta sola**. Può `accept` oppure `reject`; per ogni decisione deve spiegare il *perché*. Un `accept` deve inoltre fornire una remediation **specifica**. Il software valida che nessun rilievo sia omesso, duplicato o inventato: se la decisione è incompleta, la fase fallisce ed è ripetibile dal checkpoint.
+Dopo **tutti e dodici i revisori**, il direttore riceve i report strutturati, **estratti della prosa originale intorno alle citazioni** e il canone privato entro limiti espliciti, e giudica **ogni ID di rilievo una volta sola**. I rapporti sono opinioni da verificare: se una citazione non corrisponde a una scena, viene marcata come non trovata e il direttore non può considerarla prova certa. Può `accept` oppure `reject`; per ogni decisione deve spiegare il *perché*. Un `accept` deve inoltre fornire una remediation **specifica**. Il software valida che nessun rilievo sia omesso, duplicato o inventato: se la decisione è incompleta, la fase fallisce ed è ripetibile dal checkpoint.
 
 Il direttore **non** ha il potere di dichiarare un capitolo congelato mentre esistono remediation accettate. Se non accetta alcun problema, il capitolo può avanzare alla sinossi e al congelamento; i rigetti restano registrati con motivazione, anche quando il revisore aveva espresso un voto negativo. Questo è un **consenso risolto criticamente**, non un voto di maggioranza né una finta unanimità.
 
@@ -47,9 +47,9 @@ Il direttore **non** ha il potere di dichiarare un capitolo congelato mentre esi
 
 ### Congelamento e retroazioni
 
-- Quando non rimangono correzioni accettate, l'agente `summarize` produce sinossi progressive del capitolo e del libro per ciascun segmento. Solo dopo l'ultima sintesi vengono assegnati `chapter.frozenAt`, `chapter.summary` e `book.bookSummary`, archiviando tutti i rapporti e le sentenze.
+- Quando non rimangono correzioni accettate, l'agente `summarize` produce sinossi progressive del capitolo e del libro per ciascun segmento. Solo dopo l'ultima sintesi vengono assegnati `chapter.frozenAt`, `chapter.summary`, `chapter.bookSummaryAtFreeze` e `book.bookSummary`, archiviando tutti i rapporti e le sentenze. `bookSummaryAtFreeze` è la **snapshot globale completa in quel punto narrativo**, necessaria per un rewind successivo senza perdere le premesse dell'autore.
 - Il runner prosegue al capitolo successivo **solo dopo** il congelamento. Nessun autosync di prosa e nessun push manuale sono permessi se c'è un capitolo già iniziato ma non congelato o una redazione attiva. I soli checkpoint di outline e di congelamento sono candidati a sincronizzazione.
-- Un autore può riaprire un capitolo congelato. L'operazione prende Web Locks, disattiva autosync, elimina la coda obsoleta, annota l'azione e **invalida il congelamento e le sinossi di quel capitolo e dei successivi**. Le revisioni retroattive dell'autopilot invalidano anch'esse le approvazioni dei capitoli dipendenti; ciascuno dovrà affrontare nuovamente il panel prima di proseguire.
+- Un autore può riaprire un capitolo congelato. L'operazione prende Web Locks, disattiva autosync, elimina la coda obsoleta, annota l'azione e **invalida il congelamento e le sinossi di quel capitolo e dei successivi**. Le revisioni retroattive dell'autopilot invalidano anch'esse le approvazioni dei capitoli dipendenti; ciascuno dovrà affrontare nuovamente il panel prima di proseguire. Il rewind si basa sulla snapshot `bookSummaryAtFreeze` dell'ultimo capitolo precedente ancora congelato, mai su `slice(-8000)` applicato a un riassunto cumulativo. Per progetti legacy privi di snapshot, la ricostruzione è permessa soltanto se tutti i riassunti precedenti sono presenti e l'unione completa rispetta il limite; altrimenti l'operazione fallisce prima di salvare modifiche, con indicazione di creare un backup/riassunto.
 - L'archivio dei giudizi è parte di `BookProject`/IndexedDB e viene salvato negli ZIP e nella proiezione GitHub alle normali milestone; non contiene API key o PAT.
 - La UI mostra per ogni ruolo le prove testuali, la remediation proposta, la decisione e la motivazione dell'editor, e separa capitoli congelati, in review e non ancora completi.
 
@@ -60,7 +60,7 @@ Il direttore **non** ha il potere di dichiarare un capitolo congelato mentre esi
 - **Limiti di contesto:** la memoria privata troppo ampia blocca la chiamata con errore descrittivo; non è ancora disponibile una compattazione automatica affidabile di tutte le entità/segreti.
 - **Lettori ciechi:** una sinossi pubblica aggiornata dal modello potrebbe comunque contenere uno spoiler generato erroneamente; la verifica umana e il controllo dei prompt restano necessari.
 - **Indipendenza:** le chat sono richieste stateless distinte, non agenti server-side in background. Possono usare lo stesso modello/endpoint se l'autore lo configura; è possibile configurare separatamente le route `chapterAudit`, `chapterReaders`, `chapterJudge`, `chapterRepair` e `summarize`.
-- **Continuità in sospensione:** il browser mobile in background non garantisce generazione continua; il ciclo riprende dal prossimo rapporto checkpointato al ritorno.
+- **Continuità in sospensione:** il browser mobile in background non garantisce generazione continua; il ciclo riprende dal prossimo rapporto checkpointato al ritorno. Una risposta AI arrivata dopo un cambio di revisione locale del libro viene scartata, oltre ai controlli di lease e fase.
 - **Casi non risolti:** valutazione umana di rilievi critici, retrieval semantico della memoria, release del freeze su versioni parallele e fact-checking storico certificato sono attività future. Nessun force push.
 
 ## Gate di rilascio
@@ -69,6 +69,7 @@ Il direttore **non** ha il potere di dichiarare un capitolo congelato mentre esi
 2. Vitest end-to-end del runner locale: 12 report → giudice → riassunto → freeze; e report critico → remediation → nuovo panel → freeze; e tre cicli senza soluzione → stop autore.
 3. Test del blocco di autosync e push per capitoli non congelati; riapertura con invalidazione dei successori e conservazione dei giudizi.
 4. Playwright desktop/mobile su stato dei ruoli, progressi, storico, congelamento e riapertura.
-5. TypeScript, Vitest, smoke, Vite build, Playwright desktop/mobile verdi sulla HEAD della PR. Nessun test con provider a pagamento senza consenso.
+5. Test della snapshot globale a freeze/rewind, fallback legacy senza troncamento, blocco prima del mutamento se il riassunto non è ricostruibile, fence delle modifiche concorrenti e citazioni verificate sui testi effettivi.
+6. TypeScript, Vitest, smoke, Vite build, Playwright desktop/mobile verdi sulla HEAD della PR. Nessun test con provider a pagamento senza consenso.
 
 **Esito:** un capitolo congelato è un risultato di un processo tracciabile, non una semplice proprietà dichiarata dal modello.
