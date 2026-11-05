@@ -33,6 +33,10 @@ Il confronto legge soltanto snapshot GitHub a commit SHA. La risoluzione crea du
 
 Il browser controlla i Web Locks, il commit GitHub e il timestamp locale prima della sostituzione. La transazione IndexedDB è atomica **solo nello stesso browser**; un dispositivo differente può avanzare GitHub subito dopo la verifica, nel qual caso il successivo push viene respinto per conflitto SHA. La copia di sicurezza rimane locale: esportare anche uno ZIP esterno. Niente force push, niente fusione cieca di prosa.
 
+## Telemetria dei consumi AI (ADR 0010)
+
+Il pannello `Consumi AI registrati` legge i token e i modelli già memorizzati negli Activity del browser. Non invia alcuna telemetria a server esterni, non legge API key o PAT e non inventa saldi crediti. Dati di attività fallite/interrotte possono essere incompleti anche se una chiamata AI è stata fatturata: mostrare sempre questo limite.
+
 ## Laboratorio editoriale con AI (ADR 0009)
 
 Le proposte di fusione delle scene usano l'endpoint/modello `merge` configurato dall'autore. La UI richiede consenso esplicito prima di inviare le due versioni della scena, i vincoli del libro e **la memoria con i segreti** all'endpoint terzo. Le scene remote sono trattate come testo non attendibile nei prompt; il modello può sbagliare nonostante questa barriera, quindi la proposta resta **draft**.
