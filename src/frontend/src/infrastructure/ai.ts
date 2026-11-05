@@ -1,0 +1,100 @@
+import type { AppSettings, BookProject, TaskKind } from "../domain/types";
+import { routeFor } from "../domain/types";
+import { decryptLocal } from "./crypto";
+
+export type ModelAnswer = {
+  text: string;
+  endpointId: string;
+  modelId: string;
+  inputTokens?: number;
+  outputTokens?: number;
+};
+
+export function normalizeEndpoint(raw: string): string {
+  const url = new URL(raw.trim());
+  const local = (url.hostname === "localhost" || url.hostname === "127.0.0.1") && url.protocol === "http:";
+  if (url.protocol !== "https:" && !local) throw new Error("L'endpoint deve utilizzare HTTPS (HTTP consentito solo su localhost).");
+  if (url.username || url.password || url.search || url.hash) throw new Error("Non includere credenziali, query o fragment nell'URL dell'endpoint.");
+  return url.toString().replace(/\/$/, "");
+}
+
+function friendlyApiError(status: number): string {
+  switch (status) {
+    case 401: return "Autenticazione API non valida (HTTP 401): controlla la chiave.";
+    case 403: return "Accesso al modello non autorizzato (HTTP 403).";
+    case 404: return "Endpoint o modello non trovato (HTTP 404).";
+    case 408: return "Timeout dal provider (HTTP 408).";
+    case 429: return "Limite richieste o credito insufficiente (HTTP 429).";
+    default: return `Errore del provider AI (HTTP ${status}). Verifica disponibilità e configurazione.`;
+  }
+}
+
+export async function callModel(
+  kind: TaskKind,
+  system: string,
+  prompt: string,
+  settings: AppSettings,
+  book: BookProject,
+  signal: AbortSignal,
+): Promise<ModelAnswer> {
+  const assignment = routeFor(kind, settings, book);
+  const endpoint = settings.endpoints.find(p => p.id === assignment.endpointId);
+  if (!endpoint) throw new Error(`Endpoint non configurato per ${kind}.`);
+  if (!assignment.modelId.trim()) throw new Error(`Seleziona il modello per l'attività ${kind} nelle Impostazioni.`);
+  if (!endpoint.secret) throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
+  const base = normalizeEndpoint(endpoint.baseUrl);
+  const apiKey = await decryptLocal(endpoint.secret);
+
+  let response: Response;
+  try {
+    response = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      mode: "cors",
+      redirect: "error",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: assignment.modelId,
+        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+      }),
+      signal,
+    });
+  } catch (e) {
+    if (signal.aborted) throw new DOMException("Interrotto", "AbortError");
+    throw new Error("Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.");
+  }
+  if (!response.ok) throw new Error(friendlyApiError(response.status));
+
+  let payload: unknown;
+  try { payload = await response.json(); }
+  catch { throw new Error("Il provider AI non ha restituito JSON valido."); }
+  if (!payload || typeof payload !== "object") throw new Error("Risposta AI non valida.");
+  const data = payload as {
+    choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const content = data.choices?.[0]?.message?.content;
+  const text = typeof content === "string" ? content : Array.isArray(content) ? content.map(x => x.text ?? "").join("\n") : "";
+  if (!text.trim()) throw new Error("Il provider AI ha risposto senza testo utilizzabile.");
+  return {
+    text: text.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
+    inputTokens: data.usage?.prompt_tokens, outputTokens: data.usage?.completion_tokens,
+  };
+}
+
+export async function fetchModels(
+  endpointUrl: string,
+  secret: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const base = normalizeEndpoint(endpointUrl);
+  const response = await fetch(`${base}/models`, {
+    headers: { Authorization: `Bearer ${secret}` }, redirect: "error", signal,
+  });
+  if (!response.ok) throw new Error(friendlyApiError(response.status));
+  const parsed = await response.json() as { data?: Array<{ id?: string }> };
+  if (!Array.isArray(parsed.data)) throw new Error("Il provider non espone un elenco modelli standard.");
+  return parsed.data.map(x => x.id).filter((x): x is string => !!x).sort();
+}
