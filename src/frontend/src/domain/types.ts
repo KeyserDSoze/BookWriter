@@ -21,6 +21,7 @@ export interface GitHubRemote {
   repository: string;
   branch: string;
   lastSyncedCommit?: string;
+  lastSyncedLocalUpdatedAt?: string;
   lastSyncAt?: string;
 }
 export interface AppSettings {
