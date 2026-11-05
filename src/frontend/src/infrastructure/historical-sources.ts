@@ -54,7 +54,9 @@ export async function searchHistoricalWikipedia(
         throw new Error("La ricerca Wikipedia non ha restituito un risultato valido.");
       const pages = data.query?.pages;
       if (pages !== undefined && !Array.isArray(pages)) throw new Error("Formato pagina non valido.");
-      for (const page of (pages ?? []).slice(0, 3)) {
+      let accepted = 0;
+      for (const page of (pages ?? []).slice(0, 20)) {
+        if (accepted >= 3) break;
         if (!Number.isSafeInteger(page.pageid) || !page.pageid || page.pageid <= 0 ||
             typeof page.title !== "string" || !page.title.trim() ||
             typeof page.canonicalurl !== "string" ||
@@ -73,7 +75,7 @@ export async function searchHistoricalWikipedia(
           query, retrievedAt: searchedAt,
         };
         const duplicate = output.find(s => s.id === source.id);
-        if (!duplicate) output.push(source);
+        if (!duplicate) { output.push(source); accepted++; }
       }
     } catch (error) {
       if (signal?.aborted) throw new DOMException("Ricerca storica interrotta.", "AbortError");
