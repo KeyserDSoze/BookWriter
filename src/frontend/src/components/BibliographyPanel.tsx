@@ -10,8 +10,9 @@ export function BibliographyPanel({
 }: {book:BookProject;chapter:Chapter;onRefresh:()=>Promise<void>}){
   const dossier=chapter.historicalDossier?.bibliography;
   const works=activeBibliography(chapter.historicalDossier);
-  const [input,setInput]=useState((dossier?.works.filter(w=>
-    dossier.activeWorkIds.includes(w.id)).map(w=>w.doi)??[]).join("\n"));
+  const [input,setInput]=useState(works.map(w=>w.doi).join("\n"));
+  const missingDois=Array.isArray(dossier?.missingDois)?
+    dossier.missingDois.filter(d=>typeof d==="string").slice(0,5):[];
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
@@ -81,8 +82,8 @@ export function BibliographyPanel({
       {dossier&&<div className="space-y-2 text-xs">
         <p className="font-semibold">Metadati Crossref recuperati il{" "}
           {new Date(dossier.lookedUpAt).toLocaleString("it-IT")}</p>
-        {dossier.missingDois.length>0&&<p className="text-amber-700 dark:text-amber-300">
-          DOI non presenti: {dossier.missingDois.join("; ")}
+        {missingDois.length>0&&<p className="text-amber-700 dark:text-amber-300">
+          DOI non presenti: {missingDois.join("; ")}
         </p>}
         {works.map(work=><div className="rounded-md border border-slate-200 p-2 dark:border-slate-700" key={work.id}>
           <a className="inline-flex items-start gap-1 break-all font-semibold text-blue-700 underline dark:text-blue-300"
