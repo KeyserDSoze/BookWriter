@@ -28,7 +28,7 @@ export function HistoricalResearchPanel({
       "Invieremo SOLO queste frasi di ricerca a it.wikipedia.org:",
       ...approved.map(x => "• " + x),
       "",
-      "Non invieremo testo del romanzo, segreti o credenziali.",
+      "BookWriter non aggiunge automaticamente testo, segreti o credenziali. Ogni parola delle query qui sopra sarà però trasmessa: se contiene indizi inediti o dati privati, annulla.",
       "Wikipedia è una fonte terziaria: gli estratti sono indizi da controllare, non fatti certificati.",
       "La ricerca disattiva autosync; se il capitolo era congelato, riapre la redazione e invalida i successivi.",
       "",
