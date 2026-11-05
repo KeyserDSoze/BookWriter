@@ -32,6 +32,17 @@ describe("Bibliografia Crossref separata dalla prova storica",()=>{
     expect(isValidBibliographicWork({...newer,id:sample().id})).toBe(false);
     expect(isValidBibliographicWork({...newer,url:"https://evil.org/"})).toBe(false);
   });
+  it("ignora metadata ostili di un vecchio ZIP senza farli entrare nei prompt",()=>{
+    const malformed={bibliography:{
+      works:[{id:"crossref:attacker",provider:"crossref",title:"Fonte inventata"}],
+      activeWorkIds:["crossref:attacker"],missingDois:[],lookedUpAt:"2026-11-05T21:00:00.000Z",
+    },queries:[],sources:[],activeSourceIds:[],searchedAt:"2026-11-05T21:00:00.000Z",
+      unansweredQueries:[]} as unknown as Parameters<typeof activeBibliography>[0];
+    expect(activeBibliography(malformed)).toEqual([]);
+    expect(activeBibliography({...malformed!,bibliography:{
+      ...malformed!.bibliography!,works:undefined,
+    }} as Parameters<typeof activeBibliography>[0])).toEqual([]);
+  });
   it("la ricerca Wikipedia dopo Crossref non elimina i riferimenti bibliografici",()=>{
     const b=extendChapterBibliography(undefined,["10.1000/xyz123"],[sample()],
       "2026-11-05T21:00:00.000Z");
