@@ -41,7 +41,7 @@ describe("Bibliografia Crossref separata dalla prova storica",()=>{
     expect(activeBibliography(malformed)).toEqual([]);
     expect(activeBibliography({...malformed!,bibliography:{
       ...malformed!.bibliography!,works:undefined,
-    }} as Parameters<typeof activeBibliography>[0])).toEqual([]);
+    }} as unknown as Parameters<typeof activeBibliography>[0])).toEqual([]);
   });
   it("la ricerca Wikipedia dopo Crossref non elimina i riferimenti bibliografici",()=>{
     const b=extendChapterBibliography(undefined,["10.1000/xyz123"],[sample()],
