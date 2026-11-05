@@ -324,13 +324,25 @@ export class AutopilotRunner {
     } catch (error) {
       // Acquisition errors happen before any task is started and must not change
       // another tab's running status. Once started, preserve a readable error.
-      if (sessionStarted) {
-        const current = await getBook(bookId);
-        if (current?.status === "running") {
-          current.status = signal.aborted && !(error instanceof RemoteWriterLost) ? "paused" : "error";
-          current.previousError = error instanceof Error ? error.message : "Lock remoto non disponibile.";
-          await saveBook(current, false);
-        }
+      const message = (error instanceof Error ? error.message : "Lock remoto non disponibile.")
+        .replace(/github_pat_[A-Za-z0-9_-]+/g, "[PAT redatto]")
+        .replace(/sk-[A-Za-z0-9_-]+/g, "[chiave redatta]");
+      const current = await getBook(bookId);
+      if (sessionStarted && current?.status === "running") {
+        current.status = signal.aborted && !(error instanceof RemoteWriterLost) ? "paused" : "error";
+        current.previousError = message;
+        await saveBook(current, false);
+      }
+      if (current) {
+        const now = new Date().toISOString();
+        await saveActivity({
+          id: crypto.randomUUID(), bookId, runId, phase: current.phase,
+          title: "Verifica scrittura esclusiva",
+          reason: "Controllo di concorrenza locale e lease remoto prima della generazione AI.",
+          nextStep: "Verifica lo stato del lock in Archivio prima di riprendere.",
+          status: signal.aborted && !(error instanceof RemoteWriterLost) ? "cancelled" : "failed",
+          error: message, createdAt: now, endedAt: now,
+        });
       }
       throw error;
     } finally {
