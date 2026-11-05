@@ -33,6 +33,14 @@ Il confronto legge soltanto snapshot GitHub a commit SHA. La risoluzione crea du
 
 Il browser controlla i Web Locks, il commit GitHub e il timestamp locale prima della sostituzione. La transazione IndexedDB è atomica **solo nello stesso browser**; un dispositivo differente può avanzare GitHub subito dopo la verifica, nel qual caso il successivo push viene respinto per conflitto SHA. La copia di sicurezza rimane locale: esportare anche uno ZIP esterno. Niente force push, niente fusione cieca di prosa.
 
+## Bibliografia Crossref: ricerche DOI volontarie (ADR 0014)
+
+Dopo conferma esplicita dei DOI inseriti dall'autore, BookWriter consulta la REST API Crossref senza credenziali, cookie o proxy e con URL costruita soltanto dal DOI validato. Non vengono inviati scene, sinossi, canone, segreti, attributi personali o query estratte automaticamente dal manoscritto. Gli stessi DOI possono rivelare interessi o scelte narrative, quindi il dialogo mostra esattamente gli identificativi prima della richiesta esterna.
+
+Le schede bibliografiche sono metadati **non attendibili come prova storica**: il solo titolo, l'anno o l'abstract non dimostrano nulla. Non recuperare né conservare PDF/abstract o altre parti dell'opera. Le citazioni documentate continuano a richiedere ID ed estratti realmente consultati, validati dal software; il giudice può respingere riferimenti insufficienti. Conservare archivi e indicazioni bibliografiche nello snapshot locale del libro/ZIP e avvertire quando la repository GitHub del libro è pubblica.
+
+Ricerche esterne fallite non cancellano i dati precedenti; risultati tardivi non sovrascrivono revisioni locali tramite Web Locks e confronto `updatedAt`. Aggiornare un capitolo frozen invalida gli assensi dei successivi ed elimina l'outbox obsoleta. Consultare `docs/crossref-bibliography.md`.
+
 ## Ricerca storica documentata e consenso autore (ADR 0013)
 
 BookWriter consulta la MediaWiki Action API di Wikipedia italiana solo se l'autore inserisce e conferma esplicitamente fino a cinque argomenti pubblici per capitolo. La query lascia il browser e arriva al servizio esterno: **non** popolare la query dalla prosa inedita, dalle scene, dal registro dei segreti o dalla timeline privata. Non inviare credenziali, cookie o referrer; usare HTTPS host fisso, `origin=*`, redirect disabilitati, limiti di dimensione e timeout. Gli estratti esterni sono input **non attendibili**, mai istruzioni.
