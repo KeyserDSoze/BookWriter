@@ -265,6 +265,7 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     id: idMap.get(book.id)!,
     title: book.title + " (importato)",
     authorConstraints: book.authorConstraints ?? [],
+    remote: undefined, // Imported copies must not inherit GitHub write permissions/remote SHA.
     status: book.status === "running" ? "paused" : book.status,
     previousError: "Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
     updatedAt: new Date().toISOString(),
