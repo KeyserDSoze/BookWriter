@@ -117,5 +117,9 @@ export function newBook(brief: string, title: string, writingStyle: string, audi
 }
 
 export function routeFor(task: TaskKind, settings: AppSettings, book: BookProject): ModelRoute {
-  return book.modelRoutes?.[task] ?? settings.taskRoutes[task] ?? settings.defaultRoute;
+  const specific = book.modelRoutes?.[task] ?? settings.taskRoutes[task];
+  return {
+    endpointId: specific?.endpointId || settings.defaultRoute.endpointId,
+    modelId: specific?.modelId || settings.defaultRoute.modelId,
+  };
 }
