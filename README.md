@@ -2,7 +2,18 @@
 
 **BookWriter** è un progetto per la scrittura autonoma e supervisionabile di libri con modelli di intelligenza artificiale configurabili.
 
-> Stato: **progettazione / implementazione iniziale**. Le funzionalità descritte sono obiettivi di prodotto, non ancora un'applicazione pronta per la produzione.
+> Stato: **prima applicazione local-first e in evoluzione**. Le funzionalità descritte sono obiettivi di prodotto, non ancora un'applicazione pronta per la produzione.
+
+## Funzioni presenti sul branch di sviluppo
+
+- SPA mobile e desktop, tema chiaro/scuro.
+- Creazione di libri, orchestra AI multi-modello con osservabilità dei passaggi e possibilità di pause/revisioni.
+- Persistenza IndexedDB e chiavi API cifrate con Web Crypto.
+- Import/export ZIP content-only o completo (password AES-GCM opzionale, chiaro solo dopo avviso).
+- Generazione EPUB, DOCX e PDF dalla prosa canonica.
+- Setup GitHub Pages su **https://ghostwriting.ws** (asset base root).
+
+**Ancora da implementare:** OAuth Google/Microsoft, sync GitHub con PAT/lease, remote ZIP snapshot, parità completa Narrarium, E2E tests e budget tracking. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
 

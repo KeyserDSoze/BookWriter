@@ -1,0 +1,297 @@
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { z } from "zod";
+import type { Activity, AppSettings, BookProject } from "../domain/types";
+import { decryptLocal, encryptLocal } from "./crypto";
+import { getDb, listBooks, listActivities, loadSettings } from "./db";
+import { normalizeEndpoint } from "./ai";
+
+const VERSION = 1;
+const MAX_ZIP = 40 * 1024 * 1024;
+const MAX_UNPACKED = 80 * 1024 * 1024;
+const ITERATIONS = 310_000;
+
+const zId = z.string().min(1).max(300);
+const sceneSchema = z.object({
+  id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
+  objective: z.string().max(20_000), text: z.string().max(2_000_000),
+  summary: z.string().optional(), status: z.enum(["planned", "draft", "canon"]),
+});
+const chapterSchema = z.object({
+  id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
+  purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
+});
+const memorySchema = z.object({
+  characters: z.record(z.string(), z.string()),
+  locations: z.record(z.string(), z.string()),
+  factions: z.record(z.string(), z.string()),
+  items: z.record(z.string(), z.string()),
+  secrets: z.record(z.string(), z.string()),
+  timeline: z.array(z.string()),
+  currentState: z.string(),
+});
+const routeSchema = z.object({ endpointId: z.string(), modelId: z.string() });
+const bookSchema = z.object({
+  id: zId, title: z.string(), brief: z.string(),
+  writingStyle: z.string(), audience: z.string(),
+  authorConstraints: z.array(z.string()).default([]),
+  createdAt: z.string(), updatedAt: z.string(),
+  status: z.enum(["idle", "running", "paused", "error", "completed"]),
+  phase: z.enum(["brainstorm", "validate", "audience", "adversarial", "outline",
+    "prose", "review", "consolidate", "revision", "completed"]),
+  previousError: z.string().optional(),
+  ideas: z.string().optional(), validation: z.string().optional(),
+  audienceReviews: z.array(z.string()),
+  adversarial: z.string().optional(),
+  chapters: z.array(chapterSchema).max(200),
+  memory: memorySchema,
+  currentSceneId: z.string().optional(),
+  revision: z.object({
+    id: zId, instruction: z.string(), beforePhase: z.string(),
+    affectedSceneIds: z.array(z.string()), cursor: z.number().int().nonnegative(),
+    impactAnalysis: z.string().optional(),
+  }).passthrough().optional(),
+  modelRoutes: z.record(z.string(), routeSchema).optional(),
+}).passthrough();
+const activitySchema = z.object({
+  id: zId, bookId: zId, runId: z.string(), phase: z.string(), title: z.string(),
+  reason: z.string(), nextStep: z.string(), status: z.enum(["running", "succeeded", "cancelled", "failed"]),
+  createdAt: z.string(),
+}).passthrough();
+const backupSchema = z.object({
+  version: z.literal(VERSION),
+  kind: z.enum(["content", "full"]),
+  createdAt: z.string(),
+  books: z.array(bookSchema).max(100),
+  activities: z.array(activitySchema).max(50_000),
+  settings: z.object({
+    theme: z.enum(["dark", "light", "system"]),
+    endpoints: z.array(z.object({
+      id: z.string(), name: z.string(), baseUrl: z.string(),
+      models: z.array(z.string()), apiKey: z.string().nullable(),
+    })).max(30),
+    defaultRoute: routeSchema,
+    taskRoutes: z.record(z.string(), routeSchema),
+  }).optional(),
+}).refine(x => (x.kind === "full") === !!x.settings, "Contenuto e credenziali incoerenti.");
+
+type BackupData = {
+  version: 1;
+  kind: "content" | "full";
+  createdAt: string;
+  books: BookProject[];
+  activities: Activity[];
+  settings?: {
+    theme: AppSettings["theme"];
+    endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null }>;
+    defaultRoute: AppSettings["defaultRoute"];
+    taskRoutes: AppSettings["taskRoutes"];
+  };
+};
+export type BackupMode = "content" | "full";
+
+function toBase64(bytes: Uint8Array): string {
+  let value = "";
+  for (const byte of bytes) value += String.fromCharCode(byte);
+  return btoa(value);
+}
+function fromBase64(text: string): Uint8Array {
+  return Uint8Array.from(atob(text), char => char.charCodeAt(0));
+}
+async function passphraseKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
+  if (passphrase.length < 12) throw new Error("La password dell'archivio deve avere almeno 12 caratteri.");
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt: new Uint8Array(salt), iterations: ITERATIONS },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+async function protect(clear: Uint8Array, passphrase: string): Promise<Uint8Array> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await passphraseKey(passphrase, salt);
+  const bytes = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new Uint8Array(clear)));
+  return strToU8(JSON.stringify({
+    cipher: "AES-256-GCM", kdf: "PBKDF2-SHA256", iterations: ITERATIONS,
+    salt: toBase64(salt), iv: toBase64(iv), data: toBase64(bytes),
+  }));
+}
+async function unprotect(encrypted: Uint8Array, passphrase: string): Promise<Uint8Array> {
+  try {
+    const obj = JSON.parse(strFromU8(encrypted)) as {
+      cipher: string; kdf: string; iterations: number; salt: string; iv: string; data: string;
+    };
+    if (obj.cipher !== "AES-256-GCM" || obj.kdf !== "PBKDF2-SHA256" || obj.iterations !== ITERATIONS)
+      throw new Error("Metodo di cifratura non supportato.");
+    const key = await passphraseKey(passphrase, fromBase64(obj.salt));
+    return new Uint8Array(await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: new Uint8Array(fromBase64(obj.iv)) }, key, new Uint8Array(fromBase64(obj.data)),
+    ));
+  } catch {
+    throw new Error("Password errata o archivio cifrato danneggiato.");
+  }
+}
+
+function validateZipStructure(bytes: Uint8Array): void {
+  if (bytes.length > MAX_ZIP) throw new Error("ZIP troppo grande (massimo 40 MiB).");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65_557); --i) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("Formato ZIP non valido.");
+  const entries = view.getUint16(eocd + 10, true);
+  const offset = view.getUint32(eocd + 16, true);
+  if (entries < 1 || entries > 4 || offset >= eocd) throw new Error("Numero di file ZIP non consentito.");
+  let cursor = offset;
+  let unpacked = 0;
+  const names = new Set<string>();
+  for (let i = 0; i < entries; i++) {
+    if (cursor + 46 > bytes.length || view.getUint32(cursor, true) !== 0x02014b50)
+      throw new Error("Directory ZIP non valida.");
+    const flags = view.getUint16(cursor + 8, true);
+    const method = view.getUint16(cursor + 10, true);
+    const size = view.getUint32(cursor + 24, true);
+    const nameLen = view.getUint16(cursor + 28, true);
+    const extraLen = view.getUint16(cursor + 30, true);
+    const commentLen = view.getUint16(cursor + 32, true);
+    const start = cursor + 46;
+    const name = new TextDecoder().decode(bytes.subarray(start, start + nameLen));
+    if (flags & 1 || (method !== 0 && method !== 8) || size === 0xffffffff ||
+        !["manifest.json", "content.json", "vault.enc.json", "vault.json"].includes(name) ||
+        names.has(name))
+      throw new Error("Il file ZIP contiene elementi non autorizzati.");
+    names.add(name);
+    unpacked += size;
+    if (unpacked > MAX_UNPACKED) throw new Error("Il contenuto dello ZIP supera 80 MiB.");
+    cursor = start + nameLen + extraLen + commentLen;
+    if (cursor > eocd) throw new Error("Directory ZIP danneggiata.");
+  }
+  if (!names.has("manifest.json") ||
+      (names.has("content.json") === (names.has("vault.enc.json") || names.has("vault.json"))))
+    throw new Error("File richiesti mancanti o duplicati nell'archivio.");
+}
+
+async function snapshot(mode: BackupMode): Promise<BackupData> {
+  const books = await listBooks();
+  const activities = (await Promise.all(books.map(book => listActivities(book.id)))).flat();
+  const data: BackupData = {
+    version: VERSION, kind: mode, createdAt: new Date().toISOString(),
+    books: books.map(b => ({ ...b, status: b.status === "running" ? "paused" : b.status })),
+    activities: activities.map(a => a.status === "running" ? { ...a, status: "cancelled" } : a),
+  };
+  if (mode === "full") {
+    const settings = await loadSettings();
+    data.settings = {
+      theme: settings.theme, defaultRoute: settings.defaultRoute,
+      taskRoutes: settings.taskRoutes,
+      endpoints: await Promise.all(settings.endpoints.map(async endpoint => ({
+        id: endpoint.id, name: endpoint.name, baseUrl: endpoint.baseUrl,
+        models: endpoint.models,
+        apiKey: endpoint.secret ? await decryptLocal(endpoint.secret) : null,
+      }))),
+    };
+  }
+  return data;
+}
+
+export async function createBackup(mode: BackupMode, passphrase?: string, allowPlaintext = false): Promise<Blob> {
+  if (mode === "full" && !passphrase && !allowPlaintext)
+    throw new Error("Per includere le credenziali devi impostare una password o confermare esplicitamente l'esportazione in chiaro.");
+  const raw = strToU8(JSON.stringify(await snapshot(mode)));
+  if (raw.length > MAX_UNPACKED) throw new Error("Archivio troppo grande.");
+  const encrypted = mode === "full" && !!passphrase;
+  const name = encrypted ? "vault.enc.json" : mode === "full" ? "vault.json" : "content.json";
+  const meta = {
+    format: "bookwriter-backup", version: VERSION, mode,
+    encrypted, createdAt: new Date().toISOString(),
+    notice: "Il file ZIP contiene un payload AES-GCM cifrato solo se encrypted=true.",
+  };
+  const zipped = zipSync({
+    "manifest.json": strToU8(JSON.stringify(meta)),
+    [name]: encrypted ? await protect(raw, passphrase!) : raw,
+  }, { level: 6 });
+  return new Blob([new Uint8Array(zipped)], { type: "application/zip" });
+}
+
+export function downloadBackup(blob: Blob, kind: BackupMode): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "bookwriter-" + kind + "-" + new Date().toISOString().slice(0, 10) + ".zip";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export async function readBackup(file: File, passphrase?: string): Promise<BackupData> {
+  if (file.size > MAX_ZIP) throw new Error("ZIP oltre il limite di 40 MiB.");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  validateZipStructure(bytes);
+  const zip = unzipSync(bytes);
+  const manifest = JSON.parse(strFromU8(zip["manifest.json"]!)) as {
+    format?: string; version?: number; mode?: string; encrypted?: boolean;
+  };
+  if (manifest.format !== "bookwriter-backup" || manifest.version !== VERSION)
+    throw new Error("Questo non è uno ZIP BookWriter supportato.");
+  const fileName = manifest.encrypted ? "vault.enc.json" : manifest.mode === "full" ? "vault.json" : "content.json";
+  const payload = zip[fileName];
+  if (!payload) throw new Error("Payload del backup non trovato.");
+  if (manifest.encrypted && !passphrase) throw new Error("Questa copia richiede la password di esportazione.");
+  const textBytes = manifest.encrypted ? await unprotect(payload, passphrase!) : payload;
+  if (textBytes.length > MAX_UNPACKED) throw new Error("Archivio decompressso troppo grande.");
+  let value: unknown;
+  try { value = JSON.parse(strFromU8(textBytes)); }
+  catch { throw new Error("Il payload non contiene JSON valido."); }
+  const result = backupSchema.safeParse(value);
+  if (!result.success) throw new Error("Schema backup non valido o incompatibile.");
+  if (result.data.kind !== manifest.mode) throw new Error("Tipo di backup incoerente.");
+  return result.data as unknown as BackupData;
+}
+
+/** Importa come copie distinte: non sovrascrive nessun libro locale. */
+export async function importBackup(data: BackupData, withSettings: boolean): Promise<number> {
+  const db = await getDb();
+  const idMap = new Map<string, string>();
+  for (const book of data.books) {
+    if (idMap.has(book.id)) throw new Error("ID libro duplicato nell'archivio.");
+    idMap.set(book.id, crypto.randomUUID());
+  }
+  const safeBooks: BookProject[] = data.books.map(book => ({
+    ...book,
+    id: idMap.get(book.id)!,
+    title: book.title + " (importato)",
+    authorConstraints: book.authorConstraints ?? [],
+    status: book.status === "running" ? "paused" : book.status,
+    previousError: "Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
+    updatedAt: new Date().toISOString(),
+  })) as BookProject[];
+  const safeActivities: Activity[] = data.activities
+    .filter(activity => idMap.has(activity.bookId))
+    .map(activity => ({
+      ...activity,
+      id: crypto.randomUUID(), bookId: idMap.get(activity.bookId)!,
+      status: activity.status === "running" ? "cancelled" : activity.status,
+    })) as Activity[];
+  let importedSettings: AppSettings | undefined;
+  if (withSettings && data.settings) {
+    importedSettings = {
+      theme: data.settings.theme, defaultRoute: data.settings.defaultRoute,
+      taskRoutes: data.settings.taskRoutes as AppSettings["taskRoutes"],
+      endpoints: await Promise.all(data.settings.endpoints.map(async endpoint => ({
+        id: endpoint.id, name: endpoint.name, baseUrl: normalizeEndpoint(endpoint.baseUrl),
+        models: endpoint.models,
+        secret: endpoint.apiKey ? await encryptLocal(endpoint.apiKey) : null,
+      }))),
+    };
+  }
+  const tx = db.transaction(["books", "activities", "settings"], "readwrite");
+  for (const book of safeBooks) await tx.objectStore("books").put(book, book.id);
+  for (const activity of safeActivities) await tx.objectStore("activities").put(activity, activity.id);
+  if (importedSettings) await tx.objectStore("settings").put(importedSettings, "global");
+  await tx.done;
+  return safeBooks.length;
+}

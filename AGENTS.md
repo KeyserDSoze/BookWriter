@@ -1,0 +1,63 @@
+# BookWriter — istruzioni per agenti e sviluppatori
+
+Queste regole valgono per **tutta** la repository. Leggi README, documentazione, ADR e feature prima di modificare codice. Interfaccia, documentazione, ADR e messaggi destinati all'autore sono in **italiano**; identificatori del codice in inglese.
+
+## Obiettivo
+
+Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente ideazione, pianificazione, scrittura e revisione di un libro sotto supervisione dell'autore. Deploy statico su GitHub Pages. Non introdurre un backend senza motivazione e relativo ADR.
+
+## Struttura obbligatoria
+
+- `src/frontend/`: React + TypeScript + Vite, shadcn/ui e Tailwind, temi chiaro/scuro, accessibilità e UX mobile.
+- `src/frontend/src/domain/`: tipi, schemi e regole pure per canon, job, revisione, sincronizzazione.
+- `src/frontend/src/application/`: orchestrazione, routing dei modelli, state machine e use case.
+- `src/frontend/src/infrastructure/`: adapter IndexedDB, API OpenAI-compatible, GitHub, Google Drive, Microsoft Graph, Web Crypto.
+- `src/frontend/src/components/`, `pages/`: UI e navigazione, senza logica di dominio o token nel rendering.
+- `tests/`: unit test e test e2e. `docs/`: contratti, UX, runbook. `ADR/`: decisioni irreversibili o architetturali. `features/`: requisiti e criteri di accettazione.
+- `.github/workflows/`: CI e Pages; proteggere main.
+
+## Invarianti di sicurezza
+
+1. GitHub Pages **non è un backend**. Il bundle è pubblico; mai trasferire `PASSWORD`, PAT, chiavi AI, client secret o altre credenziali tramite variabili `VITE_*`, build, file Git o log.
+2. Google/Microsoft autorizzano l'accesso alle rispettive API e file cloud, non oscurano l'app. Usare OAuth pubblico SPA con PKCE quando supportato, nessun client secret. Access token in memoria per quanto possibile.
+3. PAT GitHub sempre **fine-grained**, limitato alle sole repository dei libri con Contents read/write. Credenziali separate dai documenti canonici; non sincronizzarle nella repository del libro né in snapshot di contenuti.
+4. Vault cloud senza passphrase: comodità, **non E2EE**. Esplicitare il trade-off. E2EE solo con segreto indipendente dall'account cloud (es. passphrase di recupero), con gestione sicura di salt/nonce e AES-GCM Web Crypto.
+5. Sanitizzare errori, redigere header, URL contenenti token e payload sensibili, evitare invio di segreti ai modelli non necessario; limitare endpoint a HTTPS e impedire redirect per chiamate con Authorization.
+6. ZIP importato è dato ostile: limiti dimensione e numero file, schema validato, niente path traversal, preview, migrazione reversibile e backup prima del replace.
+
+## Invarianti narrative
+
+1. Lo standard canonico segue Narrarium / Book.Jesus: `chapters/NNN-slug/chapter.md` e `NNN-scene-slug.md`; un “paragrafo” è una **scena narrativa**, non un paragrafo tipografico. ID stabili.
+2. Prima di scrivere: caricare `book.md`, stile/ghostwriter, pianificazione, capitoli precedenti pertinenti, stato corrente, timeline, entità, segreti e research verificata.
+3. La memoria include characters, locations, factions, items, secrets, timelines, ideas long/mid/short, plot, resumes, state e evaluations. Mai considerare un riassunto LLM l'unica fonte di verità.
+4. Ogni segreto ha detentori, false convinzioni del lettore, indizi consentiti e soglie `hint_from`, `partial_reveal_from`, `reveal_in`. Impedire spoiler non intenzionali.
+5. Distinguere fatto verificato, canon consolidato, ipotesi e invenzione. Non spacciare per fatti ricerche non verificate. Nessuna imitazione di autori viventi.
+6. Scrittura -> review stilistica, fattuale quando pertinente, continuità, pacing, dialoghi, segreti -> proposta di correzione -> revisione canonica -> refresh stato e riassunti.
+7. Le indicazioni esplicite dell'autore prevalgono sui suggerimenti IA. Non riscrivere un contenuto senza registrare il motivo, lo stato precedente e gli elementi dipendenti.
+
+## Autopilot
+
+- State machine persistita: `idle / planning / running / pause-requested / paused / needs-author / error / completed`.
+- **Ogni attività** ha ID stabile, phase, target, rationale, `nextStep`, model/endpoint, input references, timestamp, stato, summary, output references, token/costo quando comunicati. Persisti prima/dopo gli effetti.
+- Pause/cancel tramite AbortController, checkpoint; nessun doppio commit dopo restart. Identificare chiaramente ciò che è stato fatto e ciò che è solo proposto.
+- Su errore API/auth/network/quota/schema: fermare e mostrare causa leggibile, risposta HTTP redatta e pulsante riprova. Non occultare retry infiniti.
+- Autopilot potenzialmente lungo, **ma solo finché il browser è attivo**; mobile può sospendere la scheda. Resume esatto da checkpoint, senza presumere lavoro in background.
+- Intervento utente: `feedback -> impact analysis -> revision plan -> preview -> apply -> dependent review -> consolidate`; traccia revert e audit.
+- Routing multi-endpoint per libro e per attività; modelli mai hardcodati. Inventario modelli via `GET /models` se possibile, più inserimento manuale.
+- Permettere limiti di spesa/token personalizzabili, avviso e arresto. Eventuale assenza di tariffe precise va indicata.
+
+## Persistenza e sincronizzazione
+
+- IndexedDB è fonte operativa sul dispositivo; commit canonici GitHub su cambi significativi, ZIP snapshot versionati per bootstrap/ripristino, non per ogni singola attività.
+- Non includere le credenziali nel repo del libro. Cloud bootstrap (Google appDataFolder / Microsoft OneDrive approot) distinto dai contenuti.
+- Sync con expected remote SHA/base revision, verifica conflitti e controllo lease tra dispositivi. Mai last-write-wins silenzioso. Non distruggere modifiche locali non sincronizzate.
+- Testare sempre import/export, rollback, interruzioni di rete, riprese e conflitti.
+- GitHub repository **privata** raccomandata per libri inediti; mostrare avviso se pubblica.
+
+## Qualità
+
+- TypeScript strict, schemi runtime per JSON da AI/API/import, moduli piccoli, funzioni pure testabili.
+- Su ogni modifica eseguire `npm ci`, `npm run typecheck`, `npm run test`, `npm run build` e test browser dove disponibili; non dichiarare test riusciti se non eseguiti.
+- Aggiornare ADR, `docs/`, `features/` e README quando cambiano comportamento o sicurezza.
+- UI mobile-first: breakpoint reali, sidebar a sheet, controlli touch di almeno 44 px, focus visibile, aria live sugli stati, accessibilità WCAG, riduzione movimento, tema chiaro/scuro.
+- Scrivere messaggi di audit utili al lettore: "cosa ho fatto", "cosa farò", "cosa è cambiato", "come intervenire".
