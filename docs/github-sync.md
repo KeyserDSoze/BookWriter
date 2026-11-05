@@ -4,6 +4,10 @@
 
 Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Il lease GitHub per l'autopilot è disponibile (best effort) e la PR #14 aggiunge il confronto visuale dei conflitti. Non sono ancora disponibili l'import di repository Narrarium generiche, il vault Google/Microsoft e gli ZIP automatici remoti.
 
+## Fonti storiche e riservatezza (v0.9.0)
+
+Il dossier storico di ciascun capitolo viene salvato con il progetto locale e incluso nei backup e nei futuri snapshot GitHub autorizzati. Gli argomenti pubblici e gli estratti ricercati non contengono automaticamente il romanzo ma possono rivelare dettagli narrativi se li inserisci come query; **non usare segreti inediti** come termini da inviare a Wikipedia. Un aggiornamento del dossier invalida il freeze del capitolo interessato e dei successivi, disabilita autosync e cancella l'outbox obsoleta; completa di nuovo la redazione prima del push. Per dettagli: `docs/historical-sources.md` e ADR 0013.
+
 ## Per iniziare (senza token nel repository del sito)
 
 1. Su GitHub crea una **repository privata** per ciascun libro e inizializzala con un README o un commit. La Git Data API non può partire da una repository completamente senza branch.

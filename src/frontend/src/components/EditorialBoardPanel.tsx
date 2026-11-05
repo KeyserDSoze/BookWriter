@@ -5,9 +5,12 @@ import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
 import { reopenChapterReview } from "../application/editorial-control";
 import { Button } from "./ui/button";
+import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
+import type { HistoricalSource } from "../domain/historical-research";
 
-function RoundDetails({ round, reports, judgment }: {
+function RoundDetails({ round, reports, judgment, sources = [] }: {
   round: number; reports: EditorialReport[]; judgment?: EditorialJudgment;
+  sources?: HistoricalSource[];
 }) {
   const judged = new Map((judgment?.decisions ?? []).map(d => [d.findingId,d]));
   const findings = reports.flatMap(r => r.findings);
@@ -31,6 +34,25 @@ function RoundDetails({ round, reports, judgment }: {
                 <p><b>Prova:</b> {f.evidence}</p>
                 <p><b>Problema:</b> {f.reason}</p>
                 <p><b>Remediation proposta:</b> {f.remediation}</p>
+                {f.historical && <div className="space-y-1 rounded-md border border-slate-300 p-2 dark:border-slate-700">
+                  <p><b>Accertamento storico:</b> {f.historical.assessment === "consistent_with_excerpt"
+                    ? "Coerente con l'estratto (non certificato)" :
+                    f.historical.assessment === "contradicts_excerpt"
+                      ? "Potenziale contraddizione con l'estratto" :
+                        "Non verificato con documenti"}</p>
+                  <p><b>Affermazione:</b> {f.historical.claim}</p>
+                  {f.historical.sourceQuote && <p><b>Citazione originale:</b> “{f.historical.sourceQuote}”</p>}
+                  {f.historical.sourceIds.map(id => {
+                    const source = sources.find(s => s.id === id);
+                    return source ? <p key={id}><b>Fonte terziaria:</b>{" "}
+                      <a className="text-blue-700 underline dark:text-blue-300" href={source.revisionId ? "https://it.wikipedia.org/w/index.php?oldid=" + source.revisionId : source.url}
+                        rel="noopener noreferrer" target="_blank">{source.title}</a>
+                      {" "}(revisione {source.revisionId ?? "non nota"})</p>
+                      : <p key={id} className="text-amber-700 dark:text-amber-300">
+                          Fonte citata non più reperibile nel dossier: {id}
+                        </p>;
+                  })}
+                </div>}
                 {ruling ? <div className="border-t border-slate-300 pt-2 dark:border-slate-700">
                   <p className={ruling.action === "reject" ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}>
                     <b>Giudice: {ruling.action === "accept" ? "Accettato" : "Respinto"}</b>
@@ -118,10 +140,11 @@ export function EditorialBoardPanel({
           <RotateCcw size={16}/> Riparti con i nuovi vincoli
         </Button>
       </div>}
-      <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}/>
+      <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
+        sources={chapter.historicalDossier?.sources}/>
       {cycle.priorRounds.map(round => <details key={round.round} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
         <summary className="cursor-pointer text-sm font-semibold">Storico della tornata {round.round}</summary>
-        <div className="mt-3"><RoundDetails {...round}/></div>
+        <div className="mt-3"><RoundDetails {...round} sources={chapter.historicalDossier?.sources}/></div>
       </details>)}
     </div>}
     {book.chapters.length > 0 && <div className="mt-4 space-y-2">
@@ -142,10 +165,11 @@ export function EditorialBoardPanel({
           <summary className="cursor-pointer text-xs">Sinossi del capitolo</summary>
           <p className="mt-2 whitespace-pre-wrap text-xs">{ch.summary}</p>
         </details>}
+        <HistoricalResearchPanel key={ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           {ch.editorialRounds?.map((round, i) =>
-            <div key={i} className="mt-3"><RoundDetails {...round}/></div>)}
+            <div key={i} className="mt-3"><RoundDetails {...round} sources={ch.historicalDossier?.sources}/></div>)}
         </details>}
       </div>)}
     </div>}

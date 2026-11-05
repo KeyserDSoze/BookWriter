@@ -33,6 +33,14 @@ Il confronto legge soltanto snapshot GitHub a commit SHA. La risoluzione crea du
 
 Il browser controlla i Web Locks, il commit GitHub e il timestamp locale prima della sostituzione. La transazione IndexedDB è atomica **solo nello stesso browser**; un dispositivo differente può avanzare GitHub subito dopo la verifica, nel qual caso il successivo push viene respinto per conflitto SHA. La copia di sicurezza rimane locale: esportare anche uno ZIP esterno. Niente force push, niente fusione cieca di prosa.
 
+## Ricerca storica documentata e consenso autore (ADR 0013)
+
+BookWriter consulta la MediaWiki Action API di Wikipedia italiana solo se l'autore inserisce e conferma esplicitamente fino a cinque argomenti pubblici per capitolo. La query lascia il browser e arriva al servizio esterno: **non** popolare la query dalla prosa inedita, dalle scene, dal registro dei segreti o dalla timeline privata. Non inviare credenziali, cookie o referrer; usare HTTPS host fisso, `origin=*`, redirect disabilitati, limiti di dimensione e timeout. Gli estratti esterni sono input **non attendibili**, mai istruzioni.
+
+Ogni citazione storica dell'AI deve corrispondere a un ID fonte esistente e a una frase effettivamente trovata nell'estratto, con validazione software prima del giudizio. Non dichiarare che la verifica testuale di un estratto Wikipedia certifica un fatto storico: è una fonte terziaria. Le fonti e le query possono apparire nei backup ZIP e nella repository GitHub del libro (anche pubblica): informare l'autore prima della ricerca.
+
+Ricercare nuove fonti su un capitolo congelato invalida i giudizi successivi, ripristina la sinossi precedente, disattiva autosync e scarta l'outbox obsoleta con controllo `updatedAt`/Web Locks. Nessun salvataggio parziale in caso di errore di rete o verifica.
+
 ## Controllo spesa AI v0.8.1 (ADR 0012)
 
 Le soglie per libro si applicano **prima** del fetch di ogni task autopilot, panel di revisione, e fusione AI delle scene. Le tariffe input/output in EUR/milione di token sono inserite dall'autore, mai indovinate. Un tentativo AI viene registrato in IndexedDB con `aiRequested=true` prima della rete: se usage, chiamata o browser sono interrotti o incompleti, nuove richieste si fermano conservativamente. Le richieste bloccate nel preflight non sono marcate come tentate.

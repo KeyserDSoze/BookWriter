@@ -58,12 +58,20 @@ Ogni ruolo riceve il segmento del capitolo, una sinossi progressiva del libro, i
 
 Il costo può essere **elevato**: per N segmenti di testo, ci sono almeno **12 × N** richieste di revisione, una chiamata del direttore e una o più di sinossi, oltre alle riscritture e ai nuovi giri. In **Impostazioni** puoi scegliere modelli differenti per **Specialisti capitolo**, **Cinque lettori**, **Direttore editoriale**, **Remediation mirata**, **Consolidamento** e **Riassunti**, anche per singolo libro. La Dashboard mostra i token comunicati dagli endpoint, ma **non** conosce universalmente il credito residuo e non impone ancora un budget di spesa. Verifica i crediti sul portale provider: [issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17).
 
+## Dossier storico consultabile — v0.9.0
+
+Prima di una redazione puoi preparare un dossier per capitolo con fino a cinque **ricerche storiche pubbliche**. L'autore deve confermare le stringhe esatte prima di inviarle a Wikipedia italiana; nessun manoscritto, segreto o timeline privata viene utilizzato come query. Il revisore storico riceve il dossier di estratti con titolo, URL, data e revisione della voce, ma gli altri undici agenti restano indipendenti.
+
+Il report storico distingue **coerente con l'estratto**, **potenziale contraddizione** e **non verificato**. Le prime due categorie richiedono una citazione letterale realmente presente nell'estratto e un ID fonte validato dal software. Il direttore può respingere motivatamente una proposta anche quando cita Wikipedia: una fonte terziaria non certifica un fatto storico. Aggiornare le fonti di un capitolo congelato lo riapre e invalida le approvazioni successive.
+
+Guida: [Dossier storico](historical-sources.md), [ADR 0013](../ADR/0013-historical-source-dossiers.md), [issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).
+
 ## Controlli storici e fattuali
 
-Il revisore storico è utile per individuare anacronismi sospetti, ma **non consulta ancora archivi e fonti esterne**. Le sue osservazioni sono ipotesi da verificare, non certificazioni. Le verifiche con fonti reali, citazioni e valutazione della loro affidabilità sono previste come sviluppo successivo nell'[issue #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+Il revisore storico ora può leggere gli estratti cercati e approvati dall'autore su Wikipedia italiana, una fonte **terziaria**. La verifica approfondita tramite fonti primarie, archivi istituzionali e bibliografia critica resta da implementare nell'[issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).
 
 ## Limiti dichiarati
 
-I modelli possono sbagliare e un giudice può respingere una critica valida; il rapporto resta disponibile per la tua verifica. Il sistema non esegue merge semantico automatico a livello di frammenti senza approvazione, non funziona da browser chiuso, non garantisce un hard cap economico, non svolge fact-checking esterno e non ha ancora un motore completo di retrieval semantico per migliaia di entità. La capacità di blocco multi-dispositivo rimane best effort (ADR 0007).
+I modelli possono sbagliare e un giudice può respingere una critica valida; il rapporto resta disponibile per la tua verifica. Il sistema non esegue merge semantico automatico a livello di frammenti senza approvazione, non funziona da browser chiuso, non garantisce un hard cap economico, non certifica fatti storici e non ha ancora un motore completo di retrieval semantico per migliaia di entità. La capacità di blocco multi-dispositivo rimane best effort (ADR 0007).
 
 **Riferimenti:** [ADR 0011](../ADR/0011-independent-editorial-board-and-chapter-freeze.md), [Issue #20](https://github.com/KeyserDSoze/BookWriter/issues/20), [Issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17).
