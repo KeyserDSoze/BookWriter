@@ -30,6 +30,10 @@
 
 Per ogni libro una sola sessione autopilot remota alla volta. `.bookwriter/lease.json` contiene `holderId`, `runId`, `expiresAt`, `baseSha`. Acquisizione/rinnovo in GitHub con optimistic concurrency su SHA e heartbeat ragionevole; controllo lease **prima di ogni write remoto e generazione costosa**. Nessun lavoro remoto quando offline o lease incerto. Un lease scaduto può essere riassegnato con rilettura e conferma all'utente; nessun last-write-wins.
 
+## Consumi AI e budget (ADR 0010)
+
+La v0.7.1 mostra i token effettivamente riportati dai provider nelle attività del libro, separati per modello ed endpoint. Non è ancora possibile conoscere il saldo crediti attraverso una API generica, né viene imposto un limite economico al runner. Report mancanti, fallimenti e richieste interrotte possono corrispondere a addebiti sconosciuti; vedi `docs/ai-usage.md` e issue #17.
+
 ## Proposte non canoniche di fusione (ADR 0009)
 
 La v0.7.0 introduce un task AI `merge` per proporre il testo combinato di una singola scena divergente. La creazione richiede lease GitHub attivo e controlli della revisione locale/HEAD Git; l'output è una bozza in IndexedDB, non una scrittura del canone. L'utente può scrivere senza AI, rifiutare o selezionare una proposta da storico, ma l'applicazione richiede la transazione a doppio backup ADR 0008 e mantiene lo stato `draft`. Il provider non riceve PAT e API key; l'invio di prosa e segreti richiede un consenso esplicito.

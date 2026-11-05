@@ -9,7 +9,9 @@
 - [x] PR #9: autosync opt-in con outbox IndexedDB atomica, retry, Web Locks tra tab, recupero dei commit ambigui; CI e Playwright desktop/mobile superati.
 - [x] PR #12: writer lease GitHub con heartbeat e recupero manuale, CI e Playwright desktop/mobile superati.
 - [ ] PR #14: confronto visuale base/locale/remoto con scelta per scena/entità, doppio backup e recupero conservativo, in verifica CI.
-- [ ] PR #16: diff parole/paragrafi con fallback mobile, task AI `merge`, bozza manuale, storico ZIP e approvazione solo con doppio backup; in CI.
+- [x] PR #16: diff parole/paragrafi con fallback mobile, task AI `merge`, bozza manuale, storico ZIP e conferma umana di canonizzazione; CI e merge completati.
+- [ ] PR #18: telemetria token per libro/modello da report provider, test desktop/mobile e ADR 0010; in verifica CI.
+- [ ] Issue #17: listini configurabili, warning e limiti di budget prima delle chiamate AI.
 - [ ] Hardening del lease e revisione automatica del canon delle proposte (#10), OAuth Google/Microsoft (#2).
 - [ ] Completezza canon Narrarium e controlli rigorosi sui segreti (#5).
 - [ ] Budget, modelli per riassunti dedicati e test con provider reali (#6).

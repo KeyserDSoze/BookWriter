@@ -72,6 +72,15 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## Telemetria AI v0.7.1 — dati osservati, non stime inventate
+
+- `domain/ai-usage.ts` usa esclusivamente i report provider `inputTokens/outputTokens` presenti nelle `Activity` del libro attivo. Raggruppare sempre per endpoint **e** modello.
+- Un report `usage` mancante o parziale va distinto da uno completo; i token zero sono numeri validi. I conteggi invalidi/non sicuri devono essere ignorati, non stimati.
+- Chiamate fallite, interrotte o con risposta senza usage possono comportare costi ignoti: mostrarlo chiaramente. Non derivare credito residuo né euro da un totale token.
+- Nessun invio di analytics aggiuntive, chiavi o PAT. Nessuna nuova chiamata AI per la telemetria.
+- Dashboard mobile con tabella overflow locale e isolamento rigoroso dei consumi fra libri. Test unitari e browser obbligatori.
+- Limiti di spesa, tariffari e lettura di crediti reali **non sono implementati** finché non esiste una successiva ADR e relativa prova con provider. Vedi issue #17.
+
 ## Merge v0.7.0 — bozze non canoniche obbligatorie
 
 - `TASK_KINDS` include `merge`: route per endpoint/modello globale o per libro. Nessun ID di modello hardcodato.

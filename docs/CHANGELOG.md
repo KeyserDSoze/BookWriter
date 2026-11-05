@@ -2,6 +2,21 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.7.1 — 2026-11-05 (PR #18)
+
+**Dashboard per libro dei token AI dichiarati dai provider**
+
+- Nuovo pannello **Consumi AI registrati** sulla Dashboard, con token input, output e totale noto per il libro attivo.
+- Aggregazione per endpoint e modello: i token Sol/Astra/Luna e di provider diversi non vengono confusi.
+- Contatori distinti per report completi, parziali e senza usage, con avviso sulle attività fallite/interrotte che possono aver consumato token senza un report dal provider.
+- UI responsive desktop/mobile, con tabella a scorrimento locale e test per evitare overflow della pagina.
+- Nessun credito residuo, costo in euro o limite di spesa inventato. Il saldo reale è nel portale del provider e il prezzo per token dipende dai suoi listini.
+- Calcolo puro da attività IndexedDB già presenti: nessuna nuova API, tracking esterno, chiave o costo AI per generare le statistiche.
+- Unit test per token validi/invalidi, report mancanti, multi-provider e attività manuali; Playwright desktop/mobile con isolamento dei consumi fra due libri.
+- ADR 0010, issue #17, documentazione utente e backlog per listini configurabili, soglie e stop preventivo.
+
+**Limiti:** il totale noto può essere inferiore ai consumi fatturati, perché provider e richieste fallite non garantiscono usage. La versione 0.7.1 è osservabilità, **non** controllo automatico dei crediti o tetto di spesa.
+
 ## 0.7.0 — 2026-11-05 (PR #16)
 
 **Diff parola per parola e proposte di fusione delle scene, con approvazione esplicita**
