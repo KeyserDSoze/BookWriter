@@ -11,6 +11,8 @@ npm run dev
 npm run typecheck
 npm run test
 npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
 Aprire l'indirizzo Vite locale. Non serve un server applicativo. Per GitHub Pages, abilitare **Settings → Pages → Source: GitHub Actions** e fare merge su `main`; il workflow imposta Vite base `/BookWriter/`.
@@ -36,7 +38,7 @@ La pagina **Archivio** esporta e importa ZIP content-only (senza credenziali) o 
 - Nessuno: ZIP import/export e output EPUB, PDF e DOCX sono disponibili in questa fase; da aggiungere validazione editoriale avanzata, cover e immagini.
 - Recupero granulare da tutte le condizioni di crash, generazione summaries via modello economico dedicato, budget guard, ricerca fattuale con fonti, diff/rollback visuale.
 - Conversione completa delle entità/memory nel formato Markdown Narrarium; attualmente vivono nel modello IDB.\n- Enforcement rigoroso delle soglie di segreto, valutazioni factual con ricerche esterne e ricostruzione totale del canon dopo riscritture profonde.
-- Copertura test end-to-end e certificazione dei flussi con provider reali.
+- Copertura dei test browser da ampliare per Safari iOS, Chrome Android e provider AI reali; i primi test Playwright Chromium desktop/mobile verificano navigazione, backup e reload.
 
 Non usare questa versione per contenuti di valore senza esportazione manuale o backup dei dati del browser: IndexedDB può essere cancellato.
 
