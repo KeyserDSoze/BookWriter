@@ -25,7 +25,7 @@ Prima metti in **pausa** l'autopilot. Il libro deve essere collegato alla reposi
 
 Aprendo una differenza di scena con entrambe le versioni disponibili, il **Laboratorio di fusione** mostra un diff parola per parola e un editor testuale. Puoi preparare gratuitamente una bozza manuale oppure chiedere una proposta al modello assegnato alla nuova attività **merge** (configurabile globalmente e per libro).
 
-La chiamata AI richiede consenso esplicito all'invio delle due versioni e dei segreti del canone all'endpoint e può consumare crediti. La proposta rimane un draft in IndexedDB e non viene applicata automaticamente. Dopo aver scelto **Usa questa proposta per la scena**, devi comunque confermare **Applica scelte con doppio backup**; il testo approvato rimane `draft`, non `canon`. Le bozze vengono incluse nello ZIP di soli contenuti.
+La chiamata AI richiede consenso esplicito all'invio delle due versioni e dei segreti del canone all'endpoint e può consumare crediti. La proposta rimane un draft in IndexedDB e non viene applicata automaticamente. Dopo aver scelto **Usa questa proposta per la scena**, devi comunque confermare **Applica scelte con doppio backup**; il testo approvato rimane `draft`, non `canon`. Nel Lettore devi poi premere **Conferma scena come canonica** dopo la rilettura: fino ad allora il runner e i push GitHub sono bloccati. Le bozze vengono incluse nello ZIP di soli contenuti.
 
 Istruzioni complete: `docs/scene-merge.md`; decisioni tecniche: `ADR/0009-scene-diff-assisted-merge.md`.
 
