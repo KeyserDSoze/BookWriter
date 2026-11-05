@@ -17,6 +17,12 @@ Il PAT GitHub fine-grained viene inserito in **Archivio**, cifrato con Web Crypt
 
 Prima della prima sincronizzazione su repository **pubblica**, la UI richiede una scelta esplicita. L'import remoto non sovrascrive copie locali; la scrittura remota si interrompe se lo SHA è divergente. Non garantiamo ancora single-writer senza lease cross-device, quindi l'uso contemporaneo su più browser non è supportato.
 
+## Protezione della sessione AI tra dispositivi (ADR 0007)
+
+Per ogni libro collegato, un documento `.bookwriter/lease.json` vive su una **branch GitHub dedicata**, non nella branch del canon. Contiene solo ID del libro, ID casuale della sessione e date di validità; non contiene credenziali. Creazione, rinnovo e rilascio usano commit discendenti e `force:false`. Il runner verifica ownership prima e dopo le chiamate ai modelli e prima del checkpoint.
+
+L'assenza di rete o il lock passato a un altro writer fermano la sessione in modo conservativo. Il browser può essere sospeso: i token già consumati da chiamate in corso non sono recuperabili. Il takeover di lease scaduti richiede una conferma e 60 secondi di margine, ma resta sensibile al clock skew: non è un lock distribuito transazionale perfetto. Non fare modifiche manuali concorrenti senza risolvere i conflitti del canon.
+
 ## Autosync del browser (ADR 0006)
 
 La modalità opt-in accoda in IndexedDB gli ID delle operazioni e lo stato dei checkpoint, **mai** API key o PAT. Il marker GitHub `.bookwriter/sync.json` contiene solo ID del libro, ID operazione e revisione; i commit sono in chiaro nella repository del libro. Web Locks impedisce due sincronizzazioni concurrenti sullo stesso origin/browser, ma non è un lease multi-device. Un conflitto del branch ferma la coda. Non usare due autopilot contemporaneamente su due dispositivi. Se il tab è chiuso, l'autosync non prosegue.
