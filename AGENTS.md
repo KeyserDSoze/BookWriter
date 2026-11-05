@@ -72,6 +72,16 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## Autosync v0.4.0 — regole obbligatorie
+
+- L'outbox è **durabile e transazionale** con lo stato narrativo: `saveBookAndActivity` accoda solo fasi canoniche significative; ogni libro ha un operationId stabile fino all'ACK.
+- `autoSync` è opt-in e richiede il primo commit manuale. Il PAT resta fuori da canon, log e outbox.
+- L'ACK remoto valida in una transazione `books + outbox` la revisione realmente inviata, non elimina checkpoint nuovi.
+- Il worker usa Web Locks tra tab; se non disponibile, **non autosincronizzare**. Il tab deve restare aperto.
+- Un commit che sembra riuscito ma ha perso la risposta può essere confermato solo se `HEAD` ha lo STESSO `operationId` e il marker `.bookwriter/sync.json` lo conferma. Se il branch cambia per altri motivi: conflitto, nessun force push.
+- Retry limitati e backoff, blocco immediato su conflitti e autorizzazioni. Non resettare lo stato blocked a causa di nuove scene.
+- **Multi-device writer NON sicuro** fino al lease distribuito: non dichiarare supporto a due sessioni autopilot simultanee. Vedi ADR 0006 e issue #3.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
