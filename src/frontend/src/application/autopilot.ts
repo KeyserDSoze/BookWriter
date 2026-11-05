@@ -4,6 +4,7 @@ import { callModel } from "../infrastructure/ai";
 import { getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
+import { acceptedRepairs, adjudicationPrompt, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -24,6 +25,7 @@ const memorySchema = z.object({
   timeline: z.array(z.string()),
   currentState: z.string(),
 });
+const editorialSummarySchema = z.object({ chapterSummary: z.string().min(25).max(6000), bookSummary: z.string().min(25).max(9000) });
 const impactSchema = z.object({
   rationale: z.string(),
   affectedSceneIds: z.array(z.string()),
@@ -38,6 +40,7 @@ const PERSONAS = [
 ];
 
 type Work = {
+  system?: string;
   phase: Phase;
   kind: TaskKind;
   title: string;
@@ -180,9 +183,169 @@ function nextWork(book: BookProject): Work | null {
         prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. Restituisci ESCLUSIVAMENTE JSON valido con i campi: {"characters":{"nome":"stato"},"locations":{"nome":"stato"},"factions":{},"items":{},"secrets":{"id":"stato privato e quando rivelare"},"timeline":["evento"],"currentState":"riassunto stato attuale"}.\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => {
           const memory = memorySchema.parse(parseJson(text));
-          b.memory = memory as NarrativeMemory; b.currentSceneId = undefined; b.phase = "prose";
+          b.memory = memory as NarrativeMemory; b.currentSceneId = undefined;
+          const chapter = b.chapters.find(ch => ch.scenes.some(s => s.id === scene?.id));
+          if (chapter && !chapter.frozenAt && chapter.scenes.every(s => s.status === "canon")) {
+            b.editorialCycle = createEditorialCycle(chapter.id);
+            b.phase = "chapterReview";
+          } else b.phase = "prose";
         },
       };
+    }
+    case "chapterReview": {
+      const cycle = book.editorialCycle;
+      if (!cycle) throw new Error("Sessione di redazione mancante: fermati e chiedi intervento.");
+      const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
+      if (!chapter) throw new Error("Capitolo di redazione inesistente.");
+      if (cycle.stage === "blocked")
+        throw new Error(cycle.blockedReason ?? "Redazione bloccata: intervento autore necessario.");
+      if (cycle.stage === "review") {
+        const next = nextReviewSlot(book, cycle);
+        if (!next) throw new Error("Checkpoint revisioni incompleto: nessun revisore disponibile.");
+        const prompt = reviewerPrompt(book, cycle, next.role, next.segment, next.segmentCount);
+        const title = "Redazione: " + next.role + " " + (cycle.reports.length + 1) + "/" +
+          (next.segmentCount * 12);
+        return {
+          phase: "chapterReview", kind: reviewerTask(next.role), title,
+          system: prompt.system,
+          reason: "Una chat autonoma controlla solo la sua competenza, senza pareri degli altri agenti.",
+          nextStep: "Prossimo revisore o giudizio critico della redazione",
+          prompt: prompt.prompt,
+          apply: (b, text) => {
+            const current = b.editorialCycle;
+            const ch = b.chapters.find(c => c.id === cycle.chapterId);
+            if (!current || !ch) throw new Error("Il ciclo editoriale è cambiato.");
+            const report = validateReport(current, next.role, next.segment, next.segmentCount, text, ch);
+            current.reports.push(report);
+            if (!nextReviewSlot(b, current)) current.stage = "adjudicate";
+          },
+        };
+      }
+      if (cycle.stage === "adjudicate") {
+        const prompt = adjudicationPrompt(book, cycle);
+        return {
+          phase: "chapterReview", kind: "chapterJudge", system: prompt.system,
+          title: "Direttore editoriale: accettazione o rifiuto motivato dei rilievi",
+          reason: "Il direttore valuta criticamente tutti e dodici i rapporti senza assumere che siano corretti.",
+          nextStep: "Correzioni accettate oppure preparazione del congelamento",
+          prompt: prompt.prompt,
+          apply: (b, text) => {
+            const current = b.editorialCycle;
+            if (!current) throw new Error("Ciclo editoriale non disponibile.");
+            current.judgment = validateJudgment(current, text);
+            current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
+            current.repairCursor = 0;
+            current.summaryCursor = 0;
+          },
+        };
+      }
+      if (cycle.stage === "repair") {
+        const fixes = acceptedRepairs(cycle);
+        const unique = [...new Set(fixes.map(x => x.sceneId))];
+        const sceneId = unique[cycle.repairCursor];
+        if (!sceneId) throw new Error("Correzioni senza scena valida.");
+        const prompt = repairPrompt(book, cycle, sceneId);
+        return {
+          phase: "chapterReview", kind: "chapterRepair", system: prompt.system,
+          title: "Remediation approvata: " + sceneId,
+          reason: "Riscrittura mirata della scena, applicando solo critiche accolte con motivazione.",
+          nextStep: "Aggiornamento della memoria e nuova revisione completa",
+          prompt: prompt.prompt,
+          apply: (b, text) => {
+            if (!text.trim() || text.length > 180000)
+              throw new Error("Testo della remediation vuoto o eccessivo.");
+            const ch = b.chapters.find(x => x.id === cycle.chapterId);
+            const scene = ch?.scenes.find(x => x.id === sceneId);
+            if (!scene || !b.editorialCycle) throw new Error("Scena da correggere assente.");
+            scene.text = text.trim();
+            scene.status = "draft";
+            scene.summary = undefined;
+            b.editorialCycle.repairCursor++;
+            if (b.editorialCycle.repairCursor >= unique.length) {
+              b.editorialCycle.stage = "reconcile";
+              b.editorialCycle.reconcileCursor = 0;
+            }
+          },
+        };
+      }
+      if (cycle.stage === "reconcile") {
+        const segments = chapterSegments(chapter);
+        const index = cycle.reconcileCursor ?? 0;
+        const segment = segments[index];
+        if (!segment) throw new Error("Riconciliazione della memoria senza segmento.");
+        return {
+          phase: "chapterReview", kind: "consolidate",
+          title: "Riconciliazione canone dopo remediation " + (index + 1) + "/" + segments.length,
+          reason: "Aggiornare timeline, segreti e personaggi dopo la modifica prima della nuova tornata di review.",
+          nextStep: "Prossimo segmento di memoria oppure nuova votazione della redazione",
+          prompt: [
+            "Aggiorna il canone dopo una correzione editoriale. Mantieni i fatti precedenti ancora veri; non inventare.",
+            "Rispondi SOLO JSON valido con campi characters,locations,factions,items,secrets,timeline,currentState.",
+            "MEMORIA PRECEDENTE: " + JSON.stringify(book.memory),
+            "SCENA " + segment.sceneId + ", SEGMENTO " + (index+1) + "/" + segments.length + ":\n" + segment.text,
+          ].join("\n\n"),
+          apply: (b, text) => {
+            b.memory = memorySchema.parse(parseJson(text)) as NarrativeMemory;
+            const current = b.editorialCycle;
+            if (!current) throw new Error("Sessione mancante.");
+            current.reconcileCursor = (current.reconcileCursor ?? 0) + 1;
+            if (current.reconcileCursor >= segments.length) {
+              for (const scene of chapter.scenes) {
+                const updated = b.chapters.find(ch => ch.id === chapter.id)?.scenes.find(s => s.id === scene.id);
+                if (updated?.status === "draft") updated.status = "canon";
+              }
+              beginNextRound(current);
+              if (current.stage === "blocked") {
+                b.status = "paused";
+                b.previousError = current.blockedReason;
+              }
+            }
+          },
+        };
+      }
+      if (cycle.stage === "summary") {
+        if (!cycle.judgment || cycle.judgment.verdict !== "freeze")
+          throw new Error("Non è consentito congelare un capitolo senza giudizio favorevole.");
+        const segments = chapterSegments(chapter);
+        const index = cycle.summaryCursor ?? 0;
+        const segment = segments[index];
+        if (!segment) throw new Error("Segmento di riassunto mancante.");
+        return {
+          phase: "chapterReview", kind: "summarize",
+          title: "Sinossi del capitolo e del libro " + (index+1) + "/" + segments.length,
+          reason: "Compattare il contesto per i revisori dei capitoli successivi senza perdere il canone verificato.",
+          nextStep: "Prossima sinossi oppure congelamento e avanzamento al capitolo seguente",
+          prompt: [
+            "Aggiorna due sinossi progressive senza spoiler aggiuntivi e senza inventare fatti.",
+            "Restituisci SOLO JSON {\"chapterSummary\":\"...\",\"bookSummary\":\"...\"}.",
+            "Riassunto capitolo fino ad ora: " + (cycle.runningChapterSummary ?? ""),
+            "Riassunto libro precedente: " + (cycle.runningBookSummary ?? book.bookSummary ?? ""),
+            "Segmento letto: " + segment.sceneId + "\n" + segment.text,
+            "Il riassunto del libro deve descrivere quanto è stato realmente raccontato ai lettori.",
+          ].join("\n\n"),
+          apply: (b, text) => {
+            const data = editorialSummarySchema.parse(parseJson(text));
+            const current = b.editorialCycle;
+            const ch = b.chapters.find(x => x.id === cycle.chapterId);
+            if (!current || !ch) throw new Error("Sessione di sintesi non valida.");
+            current.runningChapterSummary = data.chapterSummary;
+            current.runningBookSummary = data.bookSummary;
+            current.summaryCursor = (current.summaryCursor ?? 0) + 1;
+            if (current.summaryCursor >= segments.length) {
+              ch.summary = data.chapterSummary;
+              b.bookSummary = data.bookSummary;
+              ch.frozenAt = new Date().toISOString();
+              ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, {
+                round: current.round, reports: current.reports, judgment: current.judgment!,
+              }];
+              b.editorialCycle = undefined;
+              b.currentSceneId = undefined;
+              b.phase = "prose";
+            }
+          },
+        };
+      }
+      throw new Error("Stato di revisione del capitolo sconosciuto.");
     }
     case "revision": {
       const rev = book.revision;
@@ -201,6 +364,20 @@ function nextWork(book: BookProject): Work | null {
             const earliest = canonical.findIndex(x => requested.has(x.id));
             // Rivedere anche le scene successive per non introdurre incoerenze.
             request.affectedSceneIds = (earliest < 0 ? canonical : canonical.slice(earliest)).map(x => x.id);
+            // Reopen every affected chapter and its successors: retroactive edits invalidate prior votes.
+            const earliestChapter = b.chapters.find(ch => ch.scenes.some(s =>
+              request.affectedSceneIds.includes(s.id)));
+            if (earliestChapter) {
+              for (const chapter of b.chapters) {
+                if (chapter.number >= earliestChapter.number) {
+                  chapter.frozenAt = undefined;
+                  chapter.summary = undefined;
+                }
+              }
+              b.editorialCycle = undefined;
+              b.bookSummary = b.chapters.filter(ch => ch.frozenAt)
+                .map(ch => ch.summary ?? "").join("\n").slice(-8000);
+            }
             request.impactAnalysis = impact.rationale;
             request.cursor = 0;
           },
@@ -271,6 +448,18 @@ export class AutopilotRunner {
         await guard.assertActive();
         const book = await getBook(bookId);
         if (!book || book.status !== "running") break;
+        // A previously canonical chapter is not final until the independent board freezes it.
+        if (book.phase === "prose" && !book.editorialCycle) {
+          const ready = book.chapters.find(ch => !ch.frozenAt && ch.scenes.length > 0 &&
+            ch.scenes.every(scene => scene.status === "canon"));
+          if (ready) {
+            book.editorialCycle = createEditorialCycle(ready.id);
+            book.phase = "chapterReview";
+            await saveBook(book, false);
+            await onUpdate();
+            continue;
+          }
+        }
         if (book.editorialReviewSceneIds?.length) {
           book.status = "paused";
           book.previousError = "Alcune scene fuse attendono conferma editoriale nel Lettore.";
@@ -297,7 +486,7 @@ export class AutopilotRunner {
         await onUpdate();
         try {
           await guard.assertActive(); // Do not charge credits without verified ownership.
-          const result = await callModel(work.kind, "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.", work.prompt, settings, book, signal);
+          const result = await callModel(work.kind, work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.", work.prompt, settings, book, signal);
           await guard.assertActive(); // Discard result if the lease was lost during the AI call.
           const latest = await getBook(bookId);
           if (!latest || latest.status !== "running" || latest.phase !== work.phase)
