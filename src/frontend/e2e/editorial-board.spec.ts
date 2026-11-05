@@ -1,12 +1,20 @@
 import { expect, test } from "@playwright/test";
 
 test("redazione capitolo desktop/mobile: 12 agenti separati, giudice, freeze e riapertura", async ({page}) => {
+  test.setTimeout(120_000); // 12 sequential network calls plus a judge and summary.
   const calls: Array<{system:string;prompt:string;model:string}> = [];
   const reports = JSON.stringify({
     verdict:"pass",summary:"Controllo editoriale indipendente superato senza criticità.",
     findings:[],memoryNote:"Nessun problema nel segmento letto.",
   });
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-headers": "authorization,content-type",
+        "access-control-allow-methods": "POST,OPTIONS",
+      }}); return;
+    }
     const body=route.request().postDataJSON() as {
       model:string;messages:Array<{role:string;content:string}>;
     };
@@ -64,7 +72,32 @@ test("redazione capitolo desktop/mobile: 12 agenti separati, giudice, freeze e r
   const panel=page.getByRole("region",{name:"Redazione multi-agente"});
   await expect(panel.getByText("Non ancora congelato")).toBeVisible();
   await page.getByRole("button",{name:"Riprendi"}).click();
-  await expect(panel.getByText(/Congelato il/)).toBeVisible({timeout:45_000});
+  await expect.poll(async () => {
+    const current = await page.evaluate(async () => await new Promise<{
+      status: string; frozen: boolean; previousError?: string;
+    }>((resolve, reject) => {
+      const open = indexedDB.open("bookwriter");
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const tx = open.result.transaction("books", "readonly");
+        const query = tx.objectStore("books").getAll();
+        query.onerror = () => reject(query.error);
+        query.onsuccess = () => {
+          const b = query.result[0] as {
+            status: string; previousError?: string;
+            chapters: Array<{ frozenAt?: string }>;
+          };
+          resolve({ status: b.status, frozen: !!b.chapters[0]?.frozenAt,
+            previousError: b.previousError });
+        };
+      };
+    }));
+    if (current.status === "error") {
+      throw new Error("Redazione fallita: " + current.previousError);
+    }
+    return current.frozen ? "frozen" : "pending (" + current.status + ", " + calls.length + " richieste)";
+  }, { timeout: 90_000 }).toBe("frozen");
+  await expect(panel.getByText(/Congelato il/)).toBeVisible({timeout:15_000});
   expect(calls).toHaveLength(14);
   expect(calls.every(x=>x.model==="mock-review-editorial")).toBe(true);
   expect(calls.filter(x=>x.system.includes("revisore letterario INDIPENDENTE"))).toHaveLength(12);
