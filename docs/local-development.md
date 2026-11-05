@@ -36,7 +36,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 - **PR #14**: confronto visuale base/locale/GitHub e recupero di scene/entità con doppio backup IndexedDB, controllo SHA e pause autosync. Consulta ADR 0008.
 - **PR #16**: diff parole/paragrafi, modello `merge` configurabile per libro, proposte AI opzionali con lease, bozze in IndexedDB v2 e nello ZIP, approvazione solo a doppio backup. Consulta ADR 0009 e `docs/scene-merge.md`.
 - **PR #18**: pannello di consumi token input/output per libro, modello ed endpoint, distinguendo usage completo/parziale/mancante, senza saldo crediti inventato. ADR 0010 e `docs/ai-usage.md`.
-- **PR #19**: board editoriale per capitolo (7 specialisti, 5 lettori, giudice critico, remediation, re-review e freeze). Segmenti completi con contesti separati, sinossi progressive, stop dopo tre round, riapertura capitoli e verifica dei successori. ADR 0011 e `docs/editorial-board.md`.
+- **PR #19**: board editoriale per capitolo (7 specialisti, 5 lettori, giudice critico, remediation, re-review e freeze). Segmenti completi con contesti separati, sinossi progressive, stop dopo tre round, riapertura capitoli e verifica dei successori. ADR 0011 e `docs/editorial-board.md`. Ripresa retroattiva attraverso `domain/editorial-summary.ts`, test per legacy senza snapshot e fencing contro modifiche locali concorrenti. Playwright è fissato a 1.64.1 per installazioni CI riproducibili.
 
 ## Come provare GitHub
 
