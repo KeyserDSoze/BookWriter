@@ -13,6 +13,7 @@ import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBo
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
 import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
+import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { drainGitHubOutbox } from "./application/auto-sync";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
@@ -344,9 +345,8 @@ export default function App() {
               </div>)}
             </div>
           </Section>
-          <Section title="Sincronizzazione cloud">
-            <p className="muted flex items-start gap-2 text-sm"><Cloud className="shrink-0" size={18}/> Questa versione salva in IndexedDB e permette GitHub autosync opzionale dalla sezione Archivio. Google e Microsoft non sono ancora integrati.</p>
-            <p className="muted mt-2 flex items-start gap-2 text-sm"><Github className="shrink-0" size={18}/> Il PAT è usato soltanto nelle chiamate HTTPS verso GitHub, mai nei file del libro.</p>
+          <Section title="Sincronizzazione e checkpoint">
+            <SyncStatusSummary book={current} openArchive={() => setPage("export")}/>
           </Section>
         </div>
       </div>}
