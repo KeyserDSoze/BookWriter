@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, BookOpen, BrainCircuit, CheckCircle2, Cloud, Database,
   FileText, Github, LayoutDashboard, ListChecks, Moon, Pause, Play, Plus,
-  RefreshCw, Settings2, Sun, Users, WandSparkles,
+  RefreshCw, Settings2, Sun, Users, WandSparkles, Download, Upload, ShieldCheck, FileArchive,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { AutopilotRunner, requestRevision } from "./application/autopilot";
@@ -10,14 +10,17 @@ import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings,
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { fetchModels, normalizeEndpoint } from "./infrastructure/ai";
 import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
+import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
+import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
 
-type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings";
+type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "activities", label: "Attività", icon: ListChecks },
   { id: "reader", label: "Libro", icon: BookOpen },
   { id: "atlas", label: "Memoria", icon: Database },
   { id: "settings", label: "Impostazioni", icon: Settings2 },
+  { id: "export", label: "Archivio", icon: FileArchive },
 ];
 const LABELS: Record<TaskKind, string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience (5 profili)",
@@ -62,6 +65,11 @@ export default function App() {
   const [intervention, setIntervention] = useState("");
   const [notice, setNotice] = useState("");
   const [ready, setReady] = useState(false);
+  const [backupMode, setBackupMode] = useState<BackupMode>("content");
+  const [backupPassword, setBackupPassword] = useState("");
+  const [restorePassword, setRestorePassword] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
   const runner = useRef(new AutopilotRunner()).current;
 
   const refresh = useCallback(async () => {
@@ -148,6 +156,56 @@ export default function App() {
     const modified = structuredClone(current);
     modified.modelRoutes = { ...modified.modelRoutes, [task]: { endpointId, modelId } };
     await saveBook(modified); await refresh();
+  }
+
+
+  async function makeBackup() {
+    if (busy) return;
+    setBusy(true); setNotice("");
+    try {
+      const cleartext = backupMode === "full" && !backupPassword;
+      if (cleartext && !window.confirm("ATTENZIONE: senza password lo ZIP conterrà API key in chiaro. Chiunque ottenga il file potrà usarle e generare costi. Procedere?")) return;
+      if (backupPassword && backupPassword.length < 12) throw new Error("Usa una password ZIP di almeno 12 caratteri.");
+      const blob = await createBackup(backupMode, backupPassword || undefined, cleartext);
+      downloadBackup(blob, backupMode);
+      setBackupPassword("");
+      setNotice("Backup ZIP generato. Conservalo in un luogo sicuro; verifica periodicamente il ripristino.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Esportazione non riuscita.");
+    } finally { setBusy(false); }
+  }
+  async function restoreBackup() {
+    if (!importFile || busy) return;
+    if (books.some(book => book.status === "running"))
+      { setNotice("Metti prima in pausa l'autopilot."); return; }
+    setBusy(true); setNotice("");
+    try {
+      const restored = await readBackup(importFile, restorePassword || undefined);
+      const wantsSettings = restored.kind === "full" &&
+        window.confirm("Il backup contiene le configurazioni, comprese le API key. Vuoi sostituire le impostazioni di questo browser? I libri vengono comunque aggiunti come copie.");
+      if (!window.confirm("Importare " + restored.books.length + " libri come copie senza cancellare quelli esistenti?")) return;
+      const count = await importBackup(restored, wantsSettings);
+      if (wantsSettings) setSettings(await loadSettings());
+      await refresh();
+      setImportFile(null); setRestorePassword("");
+      setNotice(count + " libri importati come copie. I dati preesistenti non sono stati sovrascritti.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Importazione non riuscita.");
+    } finally { setBusy(false); }
+  }
+  async function downloadBook(format: "epub" | "docx" | "pdf") {
+    if (!current || busy) return;
+    setBusy(true); setNotice("");
+    try {
+      switch (format) {
+        case "epub": exportEpub(current); break;
+        case "docx": await exportDocx(current); break;
+        case "pdf": await exportPdf(current); break;
+      }
+      setNotice("Esportazione " + format.toUpperCase() + " completata.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Esportazione libro non riuscita.");
+    } finally { setBusy(false); }
   }
 
   return <div className="site-nav">
@@ -317,6 +375,49 @@ export default function App() {
           {current?.memory.timeline.length ? current.memory.timeline.map((x,i) => <p className="mb-2 text-sm" key={i}>• {x}</p>) : <Empty>Ancora nessun evento.</Empty>}
         </Section>
         <Section title="Stato corrente"><p className="whitespace-pre-wrap text-sm">{current?.memory.currentState || "Non ancora disponibile."}</p></Section>
+      </div>}
+
+      {page === "export" && <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <Section title="Backup ZIP" description="Copia portabile di tutti i libri presenti su questo browser, con log, riassunti e checkpoint.">
+          <div className="space-y-4">
+            <Field label="Tipo di backup"><select className="field" value={backupMode} onChange={e => setBackupMode(e.target.value as BackupMode)}>
+              <option value="content">Solo libri e attività (senza credenziali)</option>
+              <option value="full">Completo: libri, modelli, endpoint e API key</option>
+            </select></Field>
+            {backupMode === "full" && <>
+              <Field label="Password per cifrare i dati nello ZIP (raccomandata)">
+                <input type="password" autoComplete="new-password" className="field" value={backupPassword} onChange={e => setBackupPassword(e.target.value)} placeholder="Almeno 12 caratteri" />
+              </Field>
+              <p className="muted flex items-start gap-2 text-sm"><ShieldCheck size={17} className="shrink-0" />
+                Il file ZIP con password include un payload cifrato AES-GCM. Non è il formato di password ZIP tradizionale: l'importazione si effettua da BookWriter.</p>
+              {!backupPassword && <p className="text-sm text-amber-600 dark:text-amber-300">Senza password le credenziali verranno esportate in chiaro: sarà richiesta una conferma aggiuntiva.</p>}
+            </>}
+            <Button disabled={busy} onClick={() => void makeBackup()}><Download size={17}/> Scarica backup ZIP</Button>
+          </div>
+        </Section>
+        <Section title="Ripristina backup ZIP" description="I libri importati sono creati come nuove copie: il contenuto locale esistente resta intatto.">
+          <div className="space-y-4">
+            <Field label="Archivio BookWriter (.zip)">
+              <input className="field" type="file" accept=".zip,application/zip" onChange={e => setImportFile(e.target.files?.[0] ?? null)} />
+            </Field>
+            <Field label="Password del backup (se cifrato)">
+              <input className="field" type="password" autoComplete="off" value={restorePassword} onChange={e => setRestorePassword(e.target.value)} placeholder="Lascia vuoto se non richiesta"/>
+            </Field>
+            <p className="muted text-xs">Verranno verificati formato, dimensioni e struttura. Il recupero di chiavi API richiede una conferma distinta.</p>
+            <Button disabled={!importFile || busy} onClick={() => void restoreBackup()} variant="secondary"><Upload size={17}/> Importa ZIP</Button>
+          </div>
+        </Section>
+        <Section title="Esporta libro" description="Genera un'edizione leggibile dalle scene canoniche già completate, senza inviare il testo a servizi esterni.">
+          {!current ? <Empty>Seleziona un libro per esportarlo.</Empty> : <>
+            <p className="mb-4 text-sm font-semibold">{current.title}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={busy} variant="outline" onClick={() => void downloadBook("epub")}><BookOpen size={17}/> EPUB</Button>
+              <Button disabled={busy} variant="outline" onClick={() => void downloadBook("docx")}><FileText size={17}/> Word (DOCX)</Button>
+              <Button disabled={busy} variant="outline" onClick={() => void downloadBook("pdf")}><FileText size={17}/> PDF</Button>
+            </div>
+            <p className="muted mt-3 text-xs">La prima versione esporta prosa e struttura; copertine e illustrazioni non sono ancora supportate.</p>
+          </>}
+        </Section>
       </div>}
 
       {page === "settings" && <div className="space-y-4">
