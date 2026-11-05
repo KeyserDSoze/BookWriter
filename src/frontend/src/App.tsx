@@ -324,7 +324,7 @@ export default function App() {
           {current && <Section title="Intervieni sull'autopilot" description="Una correzione diventa un vincolo persistente. L'IA analizzerà l'impatto e riscriverà la parte interessata e le scene successive.">
             <textarea className="field min-h-28" value={intervention} onChange={e => setIntervention(e.target.value)} placeholder="No, così non va bene: modifica assolutamente..." aria-label="Istruzione di revisione" />
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button disabled={!intervention.trim() || current.status === "running"} onClick={() => void sendFeedback()}><WandSparkles size={16} /> Richiedi revisione</Button>
+              <Button disabled={!intervention.trim() || current.status === "running" || !!current.editorialReviewSceneIds?.length} onClick={() => void sendFeedback()}><WandSparkles size={16} /> Richiedi revisione</Button>
               {current.status === "running" && <span className="muted text-xs">Premi prima Pausa.</span>}
             </div>
             {current.revision && <p className="mt-3 text-sm">Revisione in corso: {current.revision.instruction} ({current.revision.cursor}/{current.revision.affectedSceneIds.length})</p>}
