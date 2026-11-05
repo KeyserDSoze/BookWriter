@@ -46,6 +46,17 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Routing multi-endpoint per libro e per attività; modelli mai hardcodati. Inventario modelli via `GET /models` se possibile, più inserimento manuale.
 - Permettere limiti di spesa/token personalizzabili, avviso e arresto. Eventuale assenza di tariffe precise va indicata.
 
+## GitHub Sync — regole del codice
+
+- Fonte: `ADR/0005-github-manual-sync.md`, `docs/github-sync.md`, issue #3. `src/frontend/src/domain/narrarium.ts` costruisce proiezioni Markdown senza credenziali; `infrastructure/github-sync.ts` implementa Git Data REST.
+- Tutte le chiamate con PAT devono restare su `https://api.github.com`; mai token negli URL, log, tree, commit, ZIP narrativi o errori.
+- Una repository per libro; mai `force push`. Prima scrittura conservativa (nessun book.md preesistente estraneo); update di branch solo con parent SHA originale e `force:false`.
+- Eliminare solo file elencati in manifest precedente; path derivati da slug sicuri, no traversal. Se remote HEAD cambia, bloccare e conservare i dati locali.
+- Snapshot `.bookwriter/project.json` e `.bookwriter/activities.json` devono essere lossless per il recupero ma NON contenere token, chiavi API, `remote.lastSyncedCommit` o chiavi di cifratura.
+- Importazione remote o ZIP è additiva; mai sovrascrivere un book ID esistente in silenzio.
+- Non presentare il pulsante manuale come autosync. Outbox e lease vanno implementati con un nuovo ADR prima di abilitarli.
+- Test `narrarium.test.ts` e `github-sync.test.ts` devono coprire sicurezza, conflitti, path e push non-forzato.
+
 ## Persistenza e sincronizzazione
 
 - IndexedDB è fonte operativa sul dispositivo; commit canonici GitHub su cambi significativi, ZIP snapshot versionati per bootstrap/ripristino, non per ogni singola attività.
