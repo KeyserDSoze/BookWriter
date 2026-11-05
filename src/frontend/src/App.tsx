@@ -180,7 +180,7 @@ export default function App() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="text-sm font-semibold" htmlFor="book-select">Libro attivo</label>
         <select id="book-select" className="field max-w-xs" value={selectedId} onChange={e => setSelectedId(e.target.value)}>
-          {!books.length && <option value="">Nessun libro</option>}
+          <option value="">{books.length ? "+ Nuovo libro" : "Nessun libro"}</option>
           {books.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
         </select>
       </div>
