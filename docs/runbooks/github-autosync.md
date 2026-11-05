@@ -44,6 +44,10 @@ Prima del ripristino il sistema verifica che HEAD GitHub e la versione locale no
 
 Nell'editor di confronto seleziona una scena e apri il diff. Puoi salvare manualmente una nuova bozza senza chiamare l'AI, oppure autorizzare il modello `merge`. Ogni proposta conserva testo locale e GitHub, revisione, modello e token se disponibili, non credenziali. Seleziona **Usa questa proposta per la scena** e conferma **Applica scelte con doppio backup**; la scena accettata resta draft, quindi rileggila prima del push. Lo ZIP content-only conserva le bozze ma contiene testi in chiaro. Guida `docs/scene-merge.md`.
 
+## Checkpoint di redazione v0.8.0
+
+Un capitolo è pubblicabile soltanto dopo il congelamento della redazione (12 lettori/specialisti per segmento, giudice critico, remediation mirate, nuova verifica e sinossi). Le scene in scrittura e i report intermedi **non** autorizzano nuovi commit del canon. Il push manuale risponde con un messaggio esplicito se un capitolo è ancora in review. Se l'autore riapre un capitolo, autosync viene disabilitato e l'outbox obsoleta cancellata; completare di nuovo la redazione anche per i capitoli successivi. Guida `docs/editorial-board.md`, ADR 0011.
+
 ## Recupero dopo chiusura browser
 
 - Non presumere che un task AI o il sync lavori mentre il browser è chiuso o sospeso.
