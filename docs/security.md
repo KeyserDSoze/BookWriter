@@ -17,6 +17,10 @@ Il PAT GitHub fine-grained viene inserito in **Archivio**, cifrato con Web Crypt
 
 Prima della prima sincronizzazione su repository **pubblica**, la UI richiede una scelta esplicita. L'import remoto non sovrascrive copie locali; la scrittura remota si interrompe se lo SHA è divergente. Non garantiamo ancora single-writer senza lease cross-device, quindi l'uso contemporaneo su più browser non è supportato.
 
+## Autosync del browser (ADR 0006)
+
+La modalità opt-in accoda in IndexedDB gli ID delle operazioni e lo stato dei checkpoint, **mai** API key o PAT. Il marker GitHub `.bookwriter/sync.json` contiene solo ID del libro, ID operazione e revisione; i commit sono in chiaro nella repository del libro. Web Locks impedisce due sincronizzazioni concurrenti sullo stesso origin/browser, ma non è un lease multi-device. Un conflitto del branch ferma la coda. Non usare due autopilot contemporaneamente su due dispositivi. Se il tab è chiuso, l'autosync non prosegue.
+
 ## PAT e chiavi modello
 
 - Raccomandare credenziali limitate per repository e revocabili; per GitHub fine-grained PAT con **Contents R/W** sul solo gruppo di repository del libro. Le chiavi OpenAI-compatible possono fatturare: evitare log e invio a domini inattesi.

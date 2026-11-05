@@ -15,7 +15,9 @@
 
 **Sincronizzazione GitHub**: la PR #8 introduce collegamento a repository per libro, PAT fine-grained cifrato localmente, proiezione Markdown/frontmatter, commit multi-file con controllo SHA, import non distruttivo e blocco dei conflitti. Vedi `docs/github-sync.md` e ADR 0005.
 
-**Ancora da implementare:** OAuth Google/Microsoft, sincronizzazione GitHub **automatica** con outbox/lease, snapshot ZIP remoti, import Narrarium generico, parità completa Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
+**Autosync v0.4.0:** la PR #9 aggiunge l'outbox persistente e i commit automatici per i checkpoint narrativi, con retry, recovery e controlli Web Locks tra tab. È disattivato per default e va abilitato in Archivio dopo il primo commit manuale. Vedi ADR 0006.
+
+**Ancora da implementare:** OAuth Google/Microsoft, lease GitHub **tra dispositivi**, risoluzione dei conflitti, snapshot ZIP remoti, import Narrarium generico, parità Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
 

@@ -255,7 +255,7 @@ export class AutopilotRunner {
       const initial = await getBook(bookId);
       if (!initial) throw new Error("Libro non trovato.");
       initial.status = "running"; initial.previousError = undefined;
-      await saveBook(initial);
+      await saveBook(initial, false); // A run start is not a narrative checkpoint.
       await onUpdate();
 
       while (!signal.aborted) {
@@ -264,7 +264,7 @@ export class AutopilotRunner {
         const work = nextWork(book);
         if (!work) {
           if (book.phase === "audience" && book.audienceReviews.length >= 5) {
-            book.phase = "adversarial"; await saveBook(book); continue;
+            book.phase = "adversarial"; await saveBook(book, false); continue;
           }
           book.phase = "completed"; book.status = "completed";
           await saveBook(book); await onUpdate(); break;

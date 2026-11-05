@@ -30,20 +30,21 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 - Checkpoint IndexedDB, log per attività, pause/resume e revisioni dall'autore.
 - Archivio ZIP content-only e full; quello full può essere cifrato con passphrase AES-GCM. La copia non cancella i libri esistenti.
 - Export EPUB, DOCX, PDF delle scene canoniche, senza servizi esterni.
-- **PR #8**: sincronizzazione GitHub **manuale** per repository per libro, PAT fine-grained cifrato localmente, proiezione Markdown Narrarium, commit multi-file con SHA, import non distruttivo e blocco dei conflitti.
+- **PR #8**: sincronizzazione GitHub manuale, PAT cifrato, proiezione Markdown Narrarium, commit multi-file, import sicuro.
+- **PR #9**: autosync opt-in a checkpoint con outbox transazionale, Web Locks tra tab, retry/backoff e recovery dei commit senza risposta.
 
 ## Come provare GitHub
 
 Vedi `docs/github-sync.md`. Serve una repository GitHub con un commit iniziale (può contenere README), un PAT fine-grained con permesso `Contents: read/write` limitato a quella repository e un libro locale.
 
-In **Archivio**, salva il PAT, verifica repository e branch, collega il libro e premi **Sincronizza su GitHub**. La sincronizzazione non parte automaticamente: metti in pausa l'autopilot prima di effettuare il push. Il PAT e le API key non vengono committati.
+In **Archivio**, salva il PAT, verifica repository e branch, collega il libro e premi **Sincronizza su GitHub** (primo commit manuale con autopilot in pausa). Successivamente puoi attivare **Sincronizzazione automatica ai checkpoint**. I progressi vengono accodati in IndexedDB e inviati mentre il tab rimane attivo. Il PAT e le API key non vengono committati.
 
 Per aprire da altro browser, inserisci manualmente il PAT autorizzato, configura il repository in Archivio e importa il libro. L'import rifiuta gli ID locali già presenti per prevenire sovrascritture.
 
 ## Limiti e sviluppi in coda
 
 - Login Google/Microsoft e vault credenziali multi-dispositivo non ancora attivi; nessun login fittizio.
-- Nessuna outbox GitHub durabile, autosync, lease tra browser, conflitti con risoluzione visuale o ZIP remoti periodici.
+- Outbox e autosync sono implementati, ma NON è disponibile un lease tra dispositivi: evitare sessioni autopilot concorrenti. Mancano UI di risoluzione conflitti e ZIP remoti periodici.
 - Supporto a repository Narrarium preesistenti non gestite da BookWriter da sviluppare; ora si importa uno snapshot `.bookwriter/project.json`.
 - Manca l'applicazione rigorosa delle soglie di rivelazione dei segreti, ricerca fattuale verificata con fonti, copertine e impaginazione editoriale avanzata.
 - Budget/tariffe modello, test Safari iOS/Chrome Android reali e integrazione con provider AI a crediti reali da completare.

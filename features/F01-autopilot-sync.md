@@ -5,8 +5,9 @@
 - [x] PR #1: UI local-first, idea/review/autopilot prototipale, routing modelli, log e checkpoint.
 - [x] PR #1: esportazioni ZIP e EPUB/PDF/DOCX, test iniziali.
 - [x] PR #7: test Playwright mobile/desktop e navigazione mobile corretta.
-- [ ] PR #8 (in lavorazione): PAT GitHub locale, proiezione canon Markdown, commit manuale, import conservativo.
-- [ ] OAuth Google/Microsoft, autosync durabile, lease e merge conflitti (#2, #3).
+- [x] PR #8: PAT GitHub locale, canon Markdown, commit manuale e import conservativo.
+- [ ] PR #9: autosync opt-in con outbox IndexedDB atomica, retry, Web Locks tra tab, recupero dei commit ambigui; in verifica CI.
+- [ ] OAuth Google/Microsoft, lease distribuito e merge conflitti (#2, #3).
 - [ ] Completezza canon Narrarium e controlli rigorosi sui segreti (#5).
 - [ ] Budget, modelli per riassunti dedicati e test con provider reali (#6).
 

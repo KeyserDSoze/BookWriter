@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Cloud, Download, Github, LockKeyhole, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
-import type { AppSettings, BookProject, GitHubRemote } from "../domain/types";
+import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { encryptLocal } from "../infrastructure/crypto";
 import { getBook, saveBook } from "../infrastructure/db";
+import { acknowledgeOutbox, getOutbox, retryBlockedSync } from "../infrastructure/outbox";
+import { drainGitHubOutbox } from "../application/auto-sync";
 import {
   importGitHubBook, inspectRepository, pushGitHubBook, validateRemote,
   type RepoInfo,
@@ -38,6 +40,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   const [publicConsent, setPublicConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [outbox, setOutbox] = useState<SyncOutboxItem | undefined>();
 
   useEffect(() => {
     setOwner(book?.remote?.owner ?? "");
@@ -46,6 +49,17 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     setInfo(null);
     setPublicConsent(false);
   }, [book?.id]);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      if (!book) { setOutbox(undefined); return; }
+      void getOutbox(book.id).then(item => { if (active) setOutbox(item); });
+    };
+    refresh();
+    const timer = setInterval(refresh, 4000);
+    return () => { active = false; clearInterval(timer); };
+  }, [book?.id, book?.updatedAt, book?.remote?.lastSyncedCommit]);
 
   function remote(): GitHubRemote {
     return validateRemote({ owner, repository, branch });
@@ -117,7 +131,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   async function push(): Promise<void> {
     return doWork(async () => {
       if (!book) throw new Error("Nessun libro selezionato.");
+      if (book.remote?.autoSync) throw new Error("Con autosync attivo, usa il controllo della coda invece della sincronizzazione manuale.");
       const result = await pushGitHubBook(book.id, publicConsent);
+      const item = await getOutbox(book.id);
+      if (item) await acknowledgeOutbox(book.id, item.operationId, result.sourceRevision);
+      setOutbox(await getOutbox(book.id));
       await onRefresh();
       return "Sincronizzato " + result.repository +
         " · commit " + result.commit.slice(0, 12) + " · " + result.paths + " file. Nessun force push.";
@@ -133,6 +151,43 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       onSelectBook(imported.id);
       return "Libro importato: " + imported.title +
         ". Controlla le chiavi e i modelli AI prima di riprendere la scrittura.";
+    });
+  }
+
+  async function toggleAutoSync(enabled: boolean): Promise<void> {
+    return doWork(async () => {
+      if (!book?.remote) throw new Error("Collega prima il libro a GitHub.");
+      if (enabled && !book.remote.lastSyncedCommit)
+        throw new Error("Esegui prima una sincronizzazione manuale del libro.");
+      if (enabled && !navigator.locks?.request)
+        throw new Error("Questo browser non supporta Web Locks: autosync disabilitato per evitare scritture concorrenti tra schede.");
+      let allowPublicSync = book.remote.allowPublicSync ?? false;
+      if (enabled) {
+        const inspected = await inspectRepository(book.remote);
+        setInfo(inspected);
+        if (!inspected.private && !allowPublicSync) {
+          if (!publicConsent) throw new Error("Repository pubblica: verifica e autorizza esplicitamente la sincronizzazione automatica dei contenuti.");
+          allowPublicSync = true;
+        }
+      }
+      const current = await getBook(book.id);
+      if (!current?.remote) throw new Error("Libro o repository non più disponibili.");
+      current.remote = { ...current.remote, autoSync: enabled, allowPublicSync: enabled && allowPublicSync };
+      await saveBook(current, enabled);
+      await onRefresh();
+      setOutbox(await getOutbox(book.id));
+      if (enabled) void drainGitHubOutbox();
+      return enabled ? "Autosync attivato: checkpoint principali in coda e tentativi mentre la pagina è aperta." :
+        "Autosync disattivato. I dati locali e le richieste pendenti restano conservati.";
+    });
+  }
+  async function retryNow(): Promise<void> {
+    return doWork(async () => {
+      if (!book) throw new Error("Libro non selezionato.");
+      await retryBlockedSync(book.id);
+      setOutbox(await getOutbox(book.id));
+      void drainGitHubOutbox();
+      return "Nuovo tentativo richiesto. Se il branch è cambiato, occorre prima risolvere il conflitto.";
     });
   }
 
@@ -186,8 +241,26 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         <p className="muted">Ultimo commit: {connected.lastSyncedCommit?.slice(0, 12) ?? "Mai sincronizzato"}</p>
         <p className="muted">Stato: {dirty ? "Modifiche locali da sincronizzare" : "Checkpoint locale sincronizzato"}</p>
       </div>}
+      {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
+        <label className="flex items-center gap-3">
+          <input type="checkbox" className="size-5 accent-emerald-600"
+            checked={!!connected.autoSync} disabled={busy}
+            onChange={e => void toggleAutoSync(e.target.checked)}/>
+          <span className="font-semibold">Sincronizzazione automatica ai checkpoint</span>
+        </label>
+        <p className="muted mt-2 text-xs">Opt-in: dopo il primo commit manuale, scrive automaticamente scene consolidate, revisioni e conclusioni. La scheda deve restare aperta. Su due dispositivi non è ancora garantito un unico autopilot.</p>
+        {outbox && <div role="status" className="mt-2 space-y-1 text-xs">
+          <p><b>Coda:</b> {outbox.state === "blocked" ? "Bloccata" : outbox.state === "syncing" ? "Invio GitHub in corso" : "In attesa di GitHub"}</p>
+          <p>Operazioni accumulate: {outbox.revision} · tentativi: {outbox.attempts}</p>
+          {outbox.retryAfter && <p>Riprova dopo: {new Date(outbox.retryAfter).toLocaleString("it-IT")}</p>}
+          {outbox.lastError && <p className="text-red-600 dark:text-red-300">{outbox.lastError}</p>}
+          {outbox.state === "blocked" && connected.autoSync &&
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => void retryNow()}>Riprova sincronizzazione</Button>}
+        </div>}
+        {!outbox && <p className="muted mt-2 text-xs">{dirty ? "Modifiche locali: nessuna operazione remota in esecuzione" : "Nessuna modifica in attesa"}</p>}
+      </div>}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running"}
+        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync}
           onClick={() => void push()}><Cloud size={17}/> Sincronizza su GitHub</Button>
         <Button variant="secondary" disabled={!settings.githubToken || busy} onClick={() => void importRemote()}>
           <Download size={17}/> Importa un libro remoto
@@ -195,8 +268,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       </div>
       {message && <p role="status" className="rounded-lg border border-amber-500/40 p-3 text-sm">{message}</p>}
       <p className="muted text-xs">
-        Sincronizzazione manuale in questo rilascio. Se il branch cambia su un altro dispositivo, BookWriter blocca il commit per proteggere le modifiche remote.
-        Per automatizzare servono lease multi-dispositivo e outbox, ancora da realizzare.
+        Il salvataggio automatico usa una coda persistente e Web Locks tra schede dello stesso browser. Su dispositivi diversi usa soltanto il controllo SHA: non avviare due autopilot per lo stesso libro. Lease multi-dispositivo e risoluzione dei conflitti restano in sviluppo.
       </p>
     </div>
   </section>;

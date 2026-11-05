@@ -23,6 +23,8 @@ export interface GitHubRemote {
   lastSyncedCommit?: string;
   lastSyncedLocalUpdatedAt?: string;
   lastSyncAt?: string;
+  autoSync?: boolean;
+  allowPublicSync?: boolean;
 }
 export interface AppSettings {
   githubToken?: EncryptedSecret | null;
@@ -139,4 +141,17 @@ export function routeFor(task: TaskKind, settings: AppSettings, book: BookProjec
     endpointId: specific?.endpointId || settings.defaultRoute.endpointId,
     modelId: specific?.modelId || settings.defaultRoute.modelId,
   };
+}
+
+/** One coalesced pending synchronization per book. No credentials or prose in the outbox. */
+export interface SyncOutboxItem {
+  bookId: string;
+  operationId: string;
+  revision: number;
+  requestedAt: string;
+  state: "pending" | "syncing" | "blocked";
+  attempts: number;
+  retryAfter?: string;
+  lastError?: string;
+  lastAttemptAt?: string;
 }
