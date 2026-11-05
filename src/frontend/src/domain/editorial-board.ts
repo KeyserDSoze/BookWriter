@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { BookProject, Chapter, Scene, TaskKind } from "./types";
 import { activeHistoricalSources, validateHistoricalClaim, type HistoricalClaim } from "./historical-research";
+import { activeBibliography } from "./bibliography";
 
 export const EDITORIAL_ROLES = [
   "continuity", "secrets", "timeline", "historical", "characterVoice", "style", "narrative",
