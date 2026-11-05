@@ -3,7 +3,7 @@
 - **Stato:** Accettato (fase 1)
 - **Data:** 2026-11-05
 - **Issue:** [#3](https://github.com/KeyserDSoze/BookWriter/issues/3)
-- **PR:** da collegare al completamento
+- **PR:** [#8 — Merge completato](https://github.com/KeyserDSoze/BookWriter/pull/8)
 
 ## Problema
 
