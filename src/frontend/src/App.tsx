@@ -29,7 +29,7 @@ const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
 const LABELS: Record<TaskKind, string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience (5 profili)",
   adversarial: "Adversarial review", outline: "Piano capitoli", prose: "Scrittura",
-  continuity: "Review continuità", consolidate: "Consolidamento", summarize: "Riassunti", revision: "Revisioni",
+  continuity: "Review continuità", consolidate: "Consolidamento", summarize: "Riassunti", revision: "Revisioni", merge: "Fusione di scene",
 };
 const statusText: Record<BookProject["status"], string> = {
   idle: "Da avviare", running: "In esecuzione", paused: "In pausa",
@@ -408,7 +408,7 @@ export default function App() {
             onSaveSettings={persistSettings} onSelectBook={setSelectedId}/>
         </div>
         <div className="lg:col-span-2">
-          <ConflictReviewPanel book={current} hasGitHubToken={!!settings.githubToken}
+          <ConflictReviewPanel book={current} settings={settings} hasGitHubToken={!!settings.githubToken}
             onRefresh={refresh} onSelectBook={setSelectedId}/>
         </div>
         <Section title="Backup ZIP" description="Copia portabile di tutti i libri presenti su questo browser, con log, riassunti e checkpoint.">
@@ -499,7 +499,7 @@ export default function App() {
         </Section>
         {current && <Section title={`Override del libro: ${current.title}`} description="Il modello scelto qui sostituisce quello globale soltanto per il libro attivo.">
           <div className="grid gap-3 md:grid-cols-2">
-            {(["brainstorm","prose","continuity","revision","consolidate","summarize"] as TaskKind[]).map(kind => {
+            {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge"] as TaskKind[]).map(kind => {
               const configured = current.modelRoutes?.[kind];
               return <div className="space-y-2" key={kind}>
                 <p className="text-sm font-semibold">{LABELS[kind]}</p>
