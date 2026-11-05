@@ -53,6 +53,7 @@ test("budget desktop/mobile: prevent provider spend and stop after missing usage
   await page.getByLabel("API key").fill("sk-test-budget-guard-not-real");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("budget-review-model");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
+  await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await nav.getByRole("button",{name:"Dashboard"}).click();
   await page.reload();
   const panel=page.getByRole("region",{name:"Budget AI"});
