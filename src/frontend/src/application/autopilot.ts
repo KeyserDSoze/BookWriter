@@ -491,8 +491,9 @@ export class AutopilotRunner {
           const result = await callModel(work.kind, work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.", work.prompt, settings, book, signal);
           await guard.assertActive(); // Discard result if the lease was lost during the AI call.
           const latest = await getBook(bookId);
-          if (!latest || latest.status !== "running" || latest.phase !== work.phase)
-            throw new DOMException("La sessione è cambiata.", "AbortError");
+          if (!latest || latest.status !== "running" || latest.phase !== work.phase ||
+              latest.updatedAt !== book.updatedAt)
+            throw new DOMException("Il libro è cambiato durante la chiamata AI: risultato non applicato.", "AbortError");
           work.apply(latest, result.text);
           started.status = "succeeded"; started.endedAt = new Date().toISOString();
           started.endpointId = result.endpointId; started.modelId = result.modelId;
