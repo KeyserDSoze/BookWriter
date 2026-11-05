@@ -2,6 +2,24 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.8.0 — 2026-11-05 (PR #19)
+
+**Redazione multi-agente per capitolo — verifica critica, remediation e congelamento**
+
+- Dopo il completamento delle scene, ogni capitolo entra in una redazione composta da **sette specialisti** (causalità, segreti, timeline, accuratezza storica da verificare, voce personaggi, stile, struttura) e **cinque lettori** (genere, generalista, scettico, personaggi, mistero).
+- **Richieste AI separate** per revisore e segmento. I lettori sono ciechi ai segreti privati; gli specialisti ricevono le porzioni pertinenti del canone; il revisore dei segreti legge il registro privato. Memoria breve per ruolo e sinossi progressive del libro.
+- Rapporti JSON verificati: esito, prova testuale, gravità, motivazione e remediation proposta. Il direttore editoriale giudica ogni rilievo, può accettarlo o **respingerlo con spiegazione**, e non può ignorare rilievi in silenzio.
+- La riscrittura riguarda solo scene con correzioni approvate; seguono la riconciliazione di memoria, timeline e segreti e un'altra tornata completa di dodici letture.
+- Fino a **tre tornate di correzione automatica**. Se persistono problemi accettati, il processo si ferma e chiede istruzioni all'autore, senza inventare consenso.
+- Quando i rilievi sono risolti o respinti criticamente, la sintesi progressiva aggiorna il capitolo e il libro, **congela il capitolo** e consente solo allora di scrivere il successivo.
+- I capitoli congelati mantengono lo storico di rapporti, decisioni e motivazioni. **Rivaluta** riapre capitoli già congelati, disabilita autosync e invalida gli assensi di tutti i capitoli successivi.
+- Nuove route modelli `chapterAudit`, `chapterReaders`, `chapterJudge`, `chapterRepair`, configurabili globalmente e per libro; riutilizzo di `consolidate` e `summarize`.
+- Il push GitHub e l'autosync di prosa non avvengono mentre capitoli scritti attendono congelamento. I checkpoint si salvano in IndexedDB dopo ogni attività.
+- Pannello responsive **Redazione multi-agente** con analisi per revisore, prove testuali, remediation e motivazioni di rifiuto, stato dei capitoli e riapertura manuale.
+- Vitest per ruoli e contesti indipendenti, valutazione critica, freeze e cicli correttivi. Test Playwright desktop/mobile e ADR 0011, guida utente e issue #20.
+
+**Limiti:** la review storica segnala ipotesi ma **non verifica fonti esterne**. Un capitolo lungo può richiedere oltre dodici chiamate per segmento e consumare molti crediti; il ledger v0.7.1 non impone ancora tetti. La memoria privata troppo grande si blocca con un errore anziché troncarsi. Le sessioni browser non lavorano con pagina chiusa; il lease multi-dispositivo rimane conservativo.
+
 ## 0.7.1 — 2026-11-05 (PR #18)
 
 **Dashboard per libro dei token AI dichiarati dai provider**
