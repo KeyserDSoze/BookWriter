@@ -1,4 +1,5 @@
 import type { BookProject, Chapter, Scene } from "./types";
+import { synopsisBeforeChapter } from "./editorial-summary";
 
 type Field = "title" | "brief" | "writingStyle" | "audience" |
   "authorConstraints" | "ideas" | "validation" | "audienceReviews" | "adversarial";
@@ -232,12 +233,36 @@ export function assembleBookResolution(
     }
   }
   result.chapters.sort((a, b) => a.number - b.number || a.id.localeCompare(b.id));
+  // Any accepted remote/proposed change invalidates freezes for the affected
+  // chapter and all later chapters. Canonical consequences must be re-reviewed.
+  const changed = entries.filter(unit => (selections[unit.id] ?? "local") !== "local");
+  const globalChange = changed.some(unit =>
+    ["field", "entity", "timeline", "currentState"].includes(unit.kind));
+  const affected = changed.filter(unit =>
+    ["scene", "chapter", "chapterMeta"].includes(unit.kind))
+    .map(unit => {
+      if (!("chapterId" in unit)) return Number.POSITIVE_INFINITY;
+      return result.chapters.find(ch => ch.id === unit.chapterId)?.number ??
+        local.chapters.find(ch => ch.id === unit.chapterId)?.number ?? 1;
+    });
+  const firstAffected = globalChange ? 1 : Math.min(...affected);
+  if (Number.isFinite(firstAffected)) {
+    for (const chapter of result.chapters) {
+      if (chapter.number >= firstAffected) {
+        chapter.frozenAt = undefined;
+        chapter.summary = undefined;
+        chapter.bookSummaryAtFreeze = undefined;
+      }
+    }
+    result.bookSummary = synopsisBeforeChapter(result.chapters, firstAffected);
+    result.editorialCycle = undefined;
+  }
   const pending = new Set(result.editorialReviewSceneIds ?? []);
   for (const unit of entries) {
     if (unit.kind === "scene" && selections[unit.id] === "proposal") pending.add(unit.sceneId);
   }
-  const sceneIds = new Set(result.chapters.flatMap(ch => ch.scenes.map(scene => scene.id)));
-  result.editorialReviewSceneIds = [...pending].filter(id => sceneIds.has(id));
+  const draftSceneIds = new Set(result.chapters.flatMap(ch => ch.scenes.filter(s => s.status === "draft").map(s => s.id)));
+  result.editorialReviewSceneIds = [...pending].filter(id => draftSceneIds.has(id));
   result.authorConstraints = result.authorConstraints ?? [];
   result.audienceReviews = result.audienceReviews ?? [];
   // Runtime state cannot be safely merged structurally with two AI pipelines.

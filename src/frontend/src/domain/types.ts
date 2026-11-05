@@ -1,11 +1,14 @@
 export const TASK_KINDS = [
   "brainstorm", "validate", "audience", "adversarial", "outline",
   "prose", "continuity", "consolidate", "summarize", "revision", "merge",
+  "chapterAudit", "chapterReaders", "chapterJudge", "chapterRepair",
 ] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 
 export type RunStatus = "idle" | "running" | "paused" | "error" | "completed";
-export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "outline" | "prose" | "review" | "consolidate" | "revision" | "completed";
+export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "outline" | "prose" | "review" | "consolidate" | "chapterReview" | "revision" | "completed";
+
+import type { ChapterEditorialCycle, EditorialRound } from "./editorial-board";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -55,6 +58,11 @@ export interface Chapter {
   title: string;
   purpose: string;
   scenes: Scene[];
+  summary?: string;
+  /** Rolling, public book synopsis at this chapter freeze: supports safe rewind. */
+  bookSummaryAtFreeze?: string;
+  frozenAt?: string;
+  editorialRounds?: EditorialRound[];
 }
 export interface NarrativeMemory {
   characters: Record<string, string>;
@@ -86,6 +94,8 @@ export interface BookProject {
   phase: Phase;
   previousError?: string;
   editorialReviewSceneIds?: string[]; // Explicit canon confirmation before autopilot can resume.
+  editorialCycle?: ChapterEditorialCycle;
+  bookSummary?: string;
   ideas?: string;
   validation?: string;
   audienceReviews: string[];

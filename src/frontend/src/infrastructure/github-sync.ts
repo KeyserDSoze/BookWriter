@@ -303,6 +303,9 @@ export async function pushGitHubBook(
   if (!current?.remote) throw new Error("Collega prima una repository a questo libro.");
   if (current.editorialReviewSceneIds?.length)
     throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
+  if (current.editorialCycle || current.phase === "revision" ||
+      current.chapters.some(ch => !ch.frozenAt && ch.scenes.some(s => s.status !== "planned")))
+    throw new Error("Sincronizzazione bloccata: un capitolo non è ancora congelato dalla redazione.");
   if (current.status === "running" && !options.automatic)
     throw new Error("Metti in pausa l'autopilot prima della sincronizzazione GitHub.");
   if (options.automatic && !current.remote.autoSync)

@@ -30,6 +30,10 @@
 
 Per ogni libro una sola sessione autopilot remota alla volta. `.bookwriter/lease.json` contiene `holderId`, `runId`, `expiresAt`, `baseSha`. Acquisizione/rinnovo in GitHub con optimistic concurrency su SHA e heartbeat ragionevole; controllo lease **prima di ogni write remoto e generazione costosa**. Nessun lavoro remoto quando offline o lease incerto. Un lease scaduto può essere riassegnato con rilettura e conferma all'utente; nessun last-write-wins.
 
+## Freeze di capitolo prima del canon remoto (ADR 0011)
+
+A partire dalla v0.8.0, la review per singola scena non è una milestone canonica sufficiente: dopo un capitolo completo devono intervenire sette specialisti, cinque lettori e un direttore editoriale. Ogni correzione accettata produce nuove verifiche. Soltanto la conclusione positiva e la sinossi congelano il capitolo; la coda autosync allora può inviare il checkpoint. Riaprire un capitolo o avviare una revisione retroattiva invalida il suo freeze e quello dei successivi. Per dettagli vedi `docs/editorial-board.md`.
+
 ## Consumi AI e budget (ADR 0010)
 
 La v0.7.1 mostra i token effettivamente riportati dai provider nelle attività del libro, separati per modello ed endpoint. Non è ancora possibile conoscere il saldo crediti attraverso una API generica, né viene imposto un limite economico al runner. Report mancanti, fallimenti e richieste interrotte possono corrispondere a addebiti sconosciuti; vedi `docs/ai-usage.md` e issue #17.

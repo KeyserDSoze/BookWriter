@@ -17,6 +17,7 @@ import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
 import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
+import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
@@ -32,6 +33,7 @@ const LABELS: Record<TaskKind, string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience (5 profili)",
   adversarial: "Adversarial review", outline: "Piano capitoli", prose: "Scrittura",
   continuity: "Review continuità", consolidate: "Consolidamento", summarize: "Riassunti", revision: "Revisioni", merge: "Fusione di scene",
+  chapterAudit: "Specialisti capitolo", chapterReaders: "Cinque lettori", chapterJudge: "Direttore editoriale", chapterRepair: "Remediation mirata",
 };
 const statusText: Record<BookProject["status"], string> = {
   idle: "Da avviare", running: "In esecuzione", paused: "In pausa",
@@ -40,7 +42,7 @@ const statusText: Record<BookProject["status"], string> = {
 const phaseText: Record<BookProject["phase"], string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience review",
   adversarial: "Adversarial review", outline: "Outline", prose: "Scrittura scena",
-  review: "Review scena", consolidate: "Consolidamento canon", revision: "Revisione autore", completed: "Completato",
+  review: "Review scena", consolidate: "Consolidamento canon", chapterReview: "Redazione indipendente del capitolo", revision: "Revisione autore", completed: "Completato",
 };
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -333,7 +335,7 @@ export default function App() {
           {current?.ideas && <Section title="Idee long / mid / short term"><div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6">{current.ideas}</div></Section>}
           {current?.previousError && <Section title="Attenzione">
             <p className="flex items-start gap-2 text-sm text-red-600 dark:text-red-300"><AlertTriangle size={18} className="shrink-0" /> {current.previousError}</p>
-            <p className="muted mt-2 text-xs">Il flusso è fermo. Correggi l'endpoint, la chiave o il modello e premi Riprendi.</p>
+            <p className="muted mt-2 text-xs">Il flusso è fermo. Controlla il registro e la Redazione multi-agente: potrebbero essere necessari interventi, crediti AI o una nuova tornata.</p>
           </Section>}
         </div>
         <div className="space-y-4">
@@ -348,6 +350,7 @@ export default function App() {
               <Button variant="outline" onClick={() => setPage("activities")}>Apri registro attività</Button>
             </div> : <Empty>Nessuna operazione registrata.</Empty>}
           </Section>
+          {current && <EditorialBoardPanel book={current} onRefresh={refresh}/>}
           {current && <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>}
           <Section title="Memoria narrativa">
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -525,7 +528,7 @@ export default function App() {
         </Section>
         {current && <Section title={`Override del libro: ${current.title}`} description="Il modello scelto qui sostituisce quello globale soltanto per il libro attivo.">
           <div className="grid gap-3 md:grid-cols-2">
-            {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge"] as TaskKind[]).map(kind => {
+            {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge","chapterAudit","chapterReaders","chapterJudge","chapterRepair"] as TaskKind[]).map(kind => {
               const configured = current.modelRoutes?.[kind];
               return <div className="space-y-2" key={kind}>
                 <p className="text-sm font-semibold">{LABELS[kind]}</p>

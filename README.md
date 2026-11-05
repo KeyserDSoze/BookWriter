@@ -25,7 +25,9 @@
 
 **Consumi AI v0.7.1:** la PR #18 mostra sulla Dashboard input/output token effettivamente comunicati dai provider, separati per libro, modello ed endpoint, e segnala report mancanti e chiamate fallite. Non inventa saldi o prezzi. Vedi ADR 0010 e `docs/ai-usage.md`.
 
-**Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, diff parola per parola e merge semantico assistito, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
+**Redazione indipendente v0.8.0:** la PR #19 introduce una redazione per capitolo con 7 specialisti e 5 lettori in chiamate separate, rilievi documentati con remediation, direttore editoriale critico che può respingere rilievi infondati motivando, riscritture mirate e congelamento solo dopo un esito risolto. Dopo tre tornate senza soluzione si ferma e chiede all'autore. Riaprire un capitolo invalida i successivi. Guida: `docs/editorial-board.md`; ADR 0011.
+
+**Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, fact-checking storico con fonti, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
 

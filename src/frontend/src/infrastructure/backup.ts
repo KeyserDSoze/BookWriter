@@ -16,11 +16,11 @@ const sceneSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
   objective: z.string().max(20_000), text: z.string().max(2_000_000),
   summary: z.string().optional(), status: z.enum(["planned", "draft", "canon"]),
-});
+}).passthrough();
 const chapterSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
   purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
-});
+}).passthrough();
 const memorySchema = z.object({
   characters: z.record(z.string(), z.string()),
   locations: z.record(z.string(), z.string()),
@@ -38,7 +38,7 @@ const bookSchema = z.object({
   createdAt: z.string(), updatedAt: z.string(),
   status: z.enum(["idle", "running", "paused", "error", "completed"]),
   phase: z.enum(["brainstorm", "validate", "audience", "adversarial", "outline",
-    "prose", "review", "consolidate", "revision", "completed"]),
+    "prose", "review", "consolidate", "chapterReview", "revision", "completed"]),
   previousError: z.string().optional(),
   ideas: z.string().optional(), validation: z.string().optional(),
   audienceReviews: z.array(z.string()),

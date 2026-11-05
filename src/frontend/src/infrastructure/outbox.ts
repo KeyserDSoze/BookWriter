@@ -6,7 +6,9 @@ export async function enqueueCheckpoint(
   book: BookProject,
   store: { get: (key: string) => Promise<unknown>; put: (value: SyncOutboxItem, key: string) => Promise<unknown> },
 ): Promise<void> {
-  if (!book.remote?.autoSync) return;
+  if (!book.remote?.autoSync || book.editorialCycle || book.phase === "revision" ||
+      book.editorialReviewSceneIds?.length || book.chapters.some(ch =>
+        !ch.frozenAt && ch.scenes.some(scene => scene.status !== "planned"))) return;
   const previous = await store.get(book.id) as SyncOutboxItem | undefined;
   const next: SyncOutboxItem = previous ? {
     ...previous,

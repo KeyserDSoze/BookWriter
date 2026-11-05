@@ -74,7 +74,7 @@ export async function saveBookAndActivity(book: BookProject, activity: Activity)
   // Keep a durable sync request in the same transaction as the narrative result.
   // Do not create a GitHub commit for every intermediate AI planning operation.
   if (activity.status === "succeeded" &&
-      ["outline", "review", "consolidate", "revision"].includes(activity.phase)) {
+      ["outline", "chapterReview"].includes(activity.phase) && !book.editorialCycle) {
     await enqueueCheckpoint(book, tx.objectStore("outbox"));
   }
   await tx.done;

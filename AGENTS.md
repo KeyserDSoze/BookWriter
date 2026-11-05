@@ -72,6 +72,19 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## Redazione indipendente v0.8.0 — ogni capitolo ha un gate editoriale
+
+- Un capitolo con scene scritte **non è congelato** finché `chapter.frozenAt` non è assegnato dopo 7 specialisti, 5 lettori, giudice critico e sinossi progressive. Un singolo controllo `review` di scena non autorizza il capitolo successivo.
+- `domain/editorial-board.ts`: una chiamata `chat/completions` indipendente per RUOLO e SEGMENTO; nessuna condivisione del ragionamento degli altri revisori. `memoryNote` privata e breve per ruolo; 5 lettori **non vedono segreti privati** o dossier/futuro.
+- Ogni rilievo contiene scena esistente, prova testuale, severità, spiegazione e remediation. Validare JSON e IDs; nessun pass con finding non vuoto. Il giudice riceve anche estratti della prosa vera e canone pertinente, verifica evidenze e decide **tutti** gli IDs; può rigettare motivando, non può saltare un finding o inventarne uno.
+- Accettazione porta a `chapterRepair` mirata per scena, riconciliazione canon per segmenti e nuova tornata completa. Dopo max 3 round ancora problematici `stage:blocked` e `status:paused`, senza freeze artificiale.
+- `summary` aggiorna sinossi progressiva di capitolo e libro per segmenti; soltanto allora si assegnano `frozenAt`, `bookSummaryAtFreeze` e `editorialRounds`, archiviando ogni giudizio. Il rewind usa la snapshot globale dell'ultimo capitolo congelato precedente, MAI slicing di sinossi. Legacy senza snapshot: ricostruzione lossless oppure errore conservativo prima di persistere.
+- GitHub manuale/autosync non può pubblicare scene di capitoli avviati e non congelati. Non accodare checkpoint di `review` o `consolidate` scena: solo milestone autorizzate `outline` e `chapterReview` dopo freeze.
+- Riapertura autore prende Web Locks, disattiva autosync, cancella vecchia outbox e invalida congelamento del capitolo e dei successivi. Le revisioni retroattive devono rifare le verifiche dipendenti.
+- L'output di `callModel` viene scartato se `book.updatedAt` cambia durante la chiamata, oltre ai controlli di lease: non sovrascrivere gli interventi dell'autore.
+- Route task `chapterAudit`, `chapterReaders`, `chapterJudge`, `chapterRepair`: modelli configurabili, uso token AI reale soltanto se provider lo comunica. Niente affermazioni di fact-checking storico documentale senza fonti.
+- Il limite di contesto/40 segmenti ferma esplicitamente l'esecuzione, senza troncature silenziose di segreti o prose. Testare con Vitest + Playwright mobile/desktop e mantenere docs/issue #20 + ADR 0011.
+
 ## Telemetria AI v0.7.1 — dati osservati, non stime inventate
 
 - `domain/ai-usage.ts` usa esclusivamente i report provider `inputTokens/outputTokens` presenti nelle `Activity` del libro attivo. Raggruppare sempre per endpoint **e** modello.
