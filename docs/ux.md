@@ -15,7 +15,7 @@
 
 ## Mobile
 
-- Navigazione bottom bar per 4 aree principali e menu sheet per altre.
+- Navigazione mobile a tab sticky in alto, sempre accessibile durante la lettura e i form, con sei sezioni principali.
 - Header compatto con stato autopilot persistente; barra “Sto facendo: [attività]” sticky con tap per dettagli.
 - “Pausa”, “Intervieni” e “Riprendi” raggiungibili con un pollice; touch target minimo 44x44, form fullscreen e textarea con autosize.
 - Lettore con tipografia adattiva, indice capitoli a drawer, revisione su dettaglio separato e tasto per tornare alla posizione di lettura.
