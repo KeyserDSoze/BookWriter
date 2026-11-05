@@ -11,6 +11,12 @@ BookWriter è una SPA statica distribuita tramite GitHub Pages. Il codice JavaSc
 - Identificare i profili con `provider + providerSubject`, non solo con l'email. Richiedere collegamento esplicito per unificare identità Google e Microsoft.
 - Non codificare client secret in SPA. Token OAuth preferibilmente in memoria; clear al logout e ridurre le lifetime disponibili.
 
+## Stato dei collegamenti GitHub (fase 1)
+
+Il PAT GitHub fine-grained viene inserito in **Archivio**, cifrato con Web Crypto e conservato in IndexedDB. Viene decifrato solo per chiamare `https://api.github.com` (CORS, `redirect: error`), mai inserito nel repository narrativo o nello ZIP. L'archivio locale cifrato non è un vault E2EE; per aprire il libro da altro dispositivo occorre inserire un nuovo PAT autorizzato. Il vault Google/Microsoft per recuperare il PAT resta in progettazione (ADR 0002).
+
+Prima della prima sincronizzazione su repository **pubblica**, la UI richiede una scelta esplicita. L'import remoto non sovrascrive copie locali; la scrittura remota si interrompe se lo SHA è divergente. Non garantiamo ancora single-writer senza lease cross-device, quindi l'uso contemporaneo su più browser non è supportato.
+
 ## PAT e chiavi modello
 
 - Raccomandare credenziali limitate per repository e revocabili; per GitHub fine-grained PAT con **Contents R/W** sul solo gruppo di repository del libro. Le chiavi OpenAI-compatible possono fatturare: evitare log e invio a domini inattesi.
