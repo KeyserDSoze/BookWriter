@@ -112,6 +112,9 @@ describe("Recupero narrativo non distruttivo", () => {
 
   it("crea entrambi i backup e applica solo le scelte selezionate senza push GitHub", async () => {
     const book = await originalBook();
+    // A previously pending autosync is invalidated after explicit conflict resolution.
+    await saveBook(book);
+    expect(await getOutbox(book.id)).toBeDefined();
     const base = structuredClone(book);
     const remote = structuredClone(book);
     remote.chapters[0]!.scenes[0]!.text = "Scena versione remota.";
@@ -131,6 +134,8 @@ describe("Recupero narrativo non distruttivo", () => {
     expect((await getBook(result.remoteBackupId))?.memory.secrets.identita)
       .toBe("Versione remota del segreto.");
     expect((await getBook(result.remoteBackupId))?.remote).toBeUndefined();
+    expect((await listActivities(result.localBackupId)).length).toBe(1);
+    expect((await listActivities(result.remoteBackupId)).length).toBe(1);
     expect(await getOutbox(book.id)).toBeUndefined();
     expect((await listActivities(book.id)).some(x => /Risoluzione manuale/.test(x.title))).toBe(true);
     expect(github.calls.every(call => call.method === "GET")).toBe(true);
@@ -166,4 +171,16 @@ describe("Recupero narrativo non distruttivo", () => {
     await expect(inspectBookConflict(book.id)).rejects.toBeInstanceOf(RemoteConflict);
     expect(await listBooks()).toHaveLength(1);
   });
+  it("rifiuta ripristino mentre il lock di una scheda concorrente è occupato", async () => {
+    const book = await originalBook();
+    githubSnapshots(structuredClone(book), { ...structuredClone(book), brief: "Testo remoto" });
+    const review = await inspectBookConflict(book.id);
+    vi.stubGlobal("navigator", {
+      locks: { request: async (_name: string, _options: unknown,
+        callback: (lock: null) => Promise<unknown>) => callback(null) },
+    });
+    await expect(applyBookConflictResolution(review, {})).rejects.toBeInstanceOf(RemoteConflict);
+    expect(await listBooks()).toHaveLength(1);
+  });
+
 });
