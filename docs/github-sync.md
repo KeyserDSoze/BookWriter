@@ -2,7 +2,7 @@
 
 ## Stato
 
-Disponibile la **prima integrazione manuale**: ogni libro locale può essere collegato a una repository GitHub distinta, letto da altri browser e sincronizzato in Markdown. Non sono ancora disponibili autosync, lease cross-device, import di repository Narrarium generiche, vault Google/Microsoft e snapshot ZIP automatici su GitHub.
+Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Non sono ancora disponibili il lease cross-device, la risoluzione visuale dei conflitti, l'import di repository Narrarium generiche, il vault Google/Microsoft e gli ZIP automatici remoti.
 
 ## Per iniziare (senza token nel repository del sito)
 
@@ -11,7 +11,17 @@ Disponibile la **prima integrazione manuale**: ogni libro locale può essere col
 3. Apri `https://ghostwriting.ws`, vai in **Archivio → GitHub — sincronizzazione del libro**, incolla il PAT e salvalo. È cifrato nel browser via Web Crypto e non incluso nella repository.
 4. Seleziona un libro locale, specifica owner, repository e branch; premi **Verifica repository** e **Collega questo libro**.
 5. Metti l'autopilot in pausa. Premi **Sincronizza su GitHub**. Vedrai il commit SHA e lo stato; il salvataggio contiene la prosa, la memoria narrativa e lo storico attività, ma nessuna API key o PAT.
-6. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner.
+6. Dopo la prima sincronizzazione riuscita puoi selezionare **Sincronizzazione automatica ai checkpoint**: ogni outline, scena con review, consolidamento o revisione genera una richiesta in IndexedDB, inviata a GitHub mentre la pagina resta aperta. Se una repository è pubblica serve consenso esplicito aggiuntivo.\n7. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner.
+
+## Autosync e monitoraggio
+
+La coda per libro in IndexedDB conserva: operazione, revisione, numero tentativi, prossimo retry e motivo dell'eventuale blocco. Le chiamate sono serializzate tra tab dello stesso browser con Web Locks. I checkpoint successivi vengono accorpati senza perdere il più recente.
+
+L'operazione GitHub salva un marker `.bookwriter/sync.json` e l'identificatore nel messaggio del commit. Se una risposta di rete si perde dopo un commit riuscito, il prossimo tentativo lo riconosce; se `HEAD` corrisponde invece a un commit estraneo, BookWriter blocca senza sovrascrivere.
+
+La UI in Archivio mostra **in attesa**, **invio in corso**, **bloccata**, **retry** e ultimo SHA. Gli errori di rete vengono ritentati con intervalli crescenti fino a sei tentativi, mentre i conflitti non vengono ritentati automaticamente.
+
+**Limite fondamentale:** Web Locks protegge le tab dello *stesso browser*, NON due computer. Non avviare lo stesso libro in autopilot contemporaneamente da due dispositivi finché non ci sarà il lease distribuito. Il browser chiuso/sospeso non continua a inviare; la coda riprende quando si torna sul sito.
 
 ## Proiezione remota
 
@@ -51,7 +61,7 @@ Il JSON è necessario per recuperare senza perdita tutte le strutture del worksp
 
 ## Cosa manca
 
-- Autosync a milestone con outbox durabile e gestione dei retry.
+- Autosync e outbox sono disponibili; manca il lease distribuito e il recupero visuale dei conflitti.
 - Lease / single writer distribuito; evita nel frattempo di scrivere lo stesso romanzo contemporaneamente su due browser.
 - Risoluzione dei conflitti base/locale/remoto e aggiornamento della baseline.
 - ZIP snapshot periodici su GitHub, retenzione e bootstrap incrementale.
