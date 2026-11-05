@@ -1,3 +1,5 @@
+import type { ChapterBibliography } from "./bibliography";
+
 /** Research is deliberately separate from narrative canon and model assertions.
  * Wikipedia entries are tertiary leads; they are never certified historical truth.
  * Only author-approved search strings leave the browser.
@@ -21,6 +23,7 @@ export interface ChapterHistoricalDossier {
   activeSourceIds: string[];
   searchedAt: string;
   unansweredQueries: string[];
+  bibliography?: ChapterBibliography;
 }
 export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "unverified";
 export interface HistoricalClaim {
@@ -112,5 +115,6 @@ export function extendHistoricalDossier(
   return {
     queries: normalized, sources: [...all.values()], activeSourceIds, searchedAt,
     unansweredQueries: normalized.filter(q => !newSources.some(s => s.query === q)),
+    ...(previous?.bibliography ? { bibliography: previous.bibliography } : {}),
   };
 }
