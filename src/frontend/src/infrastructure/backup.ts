@@ -84,6 +84,11 @@ const backupSchema = z.object({
     })).max(30),
     defaultRoute: routeSchema,
     taskRoutes: z.record(z.string(), routeSchema),
+    aiPriceRates: z.array(z.object({
+      endpointId: z.string(), modelId: z.string(),
+      inputEurPerMillion: z.number().finite().min(0).max(10_000),
+      outputEurPerMillion: z.number().finite().min(0).max(10_000),
+    })).max(200).optional(),
   }).optional(),
 }).refine(x => (x.kind === "full") === !!x.settings, "Contenuto e credenziali incoerenti.");
 
@@ -99,6 +104,7 @@ type BackupData = {
     endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
+    aiPriceRates?: AppSettings["aiPriceRates"];
   };
 };
 export type BackupMode = "content" | "full";
@@ -204,6 +210,7 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
     data.settings = {
       theme: settings.theme, defaultRoute: settings.defaultRoute,
       taskRoutes: settings.taskRoutes,
+      aiPriceRates: settings.aiPriceRates,
       endpoints: await Promise.all(settings.endpoints.map(async endpoint => ({
         id: endpoint.id, name: endpoint.name, baseUrl: endpoint.baseUrl,
         models: endpoint.models,
@@ -306,6 +313,7 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     importedSettings = {
       theme: data.settings.theme, defaultRoute: data.settings.defaultRoute,
       taskRoutes: data.settings.taskRoutes as AppSettings["taskRoutes"],
+      aiPriceRates: data.settings.aiPriceRates,
       endpoints: await Promise.all(data.settings.endpoints.map(async endpoint => ({
         id: endpoint.id, name: endpoint.name, baseUrl: normalizeEndpoint(endpoint.baseUrl),
         models: endpoint.models,
