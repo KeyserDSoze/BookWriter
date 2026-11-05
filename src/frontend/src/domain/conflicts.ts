@@ -232,6 +232,12 @@ export function assembleBookResolution(
     }
   }
   result.chapters.sort((a, b) => a.number - b.number || a.id.localeCompare(b.id));
+  const pending = new Set(result.editorialReviewSceneIds ?? []);
+  for (const unit of entries) {
+    if (unit.kind === "scene" && selections[unit.id] === "proposal") pending.add(unit.sceneId);
+  }
+  const sceneIds = new Set(result.chapters.flatMap(ch => ch.scenes.map(scene => scene.id)));
+  result.editorialReviewSceneIds = [...pending].filter(id => sceneIds.has(id));
   result.authorConstraints = result.authorConstraints ?? [];
   result.audienceReviews = result.audienceReviews ?? [];
   // Runtime state cannot be safely merged structurally with two AI pipelines.
