@@ -1,6 +1,6 @@
 # Contratto di sincronizzazione local-first
 
-> **Implementazione:** la fase 1 **manuale** è in PR #8 e l'autosync **opt-in** con outbox in PR #9. Le decisioni sono documentate in `docs/github-sync.md` e `ADR/0005-github-manual-sync.md`. Le sezioni “Discovery su un browser nuovo”, “Write path” e “Lease multi-device” seguenti descrivono in parte il **target architetturale**: outbox e autosync ora funzionano, ma non esistono ancora lease distribuiti, merge o credenziali cloud. La fase corrente importa da GitHub solo con PAT impostato localmente, salva un commit manuale e rifiuta il branch avanzato.
+> **Implementazione:** la fase 1 **manuale** è in PR #8 e l'autosync **opt-in** con outbox in PR #9. Le decisioni sono documentate in `docs/github-sync.md` e `ADR/0005-github-manual-sync.md`. Le sezioni “Discovery su un browser nuovo”, “Write path” e “Lease multi-device” seguenti descrivono in parte il **target architetturale**: outbox e autosync ora funzionano, ma non esistono ancora lease distribuiti, merge o credenziali cloud. La fase corrente importa da GitHub con PAT impostato localmente, richiede un primo commit manuale e consente autosync successivo; rifiuta i branch avanzati da altri dispositivi.
 
 ## Fonti e ruoli
 
