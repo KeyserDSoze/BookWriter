@@ -45,7 +45,7 @@ describe("Dossier storico verificabile nel processo editoriale",()=>{
     expect(normalizeResearchQueries(["   Telegrafo nel 1848  ","Telegrafo nel 1848"]))
       .toEqual(["Telegrafo nel 1848"]);
     for(const query of ["sk-verysecret00000000000","https://example.com/private",
-      " x ","segreto\ninterno","".padEnd(111,"A")])
+      " x ","<script>alert(1)</script>","".padEnd(111,"A")])
       expect(()=>normalizeResearchQueries([query])).toThrow();
     expect(()=>normalizeResearchQueries(Array(6).fill("Telegrafo nel 1848"))).toThrow();
     expect(isTrustedHistoricalUrl("https://it.wikipedia.org/wiki/Telegrafo")).toBe(true);
