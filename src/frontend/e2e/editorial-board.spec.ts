@@ -68,6 +68,7 @@ test("redazione capitolo desktop/mobile: 12 agenti separati, giudice, freeze e r
   await page.getByLabel("API key").fill("sk-test-editorial-not-real");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("mock-review-editorial");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
+  await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
   const panel=page.getByRole("region",{name:"Redazione multi-agente"});
   await expect(panel.getByText("Non ancora congelato")).toBeVisible();
