@@ -34,6 +34,10 @@ Per ogni libro una sola sessione autopilot remota alla volta. `.bookwriter/lease
 
 A partire dalla v0.8.0, la review per singola scena non è una milestone canonica sufficiente: dopo un capitolo completo devono intervenire sette specialisti, cinque lettori e un direttore editoriale. Ogni correzione accettata produce nuove verifiche. Soltanto la conclusione positiva e la sinossi congelano il capitolo; la coda autosync allora può inviare il checkpoint. Riaprire un capitolo o avviare una revisione retroattiva invalida il suo freeze e quello dei successivi. Per dettagli vedi `docs/editorial-board.md`.
 
+## Budget per chiamate dei revisori (ADR 0012)
+
+Con opt-in per libro, il preflight stimato consulta tariffario dell'autore, usage dichiarato e riserva per la chiamata seguente, e può fermare il runner prima di contattare il provider. Ogni richiesta inviata viene tracciata in anticipo per non sottostimare chiamate fallite o senza usage. Il budget non è transazionale fra dispositivi e non sostituisce la fattura provider. Vedi `docs/ai-budget.md`.
+
 ## Consumi AI e budget (ADR 0010)
 
 La v0.7.1 mostra i token effettivamente riportati dai provider nelle attività del libro, separati per modello ed endpoint. Non è ancora possibile conoscere il saldo crediti attraverso una API generica, né viene imposto un limite economico al runner. Report mancanti, fallimenti e richieste interrotte possono corrispondere a addebiti sconosciuti; vedi `docs/ai-usage.md` e issue #17.
