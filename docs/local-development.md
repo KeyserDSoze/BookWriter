@@ -25,11 +25,15 @@ Aprire l'indirizzo Vite locale. Non serve un server applicativo. Per GitHub Page
 - Pausa/ripresa, checkpoint persistente dopo ogni stage e richiesta autore che determina analisi d'impatto e revisione retroattiva di scene già canoniche.
 - Lettore e atlante della memoria narrativa.
 
+## Backup ed esportazioni
+
+La pagina **Archivio** esporta e importa ZIP content-only (senza credenziali) o full backup. I backup full possono essere cifrati con passphrase AES-GCM; l'export in chiaro ha un avviso forte e una conferma. I libri importati vengono duplicati, senza cancellare gli originali. PDF, EPUB e DOCX sono generati localmente dalla prosa canonica: copertine, immagini e layout editoriale avanzato sono ancora da realizzare.
+
 ## Non ancora implementato
 
 - Login OAuth Google o Microsoft e vault remoto multi-device.
 - GitHub PAT, sincronizzazione Markdown, lease tra dispositivi e snapshot ZIP.
-- ZIP import/export con password e output EPUB, PDF, DOCX.
+- Nessuno: ZIP import/export e output EPUB, PDF e DOCX sono disponibili in questa fase; da aggiungere validazione editoriale avanzata, cover e immagini.
 - Recupero granulare da tutte le condizioni di crash, generazione summaries via modello economico dedicato, budget guard, ricerca fattuale con fonti, diff/rollback visuale.
 - Conversione completa delle entità/memory nel formato Markdown Narrarium; attualmente vivono nel modello IDB.\n- Enforcement rigoroso delle soglie di segreto, valutazioni factual con ricerche esterne e ricostruzione totale del canon dopo riscritture profonde.
 - Copertura test end-to-end e certificazione dei flussi con provider reali.
