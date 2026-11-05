@@ -7,6 +7,13 @@ const DB_NAME = "bookwriter";
 const DB_VERSION = 1;
 let database: Promise<IDBPDatabase> | undefined;
 
+function revisionTimestamp(previous?: BookProject): string {
+  const previousTime = previous ? Date.parse(previous.updatedAt) : NaN;
+  // Strictly monotonic even for multiple writes during the same millisecond.
+  const milliseconds = Number.isFinite(previousTime) ? Math.max(Date.now(), previousTime + 1) : Date.now();
+  return new Date(milliseconds).toISOString();
+}
+
 export function getDb(): Promise<IDBPDatabase> {
   database ??= openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
@@ -41,10 +48,12 @@ export async function getBook(id: string): Promise<BookProject | undefined> {
 }
 
 export async function saveBook(book: BookProject, queueSync = true): Promise<void> {
-  book.updatedAt = new Date().toISOString();
   const db = await getDb();
   const tx = db.transaction(["books", "outbox"], "readwrite");
-  await tx.objectStore("books").put(book, book.id);
+  const books = tx.objectStore("books");
+  const stored = await books.get(book.id) as BookProject | undefined;
+  book.updatedAt = revisionTimestamp(stored);
+  await books.put(book, book.id);
   if (queueSync) await enqueueCheckpoint(book, tx.objectStore("outbox"));
   await tx.done;
 }
@@ -56,9 +65,11 @@ export async function saveActivity(activity: Activity): Promise<void> {
 
 export async function saveBookAndActivity(book: BookProject, activity: Activity): Promise<void> {
   const db = await getDb();
-  book.updatedAt = new Date().toISOString();
   const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
-  await tx.objectStore("books").put(book, book.id);
+  const books = tx.objectStore("books");
+  const stored = await books.get(book.id) as BookProject | undefined;
+  book.updatedAt = revisionTimestamp(stored);
+  await books.put(book, book.id);
   await tx.objectStore("activities").put(activity, activity.id);
   // Keep a durable sync request in the same transaction as the narrative result.
   // Do not create a GitHub commit for every intermediate AI planning operation.
