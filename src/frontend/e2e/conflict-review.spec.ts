@@ -83,7 +83,8 @@ test("mobile/desktop: confronto GitHub, selezione consapevole e doppio backup lo
   await page.getByRole("button", { name: /Applica scelte con doppio backup/ }).click();
   await expect(page.getByText(/Risoluzione applicata/)).toBeVisible();
   expect(postCalls).toBe(writesBefore);
-  await expect(page.locator("#book-select option")).toHaveCount(3);
+  // The selector includes its initial placeholder option plus three books.
+  await expect(page.locator("#book-select option")).toHaveCount(4);
   await nav.getByRole("button", { name: "Dashboard" }).click();
   await expect(page.getByText(/Il protagonista decide invece di esplorare una città nascosta/)).toBeVisible();
   await nav.getByRole("button", { name: "Archivio", exact: true }).click();
