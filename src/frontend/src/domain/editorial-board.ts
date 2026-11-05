@@ -143,12 +143,19 @@ export function reviewerPrompt(book: BookProject, cycle: ChapterEditorialCycle,
   const previous = book.chapters.filter(ch => ch.number < chapter.number).map(ch =>
     String(ch.number) + ". " + ch.title + ": " + (ch.summary ?? ch.scenes.map(s => s.summary ?? "").join(" "))
   ).join("\n");
-  const personalNotes = cycle.reports.filter(x => x.role === role).map(x => x.memoryNote)
-    .filter(Boolean).slice(-6).join("\n");
+  const historicalNotes = cycle.priorRounds.flatMap(round =>
+    round.reports.filter(x => x.role === role).map(x => x.memoryNote))
+    .filter(Boolean).slice(-3);
+  const personalNotes = [...historicalNotes,
+    ...cycle.reports.filter(x => x.role === role).map(x => x.memoryNote).filter(Boolean)]
+    .slice(-6).join("\n");
   // A reader is truly blind to private secrets, character dossiers and future plot plans.
+  const compactedPrevious = previous.length > 12000 ?
+    (book.bookSummary ? "(Sinossi dei capitoli precedenti compattate nel riassunto del libro.)" :
+      bound(previous,12000,"Sinossi precedenti senza riassunto globale")) : previous;
   const publicContext = [
-    "Sinossi precedenti: " + bound(previous, 12000, "Riassunto capitoli precedenti"),
-    "Riassunto del libro: " + bound(book.bookSummary ?? "", 7000, "Sinossi del libro"),
+    "Sinossi precedenti: " + compactedPrevious,
+    "Riassunto del libro: " + bound(book.bookSummary ?? "", 9000, "Sinossi del libro"),
     "Stile: " + book.writingStyle + "; pubblico: " + book.audience,
   ].join("\n");
   const canon = reader ? "" : JSON.stringify({
