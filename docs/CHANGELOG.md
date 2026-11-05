@@ -2,6 +2,22 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.8.1 — 2026-11-05 (PR #21)
+
+**Budget stimato per libro, prezzi AI per endpoint/modello e stop preventivo delle richieste**
+
+- Nuovo pannello **Budget AI del libro** sulla Dashboard: opt-in, soglia in euro per periodo, massimo token output richiesto e tariffario manuale per input/output (€/milione di token) su ciascun modello e provider configurato.
+- Prima di ogni chiamata del runner — compresi sette specialisti, cinque lettori, direttore, remediation, consolidamento e sinossi — calcolo preventivo dei token input con riserva UTF-8, dell'output configurato e dei costi stimati da usage del periodo. Se non c'è margine, l'autopilot va in pausa **prima di contattare il provider**.
+- Anche le proposte AI di fusione delle scene usano lo stesso controllo; le bozze manuali restano gratuite.
+- Ogni richiesta potenzialmente fatturabile viene marcata `aiRequested` in IndexedDB **prima del fetch**. Se la risposta manca di token, la rete cade o l'attività viene interrotta, il budget si blocca conservativamente alle richieste successive senza trattare il consumo ignoto come gratuito.
+- I listini sono inseriti dall'autore e non includono crediti residui inventati. L'interfaccia mostra stime monetarie da token dichiarati e prezzi configurati, non fatture o saldo del provider.
+- Nessuna tariffa/prezzo predefinito. La protezione è **facoltativa**, retrocompatibile con i libri esistenti e permette di alzare la soglia mantenendo lo storico; disattivare e riattivare apre un nuovo periodo su scelta esplicita.
+- Backup ZIP content-only conserva budget per libro e activity; backup completo conserva anche le tariffe globali, con validazione degli importi.
+- Test Vitest su prezzi mancanti, provider/modelli distinti, risposte senza usage, attività fallite, riserva e limiti, più integrazione runner e scena AI. Test Playwright desktop/mobile su configurazione, stop prima della chiamata e uso sconosciuto.
+- ADR 0012, nuova guida `docs/ai-budget.md`, issue #17 e documentazione della sicurezza.
+
+**Limiti:** non è un hard cap delle fatture: il provider potrebbe addebitare chiamate interrotte, ignorare `max_tokens` o applicare tariffe/cache diverse da quelle inserite. Il calcolo input usa un'approssimazione prudente in byte UTF-8, non il tokenizer ufficiale. Il portale del provider rimane la fonte della fatturazione effettiva.
+
 ## 0.8.0 — 2026-11-05 (PR #19)
 
 **Redazione multi-agente per capitolo — verifica critica, remediation e congelamento**
