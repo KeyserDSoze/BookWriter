@@ -46,7 +46,7 @@ test("dashboard desktop/mobile: distingue uso misurato, parziale, mancato e dive
   const panel = page.getByRole("region", { name: "Consumi AI" });
   await expect(panel.getByRole("heading", { name: "Consumi AI registrati" })).toBeVisible();
   await expect(panel.getByText("190", { exact: true })).toBeVisible();
-  await expect(panel.getByText("45", { exact: true })).toBeVisible();
+  await expect(panel.getByText("45", { exact: true }).first()).toBeVisible();
   await expect(panel.getByText("235", { exact: true })).toBeVisible();
   await expect(panel.getByText("Sol", { exact: true })).toBeVisible();
   await expect(panel.getByText("Luna", { exact: true })).toBeVisible();
