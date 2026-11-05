@@ -12,7 +12,7 @@
 - [x] PR #16: diff parole/paragrafi con fallback mobile, task AI `merge`, bozza manuale, storico ZIP e conferma umana di canonizzazione; CI e merge completati.
 - [x] PR #18: telemetria token per libro/modello da report provider, CI verde e merge.
 - [ ] PR #19: panel editoriale indipendente 7 specialisti + 5 lettori per capitolo, giudizio critico motivato, remediation accettate, re-review, freeze e riapertura retroattiva; in verifica CI (ADR 0011, issue #20).
-- [ ] PR #21 (v0.8.1): tariffe manuali EUR/milione per endpoint e modello, budget stimato per libro con stop pre-call anche nei 12 agenti e nella fusione AI, activity attempted e ZIP full; CI in verifica.
+- [x] PR #21 (v0.8.1): tariffe manuali EUR/milione per endpoint/modello, budget stimato per libro, stop prima di chiamate dei 12 agenti e della fusione AI, activity attempted e ZIP full; CI verde e merge su main.
 - [ ] Issue #17: ledger storico per cached tokens e tariffe versionate, integrazioni provider-native opzionali e budget distribuito tra dispositivi.
 - [ ] Hardening del lease e revisione automatica del canon delle proposte (#10), OAuth Google/Microsoft (#2).
 - [ ] Completezza canon Narrarium e controlli rigorosi sui segreti (#5).

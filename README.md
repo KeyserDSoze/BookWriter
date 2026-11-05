@@ -29,7 +29,7 @@
 
 **Budget AI v0.8.1 (PR #21):** limite stimato facoltativo per libro prima di ogni chiamata dell'autopilot, redazione e fusione AI, con tariffe per modello/provider inserite dall'autore, output massimo e blocco conservativo su usage mancante. Non è un saldo credito o un tetto garantito alla fatturazione. Guida `docs/ai-budget.md`, ADR 0012.
 
-**Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, fact-checking storico con fonti, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
+**Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, fact-checking storico con fonti, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
 
