@@ -42,6 +42,12 @@ In **Archivio → Confronto e recupero delle versioni** puoi leggere il commit r
 
 Guida: `docs/conflict-recovery.md`. Decisione: `ADR/0008-conflict-review-and-recovery.md`. Esporta anche uno ZIP esterno: le due copie restano nello stesso browser.
 
+## Proposte editoriali per scene divergenti (v0.7.0)
+
+Dopo un confronto di versioni con la PR #14, ogni scena divergente può essere analizzata con diff parola per parola. Nel laboratorio (PR #16) scegli se scrivere una fusione manuale oppure chiedere al modello `merge` una bozza. Nessuna proposta, anche se generata correttamente, viene canonizzata o inviata su GitHub senza consenso. Per applicarla scegli esplicitamente la bozza e poi conferma il doppio backup; la scena finale resta draft e l'autosync disabilitato.
+
+Vedi `docs/scene-merge.md` e ADR 0009. Le bozze locali sono esportabili negli ZIP di contenuti (contengono prosa e segreti in chiaro).
+
 ## Proiezione remota
 
 ```text
