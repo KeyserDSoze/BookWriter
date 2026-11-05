@@ -16,6 +16,7 @@ import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book"
 import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
 import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
+import { AiUsagePanel } from "./components/AiUsagePanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
@@ -347,6 +348,7 @@ export default function App() {
               <Button variant="outline" onClick={() => setPage("activities")}>Apri registro attività</Button>
             </div> : <Empty>Nessuna operazione registrata.</Empty>}
           </Section>
+          {current && <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>}
           <Section title="Memoria narrativa">
             <div className="grid grid-cols-2 gap-2 text-sm">
               {[
