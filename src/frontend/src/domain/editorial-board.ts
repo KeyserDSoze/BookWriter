@@ -254,7 +254,7 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
   const historicalEvidence = allFindings(cycle).filter(f => !!f.historical).map(f => ({
     findingId: f.id, assessment: f.historical!.assessment,
     sources: f.historical!.sourceIds.map(id =>
-      chapter.historicalDossier?.sources.find(source => source.id === id))
+      activeHistoricalSources(chapter.historicalDossier).find(source => source.id === id))
       .filter((source): source is NonNullable<typeof source> => !!source)
       .map(source => ({
         id: source.id, title: source.title, url: source.url,
