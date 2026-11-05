@@ -1,8 +1,8 @@
-# Avvio locale e prime prove
+# Sviluppo locale e pubblicazione
 
 ## Requisiti
 
-Node.js 22+, npm, browser moderno con IndexedDB/Web Crypto. Repository privata raccomandata per i libri inediti.
+Node.js 22+, npm, browser con IndexedDB/Web Crypto e connessione Internet per i provider AI o GitHub. I manoscritti inediti devono preferibilmente risiedere in repository GitHub private.
 
 ```sh
 cd src/frontend
@@ -10,44 +10,48 @@ npm install
 npm run dev
 npm run typecheck
 npm run test
+npm run smoke
 npm run build
 npx playwright install chromium
 npm run test:e2e
 ```
 
-Aprire l'indirizzo Vite locale. Non serve un server applicativo. Per GitHub Pages, abilitare **Settings → Pages → Source: GitHub Actions** e fare merge su `main`; il workflow imposta Vite base `/BookWriter/`.
+L'app è una SPA statica Vite/React. La CI esegue controlli TypeScript, Vitest, smoke e Playwright desktop/mobile.
 
-## Cosa funziona in questa prima versione
+## Dominio e deploy
 
-- UI responsive con navigazione desktop e mobile, tema chiaro/scuro.
-- Creazione libro da un brief in linguaggio naturale, salvataggio in IndexedDB.
-- Endpoint OpenAI-compatible multipli con chiave cifrata localmente via AES-GCM; configurazione modello default e routing per attività/alcuni override per libro.
-- Autopilot browser: brainstorming, validazione, 5 audience review, adversarial, outline JSON validato, prosa scena per scena, review e aggiornamento di un canon strutturato.
-- Log delle attività con output, modello, timestamp, riepilogo preliminare e stop su errore API.
-- Pausa/ripresa, checkpoint persistente dopo ogni stage e richiesta autore che determina analisi d'impatto e revisione retroattiva di scene già canoniche.
-- Lettore e atlante della memoria narrativa.
+La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio personalizzato GitHub Pages. In **Settings → Pages** impostare la sorgente GitHub Actions; ogni merge su `main` avvia il workflow `Deploy BookWriter Pages`. Non mettere PAT, API key o segreti nel workflow/build.
 
-## Backup ed esportazioni
+## Funzionalità sviluppate
 
-La pagina **Archivio** esporta e importa ZIP content-only (senza credenziali) o full backup. I backup full possono essere cifrati con passphrase AES-GCM; l'export in chiaro ha un avviso forte e una conferma. I libri importati vengono duplicati, senza cancellare gli originali. PDF, EPUB e DOCX sono generati localmente dalla prosa canonica: copertine, immagini e layout editoriale avanzato sono ancora da realizzare.
+- UI responsive, navigazione mobile sticky, tema chiaro/scuro.
+- Libri da brief libero, endpoint OpenAI-compatible multipli e routing modelli.
+- Orchestrazione autonoma nel browser: idee long/mid/short, validazione, 5 reader personas, adversarial review, outline, generazione scene, review, consolidamento.
+- Checkpoint IndexedDB, log per attività, pause/resume e revisioni dall'autore.
+- Archivio ZIP content-only e full; quello full può essere cifrato con passphrase AES-GCM. La copia non cancella i libri esistenti.
+- Export EPUB, DOCX, PDF delle scene canoniche, senza servizi esterni.
+- **PR #8**: sincronizzazione GitHub **manuale** per repository per libro, PAT fine-grained cifrato localmente, proiezione Markdown Narrarium, commit multi-file con SHA, import non distruttivo e blocco dei conflitti.
 
-## Non ancora implementato
+## Come provare GitHub
 
-- Login OAuth Google o Microsoft e vault remoto multi-device.
-- GitHub PAT, sincronizzazione Markdown, lease tra dispositivi e snapshot ZIP.
-- Nessuno: ZIP import/export e output EPUB, PDF e DOCX sono disponibili in questa fase; da aggiungere validazione editoriale avanzata, cover e immagini.
-- Recupero granulare da tutte le condizioni di crash, generazione summaries via modello economico dedicato, budget guard, ricerca fattuale con fonti, diff/rollback visuale.
-- Conversione completa delle entità/memory nel formato Markdown Narrarium; attualmente vivono nel modello IDB.\n- Enforcement rigoroso delle soglie di segreto, valutazioni factual con ricerche esterne e ricostruzione totale del canon dopo riscritture profonde.
-- Copertura dei test browser da ampliare per Safari iOS, Chrome Android e provider AI reali; i primi test Playwright Chromium desktop/mobile verificano navigazione, backup e reload.
+Vedi `docs/github-sync.md`. Serve una repository GitHub con un commit iniziale (può contenere README), un PAT fine-grained con permesso `Contents: read/write` limitato a quella repository e un libro locale.
 
-Non usare questa versione per contenuti di valore senza esportazione manuale o backup dei dati del browser: IndexedDB può essere cancellato.
+In **Archivio**, salva il PAT, verifica repository e branch, collega il libro e premi **Sincronizza su GitHub**. La sincronizzazione non parte automaticamente: metti in pausa l'autopilot prima di effettuare il push. Il PAT e le API key non vengono committati.
 
-## API e modello
+Per aprire da altro browser, inserisci manualmente il PAT autorizzato, configura il repository in Archivio e importa il libro. L'import rifiuta gli ID locali già presenti per prevenire sovrascritture.
 
-In **Impostazioni**, fornire un `Base URL` HTTPS OpenAI-compatible che esponga `POST /chat/completions`; la API deve accettare chiamate CORS dal browser. Impostare la chiave API e un ID modello nella route di default, poi salvare. Alcuni provider non espongono `GET /models`; l'ID si può inserire manualmente. Ogni risposta JSON strutturata deve aderire al formato richiesto; in caso contrario il task si arresta e il log riporta il motivo.
+## Limiti e sviluppi in coda
 
-La chiave non viene inserita nel repository né in segreti Actions; è cifrata nel database locale con una chiave non estraibile conservata nello stesso IndexedDB. È una protezione di storage accidentale, **non E2EE** e non resiste a un attaccante con capacità di eseguire JS sulla pagina.
+- Login Google/Microsoft e vault credenziali multi-dispositivo non ancora attivi; nessun login fittizio.
+- Nessuna outbox GitHub durabile, autosync, lease tra browser, conflitti con risoluzione visuale o ZIP remoti periodici.
+- Supporto a repository Narrarium preesistenti non gestite da BookWriter da sviluppare; ora si importa uno snapshot `.bookwriter/project.json`.
+- Manca l'applicazione rigorosa delle soglie di rivelazione dei segreti, ricerca fattuale verificata con fonti, copertine e impaginazione editoriale avanzata.
+- Budget/tariffe modello, test Safari iOS/Chrome Android reali e integrazione con provider AI a crediti reali da completare.
+- L'autopilot non continua con la scheda/browser chiusi. I checkpoint lo rendono riprendibile, non sempre in esecuzione.
+- Un modulo JS sullo stesso origin può usare le API key: il Web Crypto locale non è E2EE.
 
-## Stato reale
+Non considerare la sola cache IndexedDB un backup garantito. Scarica periodicamente lo ZIP e/o esegui una sincronizzazione GitHub dopo i checkpoint importanti.
 
-Questa è una **base di sviluppo**. Non sono stati eseguiti test end-to-end in questa sessione né sono stati testati i flussi con credenziali utente. Controllare la CI prima di considerare la build utilizzabile.
+## Riferimenti
+
+`README.md`, `AGENTS.md`, `ADR/0005-github-manual-sync.md`, `docs/github-sync.md`, `docs/security.md`, `docs/deployment.md` e `features/F01-autopilot-sync.md`.

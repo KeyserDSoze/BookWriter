@@ -12,6 +12,7 @@ import { fetchModels, normalizeEndpoint } from "./infrastructure/ai";
 import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
+import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
@@ -218,7 +219,7 @@ export default function App() {
             <Icon size={19} /> {label}
           </button>)}
       </nav>
-      <p className="muted mt-8 text-xs">v0.1.0 · Dati locali al browser</p>
+      <p className="muted mt-8 text-xs">v0.3.0 · Local-first e GitHub manuale</p>
     </aside>
 
     <nav className="mobile-tabs" aria-label="Navigazione mobile">
@@ -327,8 +328,8 @@ export default function App() {
             </div>
           </Section>
           <Section title="Sincronizzazione cloud">
-            <p className="muted flex items-start gap-2 text-sm"><Cloud className="shrink-0" size={18}/> Questa versione salva davvero in IndexedDB. Google, Microsoft e il salvataggio GitHub sono definiti nell'architettura ma non ancora collegati all'app.</p>
-            <p className="muted mt-2 flex items-start gap-2 text-sm"><Github className="shrink-0" size={18}/> Nessun PAT viene inviato a GitHub o salvato nei file del libro.</p>
+            <p className="muted flex items-start gap-2 text-sm"><Cloud className="shrink-0" size={18}/> Questa versione salva in IndexedDB e permette la sincronizzazione GitHub manuale dalla sezione Archivio. Google e Microsoft non sono ancora integrati.</p>
+            <p className="muted mt-2 flex items-start gap-2 text-sm"><Github className="shrink-0" size={18}/> Il PAT è usato soltanto nelle chiamate HTTPS verso GitHub, mai nei file del libro.</p>
           </Section>
         </div>
       </div>}
@@ -384,6 +385,10 @@ export default function App() {
       </div>}
 
       {page === "export" && <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <div className="lg:col-span-2">
+          <GitHubSyncPanel book={current} settings={settings} onRefresh={refresh}
+            onSaveSettings={persistSettings} onSelectBook={setSelectedId}/>
+        </div>
         <Section title="Backup ZIP" description="Copia portabile di tutti i libri presenti su questo browser, con log, riassunti e checkpoint.">
           <div className="space-y-4">
             <Field label="Tipo di backup"><select className="field" value={backupMode} onChange={e => setBackupMode(e.target.value as BackupMode)}>
@@ -488,8 +493,8 @@ export default function App() {
           <Button onClick={() => void saveEndpointSettings()}><CheckCircle2 size={17} /> Salva impostazioni</Button>
         </div>
         <Section title="Google / Microsoft / GitHub" description="Integrazioni cloud non ancora attive in questa prima implementazione.">
-          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Nessuna login simulata: serviranno le app registration OAuth. Non inserire PAT qui fino all'attivazione del vault cloud.</p>
-          <p className="muted mt-2 text-sm">La sincronizzazione GitHub con commit Markdown, lease e snapshot ZIP è specificata in docs/sync.md e verrà attivata in una fase successiva.</p>
+          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Nessuna login Google/Microsoft simulata. Il PAT GitHub si configura nella sezione Archivio e resta cifrato nel browser.</p>
+          <p className="muted mt-2 text-sm">La sincronizzazione GitHub manuale è nella sezione Archivio. Lease, autosync e snapshot ZIP remoti sono in programma.</p>
         </Section>
       </div>}
 

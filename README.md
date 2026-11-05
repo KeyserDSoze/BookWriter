@@ -13,7 +13,9 @@
 - Generazione EPUB, DOCX e PDF dalla prosa canonica.
 - Setup GitHub Pages su **https://ghostwriting.ws** (asset base root).
 
-**Ancora da implementare:** OAuth Google/Microsoft, sync GitHub con PAT/lease, remote ZIP snapshot, parità completa Narrarium, E2E tests e budget tracking. Non affidare documenti importanti solo al browser senza backup.
+**Sincronizzazione GitHub**: la PR #8 introduce collegamento a repository per libro, PAT fine-grained cifrato localmente, proiezione Markdown/frontmatter, commit multi-file con controllo SHA, import non distruttivo e blocco dei conflitti. Vedi `docs/github-sync.md` e ADR 0005.
+
+**Ancora da implementare:** OAuth Google/Microsoft, sincronizzazione GitHub **automatica** con outbox/lease, snapshot ZIP remoti, import Narrarium generico, parità completa Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
 
@@ -31,6 +33,10 @@
 - [Book.Jesus](https://github.com/KeyserDSoze/Book.Jesus): pattern di capitoli, scene/paragrafi, continuità, timeline e segreti.
 - [GhostWriterFramework](https://github.com/KeyserDSoze/GhostWriterFramework): convenzioni e modelli Narrarium.
 - [DeliveryManager](https://github.com/KeyserDSoze/DeliveryManager): organizzazione del repository, ADR, documentazione e qualità.
+
+## Stato release
+
+La distribuzione tramite GitHub Pages raggiunge [ghostwriting.ws](https://ghostwriting.ws). Le PR vengono sottoposte alla CI prima del merge. Le funzionalità GitHub della PR #8 non sono su `main` fino al merge.
 
 ## Qualità
 

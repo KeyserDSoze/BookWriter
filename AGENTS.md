@@ -46,6 +46,17 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Routing multi-endpoint per libro e per attività; modelli mai hardcodati. Inventario modelli via `GET /models` se possibile, più inserimento manuale.
 - Permettere limiti di spesa/token personalizzabili, avviso e arresto. Eventuale assenza di tariffe precise va indicata.
 
+## GitHub Sync — regole del codice
+
+- Fonte: `ADR/0005-github-manual-sync.md`, `docs/github-sync.md`, issue #3. `src/frontend/src/domain/narrarium.ts` costruisce proiezioni Markdown senza credenziali; `infrastructure/github-sync.ts` implementa Git Data REST.
+- Tutte le chiamate con PAT devono restare su `https://api.github.com`; mai token negli URL, log, tree, commit, ZIP narrativi o errori.
+- Una repository per libro; mai `force push`. Prima scrittura conservativa (nessun book.md preesistente estraneo); update di branch solo con parent SHA originale e `force:false`.
+- Eliminare solo file elencati in manifest precedente; path derivati da slug sicuri, no traversal. Se remote HEAD cambia, bloccare e conservare i dati locali.
+- Snapshot `.bookwriter/project.json` e `.bookwriter/activities.json` devono essere lossless per il recupero ma NON contenere token, chiavi API, `remote.lastSyncedCommit` o chiavi di cifratura.
+- Importazione remote o ZIP è additiva; mai sovrascrivere un book ID esistente in silenzio.
+- Non presentare il pulsante manuale come autosync. Outbox e lease vanno implementati con un nuovo ADR prima di abilitarli.
+- Test `narrarium.test.ts` e `github-sync.test.ts` devono coprire sicurezza, conflitti, path e push non-forzato.
+
 ## Persistenza e sincronizzazione
 
 - IndexedDB è fonte operativa sul dispositivo; commit canonici GitHub su cambi significativi, ZIP snapshot versionati per bootstrap/ripristino, non per ogni singola attività.
@@ -60,6 +71,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - La sorgente GitHub Pages è GitHub Actions. Il CNAME è informativo nel build Actions; la mappatura reale è nelle impostazioni della repository.
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
+
+## Rilasci e changelog
+
+- Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
+- Lo smoke test `tests/release.test.mjs` fallisce se una versione non compare nel changelog.
+- Prima di fare merge, verificare typecheck, Vitest, smoke, build e Playwright mobile/desktop sulla **HEAD** della PR, non su un commit precedente.
+- Dopo il merge verificare deploy GitHub Pages e non confondere CI verde con disponibilità del dominio; documentare errori o blocchi.
 
 ## Qualità
 

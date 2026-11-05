@@ -16,7 +16,16 @@ export interface EndpointProfile {
   models: string[];
 }
 export interface ModelRoute { endpointId: string; modelId: string; }
+export interface GitHubRemote {
+  owner: string;
+  repository: string;
+  branch: string;
+  lastSyncedCommit?: string;
+  lastSyncedLocalUpdatedAt?: string;
+  lastSyncAt?: string;
+}
 export interface AppSettings {
+  githubToken?: EncryptedSecret | null;
   endpoints: EndpointProfile[];
   defaultRoute: ModelRoute;
   taskRoutes: Partial<Record<TaskKind, ModelRoute>>;
@@ -29,6 +38,13 @@ export interface Scene {
   objective: string;
   text: string;
   summary?: string;
+  date?: string;
+  viewpoint?: string;
+  locations?: string[];
+  characters?: string[];
+  items?: string[];
+  factions?: string[];
+  secret_refs?: string[];
   status: "planned" | "draft" | "canon";
 }
 export interface Chapter {
@@ -76,6 +92,7 @@ export interface BookProject {
   currentSceneId?: string;
   revision?: RevisionRequest;
   modelRoutes?: Partial<Record<TaskKind, ModelRoute>>;
+  remote?: GitHubRemote;
 }
 export interface Activity {
   id: string;

@@ -1,5 +1,7 @@
 # Contratto di sincronizzazione local-first
 
+> **Implementazione:** la fase 1 **manuale** è in PR #8, documentata in `docs/github-sync.md` e `ADR/0005-github-manual-sync.md`. Le sezioni “Discovery su un browser nuovo”, “Write path” e “Lease multi-device” seguenti rappresentano il **target architetturale**, non tutte funzioni attive. La fase corrente importa da GitHub solo con PAT impostato localmente, salva un commit manuale e rifiuta il branch avanzato.
+
 ## Fonti e ruoli
 
 1. **IndexedDB**: archivio operativo; ogni attività salva evento, output e checkpoint immediatamente, prima di dichiarare successo.
