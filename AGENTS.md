@@ -72,6 +72,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## Rilasci e changelog
+
+- Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
+- Lo smoke test `tests/release.test.mjs` fallisce se una versione non compare nel changelog.
+- Prima di fare merge, verificare typecheck, Vitest, smoke, build e Playwright mobile/desktop sulla **HEAD** della PR, non su un commit precedente.
+- Dopo il merge verificare deploy GitHub Pages e non confondere CI verde con disponibilità del dominio; documentare errori o blocchi.
+
 ## Qualità
 
 - TypeScript strict, schemi runtime per JSON da AI/API/import, moduli piccoli, funzioni pure testabili.
