@@ -21,8 +21,9 @@ input, select, textarea { outline-offset: 2px; }
 .dark .sidebar { border-color: #303b4a; }
 .mobile-tabs { display: none; }
 @media (max-width: 840px) {
-  .site-nav { display: block; padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .site-nav { display: block; padding-bottom: env(safe-area-inset-bottom); }
   .sidebar { display: none; }
-  .mobile-tabs { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: #fff; border-top: 1px solid #cbd5e1; padding: .4rem .5rem calc(.4rem + env(safe-area-inset-bottom)); justify-content: space-around; }
+  .mobile-tabs { display: flex; position: sticky; top: 0; left: 0; right: 0; z-index: 40; background: #fff; border-bottom: 1px solid #cbd5e1; padding: .4rem .5rem; justify-content: space-around; }
   .dark .mobile-tabs { background: #121923; border-color: #303b4a; }
+  .mobile-tabs > button { min-width: 0; flex: 1 1 0; padding: .25rem 0; overflow: hidden; white-space: nowrap; }
 }
