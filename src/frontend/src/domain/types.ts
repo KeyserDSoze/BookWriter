@@ -37,6 +37,13 @@ export interface Scene {
   objective: string;
   text: string;
   summary?: string;
+  date?: string;
+  viewpoint?: string;
+  locations?: string[];
+  characters?: string[];
+  items?: string[];
+  factions?: string[];
+  secret_refs?: string[];
   status: "planned" | "draft" | "canon";
 }
 export interface Chapter {
