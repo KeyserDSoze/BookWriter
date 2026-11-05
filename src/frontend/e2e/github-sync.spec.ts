@@ -25,7 +25,7 @@ test("collegamento GitHub usa un PAT locale e persiste tra reload", async ({ pag
   await nav.getByRole("button", { name: "Archivio" }).click();
   await expect(page.getByRole("heading", { name: /GitHub — sincronizzazione del libro/ })).toBeVisible();
 
-  await page.getByRole("textbox", { name: "PAT GitHub" }).fill("github_pat_mock_for_browser_testing_2026");
+  await page.getByLabel("PAT GitHub").fill("github_pat_mock_for_browser_testing_2026");
   await page.getByRole("button", { name: "Salva PAT cifrato" }).click();
   await expect(page.getByText(/PAT salvato cifrato nel browser/)).toBeVisible();
 
