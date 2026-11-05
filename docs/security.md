@@ -27,6 +27,12 @@ L'assenza di rete o il lock passato a un altro writer fermano la sessione in mod
 
 La modalità opt-in accoda in IndexedDB gli ID delle operazioni e lo stato dei checkpoint, **mai** API key o PAT. Il marker GitHub `.bookwriter/sync.json` contiene solo ID del libro, ID operazione e revisione; i commit sono in chiaro nella repository del libro. Web Locks impedisce due sincronizzazioni concurrenti sullo stesso origin/browser, ma non è un lease multi-device. Un conflitto del branch ferma la coda. Non usare due autopilot contemporaneamente su due dispositivi. Se il tab è chiuso, l'autosync non prosegue.
 
+## Recupero dei conflitti e protezione delle copie (ADR 0008)
+
+Il confronto legge soltanto snapshot GitHub a commit SHA. La risoluzione crea due copie complete del libro e dei log in IndexedDB, rimuovendo da entrambe il collegamento remoto. Lo storage delle API key e del PAT resta in `settings`: non vengono esportati come metadati del manoscritto.
+
+Il browser controlla i Web Locks, il commit GitHub e il timestamp locale prima della sostituzione. La transazione IndexedDB è atomica **solo nello stesso browser**; un dispositivo differente può avanzare GitHub subito dopo la verifica, nel qual caso il successivo push viene respinto per conflitto SHA. La copia di sicurezza rimane locale: esportare anche uno ZIP esterno. Niente force push, niente fusione cieca di prosa.
+
 ## PAT e chiavi modello
 
 - Raccomandare credenziali limitate per repository e revocabili; per GitHub fine-grained PAT con **Contents R/W** sul solo gruppo di repository del libro. Le chiavi OpenAI-compatible possono fatturare: evitare log e invio a domini inattesi.
