@@ -69,7 +69,7 @@ describe("DOI bibliografici nel contesto editoriale",()=>{
     cycle.reports.push(valid);
     const judge=adjudicationPrompt(b,cycle);
     expect(judge.prompt).toContain("10.1000/xyz123");
-    expect(judge.prompt).toContain("NON costituisce prova");
+    expect(judge.prompt).toContain("non costituisce prova");
     expect(judge.system).toContain("fonte TERZIARIA");
   });
 });
