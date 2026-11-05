@@ -81,9 +81,12 @@ async function api<T>(secret: string, path: string,
   if (url.origin !== API || !url.pathname.startsWith("/repos/"))
     throw new Error("Destinazione GitHub non autorizzata.");
   let response: Response;
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 15_000);
   try {
     response = await fetch(url, {
       method, cache: "no-store", mode: "cors", redirect: "error",
+      signal: controller.signal,
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: "Bearer " + secret,
@@ -93,7 +96,9 @@ async function api<T>(secret: string, path: string,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new RemoteWriterLost("GitHub non raggiungibile: scrittura bloccata per non duplicare un autore remoto.");
+    throw new RemoteWriterLost("GitHub non raggiungibile o tempo di verifica scaduto: scrittura bloccata.");
+  } finally {
+    clearTimeout(deadline);
   }
   if (allow404 && response.status === 404) return null;
   if (!response.ok) throw responseError(response.status);
