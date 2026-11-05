@@ -4,7 +4,7 @@
 
 > Stato: **prima applicazione local-first e in evoluzione**. Le funzionalità descritte sono obiettivi di prodotto, non ancora un'applicazione pronta per la produzione.
 
-## Funzioni presenti sul branch di sviluppo
+## Funzionalità disponibili
 
 - SPA mobile e desktop, tema chiaro/scuro.
 - Creazione di libri, orchestra AI multi-modello con osservabilità dei passaggi e possibilità di pause/revisioni.
