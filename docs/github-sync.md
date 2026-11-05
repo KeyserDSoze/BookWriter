@@ -14,6 +14,16 @@ Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoin
 6. Dopo la prima sincronizzazione riuscita puoi selezionare **Sincronizzazione automatica ai checkpoint**: ogni outline, scena con review, consolidamento o revisione genera una richiesta in IndexedDB, inviata a GitHub mentre la pagina resta aperta. Se una repository è pubblica serve consenso esplicito aggiuntivo.
 7. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner.
 
+## Lease di scrittura AI tra dispositivi (v0.5.0)
+
+Se il libro è collegato a GitHub, prima di avviare l'autopilot BookWriter crea un lease nel ramo dedicato `bookwriter-lock/<bookId>`. Ogni chiamata AI richiede che la sessione abbia ancora il lock: viene rinnovato ogni 25 secondi e scade dopo 120 secondi se la pagina non può comunicare con GitHub. Un secondo browser non può avviare l'AI sullo stesso libro quando il lock è attivo.
+
+Il lock è liberato alla fine di una sessione o quando premi Pausa; se il browser si arresta bruscamente, resta visibile in Archivio fino alla scadenza. Il recupero è **manuale**, disponibile soltanto dopo un ulteriore margine di 60 secondi e una conferma esplicita. Non usare takeover prima di verificare che l'altro dispositivo non stia ancora lavorando.
+
+Se GitHub non risponde o il lease cambia, la chiamata AI viene interrotta quando possibile e il risultato non viene canonizzato. Questo non significa che eventuali token già consumati dall'API vengano rimborsati.
+
+**Importante:** il lease non è ancora un blocco transazionale perfetto per le modifiche manuali, e l'orologio locale può differire fra dispositivi. Il canon Git continua a usare controllo SHA e `force:false` per impedire sovrascritture; le divergenze non sono fuse automaticamente.
+
 ## Autosync e monitoraggio
 
 La coda per libro in IndexedDB conserva: operazione, revisione, numero tentativi, prossimo retry e motivo dell'eventuale blocco. Le chiamate sono serializzate tra tab dello stesso browser con Web Locks. I checkpoint successivi vengono accorpati senza perdere il più recente.
