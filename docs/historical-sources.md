@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Studi e bibliografia DOI (v0.9.1)
+
+Se conosci l'identificativo di uno studio o di un libro, puoi aggiungerlo in **Bibliografia DOI** sotto lo stesso capitolo. BookWriter consulterà i metadati Crossref (titolo, autori, anno e pubblicazione) solo dopo la tua conferma. Non è una fonte primaria né una lettura del testo integrale: il giudice non accetterà titoli DOI come citazioni storiche. Vedi [Guida alla bibliografia DOI](crossref-bibliography.md) e ADR 0014.
+
 ## Provenienza e diritti
 
 Le prime fonti provengono da **Wikipedia italiana**, una fonte **terziaria**. Non sostituisce fonti primarie, archivi statali, studi scientifici o bibliografia specialistica. Gli estratti riprodotti vengono attribuiti al titolo dell'articolo e ai contributori Wikipedia (licenza indicata da Wikimedia, generalmente CC BY-SA). Usa i link alle revisioni specifiche per verificare se il testo è stato successivamente modificato e segui la bibliografia originale per conferme.
