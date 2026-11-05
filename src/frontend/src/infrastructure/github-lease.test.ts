@@ -116,8 +116,9 @@ describe("Lease distribuito GitHub (branch fast-forward only)", () => {
     await expect(assertWriterLease(first)).rejects.toBeInstanceOf(RemoteWriterLost);
     expect(server.calls.filter(c => c.method === "PATCH").every(c =>
       (c.body as Record<string, unknown>)?.force === false)).toBe(true);
-    const bodies = JSON.stringify(server.calls.filter(c => c.method === "POST"));
+    const bodies = JSON.stringify(server.calls.filter(c => c.method === "POST").map(c => c.body));
     expect(bodies).not.toContain(TOKEN);
+    expect(bodies).not.toContain("headSha");
   });
 
   it("conserva il lease scaduto finché l'autore non richiede takeover esplicito", async () => {
