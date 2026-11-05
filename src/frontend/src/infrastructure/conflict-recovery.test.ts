@@ -113,7 +113,8 @@ describe("Recupero narrativo non distruttivo", () => {
 
   it("crea entrambi i backup e applica solo le scelte selezionate senza push GitHub", async () => {
     const book = await originalBook();
-    // A previously pending autosync is invalidated after explicit conflict resolution.
+    // Simulate a previously frozen book with an outstanding authorized checkpoint.
+    book.chapters[0]!.frozenAt = new Date().toISOString();
     await saveBook(book);
     expect(await getOutbox(book.id)).toBeDefined();
     const base = structuredClone(book);
