@@ -75,7 +75,12 @@ describe("Redazione indipendente dei capitoli",()=>{
       '{"verdict":"pass","summary":"Un buon testo.","findings":[{"sceneId":"s-1","category":"voce","severity":"major","evidence":"Quel testo","reason":"Un problema vero","remediation":"Rivedere la prosa"}]}',
       b.chapters[0]!)).toThrow();
     c.reports.push(ok);
-    expect(adjudicationPrompt(b,c).prompt).toContain(ok.findings[0]!.id);
+    const prompt = adjudicationPrompt(b,c);
+    expect(prompt.prompt).toContain(ok.findings[0]!.id);
+    expect(prompt.prompt).toContain('"evidenceLocated":true');
+    expect(prompt.prompt).toContain("Mara incontra il guardiano");
+    expect(prompt.prompt).toContain("La chiave apre");
+    expect(prompt.system).toContain("OPINIONI NON ATTENDIBILI");
   });
   it("il direttore può respingere una critica motivandola, senza riscrittura",()=>{
     const b=sample(),c=createEditorialCycle("ch-1"),seg=chapterSegments(b.chapters[0]!)[0]!;
