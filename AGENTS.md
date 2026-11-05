@@ -54,7 +54,7 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Eliminare solo file elencati in manifest precedente; path derivati da slug sicuri, no traversal. Se remote HEAD cambia, bloccare e conservare i dati locali.
 - Snapshot `.bookwriter/project.json` e `.bookwriter/activities.json` devono essere lossless per il recupero ma NON contenere token, chiavi API, `remote.lastSyncedCommit` o chiavi di cifratura.
 - Importazione remote o ZIP è additiva; mai sovrascrivere un book ID esistente in silenzio.
-- Non presentare il pulsante manuale come autosync. Outbox e lease vanno implementati con un nuovo ADR prima di abilitarli.
+- Distinguere chiaramente sync manuale iniziale, autosync opzionale e recupero di conflitti (che non fa push e disabilita autosync). Vedi ADR 0005–0008.
 - Test `narrarium.test.ts` e `github-sync.test.ts` devono coprire sicurezza, conflitti, path e push non-forzato.
 
 ## Persistenza e sincronizzazione
@@ -71,6 +71,15 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - La sorgente GitHub Pages è GitHub Actions. Il CNAME è informativo nel build Actions; la mappatura reale è nelle impostazioni della repository.
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
+
+## Conflitti v0.6.0 — recovery conservativo
+
+- `domain/conflicts.ts` confronta progetti con ID identico, baseline GitHub immutabile se disponibile e unità atomiche: scene, capitoli, entità e sezioni. Il default di ogni decisione è **locale**, mai una fusione AI silenziosa.
+- `infrastructure/conflict-recovery.ts` può leggere il GitHub HEAD e creare copie di recupero, ma **non deve scrivere su GitHub** in una risoluzione.
+- Prima di sostituire il libro principale servono due Web Locks (writer e outbox), SHA HEAD invariato, stessa repository e stessa revisione locale.
+- Nella **stessa transazione IndexedDB** creare copia locale e copia remota senza `remote`, copiare i log con ID rigenerati, applicare le scelte, disabilitare autosync, cancellare outbox vecchia e aggiungere audit.
+- Dopo il recupero obbligare revisione umana e push manuale. Le copie solo IndexedDB non sono backup off-device: raccomandare ZIP.
+- Testare baseline, conflitti sulle scene, canone/segni di spoiler, eliminazioni, SHA divergente, timestamp modificato, assenza di POST/PATCH e vista mobile/desktop.
 
 ## Writer lease v0.5.0 — invarianti
 
@@ -91,7 +100,7 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Il worker usa Web Locks tra tab; se non disponibile, **non autosincronizzare**. Il tab deve restare aperto.
 - Un commit che sembra riuscito ma ha perso la risposta può essere confermato solo se `HEAD` ha lo STESSO `operationId` e il marker `.bookwriter/sync.json` lo conferma. Se il branch cambia per altri motivi: conflitto, nessun force push.
 - Retry limitati e backoff, blocco immediato su conflitti e autorizzazioni. Non resettare lo stato blocked a causa di nuove scene.
-- **Multi-device writer NON sicuro** fino al lease distribuito: non dichiarare supporto a due sessioni autopilot simultanee. Vedi ADR 0006 e issue #3.
+- Il lease v0.5.0 offre mitigazione conservativa tra dispositivi ma NON fencing transazionale perfetto: non dichiarare gestite tutte le race o edit manuali concorrenti. Vedi ADR 0007 e issue #10.
 
 ## Rilasci e changelog
 

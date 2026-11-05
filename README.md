@@ -19,7 +19,9 @@
 
 **Lease writer v0.5.0:** la PR #12 aggiunge un lock GitHub a branch separata per impedire l'avvio di un secondo autopilot AI sullo stesso libro, con rinnovo periodico e recupero manuale dei lock scaduti. Vedi ADR 0007 e issue #10. È una mitigazione best effort, non un database distribuito con fencing atomico.
 
-**Ancora da implementare:** OAuth Google/Microsoft, lease GitHub **tra dispositivi**, risoluzione dei conflitti, snapshot ZIP remoti, import Narrarium generico, parità Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
+**Confronto e recupero v0.6.0:** la PR #14 introduce differenze visuali locale/GitHub per capitoli, scene, personaggi e segreti, selezione esplicita per elemento e doppio backup atomico prima di applicare. Nessun force push; autosync disattivato dopo il recupero. Vedi ADR 0008 e `docs/conflict-recovery.md`.
+
+**Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, diff parola per parola e merge semantico assistito, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
 
@@ -40,7 +42,7 @@
 
 ## Stato release
 
-La distribuzione tramite GitHub Pages raggiunge [ghostwriting.ws](https://ghostwriting.ws). Le PR vengono sottoposte alla CI prima del merge. Le funzionalità GitHub della PR #8 non sono su `main` fino al merge.
+La distribuzione tramite GitHub Pages raggiunge [ghostwriting.ws](https://ghostwriting.ws). Le PR vengono sottoposte alla CI prima del merge. Le funzionalità dalla PR #8 alla #13 sono già integrate; le novità della PR #14 arriveranno su `main` solo dopo la CI verde e il merge.
 
 ## Qualità
 

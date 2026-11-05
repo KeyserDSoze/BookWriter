@@ -184,10 +184,15 @@ function parseRemoteBook(raw: string): BookProject {
   };
 }
 
-export async function readGitHubSnapshot(remote: GitHubRemote, signal?: AbortSignal):
-  Promise<{ book: BookProject; activities: Activity[]; head: string } | null> {
-  const token = await tokenFromVault();
-  const ref = await headSha(token, remote, signal);
+export interface RemoteBookSnapshot {
+  book: BookProject;
+  activities: Activity[];
+  head: string;
+}
+
+async function snapshotAtRef(
+  token: string, remote: GitHubRemote, ref: string, signal?: AbortSignal,
+): Promise<RemoteBookSnapshot | null> {
   const project = await readFile(token, remote, ".bookwriter/project.json", ref, signal);
   if (project === null) return null;
   const book = parseRemoteBook(project);
@@ -203,6 +208,33 @@ export async function readGitHubSnapshot(remote: GitHubRemote, signal?: AbortSig
   const activities = parsedActivities.data as Activity[];
   if (activities.some(a => a.bookId !== book.id)) throw new Error("Log GitHub riferito a un altro libro.");
   return { book, activities, head: ref };
+}
+
+export async function readGitHubSnapshot(remote: GitHubRemote, signal?: AbortSignal):
+  Promise<RemoteBookSnapshot | null> {
+  const token = await tokenFromVault();
+  const ref = await headSha(token, remote, signal);
+  return snapshotAtRef(token, remote, ref, signal);
+}
+
+/** Read the common ancestor at a concrete SHA, never a mutable branch name. */
+export async function readGitHubSnapshotAt(
+  remote: GitHubRemote, commitSha: string, signal?: AbortSignal,
+): Promise<RemoteBookSnapshot | null> {
+  if (!shaPattern.test(commitSha)) throw new Error("SHA di confronto GitHub non valido.");
+  const token = await tokenFromVault();
+  return snapshotAtRef(token, remote, commitSha, signal);
+}
+
+/** Recheck immutable reviewed HEAD just before any local recovery transaction. */
+export async function confirmGitHubHead(
+  remote: GitHubRemote, expectedHead: string, signal?: AbortSignal,
+): Promise<void> {
+  if (!shaPattern.test(expectedHead)) throw new Error("SHA di confronto non valido.");
+  const token = await tokenFromVault();
+  const actual = await headSha(token, remote, signal);
+  if (actual !== expectedHead)
+    throw new RemoteConflict("La repository è cambiata durante il confronto. Ricarica le versioni e ripeti la scelta.");
 }
 
 /** Restore only if the book ID does not exist locally. Never overwrite browser data. */

@@ -30,9 +30,15 @@
 | `HTTP 403` | Permessi, limiti API o blocco del provider | Controllare Contents R/W e restrizioni del token; poi riprovare |
 | `HTTP 404` | Repository o branch non trovato con quel PAT | Verificare nome e autorizzazioni; non collegare una repo diversa senza migrazione |
 | `PUBBLICA` | Libro in repository pubblica senza consenso | Preferire repository privata; in caso contrario autorizzare esplicitamente la pubblicazione |
-| `Conflitto remoto` | HEAD GitHub cambiato rispetto al commit noto | **Non** premere retry ripetutamente; salvare ZIP locale e verificare il commit remoto. La risoluzione visuale è futura |
+| `Conflitto remoto` | HEAD GitHub cambiato rispetto al commit noto | **Non** premere retry ripetutamente. Metti in pausa l'autopilot, apri **Archivio → Confronto e recupero delle versioni**, salva entrambe le copie e applica le scelte esplicite; poi fai il push manuale. |
 | `Web Locks assente` | Browser senza lock tra tab dello stesso origin | Autosync non viene attivato; usare sync manuale |
 | `Interrotto durante il commit` | Esito rete incerto | Alla ripresa si verifica il marker dell'ultimo commit; non creare manualmente un force push |
+
+## Risoluzione di conflitti del canon
+
+Dalla v0.6.0 puoi confrontare il libro locale con l'ultima versione GitHub, scegliendo per scene, personaggi, oggetti, timeline e segreti. Se disponibile, il confronto classifica le modifiche rispetto alla baseline.
+
+Prima del ripristino il sistema verifica che HEAD GitHub e la versione locale non siano cambiati e crea **due backup IndexedDB** in transazione, poi disattiva autosync. **Nessun push avviene durante il recupero.** Leggi `docs/conflict-recovery.md` e scarica uno ZIP per backup esterno.
 
 ## Recupero dopo chiusura browser
 

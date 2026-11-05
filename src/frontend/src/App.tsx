@@ -13,6 +13,7 @@ import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBo
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
 import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
+import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { drainGitHubOutbox } from "./application/auto-sync";
 
@@ -405,6 +406,10 @@ export default function App() {
         <div className="lg:col-span-2">
           <GitHubSyncPanel book={current} settings={settings} onRefresh={refresh}
             onSaveSettings={persistSettings} onSelectBook={setSelectedId}/>
+        </div>
+        <div className="lg:col-span-2">
+          <ConflictReviewPanel book={current} hasGitHubToken={!!settings.githubToken}
+            onRefresh={refresh} onSelectBook={setSelectedId}/>
         </div>
         <Section title="Backup ZIP" description="Copia portabile di tutti i libri presenti su questo browser, con log, riassunti e checkpoint.">
           <div className="space-y-4">

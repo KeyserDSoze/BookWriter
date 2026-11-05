@@ -33,6 +33,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 - **PR #8**: sincronizzazione GitHub manuale, PAT cifrato, proiezione Markdown Narrarium, commit multi-file, import sicuro.
 - **PR #9**: autosync opt-in a checkpoint con outbox transazionale, Web Locks tra tab, retry/backoff e recovery dei commit senza risposta.
 - **PR #12**: GitHub writer lease per libri collegati, acquisizione prima dell'AI, heartbeat, verifiche pre/post generazione, recupero manuale di lock scaduti. Consulta ADR 0007.
+- **PR #14**: confronto visuale base/locale/GitHub e recupero di scene/entità con doppio backup IndexedDB, controllo SHA e pause autosync. Consulta ADR 0008.
 
 ## Come provare GitHub
 
@@ -45,7 +46,7 @@ Per aprire da altro browser, inserisci manualmente il PAT autorizzato, configura
 ## Limiti e sviluppi in coda
 
 - Login Google/Microsoft e vault credenziali multi-dispositivo non ancora attivi; nessun login fittizio.
-- Outbox e autosync sono implementati, ma NON è disponibile un lease tra dispositivi: evitare sessioni autopilot concorrenti. Mancano UI di risoluzione conflitti e ZIP remoti periodici.
+- Autosync e lease GitHub per il runner AI sono implementati ma il fencing tra dispositivi non è transazionale perfetto. Il confronto dei conflitti è disponibile dalla PR #14, mentre diff parola-per-parola, merge automatico e ZIP remoti periodici restano da sviluppare.
 - Supporto a repository Narrarium preesistenti non gestite da BookWriter da sviluppare; ora si importa uno snapshot `.bookwriter/project.json`.
 - Manca l'applicazione rigorosa delle soglie di rivelazione dei segreti, ricerca fattuale verificata con fonti, copertine e impaginazione editoriale avanzata.
 - Budget/tariffe modello, test Safari iOS/Chrome Android reali e integrazione con provider AI a crediti reali da completare.
