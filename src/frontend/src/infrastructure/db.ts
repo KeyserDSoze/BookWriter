@@ -69,7 +69,7 @@ export async function listActivities(bookId: string): Promise<Activity[]> {
 
 export async function recoverInterruptedRuns(): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction("books", "readwrite");
+  const tx = db.transaction(["books", "activities"], "readwrite");
   const store = tx.objectStore("books");
   let cursor = await store.openCursor();
   while (cursor) {
@@ -80,6 +80,18 @@ export async function recoverInterruptedRuns(): Promise<void> {
       await cursor.update(book);
     }
     cursor = await cursor.continue();
+  }
+  const activityStore = tx.objectStore("activities");
+  let activityCursor = await activityStore.openCursor();
+  while (activityCursor) {
+    const activity = activityCursor.value as Activity;
+    if (activity.status === "running") {
+      activity.status = "cancelled";
+      activity.error = "Browser interrotto prima della conclusione: attività non confermata.";
+      activity.endedAt = new Date().toISOString();
+      await activityCursor.update(activity);
+    }
+    activityCursor = await activityCursor.continue();
   }
   await tx.done;
 }
