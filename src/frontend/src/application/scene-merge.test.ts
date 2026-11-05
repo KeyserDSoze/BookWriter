@@ -90,6 +90,51 @@ describe("Laboratorio di fusione senza canonizzazione automatica", () => {
     expect(callMock.mock.calls[0]?.[0]).toBe("merge");
   });
 
+  it("blocca la fusione AI prima del provider quando il budget non copre la riserva", async () => {
+    const review = await fixture();
+    const book = (await getBook(review.bookId))!;
+    book.aiBudget = {enabled:true,enabledAt:new Date(Date.now()-5000).toISOString(),
+      limitEur:0.001,maxOutputTokens:8192};
+    await saveBook(book,false);
+    review.localUpdatedAt = book.updatedAt;
+    review.local = structuredClone(book);
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId = "merge-model";
+    settings.aiPriceRates = [{endpointId:"openai",modelId:"merge-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}];
+    await saveSettings(settings);
+    await expect(generateSceneMergeDraft(review,"chapter-1","scene-1",
+      "",new AbortController())).rejects.toThrow(/Budget stimato raggiunto/);
+    expect(callMock).not.toHaveBeenCalled();
+    expect(await listSceneMergeDrafts(review,"chapter-1","scene-1")).toHaveLength(0);
+    expect((await listActivities(book.id)).some(a=>a.aiRequested)).toBe(false);
+  });
+  it("segna come potenzialmente fatturata una fusione senza usage e blocca la successiva", async () => {
+    const review = await fixture();
+    const book = (await getBook(review.bookId))!;
+    book.aiBudget = {enabled:true,enabledAt:new Date(Date.now()-5000).toISOString(),
+      limitEur:5,maxOutputTokens:8192};
+    await saveBook(book,false);
+    review.localUpdatedAt = book.updatedAt;
+    review.local = structuredClone(book);
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId = "merge-model";
+    settings.aiPriceRates = [{endpointId:"openai",modelId:"merge-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}];
+    await saveSettings(settings);
+    callMock.mockResolvedValue({text:"Testo proposto in fusione editoriale.",
+      endpointId:"openai",modelId:"merge-model"});
+    await generateSceneMergeDraft(review,"chapter-1","scene-1","",new AbortController());
+    expect(callMock).toHaveBeenCalledTimes(1);
+    expect(callMock.mock.calls[0]?.[6]).toEqual({maxOutputTokens:8192});
+    const logs=await listActivities(book.id);
+    expect(logs.filter(x=>x.aiRequested===true)).toHaveLength(1);
+    expect(logs[0]?.status).toBe("succeeded");
+    await expect(generateSceneMergeDraft(review,"chapter-1","scene-1",
+      "",new AbortController())).rejects.toThrow(/senza usage completo/);
+    expect(callMock).toHaveBeenCalledTimes(1);
+  });
+
   it("non salva una proposta se la versione locale cambia durante la chiamata AI", async () => {
     const review = await fixture();
     callMock.mockImplementation(async () => {
