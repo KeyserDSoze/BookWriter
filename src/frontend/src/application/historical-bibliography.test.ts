@@ -117,9 +117,10 @@ describe("Bibliografia DOI con decisione esplicita dell'autore",()=>{
     vi.stubGlobal("navigator",{locks:{request:async(
       _name:string,_options:unknown,callback:(lock:null)=>Promise<unknown>,
     )=>callback(null)}});
+    const beforeOutbox=await getOutbox(b.id);
     await expect(attachBibliographyToChapter(b.id,"ch1",b.updatedAt,
       ["10.1000/xyz123"])).rejects.toThrow(/altra scheda/);
     expect((await getBook(b.id))?.chapters[0]?.historicalDossier).toBeUndefined();
-    expect(await getOutbox(b.id)).toBeDefined();
+    expect(await getOutbox(b.id)).toEqual(beforeOutbox);
   });
 });
