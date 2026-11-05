@@ -2,6 +2,23 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.0 — 2026-11-05 (PR #24)
+
+**Dossier storico tracciabile per capitolo, ricerca pubblica con consenso e verifica delle citazioni dell'AI**
+
+- Dashboard **Redazione multi-agente → Dossier storico**: fino a 5 query per capitolo, scritte dall'autore e inviate a Wikipedia italiana **solo dopo una conferma che mostra le stringhe esatte**. Non parte alcuna ricerca automatica dal testo inedito, dai personaggi o dalla timeline privata.
+- Adapter MediaWiki Action API anonimo e browser-only: `https://it.wikipedia.org/w/api.php`, CORS `origin=*`, niente cookie/credenziali, redirect disabilitati, timeout, risposta max 170 KB, massimo 3 pagine per query e host/URL allowlist.
+- Dossier in IndexedDB con query, fonti, link articolo, ID pagina e revisione, estratti, data consultazione, ricerche senza risultati e storico delle revisioni citate. Backup ZIP e snapshot del libro mantengono i metadati senza nuove credenziali.
+- Il revisore **storico** (una delle 12 chiamate indipendenti) riceve soltanto il dossier documentale del capitolo, mentre gli altri 11 ruoli, inclusi i cinque lettori ciechi, non ricevono le nuove fonti.
+- Ogni finding storico dichiara una delle tre valutazioni: `consistent_with_excerpt`, `contradicts_excerpt`, `unverified`; i primi due stati richiedono source IDs validi e una **frase realmente presente** in un estratto consultato. Il software respinge fonti inventate, citazioni inesistenti e valutazioni non verificabili mascherate da documentate.
+- Il direttore editoriale riceve le fonti e gli estratti associati ai rilievi storici insieme agli estratti delle scene, per poter **accettare o respingere** una remediation motivando. I risultati esterni non riscrivono il manoscritto automaticamente.
+- Aggiornare le fonti dopo il congelamento riapre il capitolo, invalida i successivi e ripristina la sinossi globale precedente; operazione serializzata con Web Locks e controllo revisioni, autosync sospeso e outbox scartata.
+- Link alla pagina Wikipedia e alla specifica revisione, con attribuzione agli autori; gli estratti sono **fonti terziarie**, non certificazione di verità storica né ricerca d'archivio.
+- Test Vitest su privacy, origine HTTPS, finti link, query, report e citazioni, rete e concorrenza IndexedDB; test Playwright desktop/mobile su consenso, passaggio al revisore storico, giudice scettico e congelamento.
+- ADR 0013, guida `docs/historical-sources.md`, issue #23, documentazione di sicurezza e roadmap.
+
+**Limiti:** ricerche manuali per argomenti pubblici, solo Wikipedia IT e non fonti primarie o secondarie. Una frase riportata correttamente può essere falsa o fuori contesto. Per fact-checking storico approfondito occorreranno archivi istituzionali, bibliografia attendibile, più fonti indipendenti ed estrazione di query da approvare prima dell'invio esterno.
+
 ## 0.8.1 — 2026-11-05 (PR #21)
 
 **Budget stimato per libro, prezzi AI per endpoint/modello e stop preventivo delle richieste**
