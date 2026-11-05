@@ -68,9 +68,11 @@ export interface EditorialJudgment {
 export interface EditorialRound { round: number; reports: EditorialReport[]; judgment: EditorialJudgment }
 export interface ChapterEditorialCycle {
   chapterId: string; round: number;
-  stage: "review" | "adjudicate" | "repair" | "summary" | "blocked";
+  stage: "review" | "adjudicate" | "repair" | "reconcile" | "summary" | "blocked";
   reports: EditorialReport[]; judgment?: EditorialJudgment;
-  repairCursor: number; priorRounds: EditorialRound[];
+  repairCursor: number; reconcileCursor?: number; summaryCursor?: number;
+  runningChapterSummary?: string; runningBookSummary?: string;
+  priorRounds: EditorialRound[];
   blockedReason?: string;
 }
 function parseJson(raw: string): unknown {
