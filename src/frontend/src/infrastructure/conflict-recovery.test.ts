@@ -93,7 +93,7 @@ describe("Recupero narrativo non distruttivo", () => {
     const book = await originalBook();
     const base = structuredClone(book);
     const remote = structuredClone(book);
-    remote.chapters[0].scenes[0].text = "Testo GitHub modificato.";
+    remote.chapters[0]!.scenes[0]!.text = "Testo GitHub modificato.";
     remote.memory.secrets.identita = "La verità è nota solo all'antagonista.";
     const github = githubSnapshots(base, remote);
     const review = await inspectBookConflict(book.id);
@@ -104,9 +104,9 @@ describe("Recupero narrativo non distruttivo", () => {
     const copyId = await preserveRemoteVersion(review);
     const copy = await getBook(copyId);
     expect(copy?.remote).toBeUndefined();
-    expect(copy?.chapters[0].scenes[0].text).toBe("Testo GitHub modificato.");
+    expect(copy?.chapters[0]!.scenes[0]!.text).toBe("Testo GitHub modificato.");
     expect((await listActivities(copyId)).length).toBe(1);
-    expect((await getBook(book.id))?.chapters[0].scenes[0].text).toBe("Testo originale locale.");
+    expect((await getBook(book.id))?.chapters[0]!.scenes[0]!.text).toBe("Testo originale locale.");
     expect(github.calls.every(call => call.method === "GET")).toBe(true);
   });
 
@@ -114,19 +114,19 @@ describe("Recupero narrativo non distruttivo", () => {
     const book = await originalBook();
     const base = structuredClone(book);
     const remote = structuredClone(book);
-    remote.chapters[0].scenes[0].text = "Scena versione remota.";
+    remote.chapters[0]!.scenes[0]!.text = "Scena versione remota.";
     remote.memory.secrets.identita = "Versione remota del segreto.";
     const github = githubSnapshots(base, remote);
     const review = await inspectBookConflict(book.id);
     const scene = review.units.find(x => x.kind === "scene")!;
     const result = await applyBookConflictResolution(review, { [scene.id]: "remote" });
     const merged = await getBook(book.id);
-    expect(merged?.chapters[0].scenes[0].text).toBe("Scena versione remota.");
+    expect(merged?.chapters[0]!.scenes[0]!.text).toBe("Scena versione remota.");
     expect(merged?.memory.secrets.identita).toBe("Il protagonista conosce il segreto");
     expect(merged?.remote?.lastSyncedCommit).toBe(HEAD);
     expect(merged?.remote?.autoSync).toBe(false);
     expect(merged?.status).toBe("paused");
-    expect((await getBook(result.localBackupId))?.chapters[0].scenes[0].text)
+    expect((await getBook(result.localBackupId))?.chapters[0]!.scenes[0]!.text)
       .toBe("Testo originale locale.");
     expect((await getBook(result.remoteBackupId))?.memory.secrets.identita)
       .toBe("Versione remota del segreto.");
