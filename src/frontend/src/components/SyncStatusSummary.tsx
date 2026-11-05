@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, CloudAlert, CloudCheck, CloudUpload } from "lucide-react";
+import { Cloud, CloudAlert, CheckCircle2, CloudUpload } from "lucide-react";
 import type { BookProject, SyncOutboxItem } from "../domain/types";
 import { getOutbox } from "../infrastructure/outbox";
 import { Button } from "./ui/button";
@@ -29,7 +29,7 @@ export function SyncStatusSummary({
     "Checkpoint sincronizzato";
 
   const Icon = queued?.state === "blocked" ? CloudAlert :
-    queued ? CloudUpload : remote?.lastSyncedCommit ? CloudCheck : Cloud;
+    queued ? CloudUpload : remote?.lastSyncedCommit ? CheckCircle2 : Cloud;
 
   return <div className="space-y-3 text-sm" role="status" aria-live="polite">
     <p className="flex items-center gap-2 font-semibold"><Icon size={19} className={queued?.state === "blocked" ? "text-red-500" : "text-emerald-500"}/>{status}</p>
