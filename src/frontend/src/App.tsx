@@ -13,6 +13,7 @@ import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBo
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
 import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
+import { drainGitHubOutbox } from "./application/auto-sync";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
@@ -93,6 +94,21 @@ export default function App() {
     else setActivities([]);
   }, [selectedId, books]);
   useEffect(() => {
+    // Recover the durable outbox on reload, network recovery and while the tab stays open.
+    // Never claim that scheduled browser work runs when the page is closed.
+    const tick = () => { void drainGitHubOutbox().then(refresh).catch(() => undefined); };
+    void tick();
+    const timer = window.setInterval(tick, 15_000);
+    window.addEventListener("online", tick);
+    const onVisibility = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", tick);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refresh]);
+  useEffect(() => {
     const dark = settings.theme === "dark" ||
       settings.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.classList.toggle("dark", dark);
@@ -113,7 +129,8 @@ export default function App() {
   async function execute() {
     if (!current) return;
     setNotice("");
-    void runner.run(current.id, refresh).catch(e => setNotice(e instanceof Error ? e.message : "Errore di esecuzione."));
+    void runner.run(current.id, async () => { await refresh(); void drainGitHubOutbox(); })
+      .catch(e => setNotice(e instanceof Error ? e.message : "Errore di esecuzione."));
   }
   function pause() { runner.stop(); setNotice("Pausa richiesta: arresto della chiamata in corso e salvataggio del checkpoint."); }
   async function sendFeedback() {
@@ -232,7 +249,7 @@ export default function App() {
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">{navigation.find(x => x.id === page)?.label}</h1>
-          <p className="muted text-sm">Progetto local-first · Cloud sync in sviluppo</p>
+          <p className="muted text-sm">Progetto local-first · GitHub autosync opzionale</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="flex size-11 items-center justify-center rounded-lg border border-slate-400 dark:border-slate-700" aria-label="Cambia tema chiaro/scuro"
@@ -328,7 +345,7 @@ export default function App() {
             </div>
           </Section>
           <Section title="Sincronizzazione cloud">
-            <p className="muted flex items-start gap-2 text-sm"><Cloud className="shrink-0" size={18}/> Questa versione salva in IndexedDB e permette la sincronizzazione GitHub manuale dalla sezione Archivio. Google e Microsoft non sono ancora integrati.</p>
+            <p className="muted flex items-start gap-2 text-sm"><Cloud className="shrink-0" size={18}/> Questa versione salva in IndexedDB e permette GitHub autosync opzionale dalla sezione Archivio. Google e Microsoft non sono ancora integrati.</p>
             <p className="muted mt-2 flex items-start gap-2 text-sm"><Github className="shrink-0" size={18}/> Il PAT è usato soltanto nelle chiamate HTTPS verso GitHub, mai nei file del libro.</p>
           </Section>
         </div>
