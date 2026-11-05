@@ -72,6 +72,16 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## DOI bibliografici v0.9.1 — metadati NON costituiscono prove
+
+- `ChapterHistoricalDossier.bibliography` conserva snapshot Crossref selezionati dall'autore: DOI, titolo, autori, anno, editore, venue, tipo, timestamp, URL derivata dal DOI e record attivi. Non memorizzare abstract, testo completo, credenziali o dati non necessari.
+- L'autore inserisce **solo DOI**, da 1 a 5; il browser mostra l'elenco normalizzato e chiede conferma prima di chiamare `https://api.crossref.org/works/<doi>`. Mai estrarre query dal manoscritto o spedire scene/canone/secret a Crossref.
+- `infrastructure/crossref.ts` invia richieste senza cookie, headers sensibili o redirect, con DOI regex, timeout, dimensione massima e richieste seriali. HTTP 404 non prova l'inesistenza della pubblicazione. Guasti e CORS non autorizzano scritture parziali.
+- **INVARIANTE EPISTEMICO:** DOI, titolo, autori e anno di uno studio NON verificano il contenuto. `historical.sourceIds` può citare solo estratti ammessi in `activeHistoricalSources`, mai `crossref:...`. No hallucinated quotes/abstracts. Non trattare un DOI come garanzia di peer review.
+- Soltanto storico e giudice ricevono i metadati, separati dai veri estratti; gli altri undici ruoli non li vedono. Le schede Crossref sono input non attendibile.
+- Nuova bibliografia su capitolo frozen: snapshot synopsis precedente, invalidazione downstream, Web Locks + fencing `updatedAt`, autosync off e outbox delete. Preserve Wikipedia entries e backup ZIP senza distruzioni.
+- Test Vitest network/privacy/canon + Playwright desktop/mobile; consulta ADR 0014, `docs/crossref-bibliography.md`.
+
 ## Dossier storico v0.9.0 — ricerca solo consensuale
 
 - `Chapter.historicalDossier` conserva un elenco di query pubbliche approvate dall'autore, revisioni Wikipedia IT con ID, estratto, URL whitelisted e timestamp. Tutto si salva in IndexedDB, backup e proiezione del libro; non contiene chiavi/PAT.

@@ -31,6 +31,8 @@
 
 **Dossier storico v0.9.0 (PR #24):** per ogni capitolo puoi cercare fino a cinque argomenti storici pubblici previa conferma; l'app consulta Wikipedia italiana senza inviare il romanzo, archivia link e revisioni, verifica gli ID e le citazioni letterali dei rilievi del revisore storico e mostra fonti e motivazioni del direttore. Wikipedia è **terziaria**, non una certificazione storica. Guida `docs/historical-sources.md`, ADR 0013 e issue #23.
 
+**Bibliografia DOI v0.9.1 (PR #25):** ogni capitolo può conservare pubblicazioni identificabili tramite Crossref, ricercate solo dopo conferma dell'autore, con autori, anno, editore e link DOI. I metadati aiutano lo specialista storico a individuare studi da leggere, **ma non sono prove del loro contenuto**: il giudice distingue scheda bibliografica e citazione documentale. Guida `docs/crossref-bibliography.md`, ADR 0014, issue #23.
+
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi

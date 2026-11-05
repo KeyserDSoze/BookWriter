@@ -2,6 +2,21 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.1 — 2026-11-05 (PR #25)
+
+**Bibliografia DOI verificabile per capitolo: metadati Crossref separati dalle prove storiche**
+
+- Nuovo pannello **Bibliografia DOI** per ciascun capitolo nella Dashboard/Redazione: da 1 a 5 DOI immessi dall'autore e consultati solo dopo conferma delle stringhe esatte da inviare a `api.crossref.org`.
+- Adapter browser `GET https://api.crossref.org/works/{doi}`, senza credenziali/cookie/redirect, con filtro DOI rigido, timeout, controllo dei payload, richieste seriali e salvataggio atomico; 404 significa soltanto che il DOI non è censito in Crossref.
+- Dossier bibliografico distinto dagli estratti Wikipedia con titolo, autori, anno di pubblicazione, rivista/collana, editore, tipo dell'opera e URL generata da DOI, timestamp e storico degli snapshot. I metadati **non** comprendono abstract o testo completo né garantiscono l'accuratezza di un'affermazione.
+- La bibliografia viene mostrata solo al revisore `historical` e al direttore editoriale come **pista da consultare**, senza contaminare gli altri 11 agenti o i lettori ciechi.
+- **Divieto di usare metadati come prove:** `HistoricalClaim.sourceIds` continua a richiedere estratti effettivamente acquisiti e citazioni letterali valide. Un DOI Crossref non è accettato come ID di fonte documentale e non può certificare una proposizione.
+- I riferimenti bibliografici sono conservati in IndexedDB e nei backup/snapshot del libro; aggiornare le schede DOI riapre un capitolo congelato, invalida i successivi, ripristina la sinossi precedente e disabilita autosync con Web Locks e controllo `updatedAt`.
+- Copertura test Vitest su DOI non validi, privacy, rete non autorizzata, blocco della serializzazione concorrente, rewind sicuro, separazione dei prompt e contrasto delle false citazioni DOI; test Playwright desktop/mobile sul consenso e sull'intero ciclo storico.
+- ADR 0014, `docs/crossref-bibliography.md`, README, AGENTS, sicurezza e issue #23.
+
+**Limiti:** il DOI non garantisce peer review, testo disponibile, veridicità o affidabilità della pubblicazione; i metadati Crossref non sono una fonte primaria. L'integrazione con archivi istituzionali e fonti primarie effettivamente lette resta una fase successiva.
+
 ## 0.9.0 — 2026-11-05 (PR #24)
 
 **Dossier storico tracciabile per capitolo, ricerca pubblica con consenso e verifica delle citazioni dell'AI**

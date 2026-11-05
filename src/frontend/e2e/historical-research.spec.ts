@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("dossier storico desktop/mobile: consenso e query pubblica, citazione controllata, giudice critico",async({page})=>{
   test.setTimeout(120_000);
   let wikipediaCalls:string[]=[];
+  const crossrefCalls:string[]=[];
   const modelCalls:Array<{system:string;prompt:string}>=[];
   await page.route(/https:\/\/it\.wikipedia\.org\/w\/api\.php\?/,async route=>{
     const url=route.request().url();
@@ -16,6 +17,19 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
         extract:"Il telegrafo elettrico cominciò a diffondersi in Europa nel XIX secolo.",
       }]}}),
     });
+  });
+  await page.route(/https:\/\/api\.crossref\.org\/works\//,async route=>{
+    crossrefCalls.push(route.request().url());
+    await route.fulfill({status:200,headers:{
+      "content-type":"application/json","access-control-allow-origin":"*",
+    },body:JSON.stringify({status:"ok",message:{
+      DOI:"10.1000/xyz123",title:["Storia del telegrafo nell'Europa ottocentesca"],
+      author:[{given:"Anna",family:"Rossi"}],
+      publisher:"Archivio storico",type:"journal-article",
+      "container-title":["Rivista di storia"],
+      issued:{"date-parts":[[2015,6,1]]},
+      abstract:"TESTO NON LEGGERE COME PROVA",
+    }})});
   });
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
     if(route.request().method()==="OPTIONS"){
@@ -118,6 +132,22 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(url.searchParams.get("gsrsearch")).toBe("Telegrafo elettrico nel 1848");
   expect(wikipediaCalls[0]).not.toContain("stanza");
   expect(wikipediaCalls[0]).not.toContain("Mara");
+  await editorial.getByText(/Bibliografia DOI/).click();
+  await editorial.getByRole("textbox",{name:"DOI bibliografici capitolo 1"})
+    .fill("https://doi.org/10.1000/XYZ123");
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("SOLO questi identificativi DOI");
+    expect(dialog.message()).toContain("10.1000/xyz123");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Recupera metadati DOI"}).click();
+  await expect(editorial.getByRole("link",{name:/Storia del telegrafo nell'Europa/}))
+    .toBeVisible({timeout:15000});
+  expect(crossrefCalls).toHaveLength(1);
+  expect(crossrefCalls[0]).toContain("api.crossref.org/works/10.1000/xyz123");
+  expect(crossrefCalls[0]).not.toContain("Mara");
+  expect(crossrefCalls[0]).not.toContain("stanza");
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect(editorial.getByText(/Congelato il/)).toBeVisible({timeout:85_000});
   expect(modelCalls.filter(x=>x.system.includes("revisore letterario INDIPENDENTE"))).toHaveLength(12);
@@ -125,8 +155,12 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   const specialist=modelCalls.find(x=>x.system.includes("Plausibilità e accuratezza storica"));
   expect(specialist?.prompt).toContain("itwiki:42:321");
   expect(specialist?.prompt).toContain("Il telegrafo elettrico");
+  expect(specialist?.prompt).toContain("10.1000/xyz123");
+  expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwiki:42:321"))).toBe(true);
+  expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
+    !x.prompt.includes("10.1000/xyz123"))).toBe(true);
   await editorial.getByText(/Giudizi archiviati \(1\)/).click();
   await editorial.getByText(/Plausibilità e accuratezza storica ·/).click();
   await expect(editorial.getByText(/Citazione originale/)).toBeVisible();
