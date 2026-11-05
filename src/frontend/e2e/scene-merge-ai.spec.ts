@@ -168,9 +168,12 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await nav.getByRole("button", { name: "Archivio", exact: true }).click();
   await page.getByRole("button", { name: "Confronta locale e GitHub" }).click();
   await page.getByText("Scena: Il segreto", { exact: true }).click();
-  // A generated proposal is NOT selected or accepted automatically.
+  // Reopening the review must not auto-accept a persisted AI proposal.
   await expect(page.getByRole("combobox", { name: /Versione da conservare: scene:/ }))
     .toHaveValue("local");
+  const history = page.getByRole("combobox", { name: /Storico bozze:/ });
+  await expect(history.locator("option")).toHaveCount(2);
+  await history.selectOption({ index: 1 });
   await expect(page.getByRole("button", { name: "Usa questa proposta per la scena" })).toBeVisible();
   // The only GitHub writes are to the lease branch; main remains unmodified.
   expect(calls.filter(x => x.method !== "GET").every(x =>
