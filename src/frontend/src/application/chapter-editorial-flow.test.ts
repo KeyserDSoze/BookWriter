@@ -101,6 +101,23 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(tasks.filter(x=>x==="chapterRepair")).toHaveLength(1);
     expect(tasks.filter(x=>x==="consolidate")).toHaveLength(1);
   });
+  it("non applica il report AI se l'autore modifica il libro durante la chiamata",async()=>{
+    const source=book();await saveBook(source,false);
+    modelCall.mockImplementation(async()=>{
+      const changed=await getBook(source.id);
+      if (!changed) throw new Error("Fixture mancante");
+      changed.authorConstraints.push("Non svelare il segreto aggiunto dall'autore durante la review.");
+      await saveBook(changed,false);
+      return {text:report(false),endpointId:"test",modelId:"Reviewer"};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const updated=await getBook(source.id);
+    expect(updated?.authorConstraints).toContain(
+      "Non svelare il segreto aggiunto dall'autore durante la review.");
+    expect(updated?.editorialCycle?.reports).toHaveLength(0);
+    expect(updated?.chapters[0]?.frozenAt).toBeUndefined();
+    expect(updated?.status).toBe("paused");
+  });
   it("ferma l'autopilot dopo tre tornate senza consensus e NON congela il capitolo",async()=>{
     const source=book();await saveBook(source,false);
     let round=1;
