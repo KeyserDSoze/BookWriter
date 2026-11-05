@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import { callModel } from "../infrastructure/ai";
-import { getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
+import { getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
 import { acceptedRepairs, adjudicationPrompt, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
+import { routeFor } from "../domain/types";
+import { AiBudgetStop, preflightBookAiBudget } from "../domain/ai-budget";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -478,17 +480,31 @@ export class AutopilotRunner {
           await saveBook(book); await onUpdate(); break;
         }
         const settings = await loadSettings();
+        const assignment = routeFor(work.kind, settings, book);
         const started: Activity = {
           id: crypto.randomUUID(), bookId, runId,
           phase: work.phase, title: work.title, reason: work.reason,
           nextStep: work.nextStep, status: "running",
           createdAt: new Date().toISOString(),
+          endpointId: assignment.endpointId, modelId: assignment.modelId,
+          aiRequested: false,
         };
         await saveActivity(started);
         await onUpdate();
         try {
           await guard.assertActive(); // Do not charge credits without verified ownership.
-          const result = await callModel(work.kind, work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.", work.prompt, settings, book, signal);
+          const systemPrompt = work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.";
+          const preflight = preflightBookAiBudget(
+            book, settings, await listActivities(bookId), work.kind, systemPrompt, work.prompt,
+          );
+          await guard.assertActive();
+          if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");
+          // Persist the request attempt BEFORE network fetch: an interrupted browser
+          // must not misrepresent a possibly billed call as a free operation.
+          started.aiRequested = true;
+          await saveActivity(started);
+          const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,
+            preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : undefined);
           await guard.assertActive(); // Discard result if the lease was lost during the AI call.
           const latest = await getBook(bookId);
           if (!latest || latest.status !== "running" || latest.phase !== work.phase ||
@@ -505,6 +521,7 @@ export class AutopilotRunner {
           await onUpdate();
         } catch (error) {
           const leaseFailure = guard.failure();
+          const budgetStop = error instanceof AiBudgetStop;
           const aborted = !leaseFailure && (signal.aborted || error instanceof DOMException && error.name === "AbortError");
           started.status = aborted ? "cancelled" : "failed";
           started.error = leaseFailure?.message ?? (aborted
@@ -513,7 +530,7 @@ export class AutopilotRunner {
           started.endedAt = new Date().toISOString();
           const latest = await getBook(bookId);
           if (latest) {
-            latest.status = aborted ? "paused" : "error";
+            latest.status = aborted || budgetStop ? "paused" : "error";
             latest.previousError = started.error;
             await saveBookAndActivity(latest, started);
           } else await saveActivity(started);
