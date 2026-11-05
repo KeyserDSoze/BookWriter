@@ -11,7 +11,8 @@ Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoin
 3. Apri `https://ghostwriting.ws`, vai in **Archivio → GitHub — sincronizzazione del libro**, incolla il PAT e salvalo. È cifrato nel browser via Web Crypto e non incluso nella repository.
 4. Seleziona un libro locale, specifica owner, repository e branch; premi **Verifica repository** e **Collega questo libro**.
 5. Metti l'autopilot in pausa. Premi **Sincronizza su GitHub**. Vedrai il commit SHA e lo stato; il salvataggio contiene la prosa, la memoria narrativa e lo storico attività, ma nessuna API key o PAT.
-6. Dopo la prima sincronizzazione riuscita puoi selezionare **Sincronizzazione automatica ai checkpoint**: ogni outline, scena con review, consolidamento o revisione genera una richiesta in IndexedDB, inviata a GitHub mentre la pagina resta aperta. Se una repository è pubblica serve consenso esplicito aggiuntivo.\n7. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner.
+6. Dopo la prima sincronizzazione riuscita puoi selezionare **Sincronizzazione automatica ai checkpoint**: ogni outline, scena con review, consolidamento o revisione genera una richiesta in IndexedDB, inviata a GitHub mentre la pagina resta aperta. Se una repository è pubblica serve consenso esplicito aggiuntivo.
+7. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner.
 
 ## Autosync e monitoraggio
 
@@ -46,6 +47,7 @@ evaluations/total.md
 .bookwriter/project.json
 .bookwriter/activities.json
 .bookwriter/manifest.json
+.bookwriter/sync.json
 ```
 
 Il JSON è necessario per recuperare senza perdita tutte le strutture del workspace, il progresso dell'autopilot, le idee e le operazioni. Il Markdown/frontmatter serve agli editor e reader Narrarium. Il file `manifest.json` identifica i path gestiti da BookWriter; nessun file esterno a quel manifest viene eliminato o modificato dal sincronizzatore.
