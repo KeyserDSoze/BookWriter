@@ -90,7 +90,11 @@ export function HistoricalResearchPanel({
             {source.title} <ExternalLink size={13} className="shrink-0"/>
           </a>
           <p className="muted">Wikipedia italiana · revisione {source.revisionId ?? "non dichiarata"} · ricerca «{source.query}»</p>
+          {source.revisionId && <a className="inline-block text-blue-700 underline dark:text-blue-300"
+            href={"https://it.wikipedia.org/w/index.php?oldid=" + source.revisionId}
+            target="_blank" rel="noopener noreferrer">Apri la revisione citata</a>}
           <p className="mt-2 whitespace-pre-wrap">{source.excerpt}</p>
+          <p className="muted mt-1">Testo Wikipedia · attribuzione all'articolo e ai suoi autori (CC BY-SA).</p>
         </div>) : <p className="muted">La ricerca non ha trovato estratti utilizzabili. Non è stata verificata alcuna affermazione.</p>}
       </div>}
       <p className="muted text-xs">
