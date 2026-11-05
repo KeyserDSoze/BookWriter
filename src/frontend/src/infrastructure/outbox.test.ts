@@ -28,14 +28,19 @@ describe("Outbox IndexedDB atomica", () => {
     await saveBook(b, false);
     await saveBookAndActivity(b, activity(b.id, "brainstorm", "succeeded"));
     expect(await getOutbox(b.id)).toBeUndefined();
+    // Old scene-level reviews are no longer valid remote checkpoints.
     await saveBookAndActivity(b, activity(b.id, "review", "succeeded"));
+    expect(await getOutbox(b.id)).toBeUndefined();
+    await saveBookAndActivity(b, activity(b.id, "chapterReview", "succeeded"));
     const queued = await getOutbox(b.id);
     expect(queued?.state).toBe("pending");
     expect(queued?.revision).toBe(1);
     await saveBookAndActivity(b, activity(b.id, "consolidate", "succeeded"));
     expect((await getOutbox(b.id))?.operationId).toBe(queued?.operationId);
+    expect((await getOutbox(b.id))?.revision).toBe(1);
+    await saveBookAndActivity(b, activity(b.id, "chapterReview", "succeeded"));
     expect((await getOutbox(b.id))?.revision).toBe(2);
-    await saveBookAndActivity(b, activity(b.id, "review", "failed"));
+    await saveBookAndActivity(b, activity(b.id, "chapterReview", "failed"));
     expect((await getOutbox(b.id))?.revision).toBe(2);
   });
 
