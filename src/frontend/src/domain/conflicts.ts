@@ -111,7 +111,7 @@ export function compareBookVersions(
       const ls = localScenes.get(sceneId);
       const rs = remoteScenes.get(sceneId);
       pushUnit(output, {
-        id: "scene:" + chapterId + ":" + sceneId,
+        id: "scene:" + JSON.stringify([chapterId, sceneId]),
         kind: "scene", chapterId, sceneId,
         group: "Capitoli e scene",
         label: "Scena: " + (ls?.title ?? rs?.title ?? sceneId),
