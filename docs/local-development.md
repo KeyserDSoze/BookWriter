@@ -31,7 +31,7 @@ Aprire l'indirizzo Vite locale. Non serve un server applicativo. Per GitHub Page
 - GitHub PAT, sincronizzazione Markdown, lease tra dispositivi e snapshot ZIP.
 - ZIP import/export con password e output EPUB, PDF, DOCX.
 - Recupero granulare da tutte le condizioni di crash, generazione summaries via modello economico dedicato, budget guard, ricerca fattuale con fonti, diff/rollback visuale.
-- Conversione completa delle entità/memory nel formato Markdown Narrarium; attualmente vivono nel modello IDB.
+- Conversione completa delle entità/memory nel formato Markdown Narrarium; attualmente vivono nel modello IDB.\n- Enforcement rigoroso delle soglie di segreto, valutazioni factual con ricerche esterne e ricostruzione totale del canon dopo riscritture profonde.
 - Copertura test end-to-end e certificazione dei flussi con provider reali.
 
 Non usare questa versione per contenuti di valore senza esportazione manuale o backup dei dati del browser: IndexedDB può essere cancellato.
