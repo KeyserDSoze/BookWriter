@@ -21,6 +21,14 @@ Prima metti in **pausa** l'autopilot. Il libro deve essere collegato alla reposi
 7. Il salvataggio crea in **una transazione** due copie autonome, una locale e una GitHub, e applica le scelte al libro principale. Le copie avranno ID diversi e nessuna repository collegata, così non rischiano di fare un push sulla repository del romanzo originale.
 8. Il libro principale passa allo stato **pausato** e l'autosync viene **disattivato**. Rileggi scene, cronologia, segreti e vincoli; se il risultato va bene, esegui un **push manuale** in Archivio e solo dopo riattiva l'autosync.
 
+## Fusioni di due scene (v0.7.0)
+
+Aprendo una differenza di scena con entrambe le versioni disponibili, il **Laboratorio di fusione** mostra un diff parola per parola e un editor testuale. Puoi preparare gratuitamente una bozza manuale oppure chiedere una proposta al modello assegnato alla nuova attività **merge** (configurabile globalmente e per libro).
+
+La chiamata AI richiede consenso esplicito all'invio delle due versioni e dei segreti del canone all'endpoint e può consumare crediti. La proposta rimane un draft in IndexedDB e non viene applicata automaticamente. Dopo aver scelto **Usa questa proposta per la scena**, devi comunque confermare **Applica scelte con doppio backup**; il testo approvato rimane `draft`, non `canon`. Le bozze vengono incluse nello ZIP di soli contenuti.
+
+Istruzioni complete: `docs/scene-merge.md`; decisioni tecniche: `ADR/0009-scene-diff-assisted-merge.md`.
+
 ## Come funziona il confronto
 
 | Origine | Significato |
@@ -30,7 +38,7 @@ Prima metti in **pausa** l'autopilot. Il libro deve essere collegato alla reposi
 | Entrambe modificate | Sia browser sia GitHub sono differenti dalla baseline |
 | Diverse — baseline non disponibile | Due versioni differenti senza antenato verificabile |
 
-Non viene fatta una fusione automatica di due testi all'interno della stessa scena. Quando entrambe le versioni contengono passaggi utili, puoi leggerle interamente e usare il normale intervento sull'autopilot per chiedere una riscrittura ragionata dopo aver creato le copie di sicurezza.
+La v0.7.0 offre una **proposta AI opzionale** per fondere i due testi della scena, ma mai una fusione automatica o una canonizzazione non approvata. Quando entrambe le versioni contengono passaggi utili, puoi leggerle interamente e usare il normale intervento sull'autopilot per chiedere una riscrittura ragionata dopo aver creato le copie di sicurezza.
 
 La selezione di una versione **assente** può eliminare una scena o una voce del canone dal libro principale. Il contenuto precedente resta recuperabile nelle copie di sicurezza.
 
