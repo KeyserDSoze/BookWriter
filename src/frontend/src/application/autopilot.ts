@@ -259,6 +259,8 @@ export class AutopilotRunner {
       await withWriterGuard(bookId, runId, controller, async guard => {
       const initial = await getBook(bookId);
       if (!initial) throw new Error("Libro non trovato.");
+      if (initial.editorialReviewSceneIds?.length)
+        throw new Error("Rileggi e conferma le scene fuse nel Lettore prima di avviare l'autopilot.");
       initial.status = "running"; initial.previousError = undefined;
       await guard.assertActive();
       await saveBook(initial, false); // A run start is not a narrative checkpoint.
@@ -269,6 +271,13 @@ export class AutopilotRunner {
         await guard.assertActive();
         const book = await getBook(bookId);
         if (!book || book.status !== "running") break;
+        if (book.editorialReviewSceneIds?.length) {
+          book.status = "paused";
+          book.previousError = "Alcune scene fuse attendono conferma editoriale nel Lettore.";
+          await saveBook(book, false);
+          await onUpdate();
+          break;
+        }
         const work = nextWork(book);
         if (!work) {
           if (book.phase === "audience" && book.audienceReviews.length >= 5) {
@@ -358,6 +367,8 @@ export async function requestRevision(bookId: string, instruction: string): Prom
   if (!book) throw new Error("Libro non trovato.");
   if (!instruction.trim()) throw new Error("Scrivi la modifica che desideri.");
   if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
+  if (book.editorialReviewSceneIds?.length)
+    throw new Error("Conferma le scene fuse nel Lettore prima di richiedere altre revisioni AI.");
   book.authorConstraints = [...(book.authorConstraints ?? []), instruction.trim()];
   const rev: RevisionRequest = {
     id: crypto.randomUUID(), instruction: instruction.trim(), beforePhase: book.phase,
