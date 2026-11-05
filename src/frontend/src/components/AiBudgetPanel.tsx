@@ -28,7 +28,11 @@ export function AiBudgetPanel({
   const [selected, setSelected] = useState(JSON.stringify([
     routes[0]?.endpointId ?? "", routes[0]?.modelId ?? "",
   ]));
-  const selectedRoute = routes.find(x => JSON.stringify([x.endpointId, x.modelId]) === selected);
+  // Settings load after books on startup; use the first actual route until
+  // the author makes a selection, instead of retaining an empty initial key.
+  const selectedRoute = routes.find(x => JSON.stringify([x.endpointId, x.modelId]) === selected)
+    ?? routes[0];
+  const selectedValue = selectedRoute ? JSON.stringify([selectedRoute.endpointId, selectedRoute.modelId]) : "";
   const savedRate = (settings.aiPriceRates ?? []).find(x =>
     x.endpointId === selectedRoute?.endpointId && x.modelId === selectedRoute?.modelId);
   const [draftInput, setDraftInput] = useState("");
@@ -130,7 +134,7 @@ export function AiBudgetPanel({
       {routes.length ? <>
         <label className="block text-sm">Modello / endpoint
           <select className="field mt-1" aria-label="Modello per tariffa"
-            value={selected} onChange={e => { setSelected(e.target.value); setEditingPrice(false); }}>
+            value={selectedValue} onChange={e => { setSelected(e.target.value); setEditingPrice(false); }}>
             {routes.map(r => <option key={JSON.stringify([r.endpointId,r.modelId])}
               value={JSON.stringify([r.endpointId,r.modelId])}>{r.modelId} · {r.endpointId}</option>)}
           </select>
