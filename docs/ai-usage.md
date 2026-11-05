@@ -34,6 +34,10 @@ Il pannello calcola i dati dalle attività già salvate nel browser, senza invia
 
 La lettura dei consumi non fa partire né riprendere l'autopilot. I dati dei report si aggiornano dopo i checkpoint del browser e al cambio di libro.
 
+## Budget preventivo v0.8.1
+
+Puoi attivare dalla stessa Dashboard **Budget AI del libro** e configurare tariffe manuali per endpoint/modello. Il programma stima il costo delle richieste future e le blocca prima del provider se la riserva supera la soglia. Se una risposta non comunica usage, ulteriori chiamate vengono sospese invece di fingere costo zero. È una protezione stimata e non un hard cap della fattura. Guida `docs/ai-budget.md`, ADR 0012.
+
 ## Prossime funzioni
 
 L'[issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17) prevede un **ledger economico** con tariffe configurabili per endpoint/modello, valuta e data, seguito da limiti e avvisi di budget per libro e per sessione.
