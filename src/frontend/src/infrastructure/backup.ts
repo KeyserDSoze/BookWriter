@@ -74,7 +74,19 @@ const backupSchema = z.object({
   }).optional(),
 }).refine(x => (x.kind === "full") === !!x.settings, "Contenuto e credenziali incoerenti.");
 
-type BackupData = z.infer<typeof backupSchema>;
+type BackupData = {
+  version: 1;
+  kind: "content" | "full";
+  createdAt: string;
+  books: BookProject[];
+  activities: Activity[];
+  settings?: {
+    theme: AppSettings["theme"];
+    endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null }>;
+    defaultRoute: AppSettings["defaultRoute"];
+    taskRoutes: AppSettings["taskRoutes"];
+  };
+};
 export type BackupMode = "content" | "full";
 
 function toBase64(bytes: Uint8Array): string {
@@ -115,7 +127,7 @@ async function unprotect(encrypted: Uint8Array, passphrase: string): Promise<Uin
       throw new Error("Metodo di cifratura non supportato.");
     const key = await passphraseKey(passphrase, fromBase64(obj.salt));
     return new Uint8Array(await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: fromBase64(obj.iv) }, key, fromBase64(obj.data),
+      { name: "AES-GCM", iv: new Uint8Array(fromBase64(obj.iv)) }, key, new Uint8Array(fromBase64(obj.data)),
     ));
   } catch {
     throw new Error("Password errata o archivio cifrato danneggiato.");
@@ -237,7 +249,7 @@ export async function readBackup(file: File, passphrase?: string): Promise<Backu
   const result = backupSchema.safeParse(value);
   if (!result.success) throw new Error("Schema backup non valido o incompatibile.");
   if (result.data.kind !== manifest.mode) throw new Error("Tipo di backup incoerente.");
-  return result.data;
+  return result.data as unknown as BackupData;
 }
 
 /** Importa come copie distinte: non sovrascrive nessun libro locale. */
