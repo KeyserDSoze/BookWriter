@@ -54,10 +54,17 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Testare sempre import/export, rollback, interruzioni di rete, riprese e conflitti.
 - GitHub repository **privata** raccomandata per libri inediti; mostrare avviso se pubblica.
 
+## Dominio e deploy
+
+- Il dominio pubblico canonico di Pages è `https://ghostwriting.ws`; per questa installazione Vite deve usare `base: "/"`, non `/BookWriter/`.
+- La sorgente GitHub Pages è GitHub Actions. Il CNAME è informativo nel build Actions; la mappatura reale è nelle impostazioni della repository.
+- Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
+- Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
+
 ## Qualità
 
 - TypeScript strict, schemi runtime per JSON da AI/API/import, moduli piccoli, funzioni pure testabili.
-- Su ogni modifica eseguire `npm ci`, `npm run typecheck`, `npm run test`, `npm run build` e test browser dove disponibili; non dichiarare test riusciti se non eseguiti.
+- Su ogni modifica eseguire `npm ci`, `npm run typecheck`, `npm run test`, `npm run build` e `npm run test:e2e` con Playwright desktop/mobile dove disponibili; non dichiarare test riusciti se non eseguiti.
 - Aggiornare ADR, `docs/`, `features/` e README quando cambiano comportamento o sicurezza.
 - UI mobile-first: breakpoint reali, sidebar a sheet, controlli touch di almeno 44 px, focus visibile, aria live sugli stati, accessibilità WCAG, riduzione movimento, tema chiaro/scuro.
 - Scrivere messaggi di audit utili al lettore: "cosa ho fatto", "cosa farò", "cosa è cambiato", "come intervenire".
