@@ -21,7 +21,7 @@
 
 **Confronto e recupero v0.6.0:** la PR #14 introduce differenze visuali locale/GitHub per capitoli, scene, personaggi e segreti, selezione esplicita per elemento e doppio backup atomico prima di applicare. Nessun force push; autosync disattivato dopo il recupero. Vedi ADR 0008 e `docs/conflict-recovery.md`.
 
-**Fusione di scene v0.7.0:** la PR #16 aggiunge diff parole/paragrafi con fallback mobile, proposte AI facoltative, editor manuale, storico bozze in IndexedDB e ZIP, e approvazione esplicita a doppio backup. Le proposte accettate restano draft, mai canoniche automaticamente. Guida: `docs/scene-merge.md`, ADR 0009.
+**Fusione di scene v0.7.0:** la PR #16 aggiunge diff parole/paragrafi con fallback mobile, proposte AI facoltative, editor manuale, storico bozze in IndexedDB e ZIP, e approvazione esplicita a doppio backup. Le proposte accettate restano draft, mai canoniche automaticamente: il Lettore richiede una successiva conferma umana e, fino a quel momento, blocca autopilot e push GitHub. Guida: `docs/scene-merge.md`, ADR 0009.
 
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, diff parola per parola e merge semantico assistito, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e budget tracking. Non affidare documenti importanti solo al browser senza backup.
 
