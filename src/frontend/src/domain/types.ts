@@ -85,6 +85,7 @@ export interface BookProject {
   status: RunStatus;
   phase: Phase;
   previousError?: string;
+  editorialReviewSceneIds?: string[]; // Explicit canon confirmation before autopilot can resume.
   ideas?: string;
   validation?: string;
   audienceReviews: string[];
