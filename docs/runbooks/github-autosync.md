@@ -10,6 +10,16 @@
 4. Dopo un outline, una review di scena, un consolidamento o una revisione il sistema scrive in IndexedDB e inserisce un'operazione nella coda `outbox`. Il browser prova a inviarla mentre la pagina è aperta.
 5. Controlla lo stato in Dashboard o Archivio: **in coda**, **invio in corso**, **sincronizzato**, **bloccato**.
 
+## Scrittura simultanea e recupero lease
+
+- Una sessione AI collegata a GitHub acquisisce prima un lease sul ramo separato `bookwriter-lock/<bookId>`. In Archivio sono visibili lo stato, la sessione e la scadenza.
+- **Libro già in scrittura:** non forzare il lock. Apri l'altro dispositivo e interrompi correttamente l'autopilot, quindi riprova.
+- **Browser chiuso o interrotto:** attendi la scadenza (120 secondi dall'ultimo rinnovo) e altri 60 secondi di margine. Solo allora si attiva **Recupera lease scaduto**; verifica prima che l'altra scheda non stia ancora scrivendo.
+- **GitHub offline:** non avviare il runner. Il salvataggio locale resta disponibile e puoi esportare un backup ZIP; le nuove chiamate AI sul libro collegato rimangono bloccate.
+- **Lock perso durante la chiamata AI:** l'autopilot si ferma, l'eventuale risposta viene scartata e il risultato non viene canonizzato.
+- **Nessun PAT sul nuovo dispositivo:** salva nuovamente il PAT nel vault locale prima di avviare il libro.
+- Il lease protegge le **sessioni AI**. Edizioni manuali e canon remoto continuano ad avere il blocco per commit SHA; in caso di conflitto conservare entrambe le copie e non eseguire `force push`.
+
 ## Errori e azioni
 
 | Stato / errore | Significato | Azione |
