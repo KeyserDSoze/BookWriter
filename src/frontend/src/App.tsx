@@ -17,6 +17,7 @@ import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
 import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
+import { AiBudgetPanel } from "./components/AiBudgetPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 
@@ -352,6 +353,8 @@ export default function App() {
           </Section>
           {current && <EditorialBoardPanel book={current} onRefresh={refresh}/>}
           {current && <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>}
+          {current && <AiBudgetPanel key={current.id} book={current} settings={settings}
+            activities={activities} onSaveSettings={persistSettings} onRefresh={refresh}/>}
           <Section title="Memoria narrativa">
             <div className="grid grid-cols-2 gap-2 text-sm">
               {[
