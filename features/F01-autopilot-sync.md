@@ -6,7 +6,7 @@
 - [x] PR #1: esportazioni ZIP e EPUB/PDF/DOCX, test iniziali.
 - [x] PR #7: test Playwright mobile/desktop e navigazione mobile corretta.
 - [x] PR #8: PAT GitHub locale, canon Markdown, commit manuale e import conservativo.
-- [ ] PR #9: autosync opt-in con outbox IndexedDB atomica, retry, Web Locks tra tab, recupero dei commit ambigui; in verifica CI.
+- [x] PR #9: autosync opt-in con outbox IndexedDB atomica, retry, Web Locks tra tab, recupero dei commit ambigui; CI e Playwright desktop/mobile superati.
 - [ ] OAuth Google/Microsoft, lease distribuito e merge conflitti (#2, #3).
 - [ ] Completezza canon Narrarium e controlli rigorosi sui segreti (#5).
 - [ ] Budget, modelli per riassunti dedicati e test con provider reali (#6).
