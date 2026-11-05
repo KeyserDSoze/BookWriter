@@ -1,6 +1,6 @@
 # Contratto di sincronizzazione local-first
 
-> **Implementazione:** la fase 1 **manuale** è in PR #8, l'autosync **opt-in** con outbox in PR #9 e il lease per l'autopilot AI in PR #12. Le decisioni sono documentate in `docs/github-sync.md`, `ADR/0005-github-manual-sync.md` e `ADR/0006-indexeddb-autosync-outbox.md`. Le sezioni “Discovery su un browser nuovo”, “Write path” e “Lease multi-device” seguenti descrivono in parte il **target architetturale**: outbox e autosync funzionano, ed esiste un lease GitHub best effort per il runner AI; mancano fencing transazionale forte, merge dei conflitti e credenziali cloud. La fase corrente importa da GitHub con PAT impostato localmente, richiede un primo commit manuale e consente autosync successivo; rifiuta i branch avanzati da altri dispositivi.
+> **Implementazione:** la fase 1 **manuale** è in PR #8, l'autosync **opt-in** con outbox in PR #9 e il lease per l'autopilot AI in PR #12. La PR #14 introduce il confronto visuale e il recupero delle differenze con doppio backup locale (ADR 0008). Le decisioni sono documentate in `docs/github-sync.md`, `ADR/0005-github-manual-sync.md` e `ADR/0006-indexeddb-autosync-outbox.md`. Le sezioni “Discovery su un browser nuovo”, “Write path” e “Lease multi-device” seguenti descrivono in parte il **target architetturale**: outbox e autosync funzionano, ed esiste un lease GitHub best effort per il runner AI; mancano fencing transazionale forte, merge semantico automatico dei testi e credenziali cloud. La fase corrente importa da GitHub con PAT impostato localmente, richiede un primo commit manuale e consente autosync successivo; rifiuta i branch avanzati da altri dispositivi.
 
 ## Fonti e ruoli
 
@@ -31,6 +31,8 @@
 Per ogni libro una sola sessione autopilot remota alla volta. `.bookwriter/lease.json` contiene `holderId`, `runId`, `expiresAt`, `baseSha`. Acquisizione/rinnovo in GitHub con optimistic concurrency su SHA e heartbeat ragionevole; controllo lease **prima di ogni write remoto e generazione costosa**. Nessun lavoro remoto quando offline o lease incerto. Un lease scaduto può essere riassegnato con rilettura e conferma all'utente; nessun last-write-wins.
 
 ## Gestione conflitti
+
+**Implementazione v0.6.0:** l'autore può confrontare scene, sezioni del progetto ed entità canoniche rispetto alla baseline GitHub; per ogni differenza seleziona locale o remoto. Una transazione conserva copie complete di entrambe le versioni, aggiorna il libro locale, azzera l'outbox obsoleta e disattiva autosync. Il commit GitHub non viene modificato fino a un push manuale successivo. Guida `docs/conflict-recovery.md` e ADR 0008. Le regole seguenti includono anche target futuri:
 
 - Entità diverse: merge per file con ID stabili e revalidate.
 - Stesso file modificato da due dispositivi: non auto-merge prosa. Presentare `base / locale / remoto`, scelta o merge dell'autore; preservare entrambe le versioni.
