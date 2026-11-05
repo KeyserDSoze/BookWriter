@@ -74,8 +74,8 @@ test("mobile/desktop: confronto GitHub, selezione consapevole e doppio backup lo
   await expect(page.getByText(/Confronto pronto: 1 differenze/)).toBeVisible();
   await expect(page.getByText(/Baseline:/)).toBeVisible();
   await page.getByText("Brief e premessa", { exact: true }).click();
-  await expect(page.getByText(/Il protagonista parte verso il mare/)).toBeVisible();
-  await expect(page.getByText(/città nascosta/)).toBeVisible();
+  await expect(page.getByText(/Il protagonista parte verso il mare/).first()).toBeVisible();
+  await expect(page.getByText(/città nascosta/).first()).toBeVisible();
   await page.getByRole("combobox", { name: "Versione da conservare: field:brief" })
     .selectOption("remote");
   page.once("dialog", dialog => dialog.accept());
