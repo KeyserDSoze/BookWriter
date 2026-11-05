@@ -42,13 +42,21 @@ function RoundDetails({ round, reports, judgment, sources = [] }: {
                       ? "Potenziale contraddizione con l'estratto" :
                         "Non verificato con documenti"}</p>
                   <p><b>Affermazione:</b> {f.historical.claim}</p>
-                  {f.historical.sourceQuote && <p><b>Citazione originale:</b> “{f.historical.sourceQuote}”</p>}
+                  {f.historical.sourceQuote && <p><b>Citazione legacy (singola fonte):</b> “{f.historical.sourceQuote}”</p>}
                   {f.historical.sourceIds.map(id => {
                     const source = sources.find(s => s.id === id);
-                    return source ? <p key={id}><b>Fonte terziaria:</b>{" "}
-                      <a className="text-blue-700 underline dark:text-blue-300" href={source.revisionId ? "https://it.wikipedia.org/w/index.php?oldid=" + source.revisionId : source.url}
-                        rel="noopener noreferrer" target="_blank">{source.title}</a>
-                      {" "}(revisione {source.revisionId ?? "non nota"})</p>
+                    const evidence = f.historical?.sourceEvidence?.find(entry => entry.sourceId === id);
+                    return source ? <div key={id} className="mt-1 border-t border-slate-200 pt-1 dark:border-slate-700">
+                      <p><b>Fonte terziaria:</b>{" "}
+                        <a className="text-blue-700 underline dark:text-blue-300" href={source.revisionId ? "https://it.wikipedia.org/w/index.php?oldid=" + source.revisionId : source.url}
+                          rel="noopener noreferrer" target="_blank">{source.title}</a>
+                        {" "}(revisione {source.revisionId ?? "non nota"})</p>
+                      {evidence && <p className="mt-1 whitespace-pre-wrap"><b>Citazione associata:</b> “{evidence.quote}”</p>}
+                      {!evidence && f.historical?.sourceIds.length > 1 &&
+                        <p className="text-amber-700 dark:text-amber-300">
+                          Report precedente privo di citazione individuale: non considerare questa fonte corroborante.
+                        </p>}
+                    </div>
                       : <p key={id} className="text-amber-700 dark:text-amber-300">
                           Fonte citata non più reperibile nel dossier: {id}
                         </p>;
