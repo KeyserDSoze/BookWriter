@@ -15,6 +15,7 @@
 - [x] PR #21 (v0.8.1): tariffe manuali EUR/milione per endpoint/modello, budget stimato per libro, stop prima di chiamate dei 12 agenti e della fusione AI, activity attempted e ZIP full; CI verde e merge su main.
 - [ ] PR #25 (v0.9.1): bibliografia Crossref DOI per capitolo, query esclusivamente autorizzate, metadati distinti da prove, revisore e giudice informati, privacy e rewind di capitoli congelati; CI in verifica, ADR 0014.
 - [x] PR #24 (v0.9.0): dossier storico per capitolo con query pubbliche approvate, link Wikipedia/revisioni, riferimenti validati nel revisore e nel giudice, invalidazione freeze retroattiva; in verifica CI (ADR 0013, issue #23).
+- [ ] PR #27 (v0.9.2, in verifica): citazioni storiche per singola fonte, controlli anti-falsa corroborazione e giudice critico, con regressioni Vitest; ADR 0015.
 - [ ] Issue #23: fonti primarie e archivi istituzionali, bibliografia controllata, confronti fra fonti, e query estratte dai capitoli solo dopo conferma autore.
 - [ ] Issue #17: ledger storico per cached tokens e tariffe versionate, integrazioni provider-native opzionali e budget distribuito tra dispositivi.
 - [ ] Hardening del lease e revisione automatica del canon delle proposte (#10), OAuth Google/Microsoft (#2).
