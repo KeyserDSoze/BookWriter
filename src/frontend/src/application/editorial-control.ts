@@ -1,5 +1,6 @@
 import type { Activity, BookProject } from "../domain/types";
 import { createEditorialCycle } from "../domain/editorial-board";
+import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { getBook, getDb } from "../infrastructure/db";
 
 /** Explicit author action. It can reopen a frozen chapter or rescue a blocked review.
@@ -47,9 +48,9 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
       for (const ch of book.chapters) if (ch.number >= target.number) {
         ch.frozenAt = undefined;
         ch.summary = undefined;
+        ch.bookSummaryAtFreeze = undefined;
       }
-      book.bookSummary = book.chapters.filter(ch => ch.frozenAt)
-        .map(ch => ch.summary ?? "").join("\n").slice(-8000);
+      book.bookSummary = synopsisBeforeChapter(book.chapters, target.number);
       book.editorialCycle = createEditorialCycle(chapterId);
       book.status = "paused";
       book.phase = "chapterReview";
