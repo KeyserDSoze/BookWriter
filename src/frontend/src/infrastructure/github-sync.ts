@@ -233,13 +233,48 @@ export async function importGitHubBook(remote: GitHubRemote): Promise<BookProjec
   return source.book;
 }
 
+export interface PushOptions {
+  /** Enabled only by the autosync coordinator, never by an untrusted remote payload. */
+  automatic?: boolean;
+  operationId?: string;
+}
+export interface PushResult {
+  commit: string;
+  paths: number;
+  repository: string;
+  sourceRevision: string;
+  operationId: string;
+  recovered?: boolean;
+}
+
+async function persistRemoteAcknowledgment(
+  bookId: string, remote: GitHubRemote, sha: string, sourceRevision: string,
+): Promise<void> {
+  const db = await getDb();
+  const latest = await db.get("books", bookId) as BookProject | undefined;
+  if (latest?.remote && latest.remote.owner === remote.owner &&
+      latest.remote.repository === remote.repository && latest.remote.branch === remote.branch) {
+    latest.remote = {
+      ...latest.remote, lastSyncedCommit: sha,
+      lastSyncAt: new Date().toISOString(),
+      lastSyncedLocalUpdatedAt: sourceRevision,
+    };
+    await db.put("books", latest, bookId);
+  }
+}
+
 export async function pushGitHubBook(
-  bookId: string, consentPublic = false,
-): Promise<{ commit: string; paths: number; repository: string }> {
+  bookId: string, consentPublic = false, options: PushOptions = {},
+): Promise<PushResult> {
   const token = await tokenFromVault();
   const current = await getBook(bookId);
   if (!current?.remote) throw new Error("Collega prima una repository a questo libro.");
-  if (current.status === "running") throw new Error("Metti in pausa l'autopilot prima della sincronizzazione GitHub.");
+  if (current.status === "running" && !options.automatic)
+    throw new Error("Metti in pausa l'autopilot prima della sincronizzazione GitHub.");
+  if (options.automatic && !current.remote.autoSync)
+    throw new Error("La sincronizzazione automatica non è abilitata su questo libro.");
+  const operationId = options.operationId ?? crypto.randomUUID();
+  if (!/^[0-9a-f-]{36}$/i.test(operationId)) throw new Error("Identificatore di sincronizzazione non valido.");
   const remote = validateRemote(current.remote);
   const repo = await request<{
     private: boolean;
@@ -247,13 +282,36 @@ export async function pushGitHubBook(
     default_branch: string;
   }>(token, apiPath(remote, ""));
   if (!repo) throw new Error("Repository GitHub non accessibile.");
-  if (!repo.private && !consentPublic)
+  if (!repo.private && !(consentPublic || options.automatic && current.remote.allowPublicSync))
     throw new Error("Repository PUBBLICA: devi autorizzare esplicitamente la pubblicazione del libro e dei segreti narrativi.");
   if (!repo.permissions?.push) throw new Error("Il PAT non ha permessi di scrittura su questa repository.");
 
   const head = await headSha(token, remote);
-  if (current.remote.lastSyncedCommit && current.remote.lastSyncedCommit !== head)
-    throw new RemoteConflict("Il branch remoto è cambiato dall'ultima sincronizzazione. Importa/controlla le modifiche prima di scrivere.");
+  if (!current.remote.lastSyncedCommit || current.remote.lastSyncedCommit !== head) {
+    // An interrupted PATCH may have succeeded remotely but failed before its local ACK.
+    // Only our EXACT HEAD commit marker authorizes recovery, never an unrelated newer commit.
+    if (options.operationId) {
+      const latestCommit = await request<{ message?: string }>(
+        token, apiPath(remote, "/git/commits/" + head),
+      );
+      if (latestCommit?.message === "bookwriter: sync " + operationId) {
+        const metadataRaw = await readFile(token, remote, ".bookwriter/sync.json", head);
+        const metadata = metadataRaw ? z.object({
+          operationId: z.string(), sourceRevision: z.string(), bookId: z.string(),
+        }).safeParse(parseJson<unknown>(metadataRaw, "Sync marker")) : null;
+        if (metadata?.success &&
+            metadata.data.operationId === operationId && metadata.data.bookId === bookId) {
+          await persistRemoteAcknowledgment(bookId, remote, head, metadata.data.sourceRevision);
+          return {
+            commit: head, paths: 0, repository: remote.owner + "/" + remote.repository,
+            operationId, sourceRevision: metadata.data.sourceRevision, recovered: true,
+          };
+        }
+      }
+    }
+    if (current.remote.lastSyncedCommit)
+      throw new RemoteConflict("Il branch remoto è cambiato dall'ultima sincronizzazione. Importa/controlla le modifiche prima di scrivere.");
+  }
   const previousManifestRaw = await readFile(token, remote, ".bookwriter/manifest.json", head);
   let previousPaths: string[] = [];
   if (previousManifestRaw) {
@@ -274,6 +332,13 @@ export async function pushGitHubBook(
 
   const activities = await listActivities(bookId);
   const projection = projectBook(current, activities);
+  // The operation marker allows a crash/retry to prove that the previous write succeeded.
+  projection.files[".bookwriter/sync.json"] = JSON.stringify({
+    operationId, sourceRevision: current.updatedAt, bookId,
+    createdAt: new Date().toISOString(),
+  }, null, 2) + "\n";
+  projection.manifest.paths = [...new Set([...projection.manifest.paths, ".bookwriter/sync.json"])].sort();
+  projection.files[".bookwriter/manifest.json"] = JSON.stringify(projection.manifest, null, 2) + "\n";
   const removed = previousPaths.filter(p =>
     !projection.files[p] &&
     (p === ".bookwriter/project.json" || p === ".bookwriter/activities.json" ||
@@ -305,7 +370,7 @@ export async function pushGitHubBook(
   if (!tree?.sha || !shaPattern.test(tree.sha)) throw new Error("GitHub non ha creato un tree valido.");
   const commit = await request<{ sha?: string }>(
     token, apiPath(remote, "/git/commits"),
-    { method: "POST", body: { message: "bookwriter: synchronize narrative checkpoint", tree: tree.sha, parents: [head] } },
+    { method: "POST", body: { message: "bookwriter: sync " + operationId, tree: tree.sha, parents: [head] } },
   );
   if (!commit?.sha || !shaPattern.test(commit.sha)) throw new Error("GitHub non ha creato un commit valido.");
 
@@ -314,24 +379,10 @@ export async function pushGitHubBook(
     remote.branch.split("/").map(encodeURIComponent).join("/")),
   { method: "PATCH", body: { sha: commit.sha, force: false } });
 
-  const db = await getDb();
-  const latest = await db.get("books", bookId) as BookProject | undefined;
-  if (latest?.remote &&
-      latest.remote.owner === remote.owner &&
-      latest.remote.repository === remote.repository &&
-      latest.remote.branch === remote.branch) {
-    // Retain latest local changes: only the *snapshot* saved above is marked synchronized.
-    latest.remote = {
-      ...latest.remote,
-      lastSyncedCommit: commit.sha,
-      lastSyncAt: new Date().toISOString(),
-      lastSyncedLocalUpdatedAt: current.updatedAt,
-    };
-    await db.put("books", latest, bookId);
-  }
+  await persistRemoteAcknowledgment(bookId, remote, commit.sha, current.updatedAt);
   return {
-    commit: commit.sha,
-    paths: treeEntries.length,
+    commit: commit.sha, paths: treeEntries.length,
     repository: remote.owner + "/" + remote.repository,
+    sourceRevision: current.updatedAt, operationId,
   };
 }
