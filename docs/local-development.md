@@ -30,7 +30,8 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 - Checkpoint IndexedDB, log per attività, pause/resume e revisioni dall'autore.
 - Archivio ZIP content-only e full; quello full può essere cifrato con passphrase AES-GCM. La copia non cancella i libri esistenti.
 - Export EPUB, DOCX, PDF delle scene canoniche, senza servizi esterni.
-- **PR #8**: sincronizzazione GitHub manuale, PAT cifrato, proiezione Markdown Narrarium, commit multi-file, import sicuro.\n- **PR #9**: autosync opt-in a checkpoint con outbox transazionale, Web Locks tra tab, retry/backoff e recovery dei commit senza risposta.
+- **PR #8**: sincronizzazione GitHub manuale, PAT cifrato, proiezione Markdown Narrarium, commit multi-file, import sicuro.
+- **PR #9**: autosync opt-in a checkpoint con outbox transazionale, Web Locks tra tab, retry/backoff e recovery dei commit senza risposta.
 
 ## Come provare GitHub
 
