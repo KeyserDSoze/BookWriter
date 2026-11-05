@@ -195,6 +195,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   async function toggleAutoSync(enabled: boolean): Promise<void> {
     return doWork(async () => {
       if (!book?.remote) throw new Error("Collega prima il libro a GitHub.");
+      if (enabled && book.editorialReviewSceneIds?.length)
+        throw new Error("Conferma prima tutte le scene fuse nel Lettore, poi riattiva autosync.");
       if (enabled && !book.remote.lastSyncedCommit)
         throw new Error("Esegui prima una sincronizzazione manuale del libro.");
       if (enabled && !navigator.locks?.request)
@@ -298,11 +300,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <label className="flex items-center gap-3">
           <input type="checkbox" className="size-5 accent-emerald-600"
-            checked={!!connected.autoSync} disabled={busy}
+            checked={!!connected.autoSync} disabled={busy || (!!book?.editorialReviewSceneIds?.length && !connected.autoSync)}
             onChange={e => void toggleAutoSync(e.target.checked)}/>
           <span className="font-semibold">Sincronizzazione automatica ai checkpoint</span>
         </label>
-        <p className="muted mt-2 text-xs">Opt-in: dopo il primo commit manuale, scrive automaticamente scene consolidate, revisioni e conclusioni. La scheda deve restare aperta. Su due dispositivi non è ancora garantito un unico autopilot.</p>
+        <p className="muted mt-2 text-xs">Opt-in: dopo il primo commit manuale, scrive automaticamente i checkpoint confermati. La scheda deve restare aperta. Un lease GitHub riduce le sessioni AI concorrenti, ma non sostituisce un coordinatore transazionale perfetto.</p>
         {outbox && <div role="status" className="mt-2 space-y-1 text-xs">
           <p><b>Coda:</b> {outbox.state === "blocked" ? "Bloccata" : outbox.state === "syncing" ? "Invio GitHub in corso" : "In attesa di GitHub"}</p>
           <p>Operazioni accumulate: {outbox.revision} · tentativi: {outbox.attempts}</p>
@@ -313,8 +315,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         </div>}
         {!outbox && <p className="muted mt-2 text-xs">{dirty ? "Modifiche locali: nessuna operazione remota in esecuzione" : "Nessuna modifica in attesa"}</p>}
       </div>}
+      {!!book?.editorialReviewSceneIds?.length && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">
+        {book.editorialReviewSceneIds.length} scene fuse attendono conferma nel Lettore: push e riattivazione autosync bloccati.
+      </p>}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync}
+        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync || !!book.editorialReviewSceneIds?.length}
           onClick={() => void push()}><Cloud size={17}/> Sincronizza su GitHub</Button>
         <Button variant="secondary" disabled={!settings.githubToken || busy} onClick={() => void importRemote()}>
           <Download size={17}/> Importa un libro remoto
@@ -322,7 +327,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       </div>
       {message && <p role="status" className="rounded-lg border border-amber-500/40 p-3 text-sm">{message}</p>}
       <p className="muted text-xs">
-        Il salvataggio automatico usa una coda persistente e Web Locks tra schede dello stesso browser. I modelli AI sono protetti da un lease GitHub con heartbeat. La risoluzione automatica di capitoli divergenti resta disabilitata. Lease multi-dispositivo e risoluzione dei conflitti restano in sviluppo.
+        Il salvataggio automatico usa una coda persistente e Web Locks tra schede dello stesso browser. I modelli AI sono protetti da un lease GitHub con heartbeat. La risoluzione automatica di capitoli divergenti resta disabilitata. Il lease tra dispositivi è conservativo; il confronto dei conflitti e le bozze richiedono conferma esplicita.
       </p>
     </div>
   </section>;
