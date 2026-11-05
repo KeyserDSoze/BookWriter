@@ -12,6 +12,7 @@ export interface SceneMergeDraft {
   localText: string;
   remoteText: string;
   proposedText: string;
+  acceptedText?: string;
   instruction: string;
   status: "proposed" | "rejected" | "accepted";
   createdAt: string;
