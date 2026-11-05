@@ -12,8 +12,10 @@ beforeAll(async () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.endpoints[0]!.secret = await encryptLocal(API_SECRET);
   settings.defaultRoute.modelId = "test-model";
+  settings.aiPriceRates = [{endpointId:"openai",modelId:"test-model",inputEurPerMillion:3,outputEurPerMillion:9}];
   await saveSettings(settings);
   const book = newBook("Una trama avvincente e dettagliata.", "Il primo manoscritto", "Narrativo", "Adulti");
+  book.aiBudget = { enabled:true, enabledAt:"2026-11-05T00:00:00.000Z", limitEur:10,maxOutputTokens:8192 };
   await saveBook(book);
   await saveActivity({
     id: crypto.randomUUID(), bookId: book.id, runId: crypto.randomUUID(),
@@ -31,6 +33,8 @@ describe("Backup portabile BookWriter", () => {
     expect(parsed.kind).toBe("content");
     expect(parsed.settings).toBeUndefined();
     expect(parsed.books).toHaveLength(1);
+    expect(parsed.books[0]?.aiBudget?.limitEur).toBe(10);
+    expect(JSON.stringify(parsed)).not.toContain("inputEurPerMillion");
     expect(parsed.activities).toHaveLength(1);
     expect(JSON.stringify(parsed)).not.toContain(API_SECRET);
   });
@@ -45,6 +49,8 @@ describe("Backup portabile BookWriter", () => {
     const parsed = await readBackup(zip as File, passphrase);
     expect(parsed.kind).toBe("full");
     expect(parsed.settings?.endpoints[0]?.apiKey).toBe(API_SECRET);
+    expect(parsed.settings?.aiPriceRates?.[0]?.inputEurPerMillion).toBe(3);
+    expect(parsed.settings?.aiPriceRates?.[0]?.outputEurPerMillion).toBe(9);
   });
 
   it("importa come copia e non elimina né modifica libri preesistenti", async () => {

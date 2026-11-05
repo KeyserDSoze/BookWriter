@@ -19,6 +19,22 @@ export interface EndpointProfile {
   models: string[];
 }
 export interface ModelRoute { endpointId: string; modelId: string; }
+/** User-entered tariff (not verified against provider invoices). */
+export interface AiPriceRate {
+  endpointId: string;
+  modelId: string;
+  inputEurPerMillion: number;
+  outputEurPerMillion: number;
+}
+/** Optional, opt-in guardrails for AI calls made by the book autopilot. */
+export interface BookAiBudget {
+  enabled: boolean;
+  /** Budget for future requests in the period beginning at enabledAt, in EUR. */
+  limitEur: number;
+  enabledAt: string;
+  /** Requests max_tokens; actual provider behavior and charges can differ. */
+  maxOutputTokens: number;
+}
 export interface GitHubRemote {
   owner: string;
   repository: string;
@@ -34,6 +50,7 @@ export interface AppSettings {
   endpoints: EndpointProfile[];
   defaultRoute: ModelRoute;
   taskRoutes: Partial<Record<TaskKind, ModelRoute>>;
+  aiPriceRates?: AiPriceRate[];
   theme: "dark" | "light" | "system";
 }
 export interface Scene {
@@ -96,6 +113,7 @@ export interface BookProject {
   editorialReviewSceneIds?: string[]; // Explicit canon confirmation before autopilot can resume.
   editorialCycle?: ChapterEditorialCycle;
   bookSummary?: string;
+  aiBudget?: BookAiBudget;
   ideas?: string;
   validation?: string;
   audienceReviews: string[];
@@ -124,6 +142,8 @@ export interface Activity {
   modelId?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** True once a provider request was about to be sent; absent on legacy logs. */
+  aiRequested?: boolean;
   error?: string;
 }
 export const EMPTY_MEMORY: NarrativeMemory = {

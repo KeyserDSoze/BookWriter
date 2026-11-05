@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { newBook, type BookProject } from "../domain/types";
-import { getBook, getDb, listActivities, saveBook } from "../infrastructure/db";
+import { DEFAULT_SETTINGS, newBook, type BookProject } from "../domain/types";
+import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infrastructure/db";
 const { modelCall, writerGuard } = vi.hoisted(() => ({ modelCall: vi.fn(), writerGuard: vi.fn() }));
 vi.mock("../infrastructure/ai", () => ({ callModel: modelCall }));
 vi.mock("./writer-guard", () => ({ withWriterGuard: writerGuard }));
@@ -33,6 +33,7 @@ const judgment=(accept:boolean, round=1) => JSON.stringify({
 beforeEach(async()=>{
   const db=await getDb();
   await db.clear("books");await db.clear("activities");await db.clear("outbox");
+  await saveSettings(structuredClone(DEFAULT_SETTINGS));
   modelCall.mockReset();writerGuard.mockReset();
   writerGuard.mockImplementation(async(_bookId,_runId,_ctrl,callback)=>
     callback({assertActive:async()=>{},failure:()=>undefined}));
@@ -119,6 +120,51 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(updated?.chapters[0]?.frozenAt).toBeUndefined();
     expect(updated?.status).toBe("paused");
   });
+  it("ferma la redazione PRIMA del provider quando manca riserva economica",async()=>{
+    const source=book();
+    source.aiBudget={enabled:true,enabledAt:new Date(Date.now()-5000).toISOString(),
+      limitEur:0.0001,maxOutputTokens:8192};
+    const settings=structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId="mock-budget-model";
+    settings.aiPriceRates=[{endpointId:"openai",modelId:"mock-budget-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}];
+    await saveSettings(settings);
+    await saveBook(source,false);
+    modelCall.mockResolvedValue({text:report(false),endpointId:"openai",
+      modelId:"mock-budget-model",inputTokens:200,outputTokens:500});
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    expect(modelCall).not.toHaveBeenCalled();
+    const blocked=await getBook(source.id);
+    expect(blocked?.status).toBe("paused");
+    expect(blocked?.previousError).toMatch(/Budget stimato raggiunto/);
+    expect(blocked?.editorialCycle?.reports).toHaveLength(0);
+    const afterLogs=await listActivities(source.id);
+    expect(afterLogs.some(a=>a.aiRequested)).toBe(false);
+  });
+  it("sospende dopo una chiamata realmente tentata se il provider non comunica usage",async()=>{
+    const source=book();
+    source.aiBudget={enabled:true,enabledAt:new Date(Date.now()-5000).toISOString(),
+      limitEur:5,maxOutputTokens:8192};
+    const settings=structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId="mock-budget-model";
+    settings.aiPriceRates=[{endpointId:"openai",modelId:"mock-budget-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}];
+    await saveSettings(settings);
+    await saveBook(source,false);
+    modelCall.mockResolvedValue({text:report(false),
+      endpointId:"openai",modelId:"mock-budget-model"});
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    expect(modelCall).toHaveBeenCalledTimes(1);
+    expect(modelCall.mock.calls[0]?.[6]).toEqual({maxOutputTokens:8192});
+    const blocked=await getBook(source.id);
+    expect(blocked?.status).toBe("paused");
+    expect(blocked?.editorialCycle?.reports).toHaveLength(1);
+    expect(blocked?.previousError).toMatch(/senza usage completo/);
+    const attempted=(await listActivities(source.id)).filter(a=>a.aiRequested === true);
+    expect(attempted).toHaveLength(1);
+    expect(attempted[0]?.status).toBe("succeeded");
+  });
+
   it("ferma l'autopilot dopo tre tornate senza consensus e NON congela il capitolo",async()=>{
     const source=book();await saveBook(source,false);
     let round=1;

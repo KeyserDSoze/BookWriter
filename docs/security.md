@@ -33,6 +33,12 @@ Il confronto legge soltanto snapshot GitHub a commit SHA. La risoluzione crea du
 
 Il browser controlla i Web Locks, il commit GitHub e il timestamp locale prima della sostituzione. La transazione IndexedDB è atomica **solo nello stesso browser**; un dispositivo differente può avanzare GitHub subito dopo la verifica, nel qual caso il successivo push viene respinto per conflitto SHA. La copia di sicurezza rimane locale: esportare anche uno ZIP esterno. Niente force push, niente fusione cieca di prosa.
 
+## Controllo spesa AI v0.8.1 (ADR 0012)
+
+Le soglie per libro si applicano **prima** del fetch di ogni task autopilot, panel di revisione, e fusione AI delle scene. Le tariffe input/output in EUR/milione di token sono inserite dall'autore, mai indovinate. Un tentativo AI viene registrato in IndexedDB con `aiRequested=true` prima della rete: se usage, chiamata o browser sono interrotti o incompleti, nuove richieste si fermano conservativamente. Le richieste bloccate nel preflight non sono marcate come tentate.
+
+Il contatore economico è una **stima**, non un credito residuo né una garanzia di tetto rigido: provider, token cached, tasse, tariffe esterne e `max_tokens` possono differire. Non leggere account provider o inviare nuove telemetrie. Lo ZIP full contiene tariffe locali (e credenziali solo quando richieste e protette); content-only conserva i limiti per libro senza tariffe globali. Consultare `docs/ai-budget.md`.
+
 ## Revisione editoriale indipendente e congelamento (ADR 0011)
 
 Il panel usa richieste separate ai modelli AI: sette specialisti hanno contesti canonici necessari, mentre cinque lettori vedono solo prosa e sinossi pubbliche. Ogni rapporto contiene prova, motivo e remediation verificabile; il direttore editoriale è libero di respingere un rilievo infondato motivando, ma non può ometterlo.

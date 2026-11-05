@@ -72,6 +72,16 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Non cambiare asset base, redirect OAuth o service worker senza test su dominio personalizzato.
 - Il bundle distribuito è pubblico: **non** codificare credenziali o aggiungere route che pretendano di proteggerlo con sole verifiche JavaScript.
 
+## Guardrail budget AI v0.8.1 — nessun costo inventato
+
+- Budget opt-in per libro (`BookProject.aiBudget`), importi EUR limitati e periodo `enabledAt`; tariffe `AppSettings.aiPriceRates` inserite dall'autore per coppia esatta endpoint/modello.
+- `domain/ai-budget.ts` blocca ogni chiamata se non esiste un listino valido, se lo storico post-attivazione contiene tentativi senza usage completo, o se costo noto + riserva preventiva non è sotto soglia.
+- Il preflight deve essere eseguito **prima del fetch** del runner e della fusione AI, dentro il writer guard. Se blocca il runner, mettere in pausa, non in `error` e non inviare la chiamata.
+- Registrare `Activity.aiRequested=true` prima della richiesta HTTP; in caso di crash/rete non si può fingere costo zero. Un'attività respinta dal preflight ha `aiRequested=false`.
+- Richiedere `max_tokens` dell'autore solo per budget attivo. La stima UTF-8 + overhead NON equivale al tokenizer ufficiale e non garantisce un tetto alle fatture provider.
+- Nessun listino hardcoded, nessun recupero automatico del saldo, nessun tracking esterno. Testare il fail-closed su usage mancante, abort, riavvio e costo riservato.
+- ZIP content-only include budget/book + attività ma non tariffe; full backup include le tariffe. Importare senza listino deve fermare l'autopilot in modo conservativo.
+
 ## Redazione indipendente v0.8.0 — ogni capitolo ha un gate editoriale
 
 - Un capitolo con scene scritte **non è congelato** finché `chapter.frozenAt` non è assegnato dopo 7 specialisti, 5 lettori, giudice critico e sinossi progressive. Un singolo controllo `review` di scena non autorizza il capitolo successivo.

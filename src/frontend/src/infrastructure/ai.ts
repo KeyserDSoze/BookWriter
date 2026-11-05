@@ -36,6 +36,7 @@ export async function callModel(
   settings: AppSettings,
   book: BookProject,
   signal: AbortSignal,
+  options?: { maxOutputTokens?: number },
 ): Promise<ModelAnswer> {
   const assignment = routeFor(kind, settings, book);
   const endpoint = settings.endpoints.find(p => p.id === assignment.endpointId);
@@ -58,6 +59,7 @@ export async function callModel(
       body: JSON.stringify({
         model: assignment.modelId,
         messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+        ...(options?.maxOutputTokens ? { max_tokens: options.maxOutputTokens } : {}),
       }),
       signal,
     });

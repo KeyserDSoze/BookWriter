@@ -1,4 +1,6 @@
 import type { Activity, BookProject } from "../domain/types";
+import { routeFor } from "../domain/types";
+import { preflightBookAiBudget } from "../domain/ai-budget";
 import {
   assertDraftMatchesReview, buildSceneMergePrompt,
   validateSceneProposal, type SceneMergeDraft,
@@ -6,7 +8,7 @@ import {
 import type { ConflictReview } from "../infrastructure/conflict-recovery";
 import { callModel } from "../infrastructure/ai";
 import { confirmGitHubHead, RemoteConflict } from "../infrastructure/github-sync";
-import { getBook, getDb, loadSettings } from "../infrastructure/db";
+import { getBook, getDb, listActivities, loadSettings, saveActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 
 export async function listSceneMergeDrafts(
@@ -33,7 +35,7 @@ async function assertReviewFresh(review: ConflictReview): Promise<BookProject> {
     throw new RemoteConflict("Il libro o la repository sono cambiati. Ricarica il confronto prima di generare la bozza.");
   return local;
 }
-async function persistDraft(review: ConflictReview, draft: SceneMergeDraft): Promise<SceneMergeDraft> {
+async function persistDraft(review: ConflictReview, draft: SceneMergeDraft, attempted?: Activity): Promise<SceneMergeDraft> {
   assertDraftMatchesReview(draft, review);
   validateSceneProposal(draft.proposedText);
   const book = await assertReviewFresh(review);
@@ -51,7 +53,8 @@ async function persistDraft(review: ConflictReview, draft: SceneMergeDraft): Pro
   await tx.objectStore("mergeDrafts").put(draft, draft.id);
   const now = new Date().toISOString();
   const audit: Activity = {
-    id: crypto.randomUUID(), bookId: review.bookId, runId: crypto.randomUUID(),
+    id: attempted?.id ?? crypto.randomUUID(), bookId: review.bookId,
+    runId: attempted?.runId ?? crypto.randomUUID(),
     phase: "revision", status: "succeeded",
     title: draft.source === "ai" ? "Bozza AI di fusione scena" : "Bozza manuale di fusione scena",
     reason: "Confronto di due versioni della stessa scena, senza consolidamento automatico.",
@@ -59,7 +62,8 @@ async function persistDraft(review: ConflictReview, draft: SceneMergeDraft): Pro
     summary: "Bozza " + draft.id.slice(0, 8) + " salvata solo localmente; nessuna modifica al canon.",
     modelId: draft.modelId, endpointId: draft.endpointId,
     inputTokens: draft.inputTokens, outputTokens: draft.outputTokens,
-    createdAt: now, endedAt: now,
+    aiRequested: draft.source === "ai" ? attempted?.aiRequested : false,
+    createdAt: attempted?.createdAt ?? now, endedAt: now,
   };
   await tx.objectStore("activities").put(audit, audit.id);
   await tx.done;
@@ -79,25 +83,51 @@ export async function generateSceneMergeDraft(
     if (!current.remote) throw new RemoteConflict("Repository non configurata.");
     await confirmGitHubHead(current.remote, review.headSha);
     const settings = await loadSettings();
-    const response = await callModel("merge", prompt.system, prompt.prompt,
-      settings, current, controller.signal);
+    const preflight = preflightBookAiBudget(
+      current, settings, await listActivities(current.id), "merge", prompt.system, prompt.prompt,
+    );
     await guard.assertActive();
-    const text = validateSceneProposal(response.text);
-    const original = review.local.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
-    const remote = review.remote.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
-    if (!original || !remote) throw new Error("Scena non trovata durante la generazione.");
-    const draft: SceneMergeDraft = {
-      id: crypto.randomUUID(), bookId: review.bookId,
-      chapterId, sceneId,
-      localRevision: review.localUpdatedAt, remoteHead: review.headSha,
-      localText: original.text, remoteText: remote.text, proposedText: text,
-      instruction, status: "proposed", source: "ai",
+    if (controller.signal.aborted) throw new DOMException("Interrotto prima del provider.", "AbortError");
+    const route = routeFor("merge", settings, current);
+    const attempted: Activity = {
+      id: crypto.randomUUID(), bookId: review.bookId, runId: crypto.randomUUID(),
+      phase: "revision", title: "Bozza AI di fusione scena",
+      status: "running", reason: "Confronto facoltativo di due versioni della scena.",
+      nextStep: "Valuta la proposta prima dell'applicazione al canon.",
+      endpointId: route.endpointId, modelId: route.modelId, aiRequested: true,
       createdAt: new Date().toISOString(),
-      endpointId: response.endpointId, modelId: response.modelId,
-      inputTokens: response.inputTokens, outputTokens: response.outputTokens,
     };
-    await guard.assertActive();
-    return persistDraft(review, draft);
+    // Persist a potentially billable call before network I/O, even on timeout.
+    await saveActivity(attempted);
+    try {
+      const response = await callModel("merge", prompt.system, prompt.prompt,
+        settings, current, controller.signal,
+        preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : undefined);
+      await guard.assertActive();
+      const text = validateSceneProposal(response.text);
+      const original = review.local.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
+      const remote = review.remote.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);
+      if (!original || !remote) throw new Error("Scena non trovata durante la generazione.");
+      const draft: SceneMergeDraft = {
+        id: crypto.randomUUID(), bookId: review.bookId,
+        chapterId, sceneId,
+        localRevision: review.localUpdatedAt, remoteHead: review.headSha,
+        localText: original.text, remoteText: remote.text, proposedText: text,
+        instruction, status: "proposed", source: "ai",
+        createdAt: new Date().toISOString(),
+        endpointId: response.endpointId, modelId: response.modelId,
+        inputTokens: response.inputTokens, outputTokens: response.outputTokens,
+      };
+      await guard.assertActive();
+      return await persistDraft(review, draft, attempted);
+    } catch (error) {
+      await saveActivity({
+        ...attempted, status: controller.signal.aborted ? "cancelled" : "failed",
+        endedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Risposta non confermata del provider.",
+      });
+      throw error;
+    }
   });
 }
 
