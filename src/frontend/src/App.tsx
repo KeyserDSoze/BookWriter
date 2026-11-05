@@ -346,7 +346,7 @@ export default function App() {
             </div>
           </Section>
           <Section title="Sincronizzazione e checkpoint">
-            <SyncStatusSummary book={current} openArchive={() => setPage("export")}/>
+            {current ? <SyncStatusSummary book={current} openArchive={() => setPage("export")}/> : <Empty>Crea un libro per collegare GitHub.</Empty>}
           </Section>
         </div>
       </div>}
