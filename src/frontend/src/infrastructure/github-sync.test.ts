@@ -157,6 +157,7 @@ describe("GitHub sync conservativa", () => {
   it("non scambia un commit estraneo per un ACK automatico e non forza il branch", async () => {
     const book = await sampleBook();
     book.remote!.lastSyncedCommit = BEFORE;
+    book.remote!.autoSync = true;
     await saveBook(book);
     const operationId = crypto.randomUUID();
     const calls: string[] = [];
