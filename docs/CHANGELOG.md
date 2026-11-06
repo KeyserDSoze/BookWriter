@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.9 — 2026-11-06 (PR #45)
+
+**Redazione più rigorosa: citazione narrativa letterale e remediation ancorate al segmento**
+
+- Ogni nuovo finding dei dodici agenti richiede almeno 12 caratteri **letteralmente presenti nel segmento letto**; consentite solo differenze maiuscole/a capo/spazi. Il validatore rifiuta parafrasi, citazioni di altre scene, omissioni inventate e risultati basati su segmenti nel frattempo cambiati. Il report non viene archiviato finché non supera il gate.
+- `NarrativeEvidenceAnchor` viene costruito **dal codice**: indice del segmento, posizione, citazione originale, numero di occorrenze e breve contesto. Non deriva da campi inventati dal modello. Il giudice riceve `anchorStatus` ricalcolato, distinto dalle opinioni del revisore.
+- La **remediation accettata** è rifiutata deterministicamente dall'autopilot se la prova manca, è stata manomessa oppure è diventata obsoleta per modifica della scena. I vecchi rapporti rimangono leggibili e respingibili, non possono autorizzare nuove riscritture senza verifica; le decisioni archiviate non vengono eliminate.
+- Interfaccia desktop/mobile: posizione, testo trovato, occorrenze, contesto e avviso esplicito per legacy, tampering o testo cambiato. La presenza di una citazione non è prova che il rilievo sia corretto né che una fonte storica sia vera.
+- Test unitari su prove inventate, scene diverse, whitespace, ripetizioni, segmenti stale, accettazione bloccata e rifiuti leciti; Playwright desktop/mobile per etichette e compatibilità legacy. ADR 0032, [guida](editorial-narrative-evidence.md), issue #20.
+
+**Limiti:** il gate è una verifica testuale, NON semantica; critica e proposta di correzione richiedono ancora giudizio indipendente. I rilievi di omissione vanno ancorati a testo esistente e possono richiedere intervento umano. I report precedenti non sono automaticamente promossi a fonti verificate.
+
 ## 0.10.8 — 2026-11-06 (PR #44)
 
 **Rilasci npm più riproducibili: lockfile generato realmente e installazioni fail-closed**

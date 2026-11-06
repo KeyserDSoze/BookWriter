@@ -3,7 +3,7 @@ import { newBook, type BookProject } from "./types";
 import {
   EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, adjudicationPrompt, beginNextRound,
   chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt,
-  reviewerTask, validateJudgment, validateReport,
+  locateNarrativeEvidence, reviewerTask, validateJudgment, validateReport,
 } from "./editorial-board";
 
 function sample(): BookProject {
@@ -127,5 +127,76 @@ describe("Redazione indipendente dei capitoli",()=>{
     expect(cycle.stage).toBe("blocked");
     expect(cycle.priorRounds).toHaveLength(3);
     expect(cycle.blockedReason).toMatch(/decisione umana/i);
+  });
+
+  it("esige che le prove siano citazioni reali del singolo segmento: mai parafrasi o altro contesto",()=>{
+    const b=sample(),c=createEditorialCycle("ch-1");
+    const segment=chapterSegments(b.chapters[0]!)[0]!;
+    const original=JSON.parse(report("s-1",true)) as {
+      findings:Array<{evidence:string}>;
+    };
+    const run=(evidence:string)=>{
+      const payload=structuredClone(original);
+      payload.findings[0]!.evidence=evidence;
+      return validateReport(c,"style",segment,2,JSON.stringify(payload),b.chapters[0]!);
+    };
+    expect(()=>run("Mara incontra il guardiano mai comparso")).toThrow(/non presente letteralmente/);
+    expect(()=>run("Mara nasconde la chiave")).toThrow(/non presente letteralmente/);
+    expect(()=>run("Mara incontra... il guardiano")).toThrow(/non presente letteralmente/);
+    const valid=run("MARA INCONTRA IL GUARDIANO");
+    expect(valid.findings[0]?.evidenceAnchor).toMatchObject({
+      segmentIndex:0,offset:0,quote:"Mara incontra il guardiano",occurrences:1,
+    });
+    expect(valid.findings[0]?.evidenceAnchor?.context).toContain("davanti alla porta.");
+    const judgeBook=sample(),judgeCycle=createEditorialCycle("ch-1");
+    judgeCycle.reports.push(valid);
+    expect(adjudicationPrompt(judgeBook,judgeCycle).prompt)
+      .toContain('"anchorStatus":"verified_in_reviewed_segment"');
+    expect(adjudicationPrompt(judgeBook,judgeCycle).prompt)
+      .not.toContain('"anchorStatus":"legacy_or_stale_unverified"');
+  });
+  it("ancora spazi e a capo senza accettare parole riordinate, e dichiara le occorrenze multiple",()=>{
+    const txt="La porta si apre.\nMara trova la chiave. Poi Mara trova la chiave.";
+    const valid=locateNarrativeEvidence(txt,"MARA TROVA\nLA CHIAVE");
+    expect(valid).toMatchObject({segmentIndex:-1,offset:txt.indexOf("Mara"),
+      quote:"Mara trova la chiave",occurrences:2});
+    expect(locateNarrativeEvidence(txt,"la chiave Mara trova")).toBeUndefined();
+    expect(locateNarrativeEvidence(txt,"Mara ... chiave")).toBeUndefined();
+    const line=locateNarrativeEvidence("Nel cortile\nMara trova la chiave.",
+      "Nel cortile Mara trova la chiave");
+    expect(line?.quote).toBe("Nel cortile\nMara trova la chiave");
+  });
+  it("rifiuta risultati AI su segmenti mutati prima del salvataggio del rapporto",()=>{
+    const b=sample(),c=createEditorialCycle("ch-1"),seg=chapterSegments(b.chapters[0]!)[0]!;
+    b.chapters[0]!.scenes[0]!.text="Mara guarda il guardiano davanti alla porta.";
+    expect(()=>validateReport(c,"style",seg,2,report("s-1",true),b.chapters[0]!))
+      .toThrow(/Segmento editoriale cambiato/);
+    expect(c.reports).toHaveLength(0);
+  });
+  it("il giudice non può approvare remediation con prove legacy, manomesse o diventate obsolete",()=>{
+    const b=sample(),c=createEditorialCycle("ch-1"),seg=chapterSegments(b.chapters[0]!)[0]!;
+    const reportOk=validateReport(c,"style",seg,2,report("s-1",true),b.chapters[0]!);
+    c.reports.push(reportOk);
+    const id=reportOk.findings[0]!.id;
+    const decision=(action:"accept"|"reject")=>JSON.stringify({
+      reasoning:"Il rilievo deve essere verificato contro la scena corrente senza inferenze.",
+      decisions:[{findingId:id,action,rationale:
+        "L'intento della battuta non basta per accettare automaticamente una riscrittura.",
+        remediation:action==="accept"?"Riscrivere il passaggio mantenendo la voce.":""}],
+    });
+    expect(validateJudgment(c,decision("accept"),b.chapters[0]!).verdict).toBe("repair");
+    const anchor=reportOk.findings[0]!.evidenceAnchor!;
+    reportOk.findings[0]!.evidenceAnchor={...anchor,offset:anchor.offset+1};
+    expect(()=>validateJudgment(c,decision("accept"),b.chapters[0]!))
+      .toThrow(/prova narrativa legacy, manomessa/);
+    reportOk.findings[0]!.evidenceAnchor=anchor;
+    b.chapters[0]!.scenes[0]!.text="Mara corre verso la torre.";
+    expect(()=>validateJudgment(c,decision("accept"),b.chapters[0]!))
+      .toThrow(/prova narrativa legacy, manomessa/);
+    delete reportOk.findings[0]!.evidenceAnchor;
+    expect(validateJudgment(c,decision("reject"),b.chapters[0]!).verdict).toBe("freeze");
+    expect(()=>validateJudgment(c,decision("accept"),b.chapters[0]!))
+      .toThrow(/prova narrativa legacy/);
+    expect(adjudicationPrompt(b,c).prompt).toContain("legacy_or_stale_unverified");
   });
 });
