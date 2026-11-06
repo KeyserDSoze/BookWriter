@@ -1,6 +1,6 @@
 # ADR 0023 — Riverifica remota OCR Library of Congress e quarantena volontaria
 
-- **Stato:** Proposto per v0.10.0, PR in verifica
+- **Stato:** Accettato per v0.10.0 (PR #35)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0021–0022; confronto analogo Wikisource in ADR 0020.
