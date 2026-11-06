@@ -2,6 +2,19 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.3 — 2026-11-06 (PR in verifica)
+
+**Cataloghi storici istituzionali: piste di ricerca LoC, non evidenza documentale**
+
+- Pannello per capitolo **Archivi istituzionali** con 1–3 query pubbliche inserite dall'autore e conferma esplicita dell'invio delle stringhe esatte alla Library of Congress.
+- Adapter browser read-only API JSON LoC, senza chiavi, cookie o redirect, origini/URL canonici controllati, fino a 3 schede/query, timeout e limiti dimensione. La rete CORS e i rate limit possono impedire il funzionamento senza proxy o backend.
+- Record storicizzati con titolo, ID LoC, URL ricostruita, data/descrizione se presenti, query e timestamp in IndexedDB e snapshot ZIP/GitHub; dati Wikipedia e Crossref preservati fra ricerche.
+- **Nessuna prova simulata:** le schede sono metadati, non documenti letti; `loc:...` vietato nei sourceIds documentali. Soltanto il revisore storico e il direttore editoriale possono consultarle come piste.
+- Aggiornamenti con Web Locks, fencing `updatedAt`, stop in caso di errore, rewind e invalidazione dei freeze successivi, autosync off e outbox eliminata.
+- Test privacy, URL ostili, rete, persistenza, concorrenza e Playwright mobile/desktop. ADR 0016, guida `docs/institutional-archives.md`, issue #23.
+
+**Limiti:** API LoC non garantisce CORS nel browser; è necessaria consultazione umana degli originali e delle condizioni di utilizzo. Nessun OCR, testo completo o verifica primaria automatica.
+
 ## 0.9.2 — 2026-11-06 (PR #27)
 
 **Verifica delle citazioni storiche per singola fonte (anti-falsa corroborazione)**

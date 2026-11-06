@@ -42,6 +42,8 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 - **PR #24**: dossier storico del capitolo, ricerca Wikipedia IT esplicitamente approvata dall'autore, report storico con prova estratto/source IDs e giudice editoriale che verifica le fonti, ripristino conservativo del freeze e regressioni Playwright. ADR 0013, `docs/historical-sources.md`, issue #23.
 - **PR #21**: protezione budget per libro (tariffe globali per endpoint/modello, stop prima dei task della redazione e fusione AI, persistenza di aiRequested prima della rete). Include tariffe full ZIP, ADR 0012, `docs/ai-budget.md` e test Vitest/Playwright desktop-mobile. Ripresa retroattiva attraverso `domain/editorial-summary.ts`, test per legacy senza snapshot e fencing contro modifiche locali concorrenti. Playwright è fissato a 1.64.1 per installazioni CI riproducibili.
 
+- **PR v0.9.3 (in verifica)**: adapter read-only Library of Congress e pannello «Archivi istituzionali», consenso esplicito per 1–3 query pubbliche, record di catalogo storicizzati distinti dalle citazioni; privacy dei lettori, rewind dei capitoli e test network. ADR 0016 e `docs/institutional-archives.md`. La funzionalità non certifica fonti primarie e potrebbe incontrare blocchi CORS.
+
 ## Come provare GitHub
 
 Vedi `docs/github-sync.md`. Serve una repository GitHub con un commit iniziale (può contenere README), un PAT fine-grained con permesso `Contents: read/write` limitato a quella repository e un libro locale.
