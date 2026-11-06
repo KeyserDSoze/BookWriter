@@ -13,6 +13,7 @@ export function ManualEvidencePanel({
   const excerpts=activeManualEvidence(chapter.historicalDossier);
   const stored=chapter.historicalDossier?.manualEvidence?.excerpts.length ?? 0;
   const [catalogItemId,setCatalogItemId]=useState(items[0]?.id ?? "");
+  const selectedCatalogId=items.find(item=>item.id===catalogItemId)?.id ?? items[0]?.id ?? "";
   const [locator,setLocator]=useState("");
   const [text,setText]=useState("");
   const [documentDate,setDocumentDate]=useState("");
@@ -27,10 +28,10 @@ export function ManualEvidencePanel({
     setError("");setMessage("");
     if(!attested){setError("Conferma prima i diritti e la corrispondenza con il documento.");return;}
     const input:ManualExcerptInput={
-      catalogItemId,locator,text,documentDate,rightsBasis,rightsNote,
+      catalogItemId:selectedCatalogId,locator,text,documentDate,rightsBasis,rightsNote,
       rightsAttested:true,
     };
-    const selected=items.find(item=>item.id===catalogItemId);
+    const selected=items.find(item=>item.id===selectedCatalogId);
     if(!selected){setError("Seleziona una scheda d'archivio ancora attiva.");return;}
     if(!window.confirm([
       "SALVATAGGIO TRASCRIZIONE — CONFERMA AUTORE",
@@ -74,7 +75,7 @@ export function ManualEvidencePanel({
       {items.length ? <div className="space-y-3">
         <label className="block font-semibold">Documento del catalogo
           <select className="field mt-1" aria-label={"Documento archivistico capitolo "+chapter.number}
-            disabled={locked} value={catalogItemId}
+            disabled={locked} value={selectedCatalogId}
             onChange={e=>setCatalogItemId(e.target.value)}>
             {items.map(item=><option key={item.id} value={item.id}>{item.title} · {item.itemId}</option>)}
           </select>
@@ -117,7 +118,7 @@ export function ManualEvidencePanel({
           <span>Dichiaro di aver consultato il documento originale, verificato la trascrizione e
             di disporre dei diritti necessari alla conservazione e all'invio ai modelli AI.</span>
         </label>
-        <Button size="sm" variant="outline" disabled={locked||!attested||!catalogItemId||
+        <Button size="sm" variant="outline" disabled={locked||!attested||!selectedCatalogId||
           locator.trim().length<4||text.trim().length<24||rightsNote.trim().length<16}
           onClick={()=>void save()}>
           {busy?"Salvataggio...":"Archivia estratto attestato"}
