@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Riverifica live degli OCR già archiviati (v0.10.0)
+
+Dopo un'acquisizione `lococr:`, l'autore può autorizzare un **confronto remoto del file esatto**. L'app controlla che `textUrl` sia ancora fra le risorse consentite della **stessa scheda LoC**, poi verifica hash, lunghezza e citazione letterale all'offset. Il risultato è temporaneo e non autentica il documento originale o i diritti. Su divergenza, la fonte può essere **esclusa solo con seconda conferma**, mantenendo gli audit e riaprendo i capitoli frozen che ne dipendono. Guida [riverifica OCR](loc-ocr-reverification.md), ADR 0023.
+
 ## OCR istituzionale LoC attestato dall'autore (v0.9.9)
 
 Lo specialista storico può citare `lococr:` soltanto per **una frase letterale** acquisita in un singolo file testuale LoC, con SHA-256/offset conservati. Il testo è **OCR non autenticato** e i diritti sono **dichiarati dall'autore**, quindi né una frase corrispondente né una scheda LoC dimostrano da sole verità storica o licenza. Fonte attiva solo con scheda/ispezione LoC esatte ancora attive; il giudice valuta errori OCR, contesto, edizione e diritti. Guida [OCR istituzionale](loc-ocr-excerpts.md), ADR 0022.

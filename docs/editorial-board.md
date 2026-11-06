@@ -62,6 +62,10 @@ Il costo può essere **elevato**: per N segmenti di testo, ci sono almeno **12 �
 
 Nel pannello Wikisource l'autore può richiedere un nuovo GET pubblico **solo per il `revid`** della fonte, senza trasmettere manoscritto o query: il browser confronta in memoria identità, SHA-256, lunghezza e offset del frammento con quelli archiviati. Il risultato è **effimero** e non equivale ad autenticare opera o licenza. In caso di discordanza, il sistema avverte l'autore; solo con **ulteriore conferma** una fonte viene esclusa dalle nuove review, mantenendola negli audit, riaprendo capitoli congelati e invalidando i successivi. Un guasto CORS/rete è un errore, non una prova negativa. [Guida](wikisource-reverification.md), ADR 0020.
 
+## Confronto remoto e quarantena OCR LoC (v0.10.0)
+
+Il nuovo pulsante di riverifica confronta `lococr:` con l'**esatto file istituzionale ancora autorizzato dal catalogo**: ID, URL, SHA-256, lunghezza, offset e breve frase. Si tratta di una verifica della **coerenza della risposta remota**, non della scansione originale, della verità storica o del copyright. Risultato **effimero in UI**; nessuna modifica al libro. Con mismatch, solo una **seconda conferma** può rimuovere l'ID dalle fonti attive, conservando report e prosa e riaprendo i frozen. Lo storico e il giudice non ricevono nuove attestazioni di licenza; gli altri 11 revisori non vedono OCR. [Guida](loc-ocr-reverification.md), ADR 0023.
+
 ## Brevi OCR testuali LoC letti dal browser (v0.9.9)
 
 Dopo consenso e attestazione dell'autore sui diritti, una fonte `lococr:` collega **un frammento letterale di un file .txt istituzionale realmente letto** a SHA-256/offset e alla scheda/ispezione LoC esatte. Solo storico e giudice lo vedono; gli altri 11 agenti restano ciechi. Le citazioni `sourceEvidence` sono verificate contro il testo OCR memorizzato, non contro l'immagine originale: niente autenticità/diritti/interpretazione storica automatici. L'OCR e una trascrizione manuale dello stesso documento non costituiscono due fonti indipendenti. [Guida](loc-ocr-excerpts.md), ADR 0022.

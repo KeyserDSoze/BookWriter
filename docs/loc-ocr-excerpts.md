@@ -22,4 +22,6 @@ Nel libro IndexedDB/ZIP sono salvati solo **brevi passaggi** e la provenienza; l
 
 Sono conservati fino a 40 snapshot storici e al massimo quattro documenti OCR attivi. Se cambia la scheda o l'ispezione, gli estratti precedenti rimangono per audit ma non entrano nei nuovi report. Un OCR e una trascrizione manuale dello **stesso documento** non diventano due fonti indipendenti. Quando un capitolo era già frozen, la nuova fonte riapre quel capitolo e invalida i successivi senza cancellare la prosa; autosync viene disattivato.
 
+**Nuovo dalla v0.10.0:** puoi riverificare volontariamente lo stesso file OCR contro l'URL istituzionale ancora elencato nella scheda; su discordanza puoi escludere la fonte con una seconda conferma, senza perdere gli snapshot: [guida alla riverifica](loc-ocr-reverification.md), ADR 0023. Non certifica originale o diritti.
+
 La funzione non esegue il confronto visivo con il manoscritto o la scansione originale e non fornisce interpretazioni giuridiche automatiche. Per dettagli: [ADR 0022](../ADR/0022-loc-author-attested-ocr-evidence.md), [guide agli archivi](institutional-item-inspection.md), [issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).

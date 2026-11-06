@@ -51,6 +51,8 @@
 
 **Acquisizione OCR istituzionale v0.9.9 (PR #34):** l'autore può, dopo scheda e ispezione LoC attive e attestazione esplicita dei diritti, leggere un solo file .txt da host istituzionale selezionato, memorizzando **un breve estratto letterale** con SHA-256/offset. Lo storico e il giudice possono citarlo, distinguendo OCR da originale autenticato e diritti da attestazione dell'autore. [Guida](docs/loc-ocr-excerpts.md), ADR 0022, issue #23.
 
+**Riverifica OCR LoC v0.10.0 (PR in verifica):** l'autore può confrontare volontariamente un estratto OCR `lococr:` con il **medesimo file .txt ancora elencato nella scheda LoC attuale** e verificare SHA-256, lunghezza e offset, senza inviare il libro o modificare il dossier. Una discordanza può comportare l'esclusione della fonte dalle nuove review solo con seconda conferma, mantenendo report/audit e riaprendo i freeze dipendenti. Non autentica originali o diritti. [Guida](docs/loc-ocr-reverification.md), ADR 0023, issue #23.
+
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
