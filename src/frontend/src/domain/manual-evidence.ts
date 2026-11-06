@@ -51,14 +51,19 @@ export function validateManualExcerpt(item: ManualDocumentExcerpt): boolean {
       item.rightsAttested === true;
   } catch { return false; }
 }
+/** Historical snapshots must remain viewable, even when no longer eligible for new citations. */
+export function allManualEvidence(dossier?: ChapterHistoricalDossier): ManualDocumentExcerpt[] {
+  const items = dossier?.manualEvidence?.excerpts;
+  return Array.isArray(items) ? items.filter(validateManualExcerpt) : [];
+}
 /** Only approved snapshots whose exact catalogue record is still active can be cited. */
 export function activeManualEvidence(dossier?: ChapterHistoricalDossier): ManualDocumentExcerpt[] {
   const data = dossier?.manualEvidence;
-  if (!data || !Array.isArray(data.excerpts) || !Array.isArray(data.activeExcerptIds)) return [];
+  if (!data || !Array.isArray(data.activeExcerptIds)) return [];
   const active = new Set(data.activeExcerptIds);
   const catalog = new Set(activeArchivalItems(dossier).map(item => item.id));
-  return data.excerpts.filter(item => active.has(item.id) &&
-    catalog.has(item.catalogItemId) && validateManualExcerpt(item));
+  return allManualEvidence(dossier).filter(item => active.has(item.id) &&
+    catalog.has(item.catalogItemId));
 }
 export function appendManualEvidence(
   previous: ChapterHistoricalDossier | undefined,
