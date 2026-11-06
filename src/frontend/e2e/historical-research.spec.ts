@@ -265,6 +265,25 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(inspectionCalls[2]).not.toContain("Mara");
   expect(inspectionCalls[2]).not.toContain("SHA-256");
   expect(ocrCalls[1]).not.toContain("Mara");
+  await editorial.getByRole("button",{name:"Confronta OCR con scansione"}).click();
+  await expect(editorial.getByText(/non scarica né analizza le immagini/)).toBeVisible();
+  await editorial.getByRole("textbox",{name:"Pagina scansione OCR 1"})
+    .fill("Pagina 12, colonna 2");
+  await editorial.getByRole("textbox",{name:"Trascrizione scansione OCR 1"})
+    .fill("Original optical recognition revealed a telegraph station busy through the cold winter of eighteen forty eight.");
+  await editorial.getByRole("checkbox",{name:/Dichiaro di avere visto personalmente la scansione/}).check();
+  await editorial.getByRole("checkbox",{name:/Confermo di aver verificato la base per conservare/}).check();
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("COLLAZIONE SCANSIONE ORIGINALE E OCR");
+    expect(dialog.message()).toContain("Pagina 12");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Salva collazione con scansione"}).click();
+  await expect(editorial.getByText(/Collazione visiva dichiarata dall'autore/)).toBeVisible({timeout:15_000});
+  await expect(editorial.getByText(/Testi compatibili dopo normalizzazione/)).toBeVisible();
+  expect(inspectionCalls).toHaveLength(3); // No network for the author's visual comparison.
+  expect(ocrCalls).toHaveLength(2);
   await editorial.locator("summary").filter({hasText:"Trascrizioni Wikisource"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Ricerche Wikisource capitolo 1"})
     .fill("Telegrafo elettrico in Italia 1848");
@@ -329,6 +348,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("loc:2020123456");
   expect(specialist?.prompt).toContain("locex:2020123456");
   expect(specialist?.prompt).toContain("lococr:2020123456");
+  expect(specialist?.prompt).toContain("locscan:2020123456");
+  expect(specialist?.prompt).toContain("author_visual_transcription_unverified");
   expect(specialist?.prompt).toContain("institutional_ocr_unverified");
   expect(specialist?.prompt).toContain("Rights restricted: contact the Library before reuse.");
   expect(specialist?.prompt).toContain("catalog_metadata_only");
@@ -340,6 +361,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(judgeCall?.prompt).toContain("loc:2020123456");
   expect(judgeCall?.prompt).toContain("locex:2020123456");
   expect(judgeCall?.prompt).toContain("lococr:2020123456");
+  expect(judgeCall?.prompt).toContain("locscan:2020123456");
+  expect(judgeCall?.prompt).toContain("author_visual_transcription_unverified");
   expect(judgeCall?.prompt).toContain("Rights restricted: contact the Library before reuse.");
   expect(judgeCall?.prompt).toContain("itwsr:81:421:");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
@@ -352,6 +375,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
     !x.prompt.includes("locex:2020123456"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("lococr:2020123456"))).toBe(true);
+  expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
+    !x.prompt.includes("locscan:2020123456"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("Rights restricted: contact the Library before reuse."))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
