@@ -6,6 +6,8 @@ import {
   wikisourceRevisionUrl, hasExactRevisionProof,
 } from "../domain/wikisource-excerpts";
 import { attachWikisourceResearch } from "../application/wikisource-research";
+import { quarantineWikisourceSource } from "../application/wikisource-audit";
+import { auditStoredWikisourceRevision, type WikisourceAuditResult } from "../infrastructure/wikisource";
 import { Button } from "./ui/button";
 
 export function WikisourcePanel({
@@ -19,8 +21,11 @@ export function WikisourcePanel({
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
+  const [auditResults,setAuditResults]=useState<Record<string,WikisourceAuditResult>>({});
+  const [auditingId,setAuditingId]=useState<string|null>(null);
   const locked=busy||book.status==="running"||!!book.editorialCycle;
   async function lookup(){
+    setAuditResults({});
     setError("");setMessage("");
     let queries:string[];
     try{queries=normalizeWikisourceQueries(input.split("\n").filter(s=>s.trim()));}
@@ -51,6 +56,50 @@ export function WikisourcePanel({
     }catch(cause){
       setError(cause instanceof Error?cause.message:"Ricerca Wikisource non disponibile.");
     }finally{setBusy(false);}
+  }
+  async function verifySource(sourceId:string){
+    const source=active.find(s=>s.id===sourceId);
+    if(!source)return;
+    if(!window.confirm([
+      "VERIFICA REMOTA WIKISOURCE",
+      "Leggeremo la revisione pubblica "+source.revisionId+" da it.wikisource.org.",
+      "Invieremo SOLO il numero della revisione, non il romanzo, la citazione, la query, l'hash o credenziali.",
+      "Confronteremo identità, SHA-256, lunghezza e frase nell'esatta posizione del wikitesto.",
+      "Il risultato rimane solo nella schermata: non modifica il libro e non autentica l'opera storica.",
+      "In caso di discordanza potrai ESCLUDERE esplicitamente la fonte dalle nuove review.",
+      "Procedere?",
+    ].join("\n")))return;
+    setAuditingId(sourceId);
+    setAuditResults(previous=>{const next={...previous};delete next[sourceId];return next;});
+    setError("");
+    try{
+      const result=await auditStoredWikisourceRevision(source);
+      setAuditResults(previous=>({...previous,[sourceId]:result}));
+    }catch(e){
+      setError(e instanceof Error?e.message:"Verifica Wikisource non disponibile.");
+    }finally{setAuditingId(null);}
+  }
+  async function quarantine(sourceId:string){
+    if(auditResults[sourceId]?.matches!==false || locked)return;
+    if(!window.confirm([
+      "ESCLUDERE LA FONTE WIKISOURCE?",
+      "La fonte "+sourceId+" non coincide con il risultato della verifica remota.",
+      "L'estratto e i report precedenti rimarranno nello storico, ma non saranno citabili in nuove review.",
+      "Se il capitolo è congelato, saranno riaperte le review anche dei capitoli successivi.",
+      "Autosync verrà disattivato. Questa operazione NON dimostra che il documento storico sia falso.",
+      "Vuoi escludere questa fonte?",
+    ].join("\n")))return;
+    setAuditingId(sourceId);
+    setError("");
+    try{
+      const result=await quarantineWikisourceSource(book.id,chapter.id,book.updatedAt,sourceId);
+      setAuditResults(previous=>{const next={...previous};delete next[sourceId];return next;});
+      setMessage("Fonte esclusa dalle nuove review, storico preservato."+
+        (result.reopened?" Capitolo e successivi da rivalutare.":""));
+      await onRefresh();
+    }catch(e){
+      setError(e instanceof Error?e.message:"Esclusione della fonte non riuscita.");
+    }finally{setAuditingId(null);}
   }
   return <details className="mt-3 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
     <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
@@ -96,6 +145,24 @@ export function WikisourcePanel({
           SHA-256 wikitesto: {s.revisionProof!.contentSha256.slice(0,16)}… · offset {s.revisionProof!.excerptOffset}.
           La verifica riguarda solo la corrispondenza testuale, NON autenticità dell'opera o diritti.
         </p>
+        <div className="mt-2 space-y-1">
+          <Button size="sm" variant="outline" disabled={locked||!!auditingId}
+            onClick={()=>void verifySource(s.id)}>
+            {auditingId===s.id?"Controllo in corso…":"Riverifica revisione online"}
+          </Button>
+          {auditResults[s.id]?.matches===true&&<p role="status" className="text-green-700 dark:text-green-300">
+            Confronto remoto riuscito il {new Date(auditResults[s.id]!.checkedAt).toLocaleString("it-IT")}:
+            revisione, SHA-256 e frammento coincidono. NON è autenticità storica o certificazione dei diritti.
+          </p>}
+          {auditResults[s.id]?.matches===false&&<div className="space-y-2">
+            <p role="alert" className="text-red-700 dark:text-red-300">
+              Discordanza remota ({auditResults[s.id]!.reason}): non usare questa fonte per nuove correzioni.
+              Una pagina spostata può richiedere una nuova ricerca; il confronto non prova che l'opera sia falsa.
+            </p>
+            <Button size="sm" variant="outline" disabled={locked||!!auditingId}
+              onClick={()=>void quarantine(s.id)}>Escludi fonte discordante</Button>
+          </div>}
+        </div>
         <p className="muted mt-1">Contenuto non utilizzabile automaticamente come pubblico dominio:
           verifica licenza, attribuzione e fedeltà all'edizione originale.</p>
       </div>)}

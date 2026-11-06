@@ -186,3 +186,49 @@ export async function searchWikisource(
   }
   return result;
 }
+
+export type WikisourceAuditReason = "match"|"identity"|"digest"|"excerpt";
+export interface WikisourceAuditResult {
+  matches:boolean;
+  reason:WikisourceAuditReason;
+  checkedAt:string;
+}
+/** Recheck a stored record against the real exact-revision MediaWiki content.
+ * Only the public integer revid travels to the server; no book/quote/hash,
+ * search query, canon, secrets, API key or GitHub credentials are transmitted.
+ * The result is ephemeral until the author explicitly quarantines a mismatch.
+ */
+export async function auditStoredWikisourceRevision(
+  saved:WikisourceExcerpt, signal?:AbortSignal,
+):Promise<WikisourceAuditResult>{
+  if(!validateWikisourceExcerpt(saved) || !saved.revisionProof)
+    throw new Error("Snapshot Wikisource non verificabile: riacquisisci la revisione.");
+  const checkedAt=new Date().toISOString();
+  const params=new URLSearchParams({
+    action:"query",prop:"revisions",revids:String(saved.revisionId),
+    rvprop:"ids|timestamp|content",rvslots:"main",
+    format:"json",formatversion:"2",origin:"*",
+  });
+  const data=await readMediaWiki(params,signal);
+  const pages=data.query?.pages;
+  if(!Array.isArray(pages) || pages.length!==1)
+    throw new Error("La revisione non è consultabile: verifica remota non eseguita.");
+  const page=pages[0], revision=page?.revisions?.[0];
+  if(page?.pageid!==saved.pageId || page.ns!==0 ||
+    page.title!==saved.title || revision?.revid!==saved.revisionId ||
+    revision?.timestamp!==saved.revisionAt)
+    return {matches:false,reason:"identity",checkedAt};
+  const main=revision.slots?.main;
+  if(main?.contentmodel!=="wikitext" || typeof main.content!=="string")
+    throw new Error("Il wikitesto non è disponibile: verifica remota non eseguita.");
+  const raw=main.content;
+  if(raw.length>MAX_WIKITEXT_CHARS)
+    throw new Error("Il wikitesto è troppo grande: verifica remota non eseguita.");
+  const hash=await hashWikitext(raw);
+  if(hash!==saved.revisionProof.contentSha256 || raw.length!==saved.revisionProof.contentLength)
+    return {matches:false,reason:"digest",checkedAt};
+  const {excerptOffset}=saved.revisionProof;
+  if(raw.slice(excerptOffset,excerptOffset+saved.excerpt.length)!==saved.excerpt)
+    return {matches:false,reason:"excerpt",checkedAt};
+  return {matches:true,reason:"match",checkedAt};
+}

@@ -213,6 +213,19 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(new URL(wikisourceCalls[1]!).searchParams.get("revids")).toBe("421");
   expect(new URL(wikisourceCalls[1]!).searchParams.get("rvprop")).toBe("ids|timestamp|content");
   expect(wikisourceCalls[1]).not.toContain("Mara");
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("SOLO il numero della revisione");
+    expect(dialog.message()).toContain("421");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Riverifica revisione online"}).click();
+  await expect(editorial.getByText(/Confronto remoto riuscito/)).toBeVisible({timeout:15000});
+  expect(wikisourceCalls).toHaveLength(3);
+  const auditRequest=new URL(wikisourceCalls[2]!);
+  expect(auditRequest.searchParams.get("revids")).toBe("421");
+  expect(auditRequest.searchParams.has("gsrsearch")).toBe(false);
+  expect(wikisourceCalls[2]).not.toContain("Mara");
   await editorial.locator("summary").filter({hasText:"Estratti da originali consultati dall'autore"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Collocazione originale capitolo 1"})
     .fill("Page 12, column 2");

@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Riverifica remota facoltativa (v0.9.7)
+
+Per le fonti Wikisource `itwsr:`, «Riverifica revisione online» effettua un nuovo GET per il solo ID pubblico di revisione e confronta risposta, SHA-256, lunghezza e offset con lo snapshot in memoria, **senza modificare il libro**. Su discordanza, l'autore può escludere la fonte con una seconda conferma: le vecchie citazioni rimangono consultabili, le nuove review non la ricevono e i freeze dipendenti sono invalidati. Né verifica positiva né hash sono attestati di veridicità o copyright. [Guida](wikisource-reverification.md), ADR 0020.
+
 ## Citazioni legate al wikitesto della revisione (v0.9.6)
 
 BookWriter non associa più `TextExtracts` della pagina corrente a un `revid`. Dopo ricerca consensuale, richiede il **contenuto wikitext del preciso ID di revisione**, ne controlla identità/timestamp, seleziona un frammento letterale e conserva SHA-256 e offset. Solo `itwsr:...` attivi sono citabili con `sourceEvidence` per fonte. I vecchi `itws:` della v0.9.5 restano in archivio **non citabili** nelle nuove review fino a nuova ricerca approvata. Il controllo non certifica l'autenticità dell'opera, la data storica o i diritti. [Guida Wikisource](wikisource-transcriptions.md), ADR 0019.
