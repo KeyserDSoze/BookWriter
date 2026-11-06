@@ -49,7 +49,7 @@
 
 **Avvisi istituzionali v0.9.8 (PR #33):** dalle schede Library of Congress si può, con consenso, consultare il dettaglio dell'oggetto per leggere indicazioni di accesso e diritti. BookWriter salva solo metadati, senza scaricare il documento, e **non** deduce licenze o prove storiche dalla scheda; [guida](docs/institutional-item-inspection.md), ADR 0021 e issue #23.
 
-**Acquisizione OCR istituzionale v0.9.9 (PR in verifica):** l'autore può, dopo scheda e ispezione LoC attive e attestazione esplicita dei diritti, leggere un solo file .txt da host istituzionale selezionato, memorizzando **un breve estratto letterale** con SHA-256/offset. Lo storico e il giudice possono citarlo, distinguendo OCR da originale autenticato e diritti da attestazione dell'autore. [Guida](docs/loc-ocr-excerpts.md), ADR 0022, issue #23.
+**Acquisizione OCR istituzionale v0.9.9 (PR #34):** l'autore può, dopo scheda e ispezione LoC attive e attestazione esplicita dei diritti, leggere un solo file .txt da host istituzionale selezionato, memorizzando **un breve estratto letterale** con SHA-256/offset. Lo storico e il giudice possono citarlo, distinguendo OCR da originale autenticato e diritti da attestazione dell'autore. [Guida](docs/loc-ocr-excerpts.md), ADR 0022, issue #23.
 
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 

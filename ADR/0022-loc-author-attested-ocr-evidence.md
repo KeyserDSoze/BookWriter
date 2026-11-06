@@ -1,6 +1,6 @@
 # ADR 0022 — LoC OCR: breve estratto da file testuale istituzionale con diritti attestati dall'autore
 
-- **Stato:** Proposto per v0.9.9, in verifica CI
+- **Stato:** Accettato per v0.9.9 (PR #34)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0016–0017, 0019–0021

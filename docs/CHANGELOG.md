@@ -2,7 +2,7 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
-## 0.9.9 — 2026-11-06 (PR in verifica)
+## 0.9.9 — 2026-11-06 (PR #34)
 
 **Library of Congress: brevi OCR istituzionali recuperati realmente con diritti attestati dall'autore**
 
