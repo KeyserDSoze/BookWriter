@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BookCheck, RotateCcw, ShieldAlert, Users } from "lucide-react";
-import type { BookProject } from "../domain/types";
-import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, type EditorialRound,
+import type { BookProject, Chapter } from "../domain/types";
+import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
 import { reopenChapterReview } from "../application/editorial-control";
 import { Button } from "./ui/button";
@@ -18,9 +18,9 @@ import { WikisourcePanel } from "./WikisourcePanel";
 import { allWikisourceExcerpts, activeWikisourceExcerpts,
   wikisourceRevisionUrl, type WikisourceExcerpt } from "../domain/wikisource-excerpts";
 
-function RoundDetails({ round, reports, judgment, sources = [], manualSources = [], activeManualIds = [],
+function RoundDetails({ round, reports, judgment, chapter, sources = [], manualSources = [], activeManualIds = [],
   wikisourceSources = [], activeWikisourceIds = [] }: {
-  round: number; reports: EditorialReport[]; judgment?: EditorialJudgment;
+  round: number; reports: EditorialReport[]; judgment?: EditorialJudgment; chapter: Chapter;
   sources?: HistoricalSource[];
   manualSources?: ManualDocumentExcerpt[];
   activeManualIds?: string[];
@@ -44,9 +44,25 @@ function RoundDetails({ round, reports, judgment, sources = [], manualSources = 
             {!report.findings.length && <p className="text-emerald-700 dark:text-emerald-300">Nessun problema segnalato.</p>}
             {report.findings.map(f => {
               const ruling = judged.get(f.id);
+              const quoteVerified = isNarrativeEvidenceAnchorCurrent(chapter,f);
               return <div key={f.id} className="space-y-1 rounded-md bg-slate-100 p-2 dark:bg-slate-900">
                 <p className="font-semibold">{f.severity.toUpperCase()} · {f.category} · Scena {f.sceneId}</p>
                 <p><b>Prova:</b> {f.evidence}</p>
+                {quoteVerified && f.evidenceAnchor ? <div className="space-y-1 rounded border border-emerald-600/40
+                  p-2 break-words" aria-label={"Prova narrativa verificata " + f.id}>
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+                    Citazione letterale nel segmento {f.evidenceAnchor.segmentIndex + 1}
+                    {" "}· offset {f.evidenceAnchor.offset}
+                    {f.evidenceAnchor.occurrences > 1 ?
+                      " · " + f.evidenceAnchor.occurrences + " occorrenze (prima mostrata)" : ""}
+                  </p>
+                  <p className="whitespace-pre-wrap"><b>Testo trovato:</b> “{f.evidenceAnchor.quote}”</p>
+                  <p className="whitespace-pre-wrap muted"><b>Contesto:</b> {f.evidenceAnchor.context}</p>
+                  <p className="muted">Corrispondenza di testo, NON prova della fondatezza della critica.</p>
+                </div> : <p className="text-amber-700 dark:text-amber-300">
+                  Report precedente, modificato o senza ancoraggio valido: la prova narrativa non è confermata nel segmento attuale.
+                  Una nuova correzione richiede una review verificata.
+                </p>}
                 <p><b>Problema:</b> {f.reason}</p>
                 <p><b>Remediation proposta:</b> {f.remediation}</p>
                 {f.historical && <div className="space-y-1 rounded-md border border-slate-300 p-2 dark:border-slate-700">
@@ -236,14 +252,14 @@ export function EditorialBoardPanel({
         </Button>
       </div>}
       <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
-        sources={chapter.historicalDossier?.sources}
+        chapter={chapter} sources={chapter.historicalDossier?.sources}
         manualSources={allManualEvidence(chapter.historicalDossier)}
         activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}
         wikisourceSources={allWikisourceExcerpts(chapter.historicalDossier)}
         activeWikisourceIds={activeWikisourceExcerpts(chapter.historicalDossier).map(x=>x.id)}/> 
       {cycle.priorRounds.map(round => <details key={round.round} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
         <summary className="cursor-pointer text-sm font-semibold">Storico della tornata {round.round}</summary>
-        <div className="mt-3"><RoundDetails {...round} sources={chapter.historicalDossier?.sources}
+        <div className="mt-3"><RoundDetails {...round} chapter={chapter} sources={chapter.historicalDossier?.sources}
           manualSources={allManualEvidence(chapter.historicalDossier)}
           activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}
           wikisourceSources={allWikisourceExcerpts(chapter.historicalDossier)}
@@ -279,7 +295,7 @@ export function EditorialBoardPanel({
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           {ch.editorialRounds?.map((round, i) =>
-            <div key={i} className="mt-3"><RoundDetails {...round} sources={ch.historicalDossier?.sources}
+            <div key={i} className="mt-3"><RoundDetails {...round} chapter={ch} sources={ch.historicalDossier?.sources}
                 manualSources={allManualEvidence(ch.historicalDossier)}
                 activeManualIds={activeManualEvidence(ch.historicalDossier).map(x=>x.id)}
                 wikisourceSources={allWikisourceExcerpts(ch.historicalDossier)}

@@ -235,7 +235,9 @@ function nextWork(book: BookProject): Work | null {
           apply: (b, text) => {
             const current = b.editorialCycle;
             if (!current) throw new Error("Ciclo editoriale non disponibile.");
-            current.judgment = validateJudgment(current, text);
+            const chapter = b.chapters.find(c => c.id === current.chapterId);
+            if (!chapter) throw new Error("Capitolo del giudice non disponibile.");
+            current.judgment = validateJudgment(current, text, chapter);
             current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
             current.repairCursor = 0;
             current.summaryCursor = 0;

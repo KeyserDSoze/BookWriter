@@ -304,6 +304,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Regola di aggiornamento: Node 22/npm 10, `cd src/frontend && npm install --package-lock-only --ignore-scripts --no-audit --no-fund` dopo modifica manifest; controlla diff, licenze e aggiornamenti, quindi esegui due `npm ci` puliti, typecheck, Vitest, smoke, build e Playwright desktop/mobile. Consulta `docs/npm-lockfile-releases.md`.
 - Lo smoke test confronta dipendenze root, versioni esatte, integrity e URL HTTPS, oltre a verificare i workflow. Non affermare sicurezza totale dei package, riproducibilità bit per bit o deploy finché il workflow Pages sulla HEAD di `main` non è verde.
 
+## Redazione con prova narrativa verificata v0.10.9 (ADR 0032)
+
+- Per ogni nuovo `finding.evidence` dei 12 revisori, esigere una frase **letteralmente presente nel segmento esatto affidato al ruolo**, 12–1100 caratteri. Non usare canone privato, altre scene, snippet di fonti esterne, parafrasi o ellissi: il report intero viene rifiutato se non è ancorato. Le sole differenze ammesse sono capitalizzazione e whitespace.
+- `NarrativeEvidenceAnchor` è scritto solo dal validatore, con `segmentIndex`, `offset`, `quote`, `occurrences` e `context`. Ricalcolare l'ancoraggio dalla scena attuale prima del prompt del giudice e della **remediation accettata** nell'autopilot; non fidarsi di record importati o precedenti. I vecchi rapporti possono essere consultati/respinti ma non autorizzano nuove correzioni senza una review aggiornata.
+- La UI non deve mostrare un anchor come verificato senza ricontrollarlo contro il capitolo attuale. Mostrare numero delle occorrenze ripetute, contesto e un avviso per anchor assenti o obsoleti. Il controllo prova solo la presenza **testuale**, non la verità del rilievo o delle fonti storiche.
+- Nessun accesso a nuove fonti o modelli e nessuna estensione del contesto privato dei lettori ciechi. Testare parafrasi, altra scena, testo mutato, legacy, manomissione, rifiuto critico, mobile/desktop. [Guida](docs/editorial-narrative-evidence.md), ADR 0032, issue #20.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
