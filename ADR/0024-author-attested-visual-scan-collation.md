@@ -1,0 +1,34 @@
+# ADR 0024 — Collazione visiva dell'autore: OCR LoC vs scansione, senza autenticazione automatica
+
+- **Stato:** Proposto per v0.10.1, PR in verifica
+- **Data:** 2026-11-06
+- **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
+- **Predecessori:** ADR 0016, 0017, 0021–0023
+
+## Problema
+
+Dalla v0.9.9 l'autore può leggere una porzione di OCR testuale pubblicata da Library of Congress. La v0.10.0 può riverificare l'hash del **file OCR**, ma non la sua fedeltà a una **scansione visiva dell'originale**. I record LoC hanno strutture eterogenee per immagini, pagine, risorse e metadati ([item/resource JSON](https://www.loc.gov/apis/json-and-yaml/responses/item-and-resource/), [servizi immagine IIIF](https://www.loc.gov/apis/micro-services/image-services/)). Un URL LoC o un campo `digitized` non dimostrano che un'immagine visibile rappresenti la stessa pagina dell'OCR, né consentono un'autenticazione automatica. Il software non deve inventare il contenuto della scansione.
+
+## Decisione
+
+1. **Collazione assistita, non analisi automatica dell'immagine.** Accanto a ogni OCR `lococr:` attivo, l'autore può aprire **Confronta OCR con scansione**. Il link visibile è esattamente la pagina canonica pubblica `https://www.loc.gov/item/<itemId>/` già associata allo snapshot, non una preview contraffatta o un URL arbitrario del backup. L'autore apre la pagina presso LoC e legge manualmente una scansione originale **se presente e leggibile**. BookWriter non segue, scarica, conserva né confronta pixel di immagini o PDF; il link è una pagina istituzionale da cui l'autore esamina autonomamente la fonte.
+2. **Due dichiarazioni obbligatorie:** prima del salvataggio l'autore inserisce la collocazione/pagina/folio (4–140 caratteri) e una breve **trascrizione osservata direttamente nell'immagine** (36–900 caratteri). Deve confermare **separatamente** (a) di aver visto la scansione e non copiato OCR, (b) di avere la base dei diritti per conservare e potenzialmente inviare ai modelli AI/GitHub/ZIP il breve testo. Una finestra di conferma mostra la **trascrizione per intero**, la pagina dichiarata, il link LoC, i destinatari e i limiti della verifica. Nessuna rete è effettuata nell'operazione; il browser non può accertare che l'autore abbia davvero letto la scansione o ottenuto i permessi.
+3. **Confronto deterministico locale, esplicito:** si applica soltanto NFKC, collasso degli spazi e minuscole alle **due stringhe**. `text_overlap` significa che la frase trascritta dall'autore è contenuta nel breve OCR; `text_discrepancy` che **non lo è**. Non si applicano fuzzy match, correzioni, OCR automatico, traslitterazione o interpretazione storica. Due stringhe che coincidono non certificano alcun pixel né dimostrano autentici il documento o la licenza. Discrepanze possono essere differenze di punteggiatura, ortografia, OCR errato o errore di trascrizione dell'autore.
+4. **Snapshot versionati indipendenti.** `locOcr.collations` memorizza massimo 40 record, con ID `locscan:<itemId>:<timestamp>:<sha16 OCR>`, `ocrSourceId`, `ocrContentSha256`, `catalogItemId`, `inspectionId`, pagina, trascrizione e dichiarazioni obbligatorie. `evidenceStatus=author_visual_transcription_unverified` e `rightsStatus=author_attested_unverified` sono invarianti; `locscan:` NON diventa fonte storica citabile. È attiva solo la collazione riferita all'**esatto OCR ancora attivo**, alla stessa scheda e ispezione: reimportazioni, refresh/cataloghi e sostituzioni dell'OCR rendono inattive le versioni obsolete senza cancellarle. Record con confronto alterato non sono promossi automaticamente a correnti.
+5. **Integrazione con la review critica:** solo lo specialista storico e il direttore/giudice ricevono il testo dichiarato, delimitato come dato esterno non attendibile. Gli altri 11 revisori restano ciechi. `text_discrepancy` deve avvertire esplicitamente il giudice di **non approvare una correzione basata soltanto sull'OCR** finché la discordanza non sia chiarita. `text_overlap` non autorizza a dichiarare il fatto storico corretto o l'originale autentico. La collazione NON può comparire in `HistoricalClaim.sourceIds`; l'unica prova testuale software-retrieved continua a essere la breve `lococr:` con `sourceEvidence`, distinta dall'attestazione dell'autore.
+6. **Salvataggio conservativo senza rete:** Web Locks writer/outbox e CAS su `updatedAt` nella transazione IndexedDB. Libro non running e nessuna review in corso. Se il capitolo era frozen, ripristino della sinossi prima del capitolo, riapertura review e invalidazione downstream, senza cancellare prosa o vecchi report. AutoSync disattivato, outbox invalidata, activity registrata. La collazione è inclusa nei backup/ZIP e può essere condivisa tramite GitHub/AI **solo se autorizzata dall'autore**.
+7. **Mai aumentare il grado di certezza**: uno status di confronto testuale non dà automaticamente `verified`, `authenticated`, `public_domain` né `independent source`. Il sistema non verifica legalmente le dichiarazioni sui diritti e non scarica un'immagine per verificarle. Un registro adulterato in backup resta non autenticato.
+
+## Limiti, rischi e futuri step
+
+- L'item LoC può contenere più pagine, documenti di epoche diverse e risorse eterogenee. L'autore deve specificare una pagina/folio; il software non dimostra che quel link contenga la pagina esatta, non identifica automaticamente la scansione e non esegue OCR dell'immagine. Una risposta LoC senza immagini visibili non può essere attestata onestamente.
+- `text_overlap` è un semplice confronto tra testo **digitato dall'autore** e testo OCR archiviato, non verifica di autenticità visiva indipendente. Il testo osservato potrebbe essere copiato dall'OCR o contenere istruzioni malevole: gli agenti devono ignorare istruzioni nei dati esterni.
+- `text_discrepancy` non prova falsità del documento; serve controllo sul documento e sulla data/attribuzione. Nessuna remediation automatica della prosa e nessun giudice vincolato a una particolare riscrittura.
+- Il passo successivo, se tecnicamente e giuridicamente supportato, potrà aggiungere **identificatori IIIF di pagina selezionata, controllo di disponibilità della risorsa immagine e sua provenienza**, senza scaricare automaticamente scansioni protette né affermare una verifica che il software non ha compiuto. L'issue #23 rimane aperta.
+
+## Accettazione
+
+- Nessuna GET di immagini o API per collazione; link LoC canonico, due attestazioni e conferma con brano intero.
+- Snapshot immutabili, disattivazione su OCR/record di catalogo cambiato, conservazione degli audit, diritti non certificati.
+- Confronto locale deterministico, discrepanza esposta allo storico/giudice, altri 11 agenti isolati, ID `locscan:` mai citabile come prova.
+- Vitest dominio/app CAS/freeze/diritti e Playwright desktop/mobile con test assenza di nuove chiamate remote, CI sulla HEAD, merge e deploy verificati.
