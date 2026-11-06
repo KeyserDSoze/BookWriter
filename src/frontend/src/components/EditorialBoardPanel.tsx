@@ -9,13 +9,14 @@ import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
 import { BibliographyPanel } from "./BibliographyPanel";
 import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
 import type { HistoricalSource } from "../domain/historical-research";
-import { activeManualEvidence, type ManualDocumentExcerpt } from "../domain/manual-evidence";
+import { activeManualEvidence, validateManualExcerpt, type ManualDocumentExcerpt } from "../domain/manual-evidence";
 import { ManualEvidencePanel } from "./ManualEvidencePanel";
 
-function RoundDetails({ round, reports, judgment, sources = [], manualSources = [] }: {
+function RoundDetails({ round, reports, judgment, sources = [], manualSources = [], activeManualIds = [] }: {
   round: number; reports: EditorialReport[]; judgment?: EditorialJudgment;
   sources?: HistoricalSource[];
   manualSources?: ManualDocumentExcerpt[];
+  activeManualIds?: string[];
 }) {
   const judged = new Map((judgment?.decisions ?? []).map(d => [d.findingId,d]));
   const findings = reports.flatMap(r => r.findings);
@@ -58,6 +59,9 @@ function RoundDetails({ round, reports, judgment, sources = [], manualSources = 
                         {" "}(collocazione: {manual.locator}; diritti dichiarati: {manual.rightsBasis})</p>
                       {evidence && <p className="mt-1 whitespace-pre-wrap"><b>Citazione nella trascrizione:</b> “{evidence.quote}”</p>}
                       <p className="muted">Il software ha confrontato la citazione solo con il testo immesso dall'autore.</p>
+                      {!activeManualIds.includes(id) && <p className="text-amber-700 dark:text-amber-300">
+                        Snapshot storico: oggi non attivo per nuove citazioni.
+                      </p>}
                     </div> : source ? <div key={id} className="mt-1 border-t border-slate-200 pt-1 dark:border-slate-700">
                       <p><b>Fonte terziaria:</b>{" "}
                         <a className="text-blue-700 underline dark:text-blue-300" href={source.revisionId ? "https://it.wikipedia.org/w/index.php?oldid=" + source.revisionId : source.url}
@@ -163,11 +167,13 @@ export function EditorialBoardPanel({
       </div>}
       <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
         sources={chapter.historicalDossier?.sources}
-        manualSources={activeManualEvidence(chapter.historicalDossier)}/> 
+        manualSources={chapter.historicalDossier?.manualEvidence?.excerpts.filter(validateManualExcerpt)}
+        activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}/> 
       {cycle.priorRounds.map(round => <details key={round.round} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
         <summary className="cursor-pointer text-sm font-semibold">Storico della tornata {round.round}</summary>
         <div className="mt-3"><RoundDetails {...round} sources={chapter.historicalDossier?.sources}
-          manualSources={activeManualEvidence(chapter.historicalDossier)}/></div>
+          manualSources={chapter.historicalDossier?.manualEvidence?.excerpts.filter(validateManualExcerpt)}
+          activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}/></div>
       </details>)}
     </div>}
     {book.chapters.length > 0 && <div className="mt-4 space-y-2">
@@ -196,7 +202,8 @@ export function EditorialBoardPanel({
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           {ch.editorialRounds?.map((round, i) =>
             <div key={i} className="mt-3"><RoundDetails {...round} sources={ch.historicalDossier?.sources}
-                manualSources={activeManualEvidence(ch.historicalDossier)}/></div>)}
+                manualSources={ch.historicalDossier?.manualEvidence?.excerpts.filter(validateManualExcerpt)}
+                activeManualIds={activeManualEvidence(ch.historicalDossier).map(x=>x.id)}/></div>)}
         </details>}
       </div>)}
     </div>}
