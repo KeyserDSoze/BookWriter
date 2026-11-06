@@ -86,6 +86,20 @@ describe("LoC OCR: no arbitrary downloads, literal content only",()=>{
       expect(spy).toHaveBeenCalledTimes(1);
     }
   });
+  it("non scarica risorse contrassegnate come rights/download restricted",async()=>{
+    for(const property of ["download_restricted","rights_restricted"] as const){
+      const spy=mockApis({...meta,resources:[{fulltext_file:sourceUrl,[property]:true}]});
+      await expect(fetchLocOcrExcerpt(itemId,catalogItemId,inspectionId,title,rights))
+        .rejects.toThrow(/non espone/);
+      expect(spy).toHaveBeenCalledTimes(1);
+    }
+    for(const flag of ["true",0]){
+      const spy=mockApis({...meta,item:{...meta.item,access_restricted:flag}});
+      await expect(fetchLocOcrExcerpt(itemId,catalogItemId,inspectionId,title,rights))
+        .rejects.toThrow(/Flag/);
+      expect(spy).toHaveBeenCalledTimes(1);
+    }
+  });
   it("senza attestazione o collocazione non invia alcuna richiesta",async()=>{
     const spy=mockApis();
     await expect(fetchLocOcrExcerpt(itemId,catalogItemId,inspectionId,title,
@@ -107,7 +121,7 @@ describe("LoC OCR: no arbitrary downloads, literal content only",()=>{
     mockApis(meta,"<html>not text</html>");
     // Valid plaintext MIME alone does not prove that a document is historical.
     await expect(fetchLocOcrExcerpt(itemId,catalogItemId,inspectionId,title,rights))
-      .rejects.toThrow(/non contiene un frammento/);
+      .rejects.toThrow(/non è un file OCR testuale/);
     mockApis(meta,"x".repeat(160_001));
     await expect(fetchLocOcrExcerpt(itemId,catalogItemId,inspectionId,title,rights))
       .rejects.toThrow(/troppo grande/);
