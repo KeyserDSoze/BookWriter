@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.8 — 2026-11-06 (PR in verifica)
+
+**Library of Congress: ispezione per singola scheda di disponibilità e diritti, senza scaricare originali**
+
+- Nuovo comando per ogni scheda LoC attiva: **Verifica accesso e diritti della scheda**. Dialogo con ID esatto e consenso dell'autore; GET read-only verso `https://www.loc.gov/item/<itemId>/?fo=json` con endpoint fisso. Solo l'ID pubblico è inviato, non query, romanzo, segreti, PAT o chiavi AI.
+- Lettura esclusiva di indicatori/catalogo `digitized`, `access_restricted`, `rights_advisory`/`rights`, `access_advisory` e presenza di link a risorse digitali/testuali. **Nessun PDF, OCR, immagine, URL di risorsa o testo originale viene scaricato o salvato**; l'indicatore di una risorsa non certifica che sia realmente disponibile o riutilizzabile.
+- Stato dei diritti sempre `undetermined`, evidenza `catalog_metadata_only`. Campi assenti restano `null` (sconosciuto), non «permesso». Risposte identificate dall'ID istituzionale esatto, streaming massimo 240 KB, timeout 12s, zero credenziali/redirect/referrer, errori CORS/429/JSON fail-closed.
+- Snapshot separati in `ChapterArchiveCatalog.inspections` fino a 60, revisione append-only con ID `locdetail:<itemId>:<timestamp>`, consultabili via ZIP/backup/GitHub se l'autore sincronizza. Refresh del catalogo preserva lo storico ma disattiva le ispezioni su schede ritirate. I metadati `loc:` e `locdetail:` **non sono citazioni documentali**.
+- Solo specialista storico e giudice ricevono gli avvisi, segnalati come metadati non attendibili; gli altri 11 revisori restano ciechi. Concorrenza Web Locks/CAS, riapertura freeze e downstream, outbox atomica e autosync disabilitato. Test Vitest dominio/API/transazioni e Playwright desktop/mobile; ADR 0021, `docs/institutional-item-inspection.md`.
+
+**Limite:** non è ancora acquisizione del testo di un originale istituzionale né una verifica giuridica delle licenze. I test browser con mock non certificano che LoC accetti CORS nel browser reale. L'autore deve esaminare personalmente l'originale e le condizioni di riutilizzo.
+
 ## 0.9.7 — 2026-11-06 (PR #32)
 
 **Wikisource: riverifica remota dell'impronta delle revisioni e quarantena volontaria**

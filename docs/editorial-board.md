@@ -62,6 +62,10 @@ Il costo può essere **elevato**: per N segmenti di testo, ci sono almeno **12 �
 
 Nel pannello Wikisource l'autore può richiedere un nuovo GET pubblico **solo per il `revid`** della fonte, senza trasmettere manoscritto o query: il browser confronta in memoria identità, SHA-256, lunghezza e offset del frammento con quelli archiviati. Il risultato è **effimero** e non equivale ad autenticare opera o licenza. In caso di discordanza, il sistema avverte l'autore; solo con **ulteriore conferma** una fonte viene esclusa dalle nuove review, mantenendola negli audit, riaprendo capitoli congelati e invalidando i successivi. Un guasto CORS/rete è un errore, non una prova negativa. [Guida](wikisource-reverification.md), ADR 0020.
 
+## Avvisi di accesso e diritti Library of Congress (v0.9.8)
+
+L'autore può ispezionare con consenso un singolo dettaglio LoC pubblico. Il dossier conserva `catalog_metadata_only` e `rightsStatus=undetermined` con indicazioni di digitalizzazione/accesso, avvisi testuali e presenza di riferimenti a risorse digitali, **senza acquisire il documento**. Solo storico e giudice critico ricevono i metadati; gli altri undici agenti sono ciechi. Il giudice non può trattare `locdetail:` e `loc:` come `sourceIds` o permessi di ripubblicazione. [Guida](institutional-item-inspection.md), ADR 0021.
+
 ## Verifica testuale della revisione Wikisource — v0.9.6
 
 I nuovi rilievi storici possono riferire `itwsr:<pageId>:<revid>:<digest>`: significa che BookWriter ha letto dal servizio MediaWiki il **wikitesto della specifica revisione**, e ha confrontato una sottostringa letterale prima del salvataggio. Il giudice vede impronta SHA-256 e offset per motivare la propria valutazione, **non** un'autenticazione dell'originale o della sua licenza. I vecchi `itws:` della v0.9.5, associati agli estratti della pagina corrente, rimangono consultabili per audit ma **non sono più citabili** nei nuovi report finché l'autore non riavvia la ricerca con consenso. Il revisore storico e il giudice sono gli unici a ricevere i testi, e il giudice può sempre respingere una remediation. Guida [Wikisource](wikisource-transcriptions.md), ADR 0019.

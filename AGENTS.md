@@ -128,6 +128,14 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Snapshot fino a 40 versioni, 5 attive, con filtro sulla scheda catalografica esatta ancora attiva; refresh Wikipedia/DOI/LoC preservano i testi archiviati, ma una scheda ritirata disattiva le nuove citazioni. Riapertura downstream, sinossi lossless, Web Locks, fencing `updatedAt`, autosync off e outbox cancellata. Nuove CI Playwright desktop/mobile obbligatorie.
 - Riferimenti `docs/archival-excerpts.md`, ADR 0017, issue #23.
 
+## Ispezione LoC di accesso e diritti v0.9.8 — SOLI metadati (ADR 0021)
+
+- Dopo una ricerca consensuale `loc:`, l'autore può ispezionare **una singola scheda LoC ancora attiva**, mostrando dialogo con l'ID pubblico prima del `GET https://www.loc.gov/item/<id>/?fo=json`. Non inviare query del romanzo, scene, canone, segreti, API key, PAT, né URL OCR/PDF; mai seguire URL di risorsa restituiti dal catalogo.
+- Leggere solo avvisi `rights_advisory`/`rights`, `access_advisory`, flag booleani `digitized` e `access_restricted` o `null` ignoto, più indicatori **metadati** per risorse digitali/testuali. CORS/429/JSON/timeout, host/ID non corrispondente, payload >240 KB interrompono tutto; richiesta streaming limitata, `credentials:omit`, no redirect/referer/cookie.
+- `ChapterArchiveCatalog.inspections` conserva snapshot `locdetail:<itemId>:<timestamp>` non riscrivibili, massimo 60, vincolati all'ID esatto della scheda ancora attiva. Dopo aggiornamento del catalogo conservare lo storico ma disattivare ispezioni legate a snapshot di ricerca ritirati. Gli altri dossier (Wikipedia, Crossref, Wikisource, trascrizioni manuali) devono restare integri.
+- Solo storico e giudice ricevono avvisi LoC con `evidenceStatus=catalog_metadata_only`, `rightsStatus=undetermined`; nessuna indicazione sul libero accesso diventa prova di pubblico dominio, citazione o licenza. Rifiutare `loc:` e `locdetail:` in `historical.sourceIds`. Nessun originale, OCR, PDF o testo integrale è consultato.
+- Persistenza sotto Web Locks writer/outbox e CAS `updatedAt`, rewind sinossi/freezes e downstream, autosync off, outbox delete nella stessa transazione, activity. Test Vitest + E2E desktop/mobile, ADR 0021 e `docs/institutional-item-inspection.md`.
+
 ## Cataloghi istituzionali v0.9.3 — Library of Congress (ADR 0016)
 
 - `ChapterHistoricalDossier.archiveCatalog` conserva soltanto schede di catalogo LoC, **non** testi integrali o estratti verificati: gli ID `loc:...` non sono ammessi in `historical.sourceIds` né diventano prove di fatti storici.

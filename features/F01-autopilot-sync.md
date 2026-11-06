@@ -18,6 +18,7 @@
 - [x] PR #27 (v0.9.2): citazioni storiche per singola fonte, controlli anti-falsa corroborazione e giudice critico, con regressioni Vitest; ADR 0015.
 - [x] PR #28 (v0.9.3): catalogo istituzionale Library of Congress con query approvate, metadati separati dalle prove, contesti privati, Web Locks/freeze e test CI (ADR 0016).
 - [x] PR #29 (v0.9.4): trascrizioni di originali LoC consultati dall'autore, provenienza/diritti dichiarati, citazioni verificabili solo nella trascrizione, snapshot e test CI (ADR 0017).
+- [ ] v0.9.8 (PR in verifica): consultazione consensuale metadati di accesso/diritti LoC, snapshot e isolamento storico/giudice, nessun originale letto, CI desktop/mobile (ADR 0021).
 - [x] v0.9.7 (PR #32): riverifica remota Wikisource consentita, eventuale esclusione manuale con rewind e audit; diritti/non autenticità non cambiano (ADR 0020).
 - [x] v0.9.6 (PR #31): lettura `revids` esatta di Wikisource, SHA-256 e frammento letterale, legacy solo audit, prove testuali senza autenticazione storica, CI mobile/desktop (ADR 0019).
 - [x] v0.9.5 PR #30: estratti Wikisource pubblici revisionati, consenso query, quote per fonte, revisioni/diritti non certificati (ADR 0018).
