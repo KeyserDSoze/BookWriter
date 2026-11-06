@@ -88,6 +88,7 @@ export function extendArchiveCatalog(
     unansweredQueries: previous?.unansweredQueries ?? [],
     ...(previous?.bibliography ? {bibliography: previous.bibliography} : {}),
     ...(previous?.manualEvidence ? {manualEvidence:previous.manualEvidence} : {}),
+    ...(previous?.wikisource ? {wikisource:previous.wikisource} : {}),
     archiveCatalog: {
       queries: normalized, items: [...archive.values()],
       activeItemIds: [...new Set(found.map(item => item.id))],
