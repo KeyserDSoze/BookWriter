@@ -175,6 +175,27 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(new URL(archiveCalls[0]!).searchParams.get("q")).toBe("telegraph correspondence 1848");
   expect(archiveCalls[0]).not.toContain("Mara");
   expect(archiveCalls[0]).not.toContain("stanza");
+  await editorial.getByText(/Estratti da originali consultati dall'autore/).click();
+  await editorial.getByRole("textbox",{name:"Collocazione originale capitolo 1"})
+    .fill("Page 12, column 2");
+  await editorial.getByRole("textbox",{name:"Data documento originale capitolo 1"})
+    .fill("1848 original");
+  await editorial.getByRole("textbox",{name:"Trascrizione originale capitolo 1"})
+    .fill("The telegraph apparatus was operated at the station during the winter of 1848.");
+  await editorial.getByRole("textbox",{name:"Motivazione diritti capitolo 1"})
+    .fill("La pagina istituzionale dichiara il testo nel pubblico dominio.");
+  await editorial.getByRole("checkbox",{name:/Dichiaro di aver consultato/}).check();
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("SALVATAGGIO TRASCRIZIONE");
+    expect(dialog.message()).toContain("Page 12, column 2");
+    expect(dialog.message()).toContain("The telegraph apparatus");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Archivia estratto attestato"}).click();
+  await expect(editorial.getByText("The telegraph apparatus was operated at the station during the winter of 1848."))
+    .toBeVisible({timeout:15000});
+  expect(archiveCalls).toHaveLength(1); // The local author submission must NEVER fetch originals.
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect(editorial.getByText(/Congelato il/)).toBeVisible({timeout:85_000});
   expect(modelCalls.filter(x=>x.system.includes("revisore letterario INDIPENDENTE"))).toHaveLength(12);
@@ -185,16 +206,20 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("10.1000/xyz123");
   expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
   expect(specialist?.prompt).toContain("loc:2020123456");
+  expect(specialist?.prompt).toContain("locex:2020123456");
   expect(specialist?.system).toContain("CIASCUN sourceId");
   const judgeCall=modelCalls.find(x=>x.system.includes("direttore editoriale CRITICO"));
   expect(judgeCall?.prompt).toContain('"quoteMatches":true');
   expect(judgeCall?.prompt).toContain("loc:2020123456");
+  expect(judgeCall?.prompt).toContain("locex:2020123456");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwiki:42:321"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("10.1000/xyz123"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("loc:2020123456"))).toBe(true);
+  expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
+    !x.prompt.includes("locex:2020123456"))).toBe(true);
   await editorial.getByText(/Giudizi archiviati \(1\)/).click();
   await editorial.getByText(/Plausibilità e accuratezza storica ·/).click();
   await expect(editorial.getByText(/Citazione associata/)).toBeVisible();
