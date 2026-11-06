@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { activeLocOcrExcerpts } from "../domain/loc-ocr";
@@ -47,6 +48,7 @@ export async function attachLocScanCollation(
       const oldSummary=reopened?synopsisBeforeChapter(book.chapters,chapter.number):undefined;
       chapter.historicalDossier=dossier;
       if(reopened){
+        markHistoricalEvidenceChanged(book, chapter);
         for(const ch of book.chapters)if(ch.number>=chapter.number){
           ch.frozenAt=undefined;
           ch.summary=undefined;

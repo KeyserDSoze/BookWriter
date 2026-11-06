@@ -233,8 +233,10 @@ export function EditorialBoardPanel({
           cycle.stage === "reconcile" ? "Riconciliazione del canon" :
           cycle.stage === "summary" ? "Sinossi e congelamento" : "Bloccato in attesa dell'autore"}</p>
         {chapter.continuityRecheck && <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-          Rivalidazione di continuità obbligatoria: modifica dal capitolo
-          {" "}{chapter.continuityRecheck.originChapterNumber}.
+          Rivalidazione obbligatoria: {chapter.continuityRecheck.trigger === "historical_evidence"
+            ? "fonti storiche aggiornate nel capitolo "
+            : "modifica narrativa dal capitolo "}
+          {chapter.continuityRecheck.originChapterNumber}.
           La redazione confronterà campioni delle scene precedenti già congelate,
           senza considerarli una prova automatica di coerenza.
         </p>}
@@ -289,15 +291,19 @@ export function EditorialBoardPanel({
         </div>
         {ch.continuityRecheck && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300"
           aria-label={"Rivalidazione capitolo " + ch.number}>
-          <b>Rivalidazione obbligatoria:</b> modifica a monte nel capitolo
-          {" "}{ch.continuityRecheck.originChapterNumber}. Verificare segreti, timeline,
+          <b>Rivalidazione obbligatoria:</b> {ch.continuityRecheck.trigger === "historical_evidence"
+            ? "dossier storico modificato nel capitolo "
+            : "modifica a monte nel capitolo "}
+          {ch.continuityRecheck.originChapterNumber}. Verificare segreti, timeline,
           personaggi e causa-effetto con i dodici agenti prima del nuovo congelamento.
           I capitoli precedenti vanno approvati in ordine.
         </p>}
         {ch.frozenAt && ch.lastContinuityReview && <p className="mt-2 text-xs muted"
           aria-label={"Storico rivalidazione capitolo " + ch.number}>
-          Rivalidazione editoriale completata dopo il capitolo
-          {" "}{ch.lastContinuityReview.originChapterNumber} il
+          Rivalidazione editoriale completata dopo {ch.lastContinuityReview.trigger === "historical_evidence"
+            ? "l'aggiornamento delle fonti del capitolo "
+            : "la modifica al capitolo "}
+          {ch.lastContinuityReview.originChapterNumber} il
           {" "}{new Date(ch.lastContinuityReview.completedAt).toLocaleString("it-IT")}.
           {ch.lastContinuityReview.partialCoverage
             ? " Il confronto documentale campiona solo alcune scene o finestre."

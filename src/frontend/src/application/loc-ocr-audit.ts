@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { activeLocOcrExcerpts } from "../domain/loc-ocr";
@@ -39,6 +40,7 @@ export async function quarantineLocOcrSource(
       dossier.locOcr.activeExcerptIds=dossier.locOcr.activeExcerptIds
         .filter(id=>id!==sourceId);
       if(reopened){
+        markHistoricalEvidenceChanged(book, chapter);
         for(const ch of book.chapters)if(ch.number>=chapter.number){
           ch.frozenAt=undefined;
           ch.summary=undefined;

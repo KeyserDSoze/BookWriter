@@ -3,7 +3,7 @@ import { newBook, type BookProject } from "./types";
 import { adjudicationPrompt, chapterSegments, createEditorialCycle, reviewerPrompt } from "./editorial-board";
 import {
   assertPriorChaptersFrozen, buildContinuityEvidence, completeContinuityRecheck,
-  markDownstreamContinuity,
+  markDownstreamContinuity, markHistoricalEvidenceChanged,
 } from "./cross-chapter-continuity";
 
 const frozenAt="2026-11-06T12:00:00.000Z";
@@ -119,6 +119,53 @@ describe("Catena di rivalidazione narrativa fra capitoli",()=>{
       partialCoverage:false,
     });
     expect(ch.lastContinuityReview!.sampledSceneIds).toContain("s-1-1");
+  });
+
+  it("un aggiornamento storico riapre l'obbligo a valle senza fingere una modifica alla prosa",()=>{
+    const b=sample();
+    const stale={
+      originChapterId:"ch-3",originChapterNumber:3,trigger:"retroactive_revision" as const,
+      requestedAt:frozenAt,originSceneIds:["s-3-1"],
+      completedAt:frozenAt,sampledSceneIds:["s-3-1"],partialCoverage:false,
+    };
+    b.chapters[0]!.lastContinuityReview=stale;
+    b.chapters[3]!.lastContinuityReview=stale;
+    const prose=b.chapters.map(ch=>ch.scenes.map(sc=>sc.text));
+    expect(markHistoricalEvidenceChanged(b,b.chapters[0]!)).toBe(3);
+    expect(b.chapters[0]!.lastContinuityReview).toBeUndefined();
+    expect(b.chapters[1]!.continuityRecheck).toMatchObject({
+      originChapterId:"ch-1",originChapterNumber:1,
+      trigger:"historical_evidence",originSceneIds:[],
+    });
+    expect(b.chapters[3]!.lastContinuityReview).toBeUndefined();
+    expect(b.chapters.map(ch=>ch.scenes.map(sc=>sc.text))).toEqual(prose);
+    const cycle=createEditorialCycle("ch-2");
+    const seg=chapterSegments(b.chapters[1]!)[0]!;
+    const historian=reviewerPrompt(b,cycle,"historical",seg,1);
+    expect(historian.prompt).toContain("AGGIORNAMENTO DEL DOSSIER STORICO");
+    expect(historian.prompt).toContain("Mara custodisce la chiave");
+    const blind=reviewerPrompt(b,cycle,"readerMystery",seg,1);
+    expect(blind.prompt).not.toContain("AGGIORNAMENTO DEL DOSSIER STORICO");
+    expect(blind.prompt).not.toContain("Mara custodisce la chiave");
+    const judge=adjudicationPrompt(b,cycle);
+    expect(judge.prompt).toContain("trigger");
+    expect(judge.prompt).toContain("historical_evidence");
+    expect(judge.prompt).toContain("NON necessariamente");
+    completeContinuityRecheck(b,b.chapters[1]!,frozenAt);
+    expect(b.chapters[1]!.lastContinuityReview).toMatchObject({
+      originChapterId:"ch-1",trigger:"historical_evidence",partialCoverage:false,
+    });
+    expect(b.chapters[1]!.continuityRecheck).toBeUndefined();
+  });
+
+  it("conserva l'origine precedente più antica dopo una nuova modifica documentale",()=>{
+    const b=sample();
+    markDownstreamContinuity(b,b.chapters[0]!,"author_reopen",["s-1-1"]);
+    markHistoricalEvidenceChanged(b,b.chapters[1]!);
+    expect(b.chapters[2]!.continuityRecheck).toMatchObject({
+      originChapterId:"ch-1",trigger:"author_reopen",originSceneIds:["s-1-1"],
+    });
+    expect(b.chapters[3]!.continuityRecheck?.originChapterNumber).toBe(1);
   });
 
   it("rifiuta un'origine inventata anziché considerare la validazione eseguita",()=>{

@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { activeArchivalItems } from "../domain/archival-catalog";
 import { activeInstitutionalInspections } from "../domain/institutional-inspection";
@@ -51,6 +52,7 @@ export async function attachLocOcrExcerpt(
       const prior=reopened?synopsisBeforeChapter(book.chapters,target.number):undefined;
       target.historicalDossier=dossier;
       if(reopened){
+        markHistoricalEvidenceChanged(book, target);
         for(const dependent of book.chapters)if(dependent.number>=target.number){
           dependent.frozenAt=undefined;
           dependent.summary=undefined;

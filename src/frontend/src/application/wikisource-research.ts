@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { extendWikisourceDossier, normalizeWikisourceQueries } from "../domain/wikisource-excerpts";
@@ -47,6 +48,7 @@ export async function attachWikisourceResearch(
       const beforeSynopsis=reopened?synopsisBeforeChapter(book.chapters,chapter.number):undefined;
       chapter.historicalDossier=dossier;
       if(reopened){
+        markHistoricalEvidenceChanged(book, chapter);
         for(const dependent of book.chapters)if(dependent.number>=chapter.number){
           dependent.frozenAt=undefined;
           dependent.summary=undefined;

@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { normalizeDois, extendChapterBibliography } from "../domain/bibliography";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
@@ -47,6 +48,7 @@ export async function attachBibliographyToChapter(
       const previousSynopsis=reopen?synopsisBeforeChapter(book.chapters,chapter.number):undefined;
       chapter.historicalDossier=dossier;
       if(reopen){
+        markHistoricalEvidenceChanged(book, chapter);
         for(const dependent of book.chapters) if(dependent.number>=chapter.number){
           dependent.frozenAt=undefined;
           dependent.summary=undefined;

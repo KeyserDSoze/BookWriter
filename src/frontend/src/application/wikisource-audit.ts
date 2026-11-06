@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { activeWikisourceExcerpts } from "../domain/wikisource-excerpts";
@@ -36,6 +37,7 @@ export async function quarantineWikisourceSource(
       const oldSynopsis=reopened?synopsisBeforeChapter(book.chapters,chapter.number):undefined;
       d.activeExcerptIds=d.activeExcerptIds.filter(id=>id!==sourceId);
       if(reopened){
+        markHistoricalEvidenceChanged(book, chapter);
         for(const dependent of book.chapters)if(dependent.number>=chapter.number){
           dependent.frozenAt=undefined;
           dependent.summary=undefined;

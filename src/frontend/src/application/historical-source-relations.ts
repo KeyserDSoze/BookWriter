@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { appendHistoricalSourceRelation, type HistoricalSourceRelationKind } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
@@ -38,6 +39,7 @@ export async function attestHistoricalSourceRelation(
       const priorSynopsis=reopened?synopsisBeforeChapter(book.chapters,chapter.number):undefined;
       chapter.historicalDossier=dossier;
       if (reopened) {
+        markHistoricalEvidenceChanged(book, chapter);
         for (const dependent of book.chapters) if(dependent.number>=chapter.number){
           dependent.frozenAt=undefined;
           dependent.summary=undefined;

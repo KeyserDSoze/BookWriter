@@ -1,7 +1,7 @@
 import type { BookProject, Chapter, Scene } from "./types";
 
 /** Revalidation is a pending obligation, not a claim that any contradiction exists. */
-export type ContinuityTrigger = "author_reopen" | "retroactive_revision";
+export type ContinuityTrigger = "author_reopen" | "retroactive_revision" | "historical_evidence";
 
 export interface ContinuityRecheck {
   originChapterId: string;
@@ -64,6 +64,16 @@ export function markDownstreamContinuity(book: BookProject, origin: Chapter,
     touched++;
   }
   return touched;
+}
+
+/** Historical dossier edits invalidate documentary assumptions, NOT manuscript prose.
+ * Reuse the same downstream recheck/earliest-origin semantics atomically with
+ * the existing historical rewind transaction. No source text or private canon
+ * is copied into markers. */
+export function markHistoricalEvidenceChanged(book: BookProject, origin: Chapter): number {
+  const affected = markDownstreamContinuity(book, origin, "historical_evidence");
+  origin.lastContinuityReview = undefined;
+  return affected;
 }
 
 /** Never review/freeze downstream while any prior chapter awaits freeze. */

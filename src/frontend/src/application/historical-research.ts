@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { extendHistoricalDossier, normalizeResearchQueries } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
@@ -50,6 +51,7 @@ export async function researchHistoricalChapter(
       chapter.historicalDossier = dossier;
       // New evidence invalidates previously frozen approval (and later chapters).
       if (restart) {
+        markHistoricalEvidenceChanged(book, chapter);
         for (const later of book.chapters) if (later.number >= chapter.number) {
           later.frozenAt = undefined;
           later.summary = undefined;

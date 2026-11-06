@@ -2,6 +2,10 @@
 
 Dalla versione 0.9.0 il **revisore storico** della Redazione multi-agente può confrontare alcuni dubbi del romanzo con **estratti di fonti effettivamente recuperati** da Wikipedia italiana. L'obiettivo è migliorare la qualità delle domande e la tracciabilità delle proposte editoriali, **non** dichiarare automaticamente che un fatto sia storicamente provato.
 
+## Continuità dopo l'aggiornamento di un dossier (v0.11.1)
+
+Se il capitolo era già congelato, aggiornare o quarantinare una fonte storica conserva ora la **causa documentale** del rewind sui capitoli successivi già scritti, usando `historical_evidence`. La prosa non viene riscritta dalla sola operazione sulle fonti, e il direttore deve distinguere i campioni narrativi dal valore probatorio dei documenti. I cinque lettori ciechi rimangono separati. [Guida](historical-continuity-rechecks.md), ADR 0034, issue #23.
+
 ## Prima della revisione di un capitolo
 
 1. Apri la **Dashboard** del libro e, nel pannello **Redazione multi-agente**, trova il capitolo che stai preparando. Espandi **Dossier storico**.

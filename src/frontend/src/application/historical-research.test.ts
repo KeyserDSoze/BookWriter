@@ -78,6 +78,7 @@ describe("Ricerca storica con consenso esplicito e riapertura del canon",()=>{
     expect(updated?.chapters[0]?.frozenAt).toBeDefined();
     expect(updated?.chapters[1]?.frozenAt).toBeUndefined();
     expect(updated?.chapters[1]?.bookSummaryAtFreeze).toBeUndefined();
+    expect(updated?.chapters[1]?.continuityRecheck).toBeUndefined(); // No chapter after c2.
     expect(updated?.bookSummary).toBe("Mara arriva e invia una notizia.");
     expect(updated?.editorialCycle?.chapterId).toBe("c2");
     expect(updated?.phase).toBe("chapterReview");

@@ -4,6 +4,10 @@
 
 Quando riapri un capitolo già approvato o chiedi all'autopilot di correggere retroattivamente una scena, BookWriter annulla il congelamento dei capitoli interessati e dei successivi. Ora contrassegna anche i capitoli **di valle** che contengono prosa già scritta come **da rivalidare**, indicando il capitolo da cui è partita la modifica. Se un'altra modifica ancora precedente arriva prima della review, quella nuova origine prende la precedenza.
 
+## Aggiornamento delle fonti storiche (v0.11.1)
+
+La stessa catena è ora attivata anche quando aggiungi, verifichi, escludi o attesti relazioni fra **fonti storiche** in un capitolo già congelato. Il marcatore `historical_evidence` distingue un **dossier documentale modificato** dalla **prosa riscritta**. I capitoli successivi già scritti richiedono una nuova review in ordine; anche il revisore storico vede campioni della prosa precedente, ma tali campioni **non dimostrano fatti storici** e non certificano l'indipendenza dei documenti. [Guida](historical-continuity-rechecks.md) e ADR 0034.
+
 ## Come funziona la rivalidazione
 
 1. Dopo la riapertura o la revisione retroattiva, guarda **Redazione multi-agente → Stato dei capitoli**. La dicitura **Rivalidazione obbligatoria** segnala i capitoli che non possono essere considerati definitivi.

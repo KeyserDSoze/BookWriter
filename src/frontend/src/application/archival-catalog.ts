@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { extendArchiveCatalog, normalizeArchiveQueries } from "../domain/archival-catalog";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
@@ -49,6 +50,7 @@ export async function attachArchiveCatalog(
       const priorSynopsis=reopened?synopsisBeforeChapter(book.chapters,chapter.number):undefined;
       chapter.historicalDossier=dossier;
       if (reopened) {
+        markHistoricalEvidenceChanged(book, chapter);
         for (const later of book.chapters) if (later.number>=chapter.number) {
           later.frozenAt=undefined;
           later.summary=undefined;

@@ -90,6 +90,11 @@ describe("Quarantena OCR LoC consensuale, senza rete e senza perdita dati",()=>{
     expect(saved?.phase).toBe("chapterReview");
     expect(saved?.status).toBe("paused");
     expect(saved?.chapters[1]?.scenes[0]?.text).toBe("Mara parte in carrozza.");
+    expect(saved?.chapters[0]?.continuityRecheck).toBeUndefined();
+    expect(saved?.chapters[1]?.continuityRecheck).toMatchObject({
+      originChapterId:"c1",originChapterNumber:1,
+      trigger:"historical_evidence",originSceneIds:[],
+    });
   });
   it("stale revision e redazione attiva non possono eliminare la fonte",async()=>{
     const b=await fixture();
