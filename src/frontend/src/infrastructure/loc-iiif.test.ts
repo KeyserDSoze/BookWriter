@@ -83,6 +83,9 @@ describe("LoC IIIF metadata source safety",()=>{
    const spy=mock({...meta,item:{...meta.item,access_restricted:true}});
    await expect(listLocIiifCandidates(source.itemId)).rejects.toThrow(/restrizioni/);
    expect(spy).toHaveBeenCalledTimes(1);
+   const restricted=mock({...meta,resources:[{info:infoUrl,canDownload:false}]});
+   expect(await listLocIiifCandidates(source.itemId)).toEqual([]);
+   expect(restricted).toHaveBeenCalledTimes(1);
    mock(meta,{"@id":"https://example.org/other",width:2000,height:3000});
    await expect(inspectLocIiif(source,scan,{infoUrl,resourceIndex:0,fileIndex:-1}))
      .rejects.toThrow(/non corrispondenti/);
