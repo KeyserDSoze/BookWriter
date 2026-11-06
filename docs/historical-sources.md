@@ -36,6 +36,12 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Proposte di ricerche storiche soltanto locali (v0.10.6)
+
+Nel pannello **Dossier storico** è presente `Genera proposte locali`: il browser esamina brevemente le scene e riconosce solo un piccolo elenco di temi storici pubblici predefiniti (es. telegrafo o ferrovie). Può associare un anno **già scritto vicino al tema**, senza inventarlo, ma non include nomi, passaggi o segreti narrativi. **Nessuna richiesta** viene effettuata durante la generazione, la visualizzazione o l'aggiunta alla bozza. L'autore decide quali proposte aggiungere e può modificarle. Solo dopo `Cerca fonti pubbliche` e la successiva conferma il browser invia le query approvate a Wikipedia.
+
+Anche una parola del vocabolario o una data può rivelare un dettaglio privato: il filtro non sostituisce il controllo umano. Non è una ricerca AI né un confronto con fonti primarie. [Guida](historical-query-proposals.md), ADR 0029.
+
 ## Dipendenze fra fonti dichiarate dall'autore (v0.10.5)
 
 Nel pannello **Provenienza e dipendenze fra fonti** si possono associare due snapshot documentali attivi, dichiarando che riprendono uno stesso originale oppure che uno deriva dall'altro, con nota e conferma esplicita. Le successive review non possono considerarli due riscontri indipendenti, nemmeno tramite catene di dipendenza; le rettifiche restano nell'audit. I legami non passano automaticamente a revisioni nuove. Sono attestazioni volontarie, non prove di provenienza reale. [Guida](historical-source-dependencies.md), ADR 0028.

@@ -282,6 +282,14 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Solo storico e direttore critico ricevono le relazioni attive come dati non attendibili; gli altri undici agenti, inclusi i lettori ciechi, non le vedono. Nessuna classificazione automatica di autenticità, copyright o indipendenza reale.
 - Test obbligatori: false corroborazioni dirette e transitive, rettifica `unknown`, snapshot obsolete, dati importati alterati, privacy, CAS e Playwright mobile/desktop sul consenso. Riferimenti: `docs/historical-source-dependencies.md`, ADR 0028, issue #23.
 
+## Proposte di query storiche v0.10.6 — solo bozze locali (ADR 0029)
+
+- `proposeHistoricalQueriesLocally` legge scene **solo in memoria**, in modo bounded e deterministico; l'output può includere soltanto etichette tematiche appartenenti a una whitelist controllata e, se vicino al tema, un anno di quattro cifre presente nel testo. Non concatenare nomi propri, frasi narrative, prompt, segreti, ID personaggio o credenziali.
+- La proposta resta UI locale: non modifica `historicalDossier`, non chiama LLM o endpoint di ricerca, non crea attività/usage, non attiva autosync. L'autore sceglie quali proposte aggiungere alla textarea (max cinque), può correggerle e decide separatamente di inviarle con **`Cerca fonti pubbliche` + dialogo di conferma query esatte**.
+- La whitelist non è filtro di riservatezza garantito: anche un tema o un anno possono costituire uno spoiler. Non trasmettere mai query dedotte in automatico; spiegare questo limite prima della conferma.
+- I dossier esistenti, gli snapshot, i riferimenti e la review storica restano invariati. Cancellare/cambiare suggerimenti non apre freeze e non cancella outbox. Solo la ricerca approvata esistente ha effetti.
+- Test di assenza chiamate API/AI durante proposta e staging, consenso annullato, query inviata esatta, assenza nomi/segreti, copertura limitata, mobile e desktop. Guida `docs/historical-query-proposals.md`, ADR 0029, issue #23.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.

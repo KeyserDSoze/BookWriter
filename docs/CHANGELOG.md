@@ -2,6 +2,17 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.6 — 2026-11-06 (PR #41)
+
+**Proposte locali di ricerche storiche dai capitoli, con controllo umano prima della rete**
+
+- Il dossier storico del capitolo propone fino a cinque **argomenti di ricerca** tramite una funzione TypeScript locale e deterministica. Riconosce solo un vocabolario pubblico e limitato (per esempio telegrafo, ferrovie, fotografia) e anni di quattro cifre presenti vicino al tema nelle scene; altrimenti propone `storia`. Non invia né copia passaggi, nomi propri, segreti, prompt o credenziali.
+- Pulsante `Genera proposte locali` e schede responsive; ogni proposta deve essere **aggiunta manualmente alla bozza modificabile** e poi sottoposta al flusso già esistente `Cerca fonti pubbliche`, con ulteriore dialogo che mostra le query esatte. Generazione/anteprima/aggiunta non effettuano chiamate ai provider e non persistono il dossier.
+- Massimo cinque suggerimenti deduplicati per tema, bounded a 16 scene e 24.000 caratteri/scene; nessuna inferenza LLM, nuova tariffa AI o traffico esterno. Limiti delle query pubbliche del dossier, fonti attive, rewind e consenso rete restano invariati.
+- Test Vitest su estrazione, date fuori contesto, segreti, ripetizioni e limiti; Playwright desktop/mobile su anteprima senza rete, bozza, consenso annullato, invio delle sole query approvate e layout. ADR 0029, [guida](historical-query-proposals.md), issue #23.
+
+**Limiti:** il vocabolario non copre tutta la storia e le proposte potrebbero non essere pertinenti. Il filtro riduce l'esposizione del manoscritto, ma **non può dimostrare** che un anno o un tema siano pubblici: l'autore deve verificare e approvare ogni query prima di inviarla. Non è un fact-check né una ricerca effettuata in background.
+
 ## 0.10.5 — 2026-11-06 (PR #40)
 
 **Dipendenze documentali dichiarate dall'autore: impedire falsa indipendenza fra fonti**
