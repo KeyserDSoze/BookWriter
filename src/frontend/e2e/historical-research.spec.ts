@@ -5,6 +5,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   let wikipediaCalls:string[]=[];
   const crossrefCalls:string[]=[];
   const archiveCalls:string[]=[];
+  const wikisourceCalls:string[]=[];
   const modelCalls:Array<{system:string;prompt:string}>=[];
   await page.route(/https:\/\/it\.wikipedia\.org\/w\/api\.php\?/,async route=>{
     const url=route.request().url();
@@ -41,6 +42,16 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
       title:"Telegraph correspondence in 1848",date:"1848",
       description:["Historic correspondence digitized by the Library of Congress."],
     }]})});
+  });
+  await page.route(/https:\/\/it\.wikisource\.org\/w\/api\.php\?/,async route=>{
+    wikisourceCalls.push(route.request().url());
+    await route.fulfill({status:200,headers:{
+      "content-type":"application/json","access-control-allow-origin":"*",
+    },body:JSON.stringify({query:{pages:[{
+      pageid:81,ns:0,title:"Lettere del 1848",
+      extract:"La stazione telegrafica inviava dispacci durante l'inverno del 1848.",
+      revisions:[{revid:421,timestamp:"2025-01-15T10:00:00Z"}],
+    }]}})});
   });
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
     if(route.request().method()==="OPTIONS"){
@@ -175,6 +186,21 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(new URL(archiveCalls[0]!).searchParams.get("q")).toBe("telegraph correspondence 1848");
   expect(archiveCalls[0]).not.toContain("Mara");
   expect(archiveCalls[0]).not.toContain("stanza");
+  await editorial.locator("summary").filter({hasText:"Trascrizioni Wikisource"}).click({timeout:10_000});
+  await editorial.getByRole("textbox",{name:"Ricerche Wikisource capitolo 1"})
+    .fill("Telegrafo elettrico in Italia 1848");
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("it.wikisource.org");
+    expect(dialog.message()).toContain("Telegrafo elettrico in Italia 1848");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Cerca trascrizioni Wikisource"}).click();
+  await expect(editorial.getByRole("link",{name:/Lettere del 1848/})).toBeVisible({timeout:15000});
+  expect(wikisourceCalls).toHaveLength(1);
+  expect(new URL(wikisourceCalls[0]!).searchParams.get("gsrsearch"))
+    .toBe("Telegrafo elettrico in Italia 1848");
+  expect(wikisourceCalls[0]).not.toContain("stanza");
   await editorial.locator("summary").filter({hasText:"Estratti da originali consultati dall'autore"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Collocazione originale capitolo 1"})
     .fill("Page 12, column 2");
@@ -207,11 +233,14 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
   expect(specialist?.prompt).toContain("loc:2020123456");
   expect(specialist?.prompt).toContain("locex:2020123456");
+  expect(specialist?.prompt).toContain("itws:81:421");
+  expect(specialist?.prompt).toContain("community_transcription_unverified");
   expect(specialist?.system).toContain("CIASCUN sourceId");
   const judgeCall=modelCalls.find(x=>x.system.includes("direttore editoriale CRITICO"));
   expect(judgeCall?.prompt).toContain('"quoteMatches":true');
   expect(judgeCall?.prompt).toContain("loc:2020123456");
   expect(judgeCall?.prompt).toContain("locex:2020123456");
+  expect(judgeCall?.prompt).toContain("itws:81:421");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwiki:42:321"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
@@ -220,6 +249,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
     !x.prompt.includes("loc:2020123456"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("locex:2020123456"))).toBe(true);
+  expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
+    !x.prompt.includes("itws:81:421"))).toBe(true);
   await editorial.getByText(/Giudizi archiviati \(1\)/).click();
   await editorial.getByText(/Plausibilità e accuratezza storica ·/).click();
   await expect(editorial.getByText(/Citazione associata/)).toBeVisible();

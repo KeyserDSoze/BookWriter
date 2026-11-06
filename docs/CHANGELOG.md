@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.5 — 2026-11-06 (PR #30)
+
+**Wikisource: ricerca pubblica consensuale di brevi trascrizioni con ID revisione**
+
+- Nuova sezione per capitolo **Trascrizioni Wikisource**, con 1–3 query pubbliche scritte dall'autore, anteprima e conferma dell'invio a `it.wikisource.org`. Nessuna query automatica da prose, memoria, segreti, canone, credenziali o API key.
+- Adapter read-only MediaWiki su host fisso, `origin=*`, `explaintext=1`, `rvprop=ids|timestamp`, fino a 2 estratti/query, timeout 12s, 150 KB max, senza cookie/redirect/credenziali. Risposta API malformata, timeout, 429 o CORS falliscono senza salvataggio parziale.
+- Dossier `wikisource` distinto da Wikipedia, DOI, LoC e trascrizioni manuali: snapshot immutabili `itws:<pageId>:<revisionId>`, title/URL canonico ricostruito, testo breve acquisito, data revisione, query, data consultazione e storicizzazione fino a 70 voci.
+- Il revisore storico può citare solo la specifica versione attiva con una `sourceEvidence` letterale per fonte; due revisioni della stessa pagina non valgono come fonti indipendenti. Il direttore riceve quote verificabili, revisioni e stato `community_transcription_unverified`; gli altri 11 ruoli sono ciechi agli estratti.
+- Rewind sicuro dei freeze e delle sinossi, Web Locks, `updatedAt`, outbox cancellata e autosync off; backup/ZIP e altre ricerche preservano gli snapshot Wikisource. Test Vitest ed E2E desktop/mobile, ADR 0018 e guida `docs/wikisource-transcriptions.md`.
+
+**Limiti importanti:** Wikisource ospita **trascrizioni collaborative**, non originali autenticati. La sola disponibilità di un estratto non prova né l'autenticità, né un fatto storico, né il pubblico dominio: diritti e attribuzione della singola opera devono essere verificati manualmente. I mock browser non attestano l'effettiva disponibilità di `TextExtracts`/CORS né l'esatta atomicità fra estratto e ID revisione restituito dall'API.
+
 ## 0.9.4 — 2026-11-06 (PR #29)
 
 **Estratti storici trascritti dall'autore: provenienza e diritti dichiarati**

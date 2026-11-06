@@ -97,5 +97,6 @@ export function extendChapterBibliography(
     bibliography,
     ...(previous?.archiveCatalog ? {archiveCatalog:previous.archiveCatalog} : {}),
     ...(previous?.manualEvidence ? {manualEvidence:previous.manualEvidence} : {}),
+    ...(previous?.wikisource ? {wikisource:previous.wikisource} : {}),
   };
 }

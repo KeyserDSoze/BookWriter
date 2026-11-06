@@ -93,6 +93,15 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Conservare revisioni delle fonti precedentemente citate quando si aggiorna un dossier; mai cambiare gli estratti già approvati sotto lo stesso ID.
 - Test su query private, link contraffatti, citazioni inventate, annullamenti di rete, salvataggi concorrenti e Playwright desktop/mobile. Fonte storica ≠ fatto verificato; guidi l'autore a consultare fonti primarie/secondarie.
 
+## Wikisource v0.9.5 — estratti revisionati di trascrizioni collaborative (ADR 0018)
+
+- Solo 1–3 query pubbliche **scritte dall'autore** e confermate prima di chiamare `https://it.wikisource.org/w/api.php`, senza trasmettere prosa, canone, segreti o credenziali. Richieste GET seriali, `origin=*`, `credentials:omit`, `redirect:error`, timeout, JSON limitato 150 KB, 2 pagine per query. Nessun proxy, OCR o endpoint arbitrario.
+- `ChapterHistoricalDossier.wikisource` conserva solo revisioni con `pageId`, `revid`, timestamp, breve estratto, titolo e URL canonica ricostruita, query e data lettura. ID `itws:<pageId>:<revisionId>`. Massimo 70 snapshot; vecchie revisioni conservate per audit ma non citabili in nuovi report.
+- `HistoricalClaim.sourceIds` accetta `itws:...` **solo** attivi e con `sourceEvidence` letterale della *stessa* trascrizione; `sourceQuote` legacy non vale per Wikisource. Revisioni della stessa pagina non sono indipendenti. Non convertire `loc:` o DOI in supporto storico.
+- Solo lo storico e il direttore vedono i testi, etichettati `community_transcription_unverified` e `work_rights_not_verified`; gli altri undici ruoli non li vedono. L'estratto prova soltanto corrispondenza testuale, non originale autentico, fatto vero, data, autore o licenza dell'opera. Non presumere pubblico dominio: la licenza specifica è da verificare.
+- Wikipedia, Crossref, LoC e trascrizioni manuali devono preservare Wikisource a ogni refresh. Web Locks, `updatedAt`, rewind delle sinossi frozen, invalidazione downstream, outbox cancellata e autosync off atomico; arresto su CORS, rete, JSON invalido o condizioni concorrenti.
+- Test Vitest di dominio/network/privacy/fail-closed e Playwright desktop/mobile. Vedi ADR 0018, `docs/wikisource-transcriptions.md`, issue #23.
+
 ## Trascrizioni originali v0.9.4 — attestazione autore, non autenticazione (ADR 0017)
 
 - La selezione di una scheda LoC attiva, la collocazione precisa, una breve trascrizione (24–1200), dichiarazione esplicita dei diritti e motivazione sono obbligatori per un `ManualDocumentExcerpt`. La data/edizione può essere ignota; ogni versione ha ID/timestamp immutabile.

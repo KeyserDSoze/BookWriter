@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Estratti revisionati Wikisource (v0.9.5)
+
+La nuova ricerca Wikisource avviene solo dopo consenso dell'autore sulle query pubbliche. Restituisce brevi **trascrizioni collaborative effettivamente recuperate** e etichettate `itws:<pageId>:<revisionId>`. Lo specialista può citare solo una frase presente nell'estratto della **specifica revisione attiva**; il direttore distingue corrispondenza letterale e autenticità storica, che l'app non certifica. Il testo della singola opera può avere copyright o obblighi di attribuzione: la biblioteca collaborativa non è una garanzia di pubblico dominio. Guida [Wikisource](wikisource-transcriptions.md), ADR 0018.
+
 ## Trascrizioni manuali e citazioni (v0.9.4)
 
 Una trascrizione `locex:...` può essere associata a una scheda LoC attiva **solo dopo** che l'autore ha letto l'originale, fornito collocazione, breve citazione letterale e dichiarato diritti e motivazione. Il validatore può associare un `sourceEvidence` alla trascrizione, ma **non** certifica autenticità storica o licenza. I semplici record `loc:...` restano piste, non evidenze. Guida [estratti](archival-excerpts.md), ADR 0017.

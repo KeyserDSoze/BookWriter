@@ -110,6 +110,7 @@ export function appendManualEvidence(
     unansweredQueries: previous?.unansweredQueries ?? [],
     ...(previous?.bibliography ? {bibliography:previous.bibliography} : {}),
     ...(previous?.archiveCatalog ? {archiveCatalog:previous.archiveCatalog} : {}),
+    ...(previous?.wikisource ? {wikisource:previous.wikisource} : {}),
     manualEvidence: {
       excerpts:[...previousItems, entry],
       activeExcerptIds:[...activePrevious,entry.id],

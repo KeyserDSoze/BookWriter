@@ -1,6 +1,7 @@
 import type { ChapterBibliography } from "./bibliography";
 import type { ChapterArchiveCatalog } from "./archival-catalog";
 import { activeManualEvidence, type ChapterManualEvidence } from "./manual-evidence";
+import { activeWikisourceExcerpts, type ChapterWikisourceExcerpts } from "./wikisource-excerpts";
 
 /** Research is deliberately separate from narrative canon and model assertions.
  * Wikipedia entries are tertiary leads; they are never certified historical truth.
@@ -28,6 +29,7 @@ export interface ChapterHistoricalDossier {
   bibliography?: ChapterBibliography;
   archiveCatalog?: ChapterArchiveCatalog;
   manualEvidence?: ChapterManualEvidence;
+  wikisource?: ChapterWikisourceExcerpts;
 }
 export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "unverified";
 /** A quotation belongs to exactly one retrieved source revision. */
@@ -106,7 +108,10 @@ export function validateHistoricalClaim(
   const originals = activeManualEvidence(dossier).map(s => ({
     id:s.id, excerpt:s.text, identity:"loc-original:" + s.itemId,
   }));
-  const byId = new Map([...wiki,...originals].map(s => [s.id,s]));
+  const wikisource = activeWikisourceExcerpts(dossier).map(s => ({
+    id:s.id, excerpt:s.excerpt, identity:"itwikisource:" + s.pageId,
+  }));
+  const byId = new Map([...wiki,...originals,...wikisource].map(s => [s.id,s]));
   const sources = references.map(id => byId.get(id));
   if (sources.some(s => !s)) throw new Error("Fonte storica inesistente, obsoleta o non approvata.");
   // Two revisions/transcriptions of the same underlying document cannot fake independent corroboration.
@@ -131,7 +136,7 @@ export function validateHistoricalClaim(
   }
   // Legacy single-source reports may have one sourceQuote; never allow that
   // old shape to imply evidence for two or three separate sources.
-  if (references.length !== 1 || references[0]?.startsWith("locex:"))
+  if (references.length !== 1 || !references[0]?.startsWith("itwiki:"))
     throw new Error("Ogni fonte citata richiede una citazione propria in sourceEvidence.");
   const quote = claim.sourceQuote?.trim().toLocaleLowerCase("it") ?? "";
   if (quote.length < 12 || !sources[0]!.excerpt.toLocaleLowerCase("it").includes(quote))
@@ -162,5 +167,6 @@ export function extendHistoricalDossier(
     ...(previous?.bibliography ? { bibliography: previous.bibliography } : {}),
     ...(previous?.archiveCatalog ? { archiveCatalog: previous.archiveCatalog } : {}),
     ...(previous?.manualEvidence ? { manualEvidence: previous.manualEvidence } : {}),
+    ...(previous?.wikisource ? { wikisource: previous.wikisource } : {}),
   };
 }
