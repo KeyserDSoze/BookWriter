@@ -296,7 +296,8 @@ test("relazioni tra fonti desktop/mobile: consenso, audit e riapertura capitoli"
   await panel.getByRole("button",{name:"Registra relazione di provenienza"}).click();
   await expect(panel.getByText(/Dichiarazione salvata. Capitolo e successivi riaperti/))
     .toBeVisible();
-  await expect(panel.getByText(/Una fonte deriva dall'altra/)).toBeVisible();
+  await expect(panel.locator('[aria-label="Relazioni documentali attive"]')
+    .getByText(/Una fonte deriva dall'altra/)).toBeVisible();
   const state=await page.evaluate(()=>new Promise<{
     frozen:boolean;stage:string;sourceRelations:number;autosync:boolean|undefined;
   }>((resolve,reject)=>{
