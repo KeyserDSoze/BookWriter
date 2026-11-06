@@ -6,6 +6,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   const crossrefCalls:string[]=[];
   const archiveCalls:string[]=[];
   const inspectionCalls:string[]=[];
+  const ocrCalls:string[]=[];
   const wikisourceCalls:string[]=[];
   const modelCalls:Array<{system:string;prompt:string}>=[];
   await page.route(/https:\/\/it\.wikipedia\.org\/w\/api\.php\?/,async route=>{
@@ -50,10 +51,17 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
       "content-type":"application/json","access-control-allow-origin":"*",
     },body:JSON.stringify({item:{
       id:"https://www.loc.gov/item/2020123456/",
-      digitized:true,access_restricted:true,
+      digitized:true,access_restricted:false,
       rights_advisory:["Rights restricted: contact the Library before reuse."],
       access_advisory:["Onsite reading may be required."],
-    },resources:[{fulltext_file:"https://tile.loc.gov/OCR-unread.txt"}]})});
+    },resources:[{fulltext_file:"https://tile.loc.gov/storage-services/service/tests/telegraph.txt"}]})});
+  });
+  await page.route("https://tile.loc.gov/storage-services/service/tests/telegraph.txt",async route=>{
+    ocrCalls.push(route.request().url());
+    await route.fulfill({status:200,headers:{
+      "content-type":"text/plain; charset=utf-8",
+      "access-control-allow-origin":"*",
+    },body:"Original optical recognition revealed a telegraph station busy through the cold winter of eighteen forty eight.\\n"});
   });
   await page.route(/https:\/\/it\.wikisource\.org\/w\/api\.php\?/,async route=>{
     const url=route.request().url();
@@ -221,7 +229,25 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(new URL(inspectionCalls[0]!).searchParams.get("fo")).toBe("json");
   expect(inspectionCalls[0]).not.toContain("telegraph correspondence");
   expect(inspectionCalls[0]).not.toContain("Mara");
-  expect(inspectionCalls[0]).not.toContain("OCR-unread");
+  expect(inspectionCalls[0]).not.toContain("storage-services");
+  await editorial.locator("summary").filter({hasText:"Estratti OCR istituzionali"}).click({timeout:10_000});
+  await editorial.getByRole("textbox",{name:"Motivazione diritti OCR capitolo 1"})
+    .fill("L'autore dichiara di avere un permesso scritto che consente questo uso con AI.");
+  await editorial.getByRole("combobox",{name:"Diritti OCR capitolo 1"}).selectOption("permission");
+  await editorial.getByRole("checkbox",{name:/Confermo di aver verificato personalmente/}).check();
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("CONSENSO ALL'ACQUISIZIONE");
+    expect(dialog.message()).toContain("2020123456");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Acquisisci breve estratto OCR"}).click();
+  await expect(editorial.getByText(/Original optical recognition revealed a telegraph station busy/))
+    .toBeVisible({timeout:15_000});
+  expect(ocrCalls).toHaveLength(1);
+  expect(inspectionCalls).toHaveLength(2); // metadata inspection + OCR source identification
+  expect(ocrCalls[0]).toBe("https://tile.loc.gov/storage-services/service/tests/telegraph.txt");
+  expect(ocrCalls[0]).not.toContain("Mara");
   await editorial.locator("summary").filter({hasText:"Trascrizioni Wikisource"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Ricerche Wikisource capitolo 1"})
     .fill("Telegrafo elettrico in Italia 1848");
@@ -273,7 +299,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   await editorial.getByRole("button",{name:"Archivia estratto attestato"}).click();
   await expect(editorial.getByText("The telegraph apparatus was operated at the station during the winter of 1848."))
     .toBeVisible({timeout:15000});
-  expect(archiveCalls).toHaveLength(1); // The local author submission must NEVER fetch originals.
+  expect(archiveCalls).toHaveLength(1); // Manual author submission must NEVER fetch originals.
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect(editorial.getByText(/Congelato il/)).toBeVisible({timeout:85_000});
   expect(modelCalls.filter(x=>x.system.includes("revisore letterario INDIPENDENTE"))).toHaveLength(12);
@@ -285,6 +311,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
   expect(specialist?.prompt).toContain("loc:2020123456");
   expect(specialist?.prompt).toContain("locex:2020123456");
+  expect(specialist?.prompt).toContain("lococr:2020123456");
+  expect(specialist?.prompt).toContain("institutional_ocr_unverified");
   expect(specialist?.prompt).toContain("Rights restricted: contact the Library before reuse.");
   expect(specialist?.prompt).toContain("catalog_metadata_only");
   expect(specialist?.prompt).toContain("itwsr:81:421:");
@@ -294,6 +322,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(judgeCall?.prompt).toContain('"quoteMatches":true');
   expect(judgeCall?.prompt).toContain("loc:2020123456");
   expect(judgeCall?.prompt).toContain("locex:2020123456");
+  expect(judgeCall?.prompt).toContain("lococr:2020123456");
   expect(judgeCall?.prompt).toContain("Rights restricted: contact the Library before reuse.");
   expect(judgeCall?.prompt).toContain("itwsr:81:421:");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
@@ -304,6 +333,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
     !x.prompt.includes("loc:2020123456"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("locex:2020123456"))).toBe(true);
+  expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
+    !x.prompt.includes("lococr:2020123456"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("Rights restricted: contact the Library before reuse."))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>

@@ -2,6 +2,19 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.9 — 2026-11-06 (PR #34)
+
+**Library of Congress: brevi OCR istituzionali recuperati realmente con diritti attestati dall'autore**
+
+- Nuova sezione **Estratti OCR istituzionali** per capitolo: richiede una scheda LoC e relativa ispezione attiva con riferimento a risorsa testuale e nessun accesso ristretto esplicito. L'autore sceglie base di utilizzo `public_domain|permission`, nota 16–280 caratteri, spunta attestazione e conferma un secondo dialogo che avverte su invio AI/ZIP/GitHub, OCR e copyright.
+- Due GET strettamente limitate: dettaglio `https://www.loc.gov/item/<id>/?fo=json`, verifica dell'identità e dell'assenza di restrizione esplicita; poi **un solo file .txt** tra `resources[].fulltext_file|fulltext_derivative|djvu_text_file` solo se sotto `https://tile.loc.gov/storage-services/{service|master}/`. Niente OCR/PDF/HTML/immagini, URL esterne, redirect, cookie, referrer o credenziali.
+- Timeout 12 s/GET, lettura streaming limitata a 240 KB di JSON e 160 KB di testo UTF-8; stop su errori CORS/429/JSON/host/identità/formato/limite **senza salvare nulla**. Nessuna ricerca privata o testo del libro inviati a LoC.
+- Il browser memorizza soltanto una **porzione letterale di una riga OCR** fino a 900 caratteri, URL istituzionale, SHA-256 del testo ricevuto, lunghezza, offset e timestamp, con ID `lococr:<itemId>:<timestamp>:<sha16>`. `evidenceStatus=institutional_ocr_unverified`; `rightsStatus=author_attested_unverified`: NON equivalgono a originali autenticati, verità storica o licenze certificate.
+- Nuove `HistoricalClaim.sourceEvidence` possono citare `lococr:` attivi soltanto con frase letterale propria, senza promuovere `loc:` / `locdetail:`; OCR e trascrizioni manuali dello stesso item non diventano supporti indipendenti. Solo storico e giudice vedono i brani, gli altri 11 ruoli sono ciechi; nessuna scena viene modificata automaticamente.
+- Snapshot immutabili max 40 storici / 4 attivi, disattivazione su scheda o ispezione superata, conservazione durante refresh Wikipedia/Crossref/Wikisource/LoC/manuale. Web Locks, CAS, rewind freeze, invalidazione downstream, autosync off, outbox atomica, activity. Test Vitest di fonte/rete/diritti/dominio/concorrenza e Playwright desktop/mobile, ADR 0022, guida `docs/loc-ocr-excerpts.md`.
+
+**Limiti:** i contenuti possono essere OCR errati o trascrizioni derivate, non fonti primarie certificate; i diritti sono attestati dall'autore e non verificati automaticamente. La disponibilità reale di `.txt`/CORS varia per oggetto: i mock non attestano la raggiungibilità browser. Nessuna scansione/PDF e nessuna verifica contro l'immagine originale.
+
 ## 0.9.8 — 2026-11-06 (PR #33)
 
 **Library of Congress: ispezione per singola scheda di disponibilità e diritti, senza scaricare originali**

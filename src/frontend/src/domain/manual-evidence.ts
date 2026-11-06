@@ -111,6 +111,7 @@ export function appendManualEvidence(
     ...(previous?.bibliography ? {bibliography:previous.bibliography} : {}),
     ...(previous?.archiveCatalog ? {archiveCatalog:previous.archiveCatalog} : {}),
     ...(previous?.wikisource ? {wikisource:previous.wikisource} : {}),
+    ...(previous?.locOcr ? {locOcr:previous.locOcr} : {}),
     manualEvidence: {
       excerpts:[...previousItems, entry],
       activeExcerptIds:[...activePrevious,entry.id],

@@ -2,6 +2,7 @@ import type { ChapterBibliography } from "./bibliography";
 import type { ChapterArchiveCatalog } from "./archival-catalog";
 import { activeManualEvidence, type ChapterManualEvidence } from "./manual-evidence";
 import { activeWikisourceExcerpts, type ChapterWikisourceExcerpts } from "./wikisource-excerpts";
+import { activeLocOcrExcerpts, type ChapterLocOcr } from "./loc-ocr";
 
 /** Research is deliberately separate from narrative canon and model assertions.
  * Wikipedia entries are tertiary leads; they are never certified historical truth.
@@ -30,6 +31,7 @@ export interface ChapterHistoricalDossier {
   archiveCatalog?: ChapterArchiveCatalog;
   manualEvidence?: ChapterManualEvidence;
   wikisource?: ChapterWikisourceExcerpts;
+  locOcr?: ChapterLocOcr;
 }
 export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "unverified";
 /** A quotation belongs to exactly one retrieved source revision. */
@@ -111,7 +113,10 @@ export function validateHistoricalClaim(
   const wikisource = activeWikisourceExcerpts(dossier).map(s => ({
     id:s.id, excerpt:s.excerpt, identity:"itwikisource:" + s.pageId,
   }));
-  const byId = new Map([...wiki,...originals,...wikisource].map(s => [s.id,s]));
+  const locOcr = activeLocOcrExcerpts(dossier).map(s => ({
+    id:s.id,excerpt:s.excerpt,identity:"loc-original:" + s.itemId,
+  }));
+  const byId = new Map([...wiki,...originals,...wikisource,...locOcr].map(s => [s.id,s]));
   const sources = references.map(id => byId.get(id));
   if (sources.some(s => !s)) throw new Error("Fonte storica inesistente, obsoleta o non approvata.");
   // Two revisions/transcriptions of the same underlying document cannot fake independent corroboration.
@@ -168,5 +173,6 @@ export function extendHistoricalDossier(
     ...(previous?.archiveCatalog ? { archiveCatalog: previous.archiveCatalog } : {}),
     ...(previous?.manualEvidence ? { manualEvidence: previous.manualEvidence } : {}),
     ...(previous?.wikisource ? { wikisource: previous.wikisource } : {}),
+    ...(previous?.locOcr ? { locOcr: previous.locOcr } : {}),
   };
 }

@@ -8,6 +8,7 @@ import { Button } from "./ui/button";
 import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
 import { BibliographyPanel } from "./BibliographyPanel";
 import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
+import { LocOcrPanel } from "./LocOcrPanel";
 import type { HistoricalSource } from "../domain/historical-research";
 import { activeManualEvidence, allManualEvidence, type ManualDocumentExcerpt } from "../domain/manual-evidence";
 import { ManualEvidencePanel } from "./ManualEvidencePanel";
@@ -223,6 +224,7 @@ export function EditorialBoardPanel({
         <HistoricalResearchPanel key={ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <BibliographyPanel key={"doi-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <ArchiveCatalogPanel key={"archive-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+        <LocOcrPanel key={"ocr-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <WikisourcePanel key={"wikisource-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <ManualEvidencePanel key={"excerpts-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">

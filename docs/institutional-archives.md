@@ -4,6 +4,8 @@ Il pannello **Redazione multi-agente → Archivi istituzionali**, presente su og
 
 **Nuovo in v0.9.8:** per una scheda già attiva è disponibile **Verifica accesso e diritti della scheda**, consultazione con consenso degli avvisi specifici sul documento. Nessun file/OCR viene acquisito e il testo degli avvisi non vale come licenza: [guida dedicata](institutional-item-inspection.md), ADR 0021.
 
+**Nuovo dalla v0.9.9:** le schede con una ispezione attiva che segnala risorse testuali possono, **solo su attestazione diritti e doppio consenso**, consentire la lettura di un singolo file LoC .txt e l'archiviazione di un piccolo frammento OCR con impronta/offset. Non è autenticazione dell'originale o licenza verificata. [Guida OCR](loc-ocr-excerpts.md), ADR 0022.
+
 ## Uso
 
 1. Apri il capitolo prima che inizi la redazione e apri **Archivi istituzionali**.
