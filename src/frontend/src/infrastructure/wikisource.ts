@@ -11,6 +11,7 @@ interface Page {
   revisions?:Array<{revid?:unknown;timestamp?:unknown}>;
 }
 interface ResponseData {
+  batchcomplete?:unknown;
   error?:unknown;
   query?:{pages?:Page[]};
 }
@@ -53,11 +54,12 @@ export async function searchWikisource(
       let data:ResponseData;
       try{data=JSON.parse(raw) as ResponseData;}
       catch{throw new Error("Risposta Wikisource non contiene JSON valido.");}
-      if(!data || typeof data!=="object" || data.error || !data.query ||
-        !Array.isArray(data.query.pages))
+      if(!data || typeof data!=="object" || data.error ||
+        (data.query?.pages !== undefined && !Array.isArray(data.query.pages)) ||
+        (data.query?.pages === undefined && data.batchcomplete!==true))
         throw new Error("Formato della risposta Wikisource non valido.");
       let accepted=0;
-      for(const page of data.query.pages.slice(0,20)){
+      for(const page of (data.query?.pages??[]).slice(0,20)){
         if(accepted>=2)break;
         if(!page || page.ns!==0 || !Number.isSafeInteger(page.pageid) ||
           !Number.isSafeInteger(page.revisions?.[0]?.revid) ||
