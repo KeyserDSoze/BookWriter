@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Collazione OCR/scansione dichiarata dall'autore (v0.10.1)
+
+L'autore può attestare una consultazione **visiva personale** di una scansione LoC, indicare pagina/folio e trascriverne una breve frase, consentendo il confronto locale di stringhe con un `lococr:` già attivo. I risultati `text_overlap|text_discrepancy` NON attestano un'analisi automatica dell'immagine, un originale storico autentico o diritti verificati. Le collazioni `locscan:` non sono citabili come fonti indipendenti; solo storico e giudice vedono la discrepanza. [Guida](loc-scan-collation.md), ADR 0024.
+
 ## Riverifica live degli OCR già archiviati (v0.10.0)
 
 Dopo un'acquisizione `lococr:`, l'autore può autorizzare un **confronto remoto del file esatto**. L'app controlla che `textUrl` sia ancora fra le risorse consentite della **stessa scheda LoC**, poi verifica hash, lunghezza e citazione letterale all'offset. Il risultato è temporaneo e non autentica il documento originale o i diritti. Su divergenza, la fonte può essere **esclusa solo con seconda conferma**, mantenendo gli audit e riaprendo i capitoli frozen che ne dipendono. Guida [riverifica OCR](loc-ocr-reverification.md), ADR 0023.

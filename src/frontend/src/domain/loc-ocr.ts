@@ -1,6 +1,7 @@
 import type { ChapterHistoricalDossier } from "./historical-research";
 import { activeArchivalItems,locItemUrl } from "./archival-catalog";
 import { activeInstitutionalInspections } from "./institutional-inspection";
+import type { ChapterLocScanCollations } from "./loc-scan-collation";
 
 /** The LoC OCR *as retrieved*, never authenticated against the historical original.
  * Rights basis is an explicit author's assertion, never computed from API metadata.
@@ -29,6 +30,7 @@ export interface ChapterLocOcr {
   excerpts:LocOcrExcerpt[];
   activeExcerptIds:string[];
   updatedAt:string;
+  collations?:ChapterLocScanCollations;
 }
 export interface LocOcrRights {
   rightsBasis:LocOcrExcerpt["rightsBasis"];
@@ -118,6 +120,7 @@ export function appendLocOcrExcerpt(
     searchedAt:previous?.searchedAt??source.acquiredAt,
     unansweredQueries:previous?.unansweredQueries??[],
     locOcr:{excerpts:duplicate?old:[...old,source],
-      activeExcerptIds:[...remain,source.id],updatedAt:source.acquiredAt},
+      activeExcerptIds:[...remain,source.id],updatedAt:source.acquiredAt,
+      ...(previous?.locOcr?.collations?{collations:previous.locOcr.collations}:{})},
   };
 }
