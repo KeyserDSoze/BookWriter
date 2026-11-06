@@ -221,6 +221,7 @@ export function EditorialBoardPanel({
     <p className="muted mt-1 text-xs">
       Sette specialisti e cinque lettori in chiamate AI separate. Ogni rilievo include prova, gravità e remediation;
       il direttore può accettarlo o respingerlo motivando. Ogni capitolo completo deve essere congelato prima di avanzare.
+      I capitoli dopo modifiche retroattive richiedono una nuova review, con campioni identificati delle scene precedenti.
     </p>
     {cycle && chapter && <div className="mt-4 space-y-3">
       <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
@@ -231,6 +232,12 @@ export function EditorialBoardPanel({
           cycle.stage === "repair" ? "Remediation mirate" :
           cycle.stage === "reconcile" ? "Riconciliazione del canon" :
           cycle.stage === "summary" ? "Sinossi e congelamento" : "Bloccato in attesa dell'autore"}</p>
+        {chapter.continuityRecheck && <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          Rivalidazione di continuità obbligatoria: modifica dal capitolo
+          {" "}{chapter.continuityRecheck.originChapterNumber}.
+          La redazione confronterà campioni delle scene precedenti già congelate,
+          senza considerarli una prova automatica di coerenza.
+        </p>}
         <p className="muted text-xs">
           Verifiche completate: {completedReports}{totalSlots ? "/" + totalSlots : ""}.
           {cycle.judgment && " Correzioni approvate: " + pending + "."}
@@ -280,6 +287,22 @@ export function EditorialBoardPanel({
             <Button size="sm" variant="outline" disabled={busy || book.status === "running" || !!(cycle && cycle.stage !== "blocked")}
               onClick={() => void reopen(ch.id)}><RotateCcw size={15}/> Rivaluta</Button>}
         </div>
+        {ch.continuityRecheck && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300"
+          aria-label={"Rivalidazione capitolo " + ch.number}>
+          <b>Rivalidazione obbligatoria:</b> modifica a monte nel capitolo
+          {" "}{ch.continuityRecheck.originChapterNumber}. Verificare segreti, timeline,
+          personaggi e causa-effetto con i dodici agenti prima del nuovo congelamento.
+          I capitoli precedenti vanno approvati in ordine.
+        </p>}
+        {ch.frozenAt && ch.lastContinuityReview && <p className="mt-2 text-xs muted"
+          aria-label={"Storico rivalidazione capitolo " + ch.number}>
+          Rivalidazione editoriale completata dopo il capitolo
+          {" "}{ch.lastContinuityReview.originChapterNumber} il
+          {" "}{new Date(ch.lastContinuityReview.completedAt).toLocaleString("it-IT")}.
+          {ch.lastContinuityReview.partialCoverage
+            ? " Il confronto documentale campiona solo alcune scene o finestre."
+            : " I campioni identificati non certificano coerenza semantica."}
+        </p>}
         {ch.summary && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Sinossi del capitolo</summary>
           <p className="mt-2 whitespace-pre-wrap text-xs">{ch.summary}</p>

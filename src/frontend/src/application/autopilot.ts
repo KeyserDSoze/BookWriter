@@ -6,6 +6,7 @@ import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
 import { acceptedRepairs, adjudicationPrompt, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
+import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
 import { AiBudgetStop, preflightBookAiBudget } from "../domain/ai-budget";
 
@@ -337,10 +338,13 @@ function nextWork(book: BookProject): Work | null {
             current.runningBookSummary = data.bookSummary;
             current.summaryCursor = (current.summaryCursor ?? 0) + 1;
             if (current.summaryCursor >= segments.length) {
+              assertPriorChaptersFrozen(b, ch);
+              const freezeTime = new Date().toISOString();
+              completeContinuityRecheck(b, ch, freezeTime);
               ch.summary = data.chapterSummary;
               ch.bookSummaryAtFreeze = data.bookSummary;
               b.bookSummary = data.bookSummary;
-              ch.frozenAt = new Date().toISOString();
+              ch.frozenAt = freezeTime;
               ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, {
                 round: current.round, reports: current.reports, judgment: current.judgment!,
               }];
@@ -374,6 +378,10 @@ function nextWork(book: BookProject): Work | null {
             const earliestChapter = b.chapters.find(ch => ch.scenes.some(s =>
               request.affectedSceneIds.includes(s.id)));
             if (earliestChapter) {
+              markDownstreamContinuity(b, earliestChapter, "retroactive_revision",
+                earliestChapter.scenes.filter(s => request.affectedSceneIds.includes(s.id))
+                  .map(s=>s.id));
+              earliestChapter.lastContinuityReview = undefined;
               for (const chapter of b.chapters) {
                 if (chapter.number >= earliestChapter.number) {
                   chapter.frozenAt = undefined;
@@ -456,8 +464,12 @@ export class AutopilotRunner {
         if (!book || book.status !== "running") break;
         // A previously canonical chapter is not final until the independent board freezes it.
         if (book.phase === "prose" && !book.editorialCycle) {
-          const ready = book.chapters.find(ch => !ch.frozenAt && ch.scenes.length > 0 &&
-            ch.scenes.every(scene => scene.status === "canon"));
+          const ready = [...book.chapters]
+            .filter(ch => !ch.frozenAt && ch.scenes.length > 0 &&
+              ch.scenes.every(scene => scene.status === "canon"))
+            .sort((a,b)=>a.number-b.number)
+            .find(ch => book.chapters.every(prev =>
+              prev.number >= ch.number || !!prev.frozenAt));
           if (ready) {
             book.editorialCycle = createEditorialCycle(ready.id);
             book.phase = "chapterReview";

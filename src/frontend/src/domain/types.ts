@@ -10,6 +10,7 @@ export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "ou
 
 import type { ChapterEditorialCycle, EditorialRound } from "./editorial-board";
 import type { ChapterHistoricalDossier } from "./historical-research";
+import type { ContinuityRecheck, ContinuityRecheckAudit } from "./cross-chapter-continuity";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -82,6 +83,10 @@ export interface Chapter {
   frozenAt?: string;
   editorialRounds?: EditorialRound[];
   historicalDossier?: ChapterHistoricalDossier;
+  /** A change upstream requires this chapter's twelve reviewers to run again. */
+  continuityRecheck?: ContinuityRecheck;
+  /** Evidence sample and source of the last finished downstream recheck, not a semantic certificate. */
+  lastContinuityReview?: ContinuityRecheckAudit;
 }
 export interface NarrativeMemory {
   characters: Record<string, string>;

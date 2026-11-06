@@ -4,6 +4,10 @@ Dopo la scrittura e il primo consolidamento delle scene di un capitolo, l'autopi
 
 La schermata **Dashboard → Redazione multi-agente** mostra quali verifiche sono in corso, le criticità trovate, le correzioni suggerite, le decisioni dell'editor e lo stato di ogni capitolo.
 
+## Continuità dopo cambiamenti retroattivi (v0.11.0)
+
+Riaprire o rivedere una scena già passata da review invalida i capitoli successivi e ora li contrassegna esplicitamente. L'autopilot esegue le review **in ordine**, con predecessori scritti e congelati come prerequisito. Quattro specialisti ricevono un campione tracciabile di scene precedenti dell'origine e dell'ultimo predecessore (ID, date, testo letterale e offset) e il giudice può confrontare le loro interpretazioni. I lettori ciechi non vedono questi campioni; neanche la presenza di un campione prova che la continuità sia corretta. Sul nuovo freeze si registra un audit di copertura limitata. [Guida](cross-chapter-continuity.md), [ADR 0033](../ADR/0033-downstream-continuity-revalidation-chain.md), issue #20.
+
 ## Citazioni narrative verificabili (v0.10.9)
 
 I **nuovi** rilievi dei dodici revisori devono citare almeno 12 caratteri realmente presenti nel **segmento letto**, non in altre scene o nei riassunti. Il codice crea posizione, testo trovato, numero di occorrenze e contesto; parafrasi o citazioni inventate vengono rifiutate prima dell'archiviazione. Il direttore continua a valutare il merito e può respingere una critica letteralmente corretta ma infondata. Nelle review in corso, una remediation **non** è autorizzata se il riferimento è legacy, manomesso o stale dopo la modifica della scena. I vecchi rapporti restano consultabili ma non diventano prove certificate. La presenza testuale non convalida la critica né una fonte storica. [Guida dettagliata](editorial-narrative-evidence.md), ADR 0032, issue #20.

@@ -1,6 +1,7 @@
 import type { Activity, BookProject } from "../domain/types";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
+import { markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { getBook, getDb } from "../infrastructure/db";
 
 /** Explicit author action. It can reopen a frozen chapter or rescue a blocked review.
@@ -45,6 +46,9 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
       }
       if (instruction.trim()) book.authorConstraints.push(instruction.trim());
       if (book.remote) book.remote.autoSync = false;
+      const dependentCount = markDownstreamContinuity(book, target, "author_reopen",
+        target.scenes.map(scene => scene.id));
+      target.lastContinuityReview = undefined;
       for (const ch of book.chapters) if (ch.number >= target.number) {
         ch.frozenAt = undefined;
         ch.summary = undefined;
@@ -74,7 +78,8 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
         title:"Riapertura redazione capitolo",
         reason:"Richiesta esplicita dell'autore o recupero di un ciclo senza consenso.",
         nextStep:"Riprendi l'autopilot per eseguire specialisti, panel lettori e giudice.",
-        summary:"Capitolo " + target.number + " riaperto; tutti i capitoli successivi richiedono una nuova verifica.",
+        summary:"Capitolo " + target.number + " riaperto; " + dependentCount +
+          " capitoli successivi contrassegnati per rivalidazione di continuità.",
         createdAt:now,endedAt:now,
       };
       await tx.objectStore("activities").put(entry,entry.id);
