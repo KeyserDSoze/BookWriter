@@ -7,6 +7,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   const archiveCalls:string[]=[];
   const inspectionCalls:string[]=[];
   const ocrCalls:string[]=[];
+  const iiifCalls:string[]=[];
   const wikisourceCalls:string[]=[];
   const modelCalls:Array<{system:string;prompt:string}>=[];
   await page.route(/https:\/\/it\.wikipedia\.org\/w\/api\.php\?/,async route=>{
@@ -54,7 +55,15 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
       digitized:true,access_restricted:false,
       rights_advisory:["Rights restricted: contact the Library before reuse."],
       access_advisory:["Onsite reading may be required."],
-    },resources:[{fulltext_file:"https://tile.loc.gov/storage-services/service/tests/telegraph.txt"}]})});
+    },resources:[{fulltext_file:"https://tile.loc.gov/storage-services/service/tests/telegraph.txt",
+       info:"https://tile.loc.gov/image-services/iiif/service:tests:telegraph-page/info.json"}]})});
+  });
+  await page.route("https://tile.loc.gov/image-services/iiif/service:tests:telegraph-page/info.json",async route=>{
+    iiifCalls.push(route.request().url());
+    await route.fulfill({status:200,headers:{"content-type":"application/json",
+      "access-control-allow-origin":"*"},
+      body:JSON.stringify({"@id":"https://tile.loc.gov/image-services/iiif/service:tests:telegraph-page",
+        width:2400,height:3100})});
   });
   await page.route("https://tile.loc.gov/storage-services/service/tests/telegraph.txt",async route=>{
     ocrCalls.push(route.request().url());
@@ -284,6 +293,30 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   await expect(editorial.getByText(/Testi compatibili dopo normalizzazione/)).toBeVisible();
   expect(inspectionCalls).toHaveLength(3); // No network for the author's visual comparison.
   expect(ocrCalls).toHaveLength(2);
+  await editorial.locator("summary").filter({hasText:"Riferimenti IIIF scansioni"}).click({timeout:10_000});
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("CONSENSO: CERCA METADATI IIIF");
+    expect(dialog.message()).toContain("2020123456");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Cerca risorse IIIF della scheda"}).click();
+  await expect(editorial.getByRole("combobox",{name:"Risorsa IIIF selezionata"})).toBeVisible({timeout:15_000});
+  await editorial.getByRole("checkbox",{name:/Ho riconosciuto personalmente che questa risorsa IIIF/}).check();
+  await editorial.getByRole("checkbox",{name:/Attesto di avere valutato i diritti/}).check();
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("ASSOCIA METADATI IIIF");
+    expect(dialog.message()).toContain("Pagina 12, colonna 2");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Associa metadati IIIF alla collazione"}).click();
+  await expect(editorial.getByText(/Dimensioni dichiarate 2400×3100/)).toBeVisible({timeout:15_000});
+  expect(iiifCalls).toHaveLength(1);
+  expect(inspectionCalls).toHaveLength(5);
+  expect(ocrCalls).toHaveLength(2);
+  expect(iiifCalls[0]).toBe("https://tile.loc.gov/image-services/iiif/service:tests:telegraph-page/info.json");
+  expect(inspectionCalls.slice(3).every(x=>!x.includes("Mara")&&!x.includes("stanza"))).toBe(true);
   await editorial.locator("summary").filter({hasText:"Trascrizioni Wikisource"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Ricerche Wikisource capitolo 1"})
     .fill("Telegrafo elettrico in Italia 1848");
@@ -349,6 +382,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("locex:2020123456");
   expect(specialist?.prompt).toContain("lococr:2020123456");
   expect(specialist?.prompt).toContain("locscan:2020123456");
+  expect(specialist?.prompt).toContain("lociiif:2020123456");
   expect(specialist?.prompt).toContain("author_visual_transcription_unverified");
   expect(specialist?.prompt).toContain("institutional_ocr_unverified");
   expect(specialist?.prompt).toContain("Rights restricted: contact the Library before reuse.");
@@ -362,6 +396,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(judgeCall?.prompt).toContain("locex:2020123456");
   expect(judgeCall?.prompt).toContain("lococr:2020123456");
   expect(judgeCall?.prompt).toContain("locscan:2020123456");
+  expect(judgeCall?.prompt).toContain("lociiif:2020123456");
   expect(judgeCall?.prompt).toContain("author_visual_transcription_unverified");
   expect(judgeCall?.prompt).toContain("Rights restricted: contact the Library before reuse.");
   expect(judgeCall?.prompt).toContain("itwsr:81:421:");

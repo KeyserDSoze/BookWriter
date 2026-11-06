@@ -55,6 +55,8 @@
 
 **Collazione visiva v0.10.1 (PR #36):** per ogni OCR LoC attivo, l'autore può aprire la scheda originale, dichiarare **pagina e breve trascrizione letta sulla scansione** e registrare un confronto locale con il testo OCR. Le differenze diventano un avviso per il revisore storico e il giudice. BookWriter non scarica né verifica immagini e non certifica diritti; [guida](docs/loc-scan-collation.md), ADR 0024, issue #23.
 
+**Provenienza IIIF v0.10.2 (PR #37):** l'autore può associare a una collazione OCR/scansione una **risorsa immagine IIIF elencata esattamente dalla scheda LoC**, scegliendola e dichiarando pagina/diritti. BookWriter controlla solo ID e dimensioni `info.json`, senza scaricare le immagini né dimostrare corrispondenza dei pixel all'OCR. [Guida](docs/loc-iiif-page-provenance.md), ADR 0025, issue #23.
+
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi

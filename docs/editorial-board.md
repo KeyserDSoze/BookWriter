@@ -62,6 +62,10 @@ Il costo può essere **elevato**: per N segmenti di testo, ci sono almeno **12 �
 
 Nel pannello Wikisource l'autore può richiedere un nuovo GET pubblico **solo per il `revid`** della fonte, senza trasmettere manoscritto o query: il browser confronta in memoria identità, SHA-256, lunghezza e offset del frammento con quelli archiviati. Il risultato è **effimero** e non equivale ad autenticare opera o licenza. In caso di discordanza, il sistema avverte l'autore; solo con **ulteriore conferma** una fonte viene esclusa dalle nuove review, mantenendola negli audit, riaprendo capitoli congelati e invalidando i successivi. Un guasto CORS/rete è un errore, non una prova negativa. [Guida](wikisource-reverification.md), ADR 0020.
 
+## Provenienza tecnica IIIF di una pagina LoC selezionata (v0.10.2)
+
+Dopo una collazione manuale `locscan:`, l'autore può scegliere una risorsa `info.json` IIIF che il catalogo LoC elenca sotto l'item esatto, con consenso di ricerca e **secondo consenso** su pagina e diritti. BookWriter verifica identità del servizio, dimensioni e indice risorsa **senza accedere ai pixel**. La scelta della «stessa pagina» è un'attestazione dell'autore. Solo storico e giudice ricevono questi metadati, gli altri 11 agenti sono ciechi; `lociiif:` non entra nei `historical.sourceIds`, non autentica OCR, immagini o copyright. [Guida](loc-iiif-page-provenance.md), ADR 0025.
+
 ## Collazione visiva dichiarata dall'autore (v0.10.1)
 
 L'autore può confrontare una **breve frase digitata dopo aver consultato personalmente la scansione LoC** con la citazione OCR già acquisita, registrando pagina/folio e due dichiarazioni su consultazione e diritti. La funzione confronta **due stringhe**, non pixel o immagini: `text_overlap` è una coincidenza normalizzata, `text_discrepancy` una differenza da chiarire. Solo storico e giudice critico ricevono la collazione non autenticata, gli altri undici agenti no. `locscan:` non è mai una fonte indipendente né un testo dell'originale verificato dal software. [Guida](loc-scan-collation.md), ADR 0024.

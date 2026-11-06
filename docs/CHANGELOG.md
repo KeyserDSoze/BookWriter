@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.2 — 2026-11-06 (PR #37)
+
+**Library of Congress: collegamento puntuale ai metadati di risorse immagine IIIF, senza scaricare scansioni**
+
+- Dopo una collazione `locscan:` attiva, nuova sezione **Riferimenti IIIF scansioni**: dialogo per cercare candidati dalla singola scheda LoC. Il browser legge solo `https://www.loc.gov/item/<itemId>/?fo=json`, selezionando fino a 30 `resources[].info` / `resources[].files[*].info` sotto `https://tile.loc.gov/image-services/iiif/{service|master}:.../info.json`. Niente miniature, anteprime, PDF, immagini o URL non consentiti.
+- Scelta esplicita dell'autore della risorsa e due attestazioni separate (stessa pagina/folio già dichiarata e diritti sui metadati), più conferma con ID, pagina, URL e destinatari. Prima del salvataggio l'item JSON viene **riletto** e l'URL selezionato deve essere ancora presente/ammesso. Una sola GET verso il relativo `info.json` verifica identificativo del servizio e dimensioni dichiarate, senza scaricare né analizzare pixel.
+- Restrizioni item/risorsa `access_restricted`, `download_restricted`, `rights_restricted` e flag non validi bloccano la richiesta. JSON item max 240 KB, IIIF max 96 KB, timeout 12s/GET, streaming limitato, no redirect, credenziali, cookie, referrer, proxy o ricerche private. Errori CORS/429/JSON/mismatch non producono modifiche parziali.
+- Snapshot `lociiif:<itemId>:<timestamp>:<hash16>` con item, ID OCR `lococr:`, collazione `locscan:`, pagina, risorsa, indici, dimensioni e impronta **solo dei metadati tecnici**. Max 40 storici, disattivazione automatica su fonti obsolete, salvataggio Web Locks/CAS, rewind freeze/downstream, autosync off e outbox/activity atomica. Solo specialista storico e giudice ricevono i metadati; gli altri 11 revisori sono ciechi. `lociiif:` non può essere una fonte `historical.sourceIds`.
+- Test Vitest provenienza, URL/diritti, identità/fail-closed, domain, concorrenza e Playwright desktop/mobile; ADR 0025 e `docs/loc-iiif-page-provenance.md`.
+
+**Limiti:** `info.json` identifica tecnicamente un servizio e le dimensioni ma **non dimostra che l'immagine sia la stessa pagina dell'OCR**, né autentica scansione, fatto storico, titolo, licenza o copyright. L'associazione della pagina è dichiarata dall'autore; nessuna immagine è recuperata dal programma. I test mock non provano CORS o disponibilità reale in tutte le collezioni.
+
 ## 0.10.1 — 2026-11-06 (PR #36)
 
 **Library of Congress: collazione assistita dall'autore della scansione rispetto all'OCR, senza falsa verifica visiva**
