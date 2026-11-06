@@ -2,7 +2,7 @@ import { useState } from "react";
 import { BookOpenText, ExternalLink, ShieldAlert } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import { activeArchivalItems } from "../domain/archival-catalog";
-import { activeManualEvidence, type ManualExcerptInput } from "../domain/manual-evidence";
+import { activeManualEvidence, validateManualExcerpt, type ManualExcerptInput } from "../domain/manual-evidence";
 import { attachManualEvidence } from "../application/manual-evidence";
 import { Button } from "./ui/button";
 
@@ -11,7 +11,8 @@ export function ManualEvidencePanel({
 }: {book:BookProject;chapter:Chapter;onRefresh:()=>Promise<void>}) {
   const items=activeArchivalItems(chapter.historicalDossier);
   const excerpts=activeManualEvidence(chapter.historicalDossier);
-  const stored=chapter.historicalDossier?.manualEvidence?.excerpts.length ?? 0;
+  const archived=(chapter.historicalDossier?.manualEvidence?.excerpts ?? [])
+    .filter(entry=>validateManualExcerpt(entry) && !excerpts.some(active=>active.id===entry.id));
   const [catalogItemId,setCatalogItemId]=useState(items[0]?.id ?? "");
   const selectedCatalogId=items.find(item=>item.id===catalogItemId)?.id ?? items[0]?.id ?? "";
   const [locator,setLocator]=useState("");
@@ -128,10 +129,22 @@ export function ManualEvidencePanel({
         <ShieldAlert size={15} className="shrink-0"/>
         La nuova trascrizione riapre questo capitolo e invalida i successivi.
       </p>}
-      {stored>excerpts.length && <p className="text-amber-700 dark:text-amber-300">
-        {stored-excerpts.length} versioni precedenti o senza catalogo attivo conservate nello storico,
-        ma escluse dalle nuove verifiche.
-      </p>}
+      {!!archived.length && <details className="rounded-md border border-slate-200 p-2 dark:border-slate-700">
+        <summary className="cursor-pointer font-semibold">
+          Storico trascrizioni non più attive ({archived.length})
+        </summary>
+        <p className="muted mt-1">
+          Queste versioni sono conservate per audit, ma non vengono fornite alle nuove review.
+        </p>
+        {archived.map(entry=><div key={entry.id} className="mt-2 space-y-1 border-t border-slate-200 pt-2 dark:border-slate-700">
+          <a href={entry.url} target="_blank" rel="noopener noreferrer"
+            className="text-blue-700 underline dark:text-blue-300">{entry.title}</a>
+          <p>Collocazione: {entry.locator} · {new Date(entry.submittedAt).toLocaleString("it-IT")}</p>
+          <p className="whitespace-pre-wrap">{entry.text}</p>
+          <p className="muted">Diritti dichiarati: {entry.rightsBasis}. {entry.rightsNote}</p>
+          <p className="text-amber-700 dark:text-amber-300">Snapshot storico non autenticato, non attivo per nuove citazioni.</p>
+        </div>)}
+      </details>}
       {excerpts.map(entry=><div key={entry.id} className="rounded-md border border-slate-200 p-2 dark:border-slate-700">
         <a href={entry.url} rel="noopener noreferrer" target="_blank"
           className="inline-flex items-start gap-1 break-all font-semibold text-blue-700 underline dark:text-blue-300">
