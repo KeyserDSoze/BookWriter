@@ -40,4 +40,6 @@ Il browser esegue fino a tre richieste di ricerca e sei richieste separate per r
 
 Le opere Wikisource possono avere licenze differenti; l'app mantiene `community_transcription_unverified` e `work_rights_not_verified`. Non pubblicare brani di terzi senza verificare pubblico dominio, attribuzione, obblighi editoriali e regole della giurisdizione applicabile. La disponibilità di una frase in un wikitesto **non prova che il fatto storico narrato sia vero**.
 
+**Nuovo dalla v0.9.7:** puoi controllare di nuovo una revisione già presente, confrontandola online con l'hash salvato, e scegliere di escluderla in caso di discordanza; [guida alla riverifica remota](wikisource-reverification.md), ADR 0020.
+
 Riferimenti: [ADR 0019](../ADR/0019-wikisource-exact-revision-proof.md), [ADR 0018](../ADR/0018-wikisource-versioned-transcriptions.md) e [issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).

@@ -1,6 +1,6 @@
 # ADR 0020 — Audit remoto esplicito delle revisioni Wikisource e quarantena volontaria
 
-- **Stato:** Proposto per v0.9.7, PR in verifica
+- **Stato:** Accettato per v0.9.7 (PR #32)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessore:** ADR 0019
