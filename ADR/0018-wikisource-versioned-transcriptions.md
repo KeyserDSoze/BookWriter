@@ -1,6 +1,6 @@
 # ADR 0018 — Wikisource: estratti di trascrizioni pubbliche con revisione, non originali autenticati
 
-- **Stato:** Proposto per v0.9.5, in verifica CI
+- **Stato:** Accettato per v0.9.5, PR #30
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0013–0017
