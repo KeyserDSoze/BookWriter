@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.3 — 2026-11-06 (PR #38)
+
+**Redazione storica: proposte di divergenza fra fonti indipendenti, con verifica testuale e giudizio critico**
+
+- Il revisore storico può usare `historical.assessment=conflicting_excerpts` per una **possibile** divergenza: deve indicare da due a tre fonti attive indipendenti, una citazione letterale distinta per ciascuna e `sourcePositions` con giudizio motivato `supports|disputes|unclear` per ogni fonte.
+- Il validatore rifiuta ID di fonti non attive, revisioni dello stesso documento spacciate per indipendenti, citazioni assenti, posizioni incomplete/duplicate oppure senza almeno una `supports` e una `disputes`. I report precedenti rimangono leggibili senza migrazioni.
+- Il direttore editoriale riceve citazioni, contesto delle fonti e posizioni come **interpretazioni non affidabili**, può respingere i falsi conflitti motivando e non modifica direttamente prosa o canone; il pannello mostra la posizione per fonte e l'avviso sulla mancata verifica semantica.
+- Nessuna nuova chiamata a servizi esterni o ricerca automatica, nessun invio del romanzo a Wikipedia/LoC/Crossref. I dati storici restano visibili solo allo specialista e al giudice, non agli altri undici revisori. Test unitari per casi validi e attacchi, più CI Playwright desktop/mobile.
+- ADR 0026 e [guida alle divergenze](historical-source-disagreements.md); lavoro incrementale dell'issue #23.
+
+**Limiti:** la corrispondenza letterale di due estratti non prova che i documenti siano davvero in disaccordo, che descrivano lo stesso evento, siano storicamente attendibili o abbiano licenze valide. Le posizioni sono proposte del modello e non certificazioni. Il direttore conserva la responsabilità del giudizio e l'autore può intervenire.
+
 ## 0.10.2 — 2026-11-06 (PR #37)
 
 **Library of Congress: collegamento puntuale ai metadati di risorse immagine IIIF, senza scaricare scansioni**

@@ -33,7 +33,13 @@ export interface ChapterHistoricalDossier {
   wikisource?: ChapterWikisourceExcerpts;
   locOcr?: ChapterLocOcr;
 }
-export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "unverified";
+export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "conflicting_excerpts" | "unverified";
+/** Model-proposed interpretation, not a machine-verified historical fact. */
+export interface HistoricalSourcePosition {
+  sourceId: string;
+  position: "supports" | "disputes" | "unclear";
+  rationale: string;
+}
 /** A quotation belongs to exactly one retrieved source revision. */
 export interface HistoricalSourceEvidence {
   sourceId: string;
@@ -47,6 +53,8 @@ export interface HistoricalClaim {
   sourceQuote?: string;
   /** New reports bind an independent literal quotation to EVERY cited source. */
   sourceEvidence?: HistoricalSourceEvidence[];
+  /** Only for conflicting_excerpts; one proposed stance per independently quoted source. */
+  sourcePositions?: HistoricalSourcePosition[];
 }
 
 export function normalizeResearchQueries(queries: readonly string[]): string[] {
@@ -97,6 +105,25 @@ export function validateHistoricalClaim(
   if (!Array.isArray(references) || !Array.isArray(evidence) ||
       new Set(references).size !== references.length || references.length > 3)
     throw new Error("Fonti storiche duplicate, non valide o troppe fonti per un rilievo.");
+  // A claimed dispute must be traceable to distinct active sources, but the
+  // interpretation of their quotes is an LLM hypothesis, NEVER proof of truth.
+  const positions = claim.sourcePositions ?? [];
+  if (!Array.isArray(positions) ||
+      (claim.assessment !== "conflicting_excerpts" && positions.length > 0))
+    throw new Error("Le posizioni delle fonti sono ammesse solo per divergenze documentali.");
+  if (claim.assessment === "conflicting_excerpts") {
+    if (references.length < 2 || positions.length !== references.length ||
+        new Set(positions.map(p => p?.sourceId)).size !== references.length ||
+        positions.some(p => !p || !references.includes(p.sourceId) ||
+          !["supports","disputes","unclear"].includes(p.position) ||
+          typeof p.rationale !== "string" || p.rationale.trim().length < 16 ||
+          p.rationale.length > 400) ||
+        !positions.some(p => p.position === "supports") ||
+        !positions.some(p => p.position === "disputes"))
+      throw new Error("Divergenza: servono almeno due fonti distinte, posizioni motivate di supporto e smentita per ogni fonte.");
+    if (evidence.length !== references.length)
+      throw new Error("Divergenza: è richiesta una citazione letterale per ogni fonte.");
+  }
   if (claim.assessment === "unverified") {
     if (references.length || claim.sourceQuote?.trim() || evidence.length)
       throw new Error("Una segnalazione storica non verificata non può citare fonti come prova.");

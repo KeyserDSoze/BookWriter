@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Divergenze possibili fra estratti (v0.10.3)
+
+Quando sono presenti almeno **due documenti distinti** e le relative citazioni letterali, il revisore può segnalare `conflicting_excerpts`: per ogni fonte spiega se il suo estratto *sembra sostenere*, *sembra contraddire* oppure lascia incerto il fatto. Le posizioni sono ipotesi, non verifiche semantiche; la procedura impedisce che una revisione duplicata conti come una prova indipendente. Il direttore deve rileggere i brani nel contesto, distinguere periodo/edizione, accettare o respingere con motivazione. Non c'è acquisizione automatica di nuove fonti né modifica del canone. [Guida](historical-source-disagreements.md), ADR 0026.
+
 ## Riferimento puntuale ai metadati IIIF LoC (v0.10.2)
 
 Dopo la collazione OCR/scansione, l'autore può selezionare **un servizio IIIF della stessa scheda istituzionale** e dichiarare di avere riconosciuto personalmente la pagina. Il software verifica soltanto i metadati `info.json`, indici e dimensioni, non scarica immagini né dimostra che i pixel corrispondano al testo OCR. Nessuna licenza è verificata; `lociiif:` non è una fonte citabile. Solo storico e giudice vedono il riferimento. [Guida](loc-iiif-page-provenance.md), ADR 0025.
