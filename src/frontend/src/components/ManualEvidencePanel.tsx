@@ -2,7 +2,7 @@ import { useState } from "react";
 import { BookOpenText, ExternalLink, ShieldAlert } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import { activeArchivalItems } from "../domain/archival-catalog";
-import { activeManualEvidence, validateManualExcerpt, type ManualExcerptInput } from "../domain/manual-evidence";
+import { activeManualEvidence, allManualEvidence, type ManualExcerptInput } from "../domain/manual-evidence";
 import { attachManualEvidence } from "../application/manual-evidence";
 import { Button } from "./ui/button";
 
@@ -11,8 +11,8 @@ export function ManualEvidencePanel({
 }: {book:BookProject;chapter:Chapter;onRefresh:()=>Promise<void>}) {
   const items=activeArchivalItems(chapter.historicalDossier);
   const excerpts=activeManualEvidence(chapter.historicalDossier);
-  const archived=(chapter.historicalDossier?.manualEvidence?.excerpts ?? [])
-    .filter(entry=>validateManualExcerpt(entry) && !excerpts.some(active=>active.id===entry.id));
+  const archived=allManualEvidence(chapter.historicalDossier)
+    .filter(entry=>!excerpts.some(active=>active.id===entry.id));
   const [catalogItemId,setCatalogItemId]=useState(items[0]?.id ?? "");
   const selectedCatalogId=items.find(item=>item.id===catalogItemId)?.id ?? items[0]?.id ?? "";
   const [locator,setLocator]=useState("");
