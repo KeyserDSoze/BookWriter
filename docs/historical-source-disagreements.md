@@ -1,4 +1,14 @@
-# Possibili divergenze storiche fra fonti — BookWriter v0.10.3
+# Possibili divergenze storiche fra fonti — BookWriter v0.10.4
+
+## Nuovo controllo del contesto (v0.10.4)
+
+Il revisore storico deve confrontare il **contesto di ogni fonte citata** prima di proporre una divergenza. Nella redazione compare una scheda per fonte con il presunto evento, il periodo, il luogo, l'edizione/versione e le informazioni ancora incerte. Se un elemento non emerge dall'estratto, viene indicato **Non determinato**, non completato con una supposizione.
+
+Il revisore distingue `same` (pensa che le fonti descrivano lo stesso evento), `unknown` (non è sicuro) e `different`. Se dichiara `different`, BookWriter rifiuta il finding come conflitto sullo stesso fatto e richiede una formulazione non verificata. La validazione protegge **solo la coerenza formale del report**: non può confermare se l'identità dell'evento sia stata classificata correttamente.
+
+In seguito il direttore deve presentare una **seconda valutazione autonoma**, motivata per evento, cronologia, geografia, edizione e indipendenza delle fonti. Se stabilisce che sono eventi diversi, non può accettare la proposta di correzione. Una fonte senza data o luogo non diventa falsa: serve ulteriore verifica. Gli archivi delle vecchie review v0.10.3 restano visibili con un avviso, senza riscritture o migrazioni.
+
+## Contesto precedente (v0.10.3)
 
 ## Cosa cambia per l'autore
 

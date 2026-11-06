@@ -266,6 +266,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Mantenere piena compatibilità di report `consistent_with_excerpt|contradicts_excerpt|unverified` e vecchie `sourceQuote` singole, storico, ZIP e GitHub; nessun nuovo fetch o rilascio dei segreti verso servizi di ricerca. Altri undici agenti non vedono il dossier.
 - Coprire test di quote inventate, stances mancanti/duplicate, revisioni duplicate, giudizio indipendente e isolamento. Guida `docs/historical-source-disagreements.md`, issue #23.
 
+## Contesto critico v0.10.4 — divergenti solo se riferiti allo stesso fatto (ADR 0027)
+
+- Ogni NUOVO finding `conflicting_excerpts` deve contenere `conflictContext.sources` con esattamente una voce per ID (`subject, period, place, edition` stringa breve oppure `null` esplicito, `uncertainty` motivata). `comparison.eventIdentity` deve essere `same|unknown` con motivazione; `different` non ammette il finding come conflitto. Questa è una dichiarazione del revisore, **non** una verifica del software.
+- Il giudice deve emettere `conflictReview` su ogni finding `conflicting_excerpts`, motivando identità dell'evento, cronologia, geografia, edizione, indipendenza e conclusione. Se dichiara eventi `different`, può solo respingere il finding, senza applicare remediation. Nessun `conflictReview` su rilievi non storici o di altra categoria.
+- Gli storici v0.10.3 privi del campo rimangono leggibili e marcati come legacy, senza riscrivere report o capitoli; nessun nuovo fetch, nuovi destinatari dei dossier o promozione delle fonti a fatti verificati.
+- Test di sourceId mancanti o duplicati, null ammessi, contesto incompleto, falsa identità evento, review del giudice e UI responsive. Guida `docs/historical-source-disagreements.md`.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.

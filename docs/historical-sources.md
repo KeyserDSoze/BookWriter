@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Verifica del contesto delle divergenze (v0.10.4)
+
+Lo storico ora aggiunge una scheda per fonte con evento, periodo, luogo, versione e incertezze, usando `null` quando non è possibile leggere un dato. Il direttore produce una seconda valutazione argomentata di queste dimensioni. Il software può rifiutare report logicamente incoerenti, ma non certifica che due cronache descrivano lo stesso evento. I report precedenti restano leggibili. [Guida dettagliata](historical-source-disagreements.md), ADR 0027.
+
 ## Divergenze possibili fra estratti (v0.10.3)
 
 Quando sono presenti almeno **due documenti distinti** e le relative citazioni letterali, il revisore può segnalare `conflicting_excerpts`: per ogni fonte spiega se il suo estratto *sembra sostenere*, *sembra contraddire* oppure lascia incerto il fatto. Le posizioni sono ipotesi, non verifiche semantiche; la procedura impedisce che una revisione duplicata conti come una prova indipendente. Il direttore deve rileggere i brani nel contesto, distinguere periodo/edizione, accettare o respingere con motivazione. Non c'è acquisizione automatica di nuove fonti né modifica del canone. [Guida](historical-source-disagreements.md), ADR 0026.

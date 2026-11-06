@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newBook, type BookProject } from "./types";
-import { adjudicationPrompt, chapterSegments, createEditorialCycle, reviewerPrompt, validateReport } from "./editorial-board";
+import { adjudicationPrompt, chapterSegments, createEditorialCycle, reviewerPrompt, validateJudgment, validateReport } from "./editorial-board";
 import {
   activeHistoricalSources, extendHistoricalDossier, isTrustedHistoricalUrl,
   normalizeResearchQueries, validateHistoricalClaim, type HistoricalSource,
@@ -162,8 +162,40 @@ describe("Dossier storico verificabile nel processo editoriale",()=>{
         {sourceId:b.id,quote:"Un altro resoconto colloca l'apertura della stessa linea soltanto nel 1853"},
       ],
       sourcePositions:positions,
+      conflictContext:{
+        sources:[
+          {sourceId:a.id,subject:"Apertura della linea telegrafica cittadina",
+            period:"Anno 1848",place:null,edition:null,
+            uncertainty:"La cronaca non identifica chiaramente il luogo."},
+          {sourceId:b.id,subject:"Apertura della stessa linea telegrafica",
+            period:"Anno 1853",place:null,edition:null,
+            uncertainty:"Non è noto se sia la stessa fase del servizio."},
+        ],
+        comparison:{eventIdentity:"unknown" as const,
+          rationale:"Le cronache sembrano descrivere la stessa linea, ma il contesto è incompleto."},
+      },
     };
     expect(()=>validateHistoricalClaim(claim,dossier)).not.toThrow();
+    expect(()=>validateHistoricalClaim({...claim,conflictContext:undefined},
+      dossier)).toThrow(/Contesto storico/);
+    expect(()=>validateHistoricalClaim({...claim,conflictContext:{
+      ...claim.conflictContext, sources:claim.conflictContext.sources.slice(0,1),
+    }},dossier)).toThrow(/Contesto storico/);
+    expect(()=>validateHistoricalClaim({...claim,conflictContext:{
+      ...claim.conflictContext,
+      sources:[claim.conflictContext.sources[0]!,
+        {...claim.conflictContext.sources[1]!,sourceId:a.id}],
+    }},dossier)).toThrow(/Contesto storico/);
+    expect(()=>validateHistoricalClaim({...claim,conflictContext:{
+      ...claim.conflictContext,
+      comparison:{eventIdentity:"different" as const,
+        rationale:"Le due cronache parlano di infrastrutture distinte e non comparabili."},
+    }},dossier)).toThrow(/eventi dichiarati differenti/);
+    expect(()=>validateHistoricalClaim({...claim,conflictContext:{
+      ...claim.conflictContext,
+      sources:[{...claim.conflictContext.sources[0]!,uncertainty:"Breve."},
+        claim.conflictContext.sources[1]!],
+    }},dossier)).toThrow(/Contesto storico/);
     expect(()=>validateHistoricalClaim({...claim,sourcePositions:positions.slice(0,1)},
       dossier)).toThrow(/Divergenza/);
     expect(()=>validateHistoricalClaim({...claim,sourcePositions:[
@@ -185,6 +217,9 @@ describe("Dossier storico verificabile nel processo editoriale",()=>{
         {sourceId:"itwiki:42:211",quote:claim.sourceEvidence[0]!.quote}],
       sourcePositions:[positions[0]!,
         {...positions[1]!,sourceId:"itwiki:42:211"}],
+      conflictContext:{...claim.conflictContext,
+        sources:[claim.conflictContext.sources[0]!,
+          {...claim.conflictContext.sources[1]!,sourceId:"itwiki:42:211"}]},
     },samePage)).toThrow(/non sono fonti indipendenti/);
     const book=sample(),cycle=createEditorialCycle("c1"),
       segment=chapterSegments(book.chapters[0]!)[0]!;
@@ -194,8 +229,35 @@ describe("Dossier storico verificabile nel processo editoriale",()=>{
     cycle.reports.push(valid);
     const judge=adjudicationPrompt(book,cycle);
     expect(judge.prompt).toContain('"sourcePositions"');
+    expect(judge.prompt).toContain('"conflictContext"');
     expect(judge.prompt).toContain("Il resoconto colloca");
     expect(judge.system).toContain("falso conflitto");
+    const id=valid.findings[0]!.id;
+    const conflictReview={
+      eventIdentity:"different" as const,
+      chronology:"Le date divergono, ma possono riferirsi a fasi diverse.",
+      geography:"Il luogo non è identificato con sufficiente precisione.",
+      edition:"L'edizione e la data del resoconto restano da controllare.",
+      independence:"L'identità distinta delle voci non dimostra fonti storiche indipendenti.",
+      conclusion:"Il direttore non considera questo contrasto una prova di errore.",
+    };
+    const reject={
+      reasoning:"Due citazioni reali non dimostrano che si tratti del medesimo evento storico.",
+      decisions:[{findingId:id,action:"reject",rationale:"Manca il confronto di data, luogo e versione.",
+        remediation:"",conflictReview}],
+    };
+    expect(()=>validateJudgment(cycle,JSON.stringify({...reject,
+      decisions:[{findingId:id,action:"reject",rationale:"Il contesto è incerto.",
+        remediation:""}]}))).toThrow(/deve valutare evento/);
+    expect(validateJudgment(cycle,JSON.stringify(reject)).verdict).toBe("freeze");
+    expect(()=>validateJudgment(cycle,JSON.stringify({...reject,
+      decisions:[{findingId:id,action:"accept",rationale:"Propongo una correzione.",
+        remediation:"Riscrivere il dettaglio storico.",conflictReview}]}))).toThrow(/Eventi distinti/);
+    const accepted=validateJudgment(cycle,JSON.stringify({...reject,
+      decisions:[{findingId:id,action:"accept",rationale:"Servono dettagli meno assertivi.",
+        remediation:"Eliminare la data certa in attesa della fonte primaria.",
+        conflictReview:{...conflictReview,eventIdentity:"unknown"}}]}));
+    expect(accepted.verdict).toBe("repair");
     expect(reviewerPrompt(book,cycle,"historical",segment,1).system)
       .toContain("conflicting_excerpts");
     expect(reviewerPrompt(book,cycle,"readerCasual",segment,1).prompt)

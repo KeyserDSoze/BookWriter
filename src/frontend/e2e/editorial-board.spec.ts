@@ -161,6 +161,18 @@ test("divergenze documentali desktop/mobile: il report distingue posizioni e pro
             {sourceId:b.id,position:"disputes",
               rationale:"La seconda cronaca riferisce una data di apertura diversa."},
           ],
+          conflictContext:{
+            sources:[
+              {sourceId:a.id,subject:"Inizio del servizio telegrafico",
+                period:"Anno 1848",place:null,edition:null,
+                uncertainty:"La località precisa non risulta dall'estratto."},
+              {sourceId:b.id,subject:"Apertura della linea telegrafica",
+                period:"Anno 1853",place:null,edition:null,
+                uncertainty:"Non è certo che sia la stessa fase operativa."},
+            ],
+            comparison:{eventIdentity:"unknown",
+              rationale:"La concordanza dell'evento non è determinabile dalle sole frasi citate."},
+          },
         };
         book.status="paused";book.phase="chapterReview";
         book.chapters=[{id:"ch-1",number:1,title:"Il dispaccio",purpose:"Contesto",
@@ -177,7 +189,23 @@ test("divergenze documentali desktop/mobile: il report distingue posizioni e pro
             reason:"Le fonti sembrano indicare date diverse per la linea.",
             remediation:"Verificare luogo, edizione e data prima di modificare la scena.",
             historical}],
-        }],repairCursor:0,priorRounds:[]};
+        }],repairCursor:0,priorRounds:[],
+          judgment:{
+            reasoning:"Il direttore confronta data, luogo ed edizione prima di accettare un'eventuale correzione.",
+            verdict:"freeze",createdAt:t,
+            decisions:[{findingId:"1:historical:0:0",action:"reject",
+              rationale:"Le fonti non consentono di stabilire che sia la stessa linea.",
+              remediation:"",
+              conflictReview:{
+                eventIdentity:"different",
+                chronology:"I due anni possono descrivere fasi operative differenti.",
+                geography:"La città non è identificata in nessuna delle due citazioni.",
+                edition:"Non conosciamo data e versione dell'edizione originaria.",
+                independence:"Due pagine distinte non provano due testimonianze originarie indipendenti.",
+                conclusion:"Questo conflitto non giustifica modifiche al romanzo.",
+              }}],
+          },
+        };
         store.put(book,book.id as string);
         tx.oncomplete=()=>resolve();
         tx.onerror=()=>reject(tx.error);
@@ -193,6 +221,11 @@ test("divergenze documentali desktop/mobile: il report distingue posizioni e pro
   await expect(panel.getByText(/Interpretazione itwiki:44:311/)).toBeVisible();
   await expect(panel.getByText(/una citazione letterale non dimostra/)).toBeVisible();
   await expect(panel.getByText(/La prima cronaca colloca il servizio/)).toBeVisible();
+  await expect(panel.getByText(/Confronto di evento, periodo, luogo ed edizione/)).toBeVisible();
+  await expect(panel.getByText(/La località precisa non risulta/)).toBeVisible();
+  await expect(panel.getByText(/Identità dell'evento proposta/)).toBeVisible();
+  await expect(panel.getByText(/Verifica critica del direttore/)).toBeVisible();
+  await expect(panel.getByText(/Due pagine distinte non provano/)).toBeVisible();
   const width=await page.evaluate(()=>({
     actual:document.documentElement.scrollWidth,expected:window.innerWidth,
   }));
