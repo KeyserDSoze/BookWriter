@@ -35,7 +35,7 @@ describe("LoC document-level inspection: metadata, not a right to publish",()=>{
     expect(validInstitutionalInspection({...inspection,accessRestricted:"no" as never})).toBe(false);
     expect(validInstitutionalInspection({...inspection,rightsAdvisory:["x".repeat(500)]})).toBe(false);
     expect(()=>appendInstitutionalInspection(base(),{...inspection,
-      catalogItemId:"loc:2020123456:"+(Date.parse(at)+1000)})).toThrow(/non più attiva/);
+      catalogItemId:"loc:2020123456:"+(Date.parse(at)+1000)})).toThrow(/non è più attiva/);
     expect(()=>validateHistoricalClaim({
       claim:"La stazione era in funzione.",assessment:"consistent_with_excerpt",
       sourceIds:[inspection.id],sourceEvidence:[{sourceId:inspection.id,
