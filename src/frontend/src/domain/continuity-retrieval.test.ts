@@ -113,7 +113,7 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(result.scannedSceneCount).toBe(1600);
     expect(result.unscannedSceneCount).toBe(result.candidateSceneCount-1600);
     expect(result.sampled.some(s=>s.chapter.id===origin.id)).toBe(true);
-    expect(result.sampled.some(s=>s.chapter.id===latest.id)).toBe(true);
+    expect(result.sampled.some(s=>s.chapter.id===prior.at(-1)!.id)).toBe(true);
     markDownstreamContinuity(b,origin,"author_reopen");
     const pack=buildContinuityEvidence(b,target,target.scenes[0])!;
     expect(pack.retrieval.unscannedSceneCount).toBeGreaterThan(0);
