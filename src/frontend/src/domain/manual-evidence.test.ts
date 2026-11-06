@@ -42,7 +42,7 @@ describe("Trascrizioni d'archivio dell'autore: provenienza e diritti",()=>{
   });
   it("ignora snapshot corrotti da un archivio importato non attendibile",()=>{
     const d=appendManualEvidence(dossier(),input,now);
-    d.manualEvidence!.excerpts="dato non valido" as unknown as typeof d.manualEvidence.excerpts;
+    d.manualEvidence!.excerpts="dato non valido" as unknown as [];
     expect(allManualEvidence(d)).toEqual([]);
     expect(activeManualEvidence(d)).toEqual([]);
   });
