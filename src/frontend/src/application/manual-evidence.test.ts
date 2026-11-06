@@ -79,7 +79,7 @@ describe("Salvataggio locale di citazioni da originali consultati dall'autore",(
   it("rifiuta condizioni di diritti non confermate o fonte non più attiva senza corrompere il libro",async()=>{
     const b=await fixture();
     await expect(attachManualEvidence(b.id,"c1",b.updatedAt,
-      {...entry,rightsAttested:false} as ManualExcerptInput)).rejects.toThrow(/consenso/);
+      {...entry,rightsAttested:false} as unknown as ManualExcerptInput)).rejects.toThrow(/consenso/);
     await expect(attachManualEvidence(b.id,"c1",b.updatedAt,
       {...entry,catalogItemId:"loc:fake:42"})).rejects.toThrow(/scheda d'archivio/);
     expect((await getBook(b.id))?.chapters[0]?.historicalDossier?.manualEvidence).toBeUndefined();
