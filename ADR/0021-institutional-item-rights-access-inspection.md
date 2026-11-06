@@ -1,6 +1,6 @@
 # ADR 0021 — Ispezione delle schede istituzionali LoC: accesso e diritti, senza promuovere metadati a prove
 
-- **Stato:** Proposto per v0.9.8, in verifica CI
+- **Stato:** Accettato per v0.9.8 (PR #33)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0016, 0017, 0019, 0020

@@ -47,7 +47,7 @@
 
 **Riverifica remota v0.9.7 (PR #32):** nel pannello Wikisource, l'autore può confrontare nuovamente su richiesta una fonte `itwsr:` con la revisione pubblicata, tramite SHA-256, timestamp e offset. Il risultato è temporaneo e **non certifica l'originale**. In caso di discordanza può scegliere di escluderla, preservando audit e invalidando i capitoli congelati dipendenti. [Guida](docs/wikisource-reverification.md), ADR 0020, issue #23.
 
-**Avvisi istituzionali v0.9.8 (PR in verifica):** dalle schede Library of Congress si può, con consenso, consultare il dettaglio dell'oggetto per leggere indicazioni di accesso e diritti. BookWriter salva solo metadati, senza scaricare il documento, e **non** deduce licenze o prove storiche dalla scheda; [guida](docs/institutional-item-inspection.md), ADR 0021 e issue #23.
+**Avvisi istituzionali v0.9.8 (PR #33):** dalle schede Library of Congress si può, con consenso, consultare il dettaglio dell'oggetto per leggere indicazioni di accesso e diritti. BookWriter salva solo metadati, senza scaricare il documento, e **non** deduce licenze o prove storiche dalla scheda; [guida](docs/institutional-item-inspection.md), ADR 0021 e issue #23.
 
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
