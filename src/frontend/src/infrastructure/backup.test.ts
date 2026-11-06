@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
+import { markHistoricalEvidenceChanged, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
 import { encryptLocal } from "./crypto";
 import { getDb, listBooks, saveActivity, saveBook, saveSettings } from "./db";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
@@ -121,6 +121,29 @@ describe("Backup portabile BookWriter", () => {
       "content.json":strToU8(JSON.stringify(payload)),
     },{level:6});
     await expect(readBackup(new Blob([new Uint8Array(mutated)]) as File))
+      .rejects.toThrow(/Schema backup non valido/);
+
+    // The new numeric audit is optional for legacy ZIPs, round-trips when
+    // present and refuses impossible counts in an untrusted imported archive.
+    completeContinuityRecheck(original,original.chapters[1]!,
+      "2026-11-06T14:00:00.000Z");
+    await saveBook(original,false);
+    const auditedZip=await createBackup("content");
+    const audited=(await readBackup(auditedZip as File)).books
+      .find(b=>b.title==="Il primo manoscritto")!;
+    expect(audited.chapters[1]?.lastContinuityReview).toMatchObject({
+      retrievalMethod:"local_structured_lexical_v1",
+      candidateSceneCount:1,scannedSceneCount:1,unscannedSceneCount:0,
+    });
+    const archive=unzipSync(new Uint8Array(await auditedZip.arrayBuffer()));
+    const bad=JSON.parse(strFromU8(archive["content.json"]!));
+    bad.books.find((b:{title:string})=>b.title==="Il primo manoscritto")
+      .chapters[1].lastContinuityReview.scannedSceneCount=-9;
+    const hostile=zipSync({
+      "manifest.json":archive["manifest.json"]!,
+      "content.json":strToU8(JSON.stringify(bad)),
+    },{level:6});
+    await expect(readBackup(new Blob([new Uint8Array(hostile)]) as File))
       .rejects.toThrow(/Schema backup non valido/);
   });
 
