@@ -53,8 +53,20 @@ function RoundDetails({ round, reports, judgment, sources = [], manualSources = 
                     ? "Coerente con l'estratto (non certificato)" :
                     f.historical.assessment === "contradicts_excerpt"
                       ? "Potenziale contraddizione con l'estratto" :
+                    f.historical.assessment === "conflicting_excerpts"
+                      ? "Possibile divergenza fra fonti (interpretazione NON certificata)" :
                         "Non verificato con documenti"}</p>
                   <p><b>Affermazione:</b> {f.historical.claim}</p>
+                  {f.historical.sourcePositions?.map(position => <p key={position.sourceId}
+                    className="whitespace-pre-wrap text-amber-800 dark:text-amber-300">
+                    <b>Interpretazione {position.sourceId} — {position.position === "supports"
+                      ? "sembra sostenere" : position.position === "disputes"
+                        ? "sembra contraddire" : "contesto incerto"}:</b> {position.rationale}
+                  </p>)}
+                  {f.historical.assessment === "conflicting_excerpts" && <p className="muted">
+                    Le posizioni sono proposte dal revisore: una citazione letterale non dimostra
+                    incompatibilità storica. Consulta il contesto completo e il giudizio critico.
+                  </p>}
                   {f.historical.sourceQuote && <p><b>Citazione legacy (singola fonte):</b> “{f.historical.sourceQuote}”</p>}
                   {f.historical.sourceIds.map(id => {
                     const source = sources.find(s => s.id === id);

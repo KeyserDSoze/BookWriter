@@ -121,3 +121,80 @@ test("redazione capitolo desktop/mobile: 12 agenti separati, giudice, freeze e r
   }));
   expect(width.actual).toBeLessThanOrEqual(width.expected+1);
 });
+
+
+test("divergenze documentali desktop/mobile: il report distingue posizioni e prove",async({page})=>{
+  await page.goto("/");
+  await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Cronache in contrasto");
+  await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
+    .fill("Romanzo storico su una linea telegrafica controversa.");
+  await page.getByRole("button",{name:"Crea libro"}).click();
+  await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const tx=open.result.transaction("books","readwrite");
+      const store=tx.objectStore("books");
+      const all=store.getAll();
+      all.onerror=()=>reject(all.error);
+      all.onsuccess=()=>{
+        const book=all.result[0] as Record<string,unknown>;
+        const t="2026-11-06T12:00:00.000Z";
+        const a={id:"itwiki:42:210",provider:"it.wikipedia.org",pageId:42,revisionId:210,
+          title:"Prima cronaca",url:"https://it.wikipedia.org/wiki/Telegrafo",
+          query:"Telegrafo elettrico nel 1848",retrievedAt:t,
+          excerpt:"La linea telegrafica cittadina entrò in servizio nel 1848."};
+        const b={id:"itwiki:44:311",provider:"it.wikipedia.org",pageId:44,revisionId:311,
+          title:"Seconda cronaca",url:"https://it.wikipedia.org/wiki/Telegrafo_elettrico",
+          query:"Telegrafo elettrico nel 1848",retrievedAt:t,
+          excerpt:"Un'altra cronaca colloca l'apertura della stessa linea nel 1853."};
+        const historical={
+          claim:"La linea cittadina era già operativa nel 1848.",
+          assessment:"conflicting_excerpts",sourceIds:[a.id,b.id],
+          sourceEvidence:[
+            {sourceId:a.id,quote:"La linea telegrafica cittadina entrò in servizio nel 1848"},
+            {sourceId:b.id,quote:"Un'altra cronaca colloca l'apertura della stessa linea nel 1853"},
+          ],
+          sourcePositions:[
+            {sourceId:a.id,position:"supports",
+              rationale:"La prima cronaca colloca il servizio nell'anno 1848."},
+            {sourceId:b.id,position:"disputes",
+              rationale:"La seconda cronaca riferisce una data di apertura diversa."},
+          ],
+        };
+        book.status="paused";book.phase="chapterReview";
+        book.chapters=[{id:"ch-1",number:1,title:"Il dispaccio",purpose:"Contesto",
+          scenes:[{id:"scene-1",number:1,title:"Telegramma",objective:"Informare",
+            text:"Mara invia il telegramma nel 1848.",status:"canon"}],
+          historicalDossier:{queries:["Telegrafo elettrico nel 1848"],
+            sources:[a,b],activeSourceIds:[a.id,b.id],searchedAt:t,unansweredQueries:[]},
+        }];
+        book.editorialCycle={chapterId:"ch-1",round:1,stage:"adjudicate",reports:[{
+          role:"historical",segmentIndex:0,segmentCount:1,verdict:"issues",
+          summary:"Le cronache sembrano discordanti.",memoryNote:"",createdAt:t,
+          findings:[{id:"1:historical:0:0",sceneId:"scene-1",category:"storia",
+            severity:"major",evidence:"Mara invia il telegramma",
+            reason:"Le fonti sembrano indicare date diverse per la linea.",
+            remediation:"Verificare luogo, edizione e data prima di modificare la scena.",
+            historical}],
+        }],repairCursor:0,priorRounds:[]};
+        store.put(book,book.id as string);
+        tx.oncomplete=()=>resolve();
+        tx.onerror=()=>reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  const panel=page.getByRole("region",{name:"Redazione multi-agente"});
+  await panel.locator("summary").filter({hasText:"Plausibilità e accuratezza storica"}).first().click();
+  await expect(panel.getByText("Possibile divergenza fra fonti (interpretazione NON certificata)"))
+    .toBeVisible();
+  await expect(panel.getByText(/Interpretazione itwiki:42:210/)).toBeVisible();
+  await expect(panel.getByText(/Interpretazione itwiki:44:311/)).toBeVisible();
+  await expect(panel.getByText(/una citazione letterale non dimostra/)).toBeVisible();
+  await expect(panel.getByText(/La prima cronaca colloca il servizio/)).toBeVisible();
+  const width=await page.evaluate(()=>({
+    actual:document.documentElement.scrollWidth,expected:window.innerWidth,
+  }));
+  expect(width.actual).toBeLessThanOrEqual(width.expected+1);
+});

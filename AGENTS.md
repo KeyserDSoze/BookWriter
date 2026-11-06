@@ -258,6 +258,14 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Retry limitati e backoff, blocco immediato su conflitti e autorizzazioni. Non resettare lo stato blocked a causa di nuove scene.
 - Il lease v0.5.0 offre mitigazione conservativa tra dispositivi ma NON fencing transazionale perfetto: non dichiarare gestite tutte le race o edit manuali concorrenti. Vedi ADR 0007 e issue #10.
 
+## Divergenze storiche v0.10.3 — ipotesi tracciate, non verità (ADR 0026)
+
+- Il solo specialista `historical` può produrre `historical.assessment=conflicting_excerpts` con 2–3 fonti attive, indipendenti per documento, e `sourceEvidence` di una frase letterale PER ID. `sourcePositions` deve avere una e una sola voce motivata per fonte: `supports|disputes|unclear`, con almeno un supporto e una contestazione.
+- Il validatore controlla **solo** presenza e unicità degli ID, indipendenza documentale e appartenenza letterale delle citazioni; le posizioni sono interpretazioni del modello e non possono diventare automaticamente fatti nel canone.
+- Il giudice critico verifica frase, periodo, contesto, fonte originaria e reale pertinenza e può respingere il conflitto senza remediation. Nessuna riscrittura prima di un suo esito e della normale redazione.
+- Mantenere piena compatibilità di report `consistent_with_excerpt|contradicts_excerpt|unverified` e vecchie `sourceQuote` singole, storico, ZIP e GitHub; nessun nuovo fetch o rilascio dei segreti verso servizi di ricerca. Altri undici agenti non vedono il dossier.
+- Coprire test di quote inventate, stances mancanti/duplicate, revisioni duplicate, giudizio indipendente e isolamento. Guida `docs/historical-source-disagreements.md`, issue #23.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
