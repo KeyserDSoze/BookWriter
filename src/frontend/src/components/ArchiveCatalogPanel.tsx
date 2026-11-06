@@ -129,7 +129,7 @@ export function ArchiveCatalogPanel({
                 Nessun file o testo è stato scaricato.</p>
               {d.rightsAdvisory.length>0?<div><b>Avvisi istituzionali sui diritti:</b>
                 {d.rightsAdvisory.map((note,i)=><p key={i} className="mt-1 whitespace-pre-wrap">{note}</p>)}
-              </div>:<p>Nessun avviso sui diritti riportato: **non** equivale ad autorizzazione.</p>}
+              </div>:<p>Nessun avviso sui diritti riportato: non equivale ad autorizzazione.</p>}
               {d.accessAdvisory.length>0&&<div><b>Condizioni d'accesso:</b>
                 {d.accessAdvisory.map((note,i)=><p key={i} className="mt-1 whitespace-pre-wrap">{note}</p>)}
               </div>}
