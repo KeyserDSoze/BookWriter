@@ -1,6 +1,6 @@
 # ADR 0019 — Wikisource: prova locale di appartenenza all'esatta revisione MediaWiki
 
-- **Stato:** Proposto per v0.9.6 (PR in verifica)
+- **Stato:** Accettato per v0.9.6 (PR #31)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessore:** ADR 0018 (v0.9.5)

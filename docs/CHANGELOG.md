@@ -2,7 +2,7 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
-## 0.9.6 — 2026-11-06 (PR in verifica)
+## 0.9.6 — 2026-11-06 (PR #31)
 
 **Wikisource: citazioni legate al wikitesto della revisione esatta, non alla pagina corrente**
 
