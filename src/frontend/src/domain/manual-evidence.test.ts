@@ -3,7 +3,7 @@ import { newBook } from "./types";
 import { extendArchiveCatalog } from "./archival-catalog";
 import { extendChapterBibliography } from "./bibliography";
 import { extendHistoricalDossier } from "./historical-research";
-import { activeManualEvidence, appendManualEvidence, type ManualExcerptInput } from "./manual-evidence";
+import { activeManualEvidence, allManualEvidence, appendManualEvidence, type ManualExcerptInput } from "./manual-evidence";
 import { adjudicationPrompt, chapterSegments, createEditorialCycle,
   reviewerPrompt, validateReport } from "./editorial-board";
 
@@ -27,6 +27,7 @@ describe("Trascrizioni d'archivio dell'autore: provenienza e diritti",()=>{
   it("accetta solo estratti trascritti e attestati da una scheda attiva, con versioni immutabili",()=>{
     const saved=appendManualEvidence(dossier(),input,now);
     expect(activeManualEvidence(saved)).toHaveLength(1);
+    expect(allManualEvidence(saved)).toHaveLength(1);
     expect(activeManualEvidence(saved)[0]?.provider).toBe("author-transcribed-loc");
     expect(activeManualEvidence(saved)[0]?.url).toBe(archive.url);
     expect(saved.sources).toEqual([]);
@@ -38,6 +39,12 @@ describe("Trascrizioni d'archivio dell'autore: provenienza e diritti",()=>{
     expect(activeManualEvidence(later)).toHaveLength(1);
     expect(activeManualEvidence(later)[0]?.text).toContain("Second edition");
     expect(saved.manualEvidence?.excerpts[0]?.text).toBe(input.text);
+  });
+  it("ignora snapshot corrotti da un archivio importato non attendibile",()=>{
+    const d=appendManualEvidence(dossier(),input,now);
+    d.manualEvidence!.excerpts="dato non valido" as unknown as typeof d.manualEvidence.excerpts;
+    expect(allManualEvidence(d)).toEqual([]);
+    expect(activeManualEvidence(d)).toEqual([]);
   });
   it("rifiuta schede inesistenti, consenso assente, diritti ambigui e trascrizioni fuori limite",()=>{
     for (const bad of [
