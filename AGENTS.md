@@ -297,6 +297,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - `Cleanup merged branches` comprende anche i branch `fix/*`, ma SOLO se sono rispettati gli invarianti: `merged_at`, stesso repo, nessuna PR aperta, HEAD inalterata dalla PR integrata, nessun force.
 - Intervento futuro: valutare un lockfile affidabile e passare a `npm ci` in entrambi i workflow. Non affermare riproducibilità completa della v0.10.7. ADR 0030, `docs/release-dependency-recovery.md`.
 
+## Lockfile npm controllato v0.10.8 (ADR 0031, issue #43)
+
+- `src/frontend/package-lock.json` è generato solo **da npm sul registry reale**, mai assemblato a mano. Mantieni `package.json` e lockfile nello **stesso commit** per ogni cambio versione/dipendenza.
+- Entrambi i workflow (`ci.yml` e `pages.yml`) devono installare con **`npm ci --no-audit --no-fund`** e fallire se il lock manca o non combacia. Non sostituire con `npm install`, `--force` o `--legacy-peer-deps` per eludere i mismatch. Non committare `node_modules`.
+- Regola di aggiornamento: Node 22/npm 10, `cd src/frontend && npm install --package-lock-only --ignore-scripts --no-audit --no-fund` dopo modifica manifest; controlla diff, licenze e aggiornamenti, quindi esegui due `npm ci` puliti, typecheck, Vitest, smoke, build e Playwright desktop/mobile. Consulta `docs/npm-lockfile-releases.md`.
+- Lo smoke test confronta dipendenze root, versioni esatte, integrity e URL HTTPS, oltre a verificare i workflow. Non affermare sicurezza totale dei package, riproducibilità bit per bit o deploy finché il workflow Pages sulla HEAD di `main` non è verde.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
