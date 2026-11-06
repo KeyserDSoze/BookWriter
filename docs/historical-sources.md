@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Riferimento puntuale ai metadati IIIF LoC (v0.10.2)
+
+Dopo la collazione OCR/scansione, l'autore può selezionare **un servizio IIIF della stessa scheda istituzionale** e dichiarare di avere riconosciuto personalmente la pagina. Il software verifica soltanto i metadati `info.json`, indici e dimensioni, non scarica immagini né dimostra che i pixel corrispondano al testo OCR. Nessuna licenza è verificata; `lociiif:` non è una fonte citabile. Solo storico e giudice vedono il riferimento. [Guida](loc-iiif-page-provenance.md), ADR 0025.
+
 ## Collazione OCR/scansione dichiarata dall'autore (v0.10.1)
 
 L'autore può attestare una consultazione **visiva personale** di una scansione LoC, indicare pagina/folio e trascriverne una breve frase, consentendo il confronto locale di stringhe con un `lococr:` già attivo. I risultati `text_overlap|text_discrepancy` NON attestano un'analisi automatica dell'immagine, un originale storico autentico o diritti verificati. Le collazioni `locscan:` non sono citabili come fonti indipendenti; solo storico e giudice vedono la discrepanza. [Guida](loc-scan-collation.md), ADR 0024.

@@ -29,4 +29,6 @@ L'aggiunta di una collazione a un capitolo frozen ripristina la sinossi preceden
 - Non viene inviata alcuna richiesta di rete durante la collazione in BookWriter. Il sito LoC è però aperto dal browser quando premi il collegamento. I dati dichiarati vengono conservati localmente e possono entrare in backup/GitHub/modelli AI con la tua autorizzazione.
 - I test della UI provano il flusso di dichiarazioni e il confronto testuale ma **non** un'autentica visita umana al documento. La verifica automatica di una specifica immagine e del suo identificativo IIIF è un passo successivo.
 
+**Nuovo in v0.10.2:** dopo avere registrato la collazione puoi scegliere una risorsa immagine IIIF elencata nella medesima scheda LoC e salvare il suo identificativo tecnico dopo due consensi separati, **senza scaricare pixel**: [guida IIIF](loc-iiif-page-provenance.md).
+
 Riferimenti: [ADR 0024](../ADR/0024-author-attested-visual-scan-collation.md), [guida OCR](loc-ocr-excerpts.md), [riverifica OCR](loc-ocr-reverification.md), [issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).
