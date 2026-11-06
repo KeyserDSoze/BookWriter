@@ -26,11 +26,19 @@ export interface ChapterHistoricalDossier {
   bibliography?: ChapterBibliography;
 }
 export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "unverified";
+/** A quotation belongs to exactly one retrieved source revision. */
+export interface HistoricalSourceEvidence {
+  sourceId: string;
+  quote: string;
+}
 export interface HistoricalClaim {
   claim: string;
   assessment: HistoricalAssessment;
   sourceIds: string[];
+  /** Kept for single-source reports already stored in older books. */
   sourceQuote?: string;
+  /** New reports bind an independent literal quotation to EVERY cited source. */
+  sourceEvidence?: HistoricalSourceEvidence[];
 }
 
 export function normalizeResearchQueries(queries: readonly string[]): string[] {
@@ -77,20 +85,46 @@ export function validateHistoricalClaim(
 ): void {
   if (!claim) throw new Error("Il revisore storico deve distinguere evidenza documentale e ipotesi.");
   const references = claim.sourceIds;
-  if (new Set(references).size !== references.length || references.length > 3)
-    throw new Error("Fonti storiche duplicate o troppe fonti per un rilievo.");
+  const evidence = claim.sourceEvidence ?? [];
+  if (!Array.isArray(references) || !Array.isArray(evidence) ||
+      new Set(references).size !== references.length || references.length > 3)
+    throw new Error("Fonti storiche duplicate, non valide o troppe fonti per un rilievo.");
   if (claim.assessment === "unverified") {
-    if (references.length || claim.sourceQuote?.trim())
+    if (references.length || claim.sourceQuote?.trim() || evidence.length)
       throw new Error("Una segnalazione storica non verificata non può citare fonti come prova.");
     return;
   }
-  if (!references.length || !claim.sourceQuote?.trim())
-    throw new Error("Un rilievo storico documentato deve citare una fonte e una frase originale.");
+  if (!references.length)
+    throw new Error("Un rilievo storico documentato deve citare almeno una fonte.");
   const byId = new Map(activeHistoricalSources(dossier).map(s => [s.id, s]));
   const sources = references.map(id => byId.get(id));
   if (sources.some(s => !s)) throw new Error("Fonte storica inesistente, obsoleta o non approvata.");
-  const quote = claim.sourceQuote.trim().toLocaleLowerCase("it");
-  if (quote.length < 12 || !sources.some(s => s!.excerpt.toLocaleLowerCase("it").includes(quote)))
+  // Two revisions of the same Wikipedia page cannot masquerade as independent corroboration.
+  if (new Set(sources.map(s => s!.pageId)).size !== sources.length)
+    throw new Error("Revisioni della stessa pagina Wikipedia non sono fonti indipendenti.");
+
+  if (evidence.length) {
+    if (claim.sourceQuote?.trim())
+      throw new Error("Usa sourceEvidence per ogni fonte senza aggiungere una citazione ambigua.");
+    if (evidence.length !== references.length ||
+        new Set(evidence.map(e => e.sourceId)).size !== evidence.length ||
+        evidence.some(e => !references.includes(e.sourceId)))
+      throw new Error("Ogni fonte citata deve avere una e una sola citazione associata al suo ID.");
+    for (const entry of evidence) {
+      if (typeof entry.quote !== "string" || entry.quote.trim().length < 12 ||
+          entry.quote.trim().length > 500 ||
+          !byId.get(entry.sourceId)!.excerpt.toLocaleLowerCase("it")
+            .includes(entry.quote.trim().toLocaleLowerCase("it")))
+        throw new Error("La citazione storica non compare nell'estratto della fonte associata: " + entry.sourceId);
+    }
+    return;
+  }
+  // Legacy single-source reports may have one sourceQuote; never allow that
+  // old shape to imply evidence for two or three separate sources.
+  if (references.length !== 1)
+    throw new Error("Ogni fonte citata richiede una citazione propria in sourceEvidence.");
+  const quote = claim.sourceQuote?.trim().toLocaleLowerCase("it") ?? "";
+  if (quote.length < 12 || !sources[0]!.excerpt.toLocaleLowerCase("it").includes(quote))
     throw new Error("La citazione storica non compare nell'estratto recuperato dal servizio.");
 }
 export function extendHistoricalDossier(

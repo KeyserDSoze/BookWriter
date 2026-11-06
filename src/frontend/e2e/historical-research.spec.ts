@@ -66,7 +66,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
           claim:"Il telegrafo elettrico era noto in Europa nel secolo XIX.",
           assessment:"consistent_with_excerpt",
           sourceIds:["itwiki:42:321"],
-          sourceQuote:"Il telegrafo elettrico cominciò a diffondersi",
+          sourceEvidence:[{sourceId:"itwiki:42:321",quote:"Il telegrafo elettrico cominciò a diffondersi"}],
         },
       }],
     }):JSON.stringify({
@@ -157,13 +157,16 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("Il telegrafo elettrico");
   expect(specialist?.prompt).toContain("10.1000/xyz123");
   expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
+  expect(specialist?.system).toContain("CIASCUN sourceId");
+  const judgeCall=modelCalls.find(x=>x.system.includes("direttore editoriale CRITICO"));
+  expect(judgeCall?.prompt).toContain('"quoteMatches":true');
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwiki:42:321"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("10.1000/xyz123"))).toBe(true);
   await editorial.getByText(/Giudizi archiviati \(1\)/).click();
   await editorial.getByText(/Plausibilità e accuratezza storica ·/).click();
-  await expect(editorial.getByText(/Citazione originale/)).toBeVisible();
+  await expect(editorial.getByText(/Citazione associata/)).toBeVisible();
   await expect(editorial.getByText(/La fonte non dimostra/)).toBeVisible();
   const metrics=await page.evaluate(()=>({
     actual:document.documentElement.scrollWidth,expected:window.innerWidth,

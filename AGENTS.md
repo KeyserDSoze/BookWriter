@@ -93,6 +93,14 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Conservare revisioni delle fonti precedentemente citate quando si aggiorna un dossier; mai cambiare gli estratti già approvati sotto lo stesso ID.
 - Test su query private, link contraffatti, citazioni inventate, annullamenti di rete, salvataggi concorrenti e Playwright desktop/mobile. Fonte storica ≠ fatto verificato; guidi l'autore a consultare fonti primarie/secondarie.
 
+## Integrità delle citazioni storiche v0.9.2 (ADR 0015, PR #27)
+
+- Ogni nuovo `HistoricalClaim` con fonti documentali usa `sourceEvidence:[{sourceId,quote}]`: un estratto letterale valido per **ciascuna** fonte citata e associazione 1:1 fra `sourceIds` e quote; massimo tre. Il validatore controlla l'estratto della **fonte corrispondente**.
+- `unverified` non può riportare nessun ID/citazione. `sourceQuote` legacy è ammesso esclusivamente per un `sourceId`, per leggere i vecchi report senza riscriverli. Vietato simulare multi-supporto associando una sola citazione a più URL.
+- Revisioni diverse della stessa voce Wikipedia non sono prove indipendenti; il giudice verifica anche contesto, pertinenza e possibile dipendenza fra voci diverse. Corrispondenza letterale ≠ fatto storico certificato.
+- Visualizzare accanto a ciascuna fonte la sua citazione; se un vecchio report cita più fonti senza citazioni individuali, segnalarne il limite e non considerarlo corroborato.
+- Nessuna nuova chiamata web, invio di testo privato o esposizione della bibliografia DOI agli altri undici ruoli. Non dichiarare archivistica primaria finché non sia realmente implementata.
+
 ## Guardrail budget AI v0.8.1 — nessun costo inventato
 
 - Budget opt-in per libro (`BookProject.aiBudget`), importi EUR limitati e periodo `enabledAt`; tariffe `AppSettings.aiPriceRates` inserite dall'autore per coppia esatta endpoint/modello.

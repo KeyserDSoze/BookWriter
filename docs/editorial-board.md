@@ -58,6 +58,10 @@ Ogni ruolo riceve il segmento del capitolo, una sinossi progressiva del libro, i
 
 Il costo può essere **elevato**: per N segmenti di testo, ci sono almeno **12 × N** richieste di revisione, una chiamata del direttore e una o più di sinossi, oltre alle riscritture e ai nuovi giri. In **Impostazioni** puoi scegliere modelli differenti per **Specialisti capitolo**, **Cinque lettori**, **Direttore editoriale**, **Remediation mirata**, **Consolidamento** e **Riassunti**, anche per singolo libro. La Dashboard mostra i token comunicati dagli endpoint, ma **non** conosce universalmente il credito residuo e non impone ancora un budget di spesa. Verifica i crediti sul portale provider: [issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17).
 
+## Citazioni per fonte e confronto critico — v0.9.2 (PR #27)
+
+Un nuovo rilievo dello storico può indicare fino a tre fonti, ma **deve citare una frase effettivamente presente nell'estratto di ciascuna fonte**. Non basta una frase corretta per attribuire supporto a tre articoli diversi. Nel pannello ogni citazione è affiancata alla propria fonte, con la revisione utilizzata; il giudice verifica gli abbinamenti, la pertinenza e l'eventuale contraddizione, potendo respingere rilievi non fondati. Due revisioni della stessa voce non sono due prove indipendenti. I vecchi report che contengono una sola citazione su una sola fonte restano leggibili; quelli più ambigui non vengono automaticamente certificati. Corrispondenza testuale non equivale a verità storica. Vedi [ADR 0015](../ADR/0015-per-source-historical-evidence.md).
+
 ## Bibliografia accademica DOI — v0.9.1
 
 Oltre agli estratti Wikipedia, ogni capitolo può memorizzare da uno a cinque DOI di pubblicazioni e studi tramite **Crossref**, dopo conferma esplicita dell'autore. I metadati (titolo, autori, anno, editore e collegamento) sono visibili **solo allo storico e al direttore** come riferimenti bibliografici da consultare. **Non vengono letti gli articoli originali**: il software non permette di usare titolo o DOI come prova di una proposizione storica. Fonte registrata ≠ fatto verificato.
