@@ -20,6 +20,7 @@ import { AiUsagePanel } from "./components/AiUsagePanel";
 import { AiBudgetPanel } from "./components/AiBudgetPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
+import packageInfo from "../package.json";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
@@ -258,7 +259,7 @@ export default function App() {
             <Icon size={19} /> {label}
           </button>)}
       </nav>
-      <p className="muted mt-8 text-xs">v0.3.0 · Local-first e GitHub manuale</p>
+      <p className="muted mt-8 text-xs">v{packageInfo.version} · Local-first e GitHub sync opzionale</p>
     </aside>
 
     <nav className="mobile-tabs" aria-label="Navigazione mobile">
@@ -271,7 +272,7 @@ export default function App() {
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">{navigation.find(x => x.id === page)?.label}</h1>
-          <p className="muted text-sm">Progetto local-first · GitHub autosync opzionale</p>
+          <p className="muted text-sm">Progetto local-first · GitHub autosync opzionale <span className="sm:hidden">· v{packageInfo.version}</span></p>
         </div>
         <div className="flex items-center gap-2">
           <button className="flex size-11 items-center justify-center rounded-lg border border-slate-400 dark:border-slate-700" aria-label="Cambia tema chiaro/scuro"
