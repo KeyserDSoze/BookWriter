@@ -96,6 +96,31 @@ describe("Riapertura conservativa di capitoli congelati",()=>{
     expect(updated?.chapters[0]?.editorialRounds).toHaveLength(1);
     expect(updated?.authorConstraints.at(-1)).toContain("Mantieni");
   });
+  it("marca la catena di dipendenze dopo una riapertura e rende visibile l'origine ai revisori futuri",async()=>{
+    const book=await sample();
+    book.chapters.push({...structuredClone(book.chapters[1]!),
+      id:"ch-3",number:3,title:"Capitolo 3",
+      scenes:[{...book.chapters[1]!.scenes[0]!,id:"scene-3"}]});
+    book.chapters[1]!.lastContinuityReview={
+      originChapterId:"ch-1",originChapterNumber:1,trigger:"retroactive_revision",
+      originSceneIds:["scene-1"],requestedAt:"2026-11-05T12:00:00.000Z",
+      completedAt:"2026-11-06T12:00:00.000Z",sampledSceneIds:["scene-1"],partialCoverage:false,
+    };
+    await saveBook(book,false);
+    await reopenChapterReview(book.id,"ch-1");
+    const after=await getBook(book.id);
+    expect(after?.chapters[0]?.continuityRecheck).toBeUndefined();
+    expect(after?.chapters[1]?.continuityRecheck).toMatchObject({
+      originChapterId:"ch-1",originChapterNumber:1,trigger:"author_reopen",
+      originSceneIds:["scene-1"],
+    });
+    expect(after?.chapters[2]?.continuityRecheck?.originChapterId).toBe("ch-1");
+    expect(after?.chapters[1]?.lastContinuityReview).toBeUndefined();
+    expect(after?.chapters.slice(1).every(ch=>!ch.frozenAt)).toBe(true);
+    expect((await listActivities(book.id)).some(e=>
+      e.summary?.includes("2 capitoli successivi contrassegnati"))).toBe(true);
+    expect(await getOutbox(book.id)).toBeUndefined();
+  });
   it("blocca la riapertura se una scheda concorrente possiede il lock",async()=>{
     const book=await sample();
     vi.stubGlobal("navigator",{locks:{request:async(

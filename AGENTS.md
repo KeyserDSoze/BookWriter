@@ -311,6 +311,14 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - La UI non deve mostrare un anchor come verificato senza ricontrollarlo contro il capitolo attuale. Mostrare numero delle occorrenze ripetute, contesto e un avviso per anchor assenti o obsoleti. Il controllo prova solo la presenza **testuale**, non la verità del rilievo o delle fonti storiche.
 - Nessun accesso a nuove fonti o modelli e nessuna estensione del contesto privato dei lettori ciechi. Testare parafrasi, altra scena, testo mutato, legacy, manomissione, rifiuto critico, mobile/desktop. [Guida](docs/editorial-narrative-evidence.md), ADR 0032, issue #20.
 
+## Catena di rivalidazione cross-chapter v0.11.0 (ADR 0033)
+
+- `Chapter.continuityRecheck` è un obbligo **locale** di riesame dei capitoli a valle dopo `reopenChapterReview` e il piano di revisione retroattiva dell'autopilot. Contiene soltanto origine, causa, data e ID di scene dell'origine. La modifica con origine più antica prevale: non perdere dipendenze precedenti quando si accumulano interventi. Azzerare l'audit precedente quando il capitolo torna da verificare.
+- Prima del prompt del revisore/giudice e **prima del freeze**, `assertPriorChaptersFrozen` deve verificare che tutti i capitoli precedenti siano scritti, canonici, congelati. L'autopilot deve scegliere la prima review disponibile in ordine narrativo.
+- `buildContinuityEvidence` prepara **solo campioni di prosa pubblica congelata a monte**, non memoria privata o scene future: ID del capitolo/scena, date dichiarate, entità esplicite, finestre letterali con offset, copertura completa/parziale e numero omesse. Non spacciare un campione per verifica esaustiva. Solo `continuity`, `timeline`, `secrets`, `characterVoice` e giudice ricevono gli estratti; i cinque lettori ciechi **mai**.
+- Il gate delle prove v0.10.9 continua ad accettare `finding.evidence` soltanto dal segmento **corrente**: le scene precedenti sono contesto da citare nel `reason`, non un'alternativa alla prova nel segmento. Al nuovo freeze, `completeContinuityRecheck` registra un audit di campionamento e rimuove il marker, non certifica coerenza semantica. Niente nuovi modelli o HTTP; il contesto aggiuntivo può aumentare i costi (budget/preflight esistenti).
+- Test: origine più antica, priorità scene, finestre e offset, no futuro/privacy lettori, ruolo specialista e giudice, predecessore non congelato, Web Locks/outbox, UI mobile/desktop. Non assumere che il marker sia stato introdotto per ogni meccanismo storico già esistente; ADR 0033, `docs/cross-chapter-continuity.md`, issue #20.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.

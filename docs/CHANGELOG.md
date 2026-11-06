@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.11.0 — 2026-11-06 (PR #46)
+
+**Catena di rivalidazione della continuità dopo modifiche retroattive**
+
+- Riapertura manuale e revisioni retroattive marcano i capitoli successivi già scritti con origine, data, causa e ID delle scene toccate, senza copiare trama o segreti. La modifica più antica ha precedenza; il marker sopravvive ai checkpoint e ai riavvii.
+- La redazione procede in ordine cronologico: non si può revisionare e **congelare** un capitolo successivo se un capitolo precedente non è ancora scritto, canonico e congelato. L'autopilot sceglie il primo pronto, prevenendo votazioni su premesse instabili.
+- I quattro specialisti di continuità, timeline, segreti e voce ricevono campioni di **scene pubbliche precedenti** dell'origine e dell'ultimo predecessore, con ID, data, riferimenti dichiarati, finestre di testo **letterali con offset** e marcatura `complete|partial`/numero di scene omesse. Il giudice riceve lo stesso contesto e può respingere falsi rilievi. I cinque lettori ciechi non ricevono nuove memorie o segreti.
+- Dopo il nuovo freeze, un audit locale registra origine, data e scene campionate; la UI mostra l'obbligo pendente e lo storico, senza chiamare il risultato una verifica semantica certificata.
+- Test Vitest su catene multiple, fonti assenti, finestre parziali, ruoli separati, cronologia e audit; test IndexedDB/outbox/Web Locks e Playwright desktop/mobile per riapertura e segnali UI. ADR 0033, [guida](cross-chapter-continuity.md), issue #20.
+
+**Limiti:** il campione è bounded (max 2 scene per origine e ultimo predecessore, max 4 in totale, scene lunghe solo in finestre) e **non esaurisce tutte le possibili contraddizioni**. Una citazione letterale non dimostra un conflitto; il giudice mantiene l'ultima valutazione. I prompt possono essere più lunghi e costosi, pur senza nuove chiamate AI. Le altre vie di riapertura di dossier storici non sono ancora unificate con questo marker.
+
 ## 0.10.9 — 2026-11-06 (PR #45)
 
 **Redazione più rigorosa: citazione narrativa letterale e remediation ancorate al segmento**

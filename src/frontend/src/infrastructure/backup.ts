@@ -17,9 +17,25 @@ const sceneSchema = z.object({
   objective: z.string().max(20_000), text: z.string().max(2_000_000),
   summary: z.string().optional(), status: z.enum(["planned", "draft", "canon"]),
 }).passthrough();
+// Untrusted ZIPs must not inject arbitrary instructions or unbounded state into
+// cross-chapter continuity prompts. Existing archives without these fields work.
+const continuityRecheckSchema = z.object({
+  originChapterId: zId,
+  originChapterNumber: z.number().int().min(1).max(200),
+  trigger: z.enum(["author_reopen","retroactive_revision"]),
+  requestedAt: z.string().datetime(),
+  originSceneIds: z.array(zId).max(50),
+}).strict();
+const continuityAuditSchema = continuityRecheckSchema.extend({
+  completedAt: z.string().datetime(),
+  sampledSceneIds: z.array(zId).max(4),
+  partialCoverage: z.boolean(),
+}).strict();
 const chapterSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
   purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
+  continuityRecheck: continuityRecheckSchema.optional(),
+  lastContinuityReview: continuityAuditSchema.optional(),
 }).passthrough();
 const memorySchema = z.object({
   characters: z.record(z.string(), z.string()),
