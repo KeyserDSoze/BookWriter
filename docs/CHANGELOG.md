@@ -2,6 +2,17 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.7 — 2026-11-06 (PR #42)
+
+**Ripristino CI e deploy Pages dopo risoluzione incoerente delle dipendenze Tailwind**
+
+- Dopo il merge della v0.10.6, sia CI che build GitHub Pages si sono fermate su `npm install` con `ETARGET: No matching version found for @tailwindcss/oxide@4.3.5`. La CI della PR #41 era verde: il guasto è nella risoluzione senza lockfile di `@tailwindcss/vite` e `tailwindcss`, dichiarati con `^`.
+- I due pacchetti sono fissati **esattamente alla versione pubblicata 4.3.4**, con smoke test che impedisce aggiornamenti divergenti del plugin Vite e del framework. Nessuna modifica ai dati o al comportamento del generatore di proposte.
+- Il workflow `Cleanup merged branches` riconosce anche `fix/*`, senza allargare le altre condizioni: PR realmente unita, branch nella stessa repository, nessun'altra PR aperta e HEAD del branch identica a quella della PR integrata.
+- ADR 0030, runbook e documentazione aggiornati. Verifica integrale TypeScript/Vitest/smoke/build/Playwright mobile+desktop su HEAD PR e verifica dopo il merge di CI main, deploy Pages e pulizia branch.
+
+**Limiti:** senza un `package-lock.json` versionato il restante albero delle dipendenze può ancora cambiare. Non si presume che un `npm install` riuscito una volta garantisca la stessa risoluzione futura: la migrazione a lockfile con `npm ci` resta un intervento distinto.
+
 ## 0.10.6 — 2026-11-06 (PR #41)
 
 **Proposte locali di ricerche storiche dai capitoli, con controllo umano prima della rete**

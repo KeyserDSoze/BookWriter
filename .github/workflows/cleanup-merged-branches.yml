@@ -38,7 +38,7 @@ jobs:
           removed=0
           while IFS=$'\t' read -r branch expected_sha; do
             # Only known topic branch families. Main and arbitrary references are untouchable.
-            if [[ ! "$branch" =~ ^(feat|docs|test)/[a-zA-Z0-9._/-]+$ ]] ||
+            if [[ ! "$branch" =~ ^(feat|fix|docs|test)/[a-zA-Z0-9._/-]+$ ]] ||
                [[ "$branch" == *".."* ]] || [[ "$branch" == *"//"* ]]; then
               continue
             fi
