@@ -73,7 +73,10 @@ describe("Evidenza OCR LoC con attestazione dei diritti e provenienza immutabile
       sourceEvidence:[{sourceId:catalog.id,quote:"Rights must be assessed"}]},dossier)).toThrow();
     const copied={...source,id:"lococr:2020123456:"+(Date.parse(acquiredAt)+1000)+":"
       +hash.slice(0,16),acquiredAt:"2026-11-06T11:05:01.000Z"};
-    const duplicates=appendLocOcrExcerpt(dossier,copied);
+    const duplicates={...dossier,locOcr:{
+      ...dossier.locOcr!,excerpts:[source,copied],
+      activeExcerptIds:[source.id,copied.id],
+    }}; // Validate imported/legacy data even if UI prevents such an active pair.
     expect(()=>validateHistoricalClaim({...claim,sourceIds:[source.id,copied.id],
       sourceEvidence:[{sourceId:source.id,quote:claim.sourceEvidence[0]!.quote},
         {sourceId:copied.id,quote:claim.sourceEvidence[0]!.quote}]},duplicates))
