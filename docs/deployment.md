@@ -13,6 +13,10 @@ BookWriter è pubblicato da GitHub Pages mediante GitHub Actions, con dominio **
 
 ## Deploy
 
-La PR passa `Frontend CI`; dopo merge su `main` il workflow `Deploy BookWriter Pages` esegue build e publish. Verificare status e URL del deployment nelle Actions e aprire manualmente il dominio per smoke test mobile e desktop.
+La PR passa `Frontend CI`; dopo merge su `main` il workflow `Deploy BookWriter Pages` esegue build e publish.
+La versione mostrata nell'interfaccia deriva da `src/frontend/package.json`; in passato il footer riportava ancora il testo statico «v0.3.0» nonostante release successive già pubblicate. La versione visibile è un riferimento al bundle effettivamente caricato, **non** alla data di aggiornamento di una scheda IndexedDB.
+Dopo il deploy, in caso di scritta precedente, aggiornare la pagina forzando il caricamento delle risorse (ad esempio Ctrl+Shift+R, o ricaricamento completo da browser mobile); la cache e la propagazione CDN potrebbero non essere istantanee. Il browser potrebbe non essere raggiungibile dagli ambienti CI e il successo del workflow non dimostra disponibilità DNS/HTTPS sul dispositivo dell'autore.
+I branch di PR integrate sono eliminati da [Cleanup merged branches](../.github/workflows/cleanup-merged-branches.yml) con verifiche sulla PR e lo SHA; guida [pulizia branch](branch-maintenance.md).
+ Verificare status e URL del deployment nelle Actions e aprire manualmente il dominio per smoke test mobile e desktop.
 
 La presenza di una pagina in rete **non equivale** a sincronizzazione cloud, export editoriali o login multi-provider pronti; controllare `docs/local-development.md` e le feature.

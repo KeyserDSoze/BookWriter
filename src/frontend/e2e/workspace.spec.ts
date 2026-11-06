@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import packageInfo from "../package.json";
 
 const brief = "Un thriller storico realistico, con intrecci a lungo termine, personaggi complessi e misteri distribuiti su più capitoli.";
 
@@ -16,6 +17,10 @@ test("workspace responsive e accessibile, anche dopo reload", async ({ page }, t
   const mobile = testInfo.project.name === "mobile-chromium";
   const nav = page.getByRole("navigation", { name: mobile ? "Navigazione mobile" : "Navigazione principale" });
   await expect(nav).toBeVisible();
+  const visibleVersion = mobile
+    ? page.locator("main header").getByText("v" + packageInfo.version, {exact:false})
+    : page.locator("aside.sidebar").getByText("v" + packageInfo.version, {exact:false});
+  await expect(visibleVersion).toBeVisible();
   await nav.getByRole("button", { name: "Impostazioni" }).click();
   await expect(page.getByRole("heading", { name: "Endpoint OpenAI-compatible" })).toBeVisible();
   const dimensions = await page.evaluate(() => ({

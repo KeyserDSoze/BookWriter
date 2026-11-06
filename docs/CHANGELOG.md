@@ -6,6 +6,8 @@ Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il co
 
 **Estratti storici trascritti dall'autore: provenienza e diritti dichiarati**
 
+- **Versione online corretta**: il footer desktop e l'header mobile leggono `package.json.version`, eliminando il precedente testo fisso «v0.3.0» che non corrispondeva alla versione distribuita.
+- **Pulizia dei branch**: workflow dedicato su push a `main`, con cancellazione solo di branch di PR già unite, mai di PR aperte, `main` o riferimenti il cui SHA sia stato modificato; vedere `docs/branch-maintenance.md`.
 - Nuovo pannello **Estratti da originali consultati dall'autore**: un documento del catalogo Library of Congress già approvato, pagina/folio e trascrizione breve (24–1200 caratteri), data/edizione opzionale, conferma della base dei diritti e motivazione.
 - Nessuna nuova richiesta verso archivi durante il salvataggio; l'app non scarica originali, immagini, PDF, OCR o testi completi. Checkbox + conferma che mostra la trascrizione e spiega l'invio futuro a modelli AI e la possibile sincronizzazione GitHub.
 - Dossier `manualEvidence` conservativo: ID `locex:<itemId>:<timestamp>`, snapshot immutabili, fino a 40 versioni/5 documenti attivi, associazione alla scheda LoC valida. Le trascrizioni riferite a schede inattive sono conservate ma escluse dalle nuove review.

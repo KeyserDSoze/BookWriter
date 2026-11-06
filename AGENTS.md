@@ -195,6 +195,8 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
+- La versione mostrata in UI deve essere **derivata direttamente** da `src/frontend/package.json`: vietato fissare un valore nel componente.
+- Dopo il merge `Cleanup merged branches` può rimuovere solo i branch di PR effettivamente unite, senza PR aperte e con HEAD **identica** allo SHA del merge PR; mai eliminare `main`, branch di lavoro attivi o forzare push. Vedi `docs/branch-maintenance.md`.
 - Lo smoke test `tests/release.test.mjs` fallisce se una versione non compare nel changelog.
 - Prima di fare merge, verificare typecheck, Vitest, smoke, build e Playwright mobile/desktop sulla **HEAD** della PR, non su un commit precedente.
 - Dopo il merge verificare deploy GitHub Pages e non confondere CI verde con disponibilità del dominio; documentare errori o blocchi.

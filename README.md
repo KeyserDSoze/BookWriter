@@ -39,6 +39,8 @@
 
 **Estratti originali v0.9.4 (PR #29):** dopo aver consultato personalmente una scheda della Library of Congress, l'autore può archiviare una breve trascrizione con pagina/folio e base dichiarata dei diritti. La review storica può verificare una citazione nel testo digitato, ma non ha letto o autenticato autonomamente l'originale. Leggi `docs/archival-excerpts.md`, ADR 0017 e issue #23.
 
+**Release e branch:** l'interfaccia mostra la versione letta direttamente da `src/frontend/package.json` (la vecchia dicitura fissa «v0.3.0» era obsoleta). Le release sono pubblicate su GitHub Pages dopo CI verde, e il workflow di pulizia rimuove soltanto branch di PR già integrate senza nuovi commit; [guida ai branch](docs/branch-maintenance.md) e [deploy](docs/deployment.md).
+
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
