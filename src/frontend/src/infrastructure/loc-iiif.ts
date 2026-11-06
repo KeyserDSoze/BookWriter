@@ -52,9 +52,9 @@ async function jsonGet(url:string,maxBytes:number,signal?:AbortSignal):Promise<D
         body+=decoder.decode();
       }finally{reader.releaseLock();}
     }else{
-      body=await response.text();
-      if(new TextEncoder().encode(body).byteLength>maxBytes)
-        throw new Error("Risposta LoC troppo grande.");
+      // Without a readable stream, response.text() would buffer an unbounded
+      // remote payload before enforcing MAX_ITEM_BYTES / MAX_IIIF_BYTES.
+      throw new Error("Risposta LoC priva di streaming limitabile.");
     }
     let parsed:unknown;
     try{parsed=JSON.parse(body);}catch{throw new Error("Risposta IIIF/LoC JSON non valido.");}
@@ -133,8 +133,11 @@ export async function inspectLocIiif(
     throw new Error("La risorsa IIIF non è più pubblicata o non è ammessa.");
   const info=await jsonGet(candidate.infoUrl,MAX_IIIF_BYTES,signal);
   const serviceUrl=candidate.infoUrl.slice(0,-"/info.json".length);
-  const identity=info["@id"]??info.id;
-  if(identity!==serviceUrl||
+  // IIIF v2 uses @id, v3 uses id. If both are supplied they must agree;
+  // accepting only the first would hide a conflicting service identity.
+  if((info["@id"]===undefined&&info.id===undefined)||
+    (info["@id"]!==undefined&&info["@id"]!==serviceUrl)||
+    (info.id!==undefined&&info.id!==serviceUrl)||
     !Number.isSafeInteger(info.width)||!Number.isSafeInteger(info.height)||
     (info.width as number)<1||(info.width as number)>200_000||
     (info.height as number)<1||(info.height as number)>200_000)
