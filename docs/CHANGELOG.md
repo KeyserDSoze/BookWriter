@@ -2,6 +2,19 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.4 — 2026-11-06 (PR in verifica)
+
+**Estratti storici trascritti dall'autore: provenienza e diritti dichiarati**
+
+- Nuovo pannello **Estratti da originali consultati dall'autore**: un documento del catalogo Library of Congress già approvato, pagina/folio e trascrizione breve (24–1200 caratteri), data/edizione opzionale, conferma della base dei diritti e motivazione.
+- Nessuna nuova richiesta verso archivi durante il salvataggio; l'app non scarica originali, immagini, PDF, OCR o testi completi. Checkbox + conferma che mostra la trascrizione e spiega l'invio futuro a modelli AI e la possibile sincronizzazione GitHub.
+- Dossier `manualEvidence` conservativo: ID `locex:<itemId>:<timestamp>`, snapshot immutabili, fino a 40 versioni/5 documenti attivi, associazione alla scheda LoC valida. Le trascrizioni riferite a schede inattive sono conservate ma escluse dalle nuove review.
+- La redazione storica può citare `locex:...` solo mediante `sourceEvidence[{sourceId,quote}]` effettivamente presente nella trascrizione. Gli ID di catalogo `loc:...` e i DOI `crossref:...` restano **non probatori**. Due trascrizioni dello stesso originale non sono due fonti indipendenti.
+- Il direttore visualizza `evidenceStatus=author_transcribed_unverified` e la collocazione, con istruzioni a non certificare l'autenticità; gli altri undici agenti non vedono gli estratti. Interfaccia con provenienza e diritti dichiarati.
+- Web Locks, CAS `updatedAt`, salvataggio e activity atomici, rewind dei capitoli congelati, autosync off e outbox cancellata. Test Vitest e Playwright desktop/mobile, ADR 0017, `docs/archival-excerpts.md`.
+
+**Limiti:** originali e licenze sono attestati dall'autore, **non verificati autonomamente** dall'app. Una citazione letterale prova corrispondenza al testo digitato, non provenienza, autenticità, diritto di pubblicazione o veridicità del documento. È ancora aperta la consultazione indipendente dei documenti originali e delle loro versioni.
+
 ## 0.9.3 — 2026-11-06 (PR #28)
 
 **Cataloghi storici istituzionali: piste di ricerca LoC, non evidenza documentale**

@@ -10,7 +10,7 @@ Il pannello **Redazione multi-agente → Archivi istituzionali**, presente su og
 4. Dopo il recupero, apri ogni collegamento per consultare sul sito originale il documento e le indicazioni sui diritti d'uso. La scheda mostra titolo, ID, data e descrizione quando presenti, e la data della consultazione.
 5. Riprendi la redazione, se necessario. Lo specialista storico e il direttore editoriale ricevono il catalogo come **piste da approfondire**. Gli altri undici agenti non lo vedono.
 
-**Distinzione essenziale:** un documento presente nel catalogo **non è stato letto** da BookWriter; titolo, data e descrizione del record non sono citazioni dell'originale e non provano un fatto. Il motore rifiuta gli ID di catalogo `loc:...` come `historical.sourceIds`. Gli unici estratti citabili nella tranche attuale restano quelli Wikipedia effettivamente recuperati e associati a una frase testuale valida, pur essendo fonti terziarie.
+**Distinzione essenziale:** un documento presente nel catalogo **non è stato letto** da BookWriter; titolo, data e descrizione del record non sono citazioni dell'originale e non provano un fatto. Il motore rifiuta gli ID di catalogo `loc:...` come `historical.sourceIds`. Dalla v0.9.4 l'autore può aggiungere una **trascrizione manuale dichiarata**, con collocazione e diritti, che ottiene ID `locex:...` ed è citabile solo come corrispondenza al testo immesso, **non come autenticazione della fonte originale**. Vedi [guida estratti](archival-excerpts.md).
 
 ## Riservatezza e autorizzazioni
 
