@@ -159,7 +159,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(crossrefCalls[0]).toContain("api.crossref.org/works/10.1000/xyz123");
   expect(crossrefCalls[0]).not.toContain("Mara");
   expect(crossrefCalls[0]).not.toContain("stanza");
-  await editorial.getByText(/^Archivi istituzionali ·/).click();
+  await editorial.locator("summary").filter({hasText:"Archivi istituzionali"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Ricerche archivistiche capitolo 1"})
     .fill("telegraph correspondence 1848");
   page.once("dialog",dialog=>{
@@ -175,7 +175,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(new URL(archiveCalls[0]!).searchParams.get("q")).toBe("telegraph correspondence 1848");
   expect(archiveCalls[0]).not.toContain("Mara");
   expect(archiveCalls[0]).not.toContain("stanza");
-  await editorial.getByText(/Estratti da originali consultati dall'autore/).click();
+  await editorial.locator("summary").filter({hasText:"Estratti da originali consultati dall'autore"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Collocazione originale capitolo 1"})
     .fill("Page 12, column 2");
   await editorial.getByRole("textbox",{name:"Data documento originale capitolo 1"})
