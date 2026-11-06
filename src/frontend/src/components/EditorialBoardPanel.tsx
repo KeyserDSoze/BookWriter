@@ -11,12 +11,18 @@ import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
 import type { HistoricalSource } from "../domain/historical-research";
 import { activeManualEvidence, allManualEvidence, type ManualDocumentExcerpt } from "../domain/manual-evidence";
 import { ManualEvidencePanel } from "./ManualEvidencePanel";
+import { WikisourcePanel } from "./WikisourcePanel";
+import { allWikisourceExcerpts, activeWikisourceExcerpts,
+  wikisourceRevisionUrl, type WikisourceExcerpt } from "../domain/wikisource-excerpts";
 
-function RoundDetails({ round, reports, judgment, sources = [], manualSources = [], activeManualIds = [] }: {
+function RoundDetails({ round, reports, judgment, sources = [], manualSources = [], activeManualIds = [],
+  wikisourceSources = [], activeWikisourceIds = [] }: {
   round: number; reports: EditorialReport[]; judgment?: EditorialJudgment;
   sources?: HistoricalSource[];
   manualSources?: ManualDocumentExcerpt[];
   activeManualIds?: string[];
+  wikisourceSources?: WikisourceExcerpt[];
+  activeWikisourceIds?: string[];
 }) {
   const judged = new Map((judgment?.decisions ?? []).map(d => [d.findingId,d]));
   const findings = reports.flatMap(r => r.findings);
@@ -51,8 +57,22 @@ function RoundDetails({ round, reports, judgment, sources = [], manualSources = 
                   {f.historical.sourceIds.map(id => {
                     const source = sources.find(s => s.id === id);
                     const manual = manualSources.find(s => s.id === id);
+                    const wikisource = wikisourceSources.find(s => s.id === id);
                     const evidence = f.historical?.sourceEvidence?.find(entry => entry.sourceId === id);
-                    return manual ? <div key={id} className="mt-1 border-t border-slate-200 pt-1 dark:border-slate-700">
+                    return wikisource ? <div key={id} className="mt-1 border-t border-slate-200 pt-1 dark:border-slate-700">
+                      <p><b>Wikisource: trascrizione collaborativa NON autenticata:</b>{" "}
+                        <a href={wikisourceRevisionUrl(wikisource.revisionId)}
+                          className="text-blue-700 underline dark:text-blue-300"
+                          target="_blank" rel="noopener noreferrer">{wikisource.title}</a>
+                        {" "}(revisione {wikisource.revisionId}, diritti originali da verificare)</p>
+                      {evidence&&<p className="mt-1 whitespace-pre-wrap">
+                        <b>Citazione associata alla trascrizione:</b> “{evidence.quote}”
+                      </p>}
+                      <p className="muted">Confrontata con l'estratto ottenuto da Wikisource, non con l'originale storico.</p>
+                      {!activeWikisourceIds.includes(id)&&<p className="text-amber-700 dark:text-amber-300">
+                        Revisione conservata per audit, non più attiva per nuove review.
+                      </p>}
+                    </div> : manual ? <div key={id} className="mt-1 border-t border-slate-200 pt-1 dark:border-slate-700">
                       <p><b>Trascrizione dell'autore, NON autenticata:</b>{" "}
                         <a className="text-blue-700 underline dark:text-blue-300" href={manual.url}
                           rel="noopener noreferrer" target="_blank">{manual.title}</a>
@@ -168,12 +188,16 @@ export function EditorialBoardPanel({
       <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
         sources={chapter.historicalDossier?.sources}
         manualSources={allManualEvidence(chapter.historicalDossier)}
-        activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}/> 
+        activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}
+        wikisourceSources={allWikisourceExcerpts(chapter.historicalDossier)}
+        activeWikisourceIds={activeWikisourceExcerpts(chapter.historicalDossier).map(x=>x.id)}/> 
       {cycle.priorRounds.map(round => <details key={round.round} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
         <summary className="cursor-pointer text-sm font-semibold">Storico della tornata {round.round}</summary>
         <div className="mt-3"><RoundDetails {...round} sources={chapter.historicalDossier?.sources}
           manualSources={allManualEvidence(chapter.historicalDossier)}
-          activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}/></div>
+          activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}
+          wikisourceSources={allWikisourceExcerpts(chapter.historicalDossier)}
+          activeWikisourceIds={activeWikisourceExcerpts(chapter.historicalDossier).map(x=>x.id)}/></div>
       </details>)}
     </div>}
     {book.chapters.length > 0 && <div className="mt-4 space-y-2">
@@ -197,13 +221,16 @@ export function EditorialBoardPanel({
         <HistoricalResearchPanel key={ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <BibliographyPanel key={"doi-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <ArchiveCatalogPanel key={"archive-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+        <WikisourcePanel key={"wikisource-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <ManualEvidencePanel key={"excerpts-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           {ch.editorialRounds?.map((round, i) =>
             <div key={i} className="mt-3"><RoundDetails {...round} sources={ch.historicalDossier?.sources}
                 manualSources={allManualEvidence(ch.historicalDossier)}
-                activeManualIds={activeManualEvidence(ch.historicalDossier).map(x=>x.id)}/></div>)}
+                activeManualIds={activeManualEvidence(ch.historicalDossier).map(x=>x.id)}
+                wikisourceSources={allWikisourceExcerpts(ch.historicalDossier)}
+                activeWikisourceIds={activeWikisourceExcerpts(ch.historicalDossier).map(x=>x.id)}/></div>)}
         </details>}
       </div>)}
     </div>}
