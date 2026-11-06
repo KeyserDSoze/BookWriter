@@ -86,7 +86,7 @@ describe("Origine documentale dichiarata dall'autore",()=>{
 
   it("rifiuta fonti inattive, coppie ripetute, ragioni insufficienti e backup alterati",()=>{
     const {a,b,dossier,claim}=example();
-    for(const [idA,idB] of [[a.id,a.id],[a.id,"itwiki:99:1"],["",b.id]])
+    for(const [idA,idB] of ([[a.id,a.id],[a.id,"itwiki:99:1"],["",b.id]] as Array<[string,string]>))
       expect(()=>appendHistoricalSourceRelation(dossier,idA,idB,
         "derived",note,stamp)).toThrow(/distinte|attive/);
     expect(()=>appendHistoricalSourceRelation(dossier,a.id,b.id,"derived","troppo breve",stamp))

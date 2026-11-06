@@ -194,7 +194,8 @@ export function appendHistoricalSourceRelation(
   if (!Number.isSafeInteger(time) || !reason || reason.length < 24 ||
       reason.length > 400 || /[\u0000-\u001f]/.test(reason))
     throw new Error("Motiva il legame fra fonti in 24–400 caratteri senza righe di controllo.");
-  const [sourceAId, sourceBId] = [sourceIdA, sourceIdB].sort();
+  const sourceAId = sourceIdA < sourceIdB ? sourceIdA : sourceIdB;
+  const sourceBId = sourceIdA < sourceIdB ? sourceIdB : sourceIdA;
   const item: HistoricalSourceRelation = {
     id: "srcrel:" + time + ":" + history.length,
     sourceAId, sourceBId, relation, note: reason, recordedAt,
