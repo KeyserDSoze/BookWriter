@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.5 — 2026-11-06 (PR #40)
+
+**Dipendenze documentali dichiarate dall'autore: impedire falsa indipendenza fra fonti**
+
+- Nuovo pannello nel capitolo per associare due **snapshot esatti e attivi** di Wikipedia, Wikisource, trascrizioni LoC o OCR LoC, con attestazione `same_original`, `derived` oppure `unknown`, nota motivata (24–400 caratteri) e secondo dialogo di consenso. Nessuna richiesta a servizi esterni; non si asserisce verifica tecnica, autenticità o indipendenza storica.
+- Registro append-only `sourceRelations` per capitolo, fino a 60 dichiarazioni, ordinamento deterministico della coppia, ID e timestamp, conserva le rettifiche. L'ultima dichiarazione valida per coppia prevale; `unknown` rettifica un sospetto ma non costituisce prova di indipendenza. Le relazioni restano nell'audit dopo aggiornamento delle revisioni, ma si applicano soltanto quando **entrambi gli ID esatti sono attivi**.
+- Il validatore di citazioni rifiuta l'uso congiunto di fonti con originale comune o derivazione dichiarata, **anche se il legame è transitivo**; restano attivi i controlli per revisioni duplicate e citazioni letterali. Lo storico e il direttore ricevono le sole relazioni attive come dati non attendibili; gli altri 11 agenti non le vedono.
+- Salvataggio local-first con doppio Web Lock (writer/outbox), CAS su `updatedAt`, attività di audit, autosync disabilitato, outbox pulita e rewind dei capitoli congelati e successivi. Conservazione dei legami attraverso i refresh dei vari dossier, archivi ZIP/IndexedDB e sincronizzazione GitHub opt-in.
+- Test Vitest di dipendenze dirette/transitive, rettifiche, revisione obsoleta, dati importati malformati e isolamento, più Playwright mobile/desktop sul consenso e invalidazione freeze. ADR 0028 e [guida autore](historical-source-dependencies.md), issue #23.
+
+**Limiti:** una dichiarazione dell'autore non verifica l'identità reale degli originali. L'assenza di un legame registrato non garantisce che due fonti siano indipendenti. Le fonti potrebbero riprodurre una medesima testimonianza senza indicarlo; il controllo è **conservativo e manuale**, non una verifica archivistica automatica.
+
 ## 0.10.4 — 2026-11-06 (PR #39)
 
 **Contesto per ogni divergenza storica e seconda valutazione obbligatoria del direttore**

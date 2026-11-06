@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Dipendenze fra fonti dichiarate dall'autore (v0.10.5)
+
+Nel pannello **Provenienza e dipendenze fra fonti** si possono associare due snapshot documentali attivi, dichiarando che riprendono uno stesso originale oppure che uno deriva dall'altro, con nota e conferma esplicita. Le successive review non possono considerarli due riscontri indipendenti, nemmeno tramite catene di dipendenza; le rettifiche restano nell'audit. I legami non passano automaticamente a revisioni nuove. Sono attestazioni volontarie, non prove di provenienza reale. [Guida](historical-source-dependencies.md), ADR 0028.
+
 ## Verifica del contesto delle divergenze (v0.10.4)
 
 Lo storico ora aggiunge una scheda per fonte con evento, periodo, luogo, versione e incertezze, usando `null` quando non è possibile leggere un dato. Il direttore produce una seconda valutazione argomentata di queste dimensioni. Il software può rifiutare report logicamente incoerenti, ma non certifica che due cronache descrivano lo stesso evento. I report precedenti restano leggibili. [Guida dettagliata](historical-source-disagreements.md), ADR 0027.

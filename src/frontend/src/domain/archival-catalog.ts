@@ -92,6 +92,7 @@ export function extendArchiveCatalog(
     ...(previous?.manualEvidence ? {manualEvidence:previous.manualEvidence} : {}),
     ...(previous?.wikisource ? {wikisource:previous.wikisource} : {}),
     ...(previous?.locOcr ? {locOcr:previous.locOcr} : {}),
+    ...(previous?.sourceRelations ? {sourceRelations:previous.sourceRelations} : {}),
     archiveCatalog: {
       queries: normalized, items: [...archive.values()],
       activeItemIds: [...new Set(found.map(item => item.id))],

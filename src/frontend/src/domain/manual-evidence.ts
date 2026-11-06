@@ -112,6 +112,7 @@ export function appendManualEvidence(
     ...(previous?.archiveCatalog ? {archiveCatalog:previous.archiveCatalog} : {}),
     ...(previous?.wikisource ? {wikisource:previous.wikisource} : {}),
     ...(previous?.locOcr ? {locOcr:previous.locOcr} : {}),
+    ...(previous?.sourceRelations ? {sourceRelations:previous.sourceRelations} : {}),
     manualEvidence: {
       excerpts:[...previousItems, entry],
       activeExcerptIds:[...activePrevious,entry.id],
