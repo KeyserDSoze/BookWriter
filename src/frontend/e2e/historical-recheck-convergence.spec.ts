@@ -43,7 +43,7 @@ test("aggiornare la provenienza storica rivalida i capitoli successivi senza inv
   }));
   await page.reload();
   const panel=page.getByRole("region",{name:"Redazione multi-agente"});
-  await panel.locator("summary").filter({hasText:"Provenienza e dipendenze fra fonti"}).click();
+  await panel.locator("summary").filter({hasText:"Provenienza e dipendenze fra fonti"}).first().click();
   await panel.getByRole("combobox",{name:"Prima fonte relazione capitolo 1"})
     .selectOption("itwiki:42:210");
   await panel.getByRole("combobox",{name:"Seconda fonte relazione capitolo 1"})
