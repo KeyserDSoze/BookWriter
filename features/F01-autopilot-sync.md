@@ -18,7 +18,7 @@
 - [x] PR #27 (v0.9.2): citazioni storiche per singola fonte, controlli anti-falsa corroborazione e giudice critico, con regressioni Vitest; ADR 0015.
 - [x] PR #28 (v0.9.3): catalogo istituzionale Library of Congress con query approvate, metadati separati dalle prove, contesti privati, Web Locks/freeze e test CI (ADR 0016).
 - [x] PR #29 (v0.9.4): trascrizioni di originali LoC consultati dall'autore, provenienza/diritti dichiarati, citazioni verificabili solo nella trascrizione, snapshot e test CI (ADR 0017).
-- [ ] v0.10.2 (PR in verifica): collegamento a metadati di una risorsa immagine IIIF LoC selezionata dall'autore, due consensi, snapshot e isolamento storico/giudice, nessun pixel scaricato, CI desktop/mobile (ADR 0025).
+- [x] v0.10.2 (PR #37): collegamento a metadati di una risorsa immagine IIIF LoC selezionata dall'autore, due consensi, snapshot e isolamento storico/giudice, nessun pixel scaricato, CI desktop/mobile (ADR 0025).
 - [x] v0.10.1 (PR #36): collazione visiva manuale su scansione LoC dichiarata dall'autore, confronto di brevi testi, isolamento storico/giudice, nessuna autenticazione automatica (ADR 0024).
 - [x] v0.10.0 (PR #35): confronto live consentito per OCR LoC archiviati e quarantena manuale con rewind, hash/offset verificati senza promuovere licenze/autenticità, test desktop/mobile (ADR 0023).
 - [x] v0.9.9 (PR #34): recupero controllato di brevissimo OCR istituzionale LoC con diritti dichiarati dall'autore, citazioni letterali per fonte, isolamento agente e freeze, CI desktop/mobile (ADR 0022).

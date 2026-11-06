@@ -1,6 +1,6 @@
 # ADR 0025 — Provenienza tecnica della pagina IIIF LoC senza scaricare scansioni
 
-- **Stato:** Proposto per v0.10.2, CI in verifica
+- **Stato:** Accettato per v0.10.2 (PR #37)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0022–0024
