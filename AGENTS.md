@@ -290,6 +290,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - I dossier esistenti, gli snapshot, i riferimenti e la review storica restano invariati. Cancellare/cambiare suggerimenti non apre freeze e non cancella outbox. Solo la ricerca approvata esistente ha effetti.
 - Test di assenza chiamate API/AI durante proposta e staging, consenso annullato, query inviata esatta, assenza nomi/segreti, copertura limitata, mobile e desktop. Guida `docs/historical-query-proposals.md`, ADR 0029, issue #23.
 
+## Risoluzione dipendenze e recupero deploy v0.10.7 (ADR 0030)
+
+- Evita intervalli SemVer per la coppia `@tailwindcss/vite`/`tailwindcss` finché la repository non ha un lockfile: i due pacchetti devono avere versioni **esatte, identiche e realmente pubblicate**. Lo smoke test protegge questa invariante.
+- Un `npm install` riuscito sulla PR NON garantisce che una nuova esecuzione su `main` risolva l'identico albero se manca il lockfile. Se Pages/CI post-merge falliscono, leggere i log e rilasciare un hotfix con CI verde prima di dichiarare online la versione; non presentare il merge come deploy.
+- `Cleanup merged branches` comprende anche i branch `fix/*`, ma SOLO se sono rispettati gli invarianti: `merged_at`, stesso repo, nessuna PR aperta, HEAD inalterata dalla PR integrata, nessun force.
+- Intervento futuro: valutare un lockfile affidabile e passare a `npm ci` in entrambi i workflow. Non affermare riproducibilità completa della v0.10.7. ADR 0030, `docs/release-dependency-recovery.md`.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.

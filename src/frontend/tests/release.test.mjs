@@ -20,7 +20,15 @@ test("La pulizia protegge main, PR aperte e HEAD modificate dopo il merge", asyn
   assert.match(workflow, /select\(\.merged_at != null\)/);
   assert.match(workflow, /\bstate=open\b/);
   assert.match(workflow, /current_sha.*expected_sha/);
-  assert.match(workflow, /\(feat\|docs\|test\)/);
+  assert.match(workflow, /\(feat\|fix\|docs\|test\)/);
+});
+
+test("Plugin Tailwind e framework restano allineati a versioni esatte", async () => {
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const core = pkg.devDependencies.tailwindcss;
+  const plugin = pkg.devDependencies["@tailwindcss/vite"];
+  assert.match(core, /^[0-9]+[.][0-9]+[.][0-9]+$/);
+  assert.equal(plugin, core, "Versioni Tailwind e plugin Vite devono essere identiche");
 });
 
 test("Non compilare segreti nel frontend", async () => {

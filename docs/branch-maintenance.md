@@ -1,13 +1,13 @@
 # Pulizia dei branch dopo il merge
 
-BookWriter usa **`main`** come unico ramo di rilascio. I branch di lavoro `feat/*`, `docs/*` e `test/*` possono essere eliminati dopo che le relative PR sono state **effettivamente unite**: una PR semplicemente chiusa senza merge non è sufficiente.
+BookWriter usa **`main`** come unico ramo di rilascio. I branch di lavoro `feat/*`, `fix/*`, `docs/*` e `test/*` possono essere eliminati dopo che le relative PR sono state **effettivamente unite**: una PR semplicemente chiusa senza merge non è sufficiente.
 
 A partire dal rilascio v0.9.4, il workflow [Cleanup merged branches](../.github/workflows/cleanup-merged-branches.yml) viene avviato a ogni push su `main` e può essere richiamato manualmente da **Actions → Cleanup merged branches → Run workflow**. Non ha accesso ai segreti AI, ai libri locali o ai contenuti di altri repository: usa soltanto il token GitHub Actions con autorizzazioni `contents: write` e `pull-requests: read`.
 
 ## Garanzie prima dell'eliminazione
 
 1. GitHub segnala `merged_at` non nullo per la PR (non basta lo stato `closed`).
-2. La PR proviene **dallo stesso repository** e il branch appartiene a una delle famiglie `feat/`, `docs/`, `test/`.
+2. La PR proviene **dallo stesso repository** e il branch appartiene a una delle famiglie `feat/`, `fix/`, `docs/`, `test/`.
 3. **Nessuna PR aperta** usa ancora quel branch.
 4. Il commit a cui il branch punta è **esattamente uguale** allo SHA della HEAD della PR unita; se qualcuno ha aggiunto nuovi commit, non viene eliminato.
 5. `main`, nomi inattesi e branch senza PR unita non vengono mai eliminati. Ogni cancellazione viene registrata nel log del workflow.
