@@ -58,6 +58,10 @@ Ogni ruolo riceve il segmento del capitolo, una sinossi progressiva del libro, i
 
 Il costo può essere **elevato**: per N segmenti di testo, ci sono almeno **12 × N** richieste di revisione, una chiamata del direttore e una o più di sinossi, oltre alle riscritture e ai nuovi giri. In **Impostazioni** puoi scegliere modelli differenti per **Specialisti capitolo**, **Cinque lettori**, **Direttore editoriale**, **Remediation mirata**, **Consolidamento** e **Riassunti**, anche per singolo libro. La Dashboard mostra i token comunicati dagli endpoint, ma **non** conosce universalmente il credito residuo e non impone ancora un budget di spesa. Verifica i crediti sul portale provider: [issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17).
 
+## Trascrizioni collaborative Wikisource — v0.9.5
+
+Lo storico e il giudice ricevono piccoli estratti **realmente recuperati** da Wikisource, identificati da numero e data di revisione; il giudice controlla citazioni testuali per fonte, distingue `community_transcription_unverified` e `work_rights_not_verified`, e non accetta come prova automatica di fatto o diritto d'autore la sola corrispondenza del testo. Gli altri undici revisori continuano a non vedere questo dossier. Nessuna opera viene automaticamente aggiunta al romanzo. Vedi [guida Wikisource](wikisource-transcriptions.md), ADR 0018.
+
 ## Trascrizioni dei documenti originali — v0.9.4
 
 Se l'autore ha consultato personalmente l'originale LoC e ha dichiarato la base dei diritti, può salvare una breve trascrizione con pagina/folio esatti. Solo lo specialista storico riceve il testo e può associarvi `sourceEvidence` con la citazione letterale; il direttore legge estratto, collocazione e stato **author_transcribed_unverified** e può respingere una remediation non fondata. Gli altri undici agenti restano ciechi ai documenti. L'app confronta le parole solo con la trascrizione, **non autentica** contenuto, diritti o data dell'originale. La modifica di capitoli congelati impone nuova review. Vedi [guida alle trascrizioni](archival-excerpts.md) e ADR 0017.

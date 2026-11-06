@@ -41,6 +41,8 @@
 
 **Release e branch:** l'interfaccia mostra la versione letta direttamente da `src/frontend/package.json` (la vecchia dicitura fissa «v0.3.0» era obsoleta). Le release sono pubblicate su GitHub Pages dopo CI verde, e il workflow di pulizia rimuove soltanto branch di PR già integrate senza nuovi commit; [guida ai branch](docs/branch-maintenance.md) e [deploy](docs/deployment.md).
 
+**Wikisource v0.9.5 (PR in verifica):** per capitolo, ricerca soltanto dopo consenso su 1–3 query pubbliche, con brevi estratti di trascrizioni Wikisource e ID/data revisione. Le citazioni dei rilievi storici sono confrontate contro il testo ricevuto e valutate dal direttore. Gli altri undici agenti non ricevono gli estratti. Le trascrizioni sono **collaborative e non autenticate**; i diritti sull'opera originale sono da verificare. Guida `docs/wikisource-transcriptions.md`, ADR 0018 e issue #23.
+
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
