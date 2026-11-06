@@ -116,7 +116,7 @@ describe("Catena di rivalidazione narrativa fra capitoli",()=>{
     expect(ch.lastContinuityReview).toMatchObject({
       originChapterNumber:1,originChapterId:"ch-1",
       completedAt:"2026-11-06T14:00:00.000Z",
-      partialCoverage:true,
+      partialCoverage:false,
     });
     expect(ch.lastContinuityReview!.sampledSceneIds).toContain("s-1-1");
   });
