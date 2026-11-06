@@ -79,6 +79,10 @@ function allowedCandidates(payload:Data,itemId:string):LocIiifCandidate[]{
   const result:LocIiifCandidate[]=[];
   resources.slice(0,100).forEach((resource,rIndex)=>{
     if(!object(resource))return;
+    // Some LoC digital files expose canDownload independently of access flags.
+    // Treat an explicit ban OR an invalid/ambiguous flag as non-eligible.
+    if(resource.canDownload===false||
+      resource.canDownload!==undefined&&typeof resource.canDownload!=="boolean")return;
     if(["access_restricted","rights_restricted","download_restricted"].some(flag=>
       resource[flag]===true || resource[flag]!==undefined&&
       typeof resource[flag]!=="boolean"))return;
@@ -98,8 +102,10 @@ function allowedCandidates(payload:Data,itemId:string):LocIiifCandidate[]{
         const entries=Array.isArray(group)?group:[group];
         for(const part of entries){
           if(file>499)break;
-          if(object(part)&&!["access_restricted","rights_restricted","download_restricted"].some(flag=>
-            part[flag]===true||part[flag]!==undefined&&typeof part[flag]!=="boolean"))
+          if(object(part)&&part.canDownload!==false&&
+            (part.canDownload===undefined||typeof part.canDownload==="boolean")&&
+            !["access_restricted","rights_restricted","download_restricted"].some(flag=>
+              part[flag]===true||part[flag]!==undefined&&typeof part[flag]!=="boolean"))
             push(part.info,file);
           file++;
         }
