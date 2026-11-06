@@ -1,4 +1,5 @@
 import type { ChapterHistoricalDossier } from "./historical-research";
+import type { ChapterInstitutionalInspections } from "./institutional-inspection";
 
 /** LoC catalogue metadata is an archival LEAD, not a quotation from a document. */
 export interface ArchivalCatalogItem {
@@ -18,6 +19,7 @@ export interface ChapterArchiveCatalog {
   activeItemIds: string[];
   missingQueries: string[];
   searchedAt: string;
+  inspections?: ChapterInstitutionalInspections;
 }
 export function normalizeArchiveQueries(input: readonly string[]): string[] {
   if (!input.length || input.length > 3)
@@ -94,6 +96,7 @@ export function extendArchiveCatalog(
       activeItemIds: [...new Set(found.map(item => item.id))],
       missingQueries: normalized.filter(query => !found.some(item => item.query === query)),
       searchedAt: at,
+      ...(previous?.archiveCatalog?.inspections ? {inspections:previous.archiveCatalog.inspections}:{}),
     },
   };
 }
