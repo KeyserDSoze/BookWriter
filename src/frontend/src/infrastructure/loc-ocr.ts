@@ -77,14 +77,25 @@ async function fixedGet(url:string,maxBytes:number,type:"json"|"text",signal?:Ab
 function findTextResource(payload:JsonObject):string{
   const item=payload.item;
   if(!isObject(item))throw new Error("LoC non ha restituito il record documentale.");
-  if(item.access_restricted===true)
-    throw new Error("Accesso ristretto dichiarato dalla Library of Congress.");
+  if(item.access_restricted!==undefined &&
+      typeof item.access_restricted!=="boolean")
+    throw new Error("Flag di accesso LoC non valido: nessuna risorsa acquisita.");
+  if(item.access_restricted===true || item.download_restricted===true)
+    throw new Error("Accesso o download ristretto dichiarato dalla Library of Congress.");
   const resources=[
     ...(Array.isArray(payload.resources)?payload.resources:[]),
     ...(Array.isArray(item.resources)?item.resources:[]),
   ];
   for(const resource of resources){
     if(!isObject(resource))continue;
+    // Object-level rights/download restrictions take precedence over a .txt link.
+    if(resource.download_restricted===true || resource.rights_restricted===true)
+      continue;
+    if((resource.download_restricted!==undefined &&
+       typeof resource.download_restricted!=="boolean") ||
+       (resource.rights_restricted!==undefined &&
+       typeof resource.rights_restricted!=="boolean"))
+      continue;
     for(const key of ["fulltext_file","fulltext_derivative","djvu_text_file"]){
       const value=resource[key];
       if(typeof value==="string"&&trustedLocTextUrl(value))return value;
@@ -135,6 +146,9 @@ export async function fetchLocOcrExcerpt(
   // Exactly one follow-up, only to a structurally allowlisted LoC storage text.
   const raw=await fixedGet(url,MAX_TEXT_BYTES,"text",signal);
   if(raw.length>MAX_TEXT_BYTES)throw new Error("Testo OCR LoC troppo grande.");
+  // A login/error HTML page must not masquerade as OCR even if mislabelled text/plain.
+  if(/^\s*<(?:!doctype\s+html|html|head|body|script|\?xml)\b/i.test(raw))
+    throw new Error("La risorsa LoC non è un file OCR testuale.");
   const snippet=selectLocOcrExcerpt(raw);
   if(!snippet)throw new Error("Il file non contiene un frammento OCR semplice e citabile.");
   if(!crypto?.subtle?.digest)
