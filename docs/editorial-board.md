@@ -4,6 +4,10 @@ Dopo la scrittura e il primo consolidamento delle scene di un capitolo, l'autopi
 
 La schermata **Dashboard → Redazione multi-agente** mostra quali verifiche sono in corso, le criticità trovate, le correzioni suggerite, le decisioni dell'editor e lo stato di ogni capitolo.
 
+## Recupero mirato della continuità (v0.11.2)
+
+In una nuova review cross-chapter, i quattro specialisti di continuità e il giudice ricevono fino a quattro scene pubbliche precedenti scelte per corrispondenza di entità, lessico e date: **anche in capitoli intermedi**, preservando il capitolo d'origine e l'ultimo predecessore. Lo storico vede i campioni solo se è cambiato il dossier. Finestre con offset e segnali spiegano la selezione; contatori e limiti di scansione non permettono di chiamarla una verifica esaustiva né semantica. I cinque lettori ciechi restano separati. [Guida](targeted-continuity-retrieval.md), ADR 0035, issue #20.
+
 ## Continuità dopo cambiamenti retroattivi (v0.11.0)
 
 Riaprire o rivedere una scena già passata da review invalida i capitoli successivi e ora li contrassegna esplicitamente. L'autopilot esegue le review **in ordine**, con predecessori scritti e congelati come prerequisito. Quattro specialisti ricevono un campione tracciabile di scene precedenti dell'origine e dell'ultimo predecessore (ID, date, testo letterale e offset) e il giudice può confrontare le loro interpretazioni. I lettori ciechi non vedono questi campioni; neanche la presenza di un campione prova che la continuità sia corretta. Sul nuovo freeze si registra un audit di copertura limitata. [Guida](cross-chapter-continuity.md), [ADR 0033](../ADR/0033-downstream-continuity-revalidation-chain.md), issue #20.

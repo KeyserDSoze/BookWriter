@@ -1,4 +1,6 @@
 import type { BookProject, Chapter, Scene } from "./types";
+import { retrievePriorContinuityScenes, targetedLiteralWindows, type RetrievalMatch,
+  type RankedPriorScene } from "./continuity-retrieval";
 
 /** Revalidation is a pending obligation, not a claim that any contradiction exists. */
 export type ContinuityTrigger = "author_reopen" | "retroactive_revision" | "historical_evidence";
@@ -16,6 +18,11 @@ export interface ContinuityRecheckAudit extends ContinuityRecheck {
   completedAt: string;
   sampledSceneIds: string[];
   partialCoverage: boolean;
+  /** Optional for persisted audits prior to targeted local retrieval. */
+  retrievalMethod?: "local_structured_lexical_v1";
+  candidateSceneCount?: number;
+  scannedSceneCount?: number;
+  unscannedSceneCount?: number;
 }
 
 export interface ContinuityEvidenceWindow { offset: number; text: string }
@@ -28,6 +35,9 @@ export interface ContinuityEvidenceScene {
   referencedEntities: string[];
   coverage: "complete" | "partial";
   windows: ContinuityEvidenceWindow[];
+  /** The matching signals explain selection, NOT a verified inconsistency. */
+  matchSignals: RetrievalMatch;
+  selectionReason: RankedPriorScene["selectionReason"];
 }
 
 export interface ContinuityEvidencePack {
@@ -37,6 +47,13 @@ export interface ContinuityEvidencePack {
   scope: "public_prior_scenes_partial_sample";
   examinedChapterIds: string[];
   omittedSceneCount: number;
+  retrieval: {
+    method: "local_structured_lexical_v1";
+    candidateSceneCount: number;
+    scannedSceneCount: number;
+    unscannedSceneCount: number;
+    maxSelectedScenes: 4;
+  };
   scenes: ContinuityEvidenceScene[];
 }
 
@@ -101,45 +118,34 @@ export function buildContinuityEvidence(book: BookProject, chapter: Chapter,
     ch.number === recheck.originChapterNumber);
   if (!origin || !origin.frozenAt) throw new Error(
     "Origine della rivalidazione non disponibile o non congelata: correggi la catena prima di avanzare.");
-  const latest = [...prior].sort((a,b)=>b.number-a.number)[0]!;
-  const selected = latest.id === origin.id ? [origin] : [origin,latest];
-  const currentRefs = new Set(relatedNames(currentScene));
-  const priorityScenes = new Set(recheck.originSceneIds);
-  const selectedScenes: ContinuityEvidenceScene[] = [];
-  let omitted = 0;
-  for (const priorChapter of selected) {
-    const ranked = [...priorChapter.scenes].sort((a,b)=>{
-      const score=(s:Scene)=>
-        (priorityScenes.has(s.id) ? 20 : 0) +
-        relatedNames(s).filter(x=>currentRefs.has(x)).length * 5;
-      return score(b)-score(a) || b.number-a.number;
-    });
-    // Sample at most two relevant scenes per source chapter, and at most four
-    // across the chain. Every omitted scene is disclosed in the evidence pack.
-    const keep = ranked.slice(0,2);
-    omitted += ranked.length-keep.length;
-    for (const scene of keep) {
-      const windows: ContinuityEvidenceWindow[] = scene.text.length <= 2800
-        ? [{offset:0,text:scene.text}]
-        : [{offset:0,text:scene.text.slice(0,1250)},
-           {offset:scene.text.length-1250,text:scene.text.slice(-1250)}];
-      selectedScenes.push({
-        chapterId:priorChapter.id,chapterNumber:priorChapter.number,
-        sceneId:scene.id,sceneNumber:scene.number,
-        date:typeof scene.date === "string" ? scene.date.slice(0,80) : null,
-        referencedEntities:relatedNames(scene).slice(0,18),
-        coverage:scene.text.length<=2800 ? "complete" : "partial",
-        windows,
-      });
-    }
-  }
-  omitted += prior.filter(ch=>!selected.some(s=>s.id===ch.id))
-    .reduce((n,ch)=>n+ch.scenes.length,0);
+  const selected = retrievePriorContinuityScenes(prior,origin,chapter,
+    recheck.originSceneIds,currentScene);
+  const sampledScenes: ContinuityEvidenceScene[] = selected.sampled.map(entry=>{
+    const {chapter:sourceChapter,scene,match,selectionReason}=entry;
+    const windows=targetedLiteralWindows(scene.text,[
+      ...match.terms,...match.entities,
+    ]);
+    return {
+      chapterId:sourceChapter.id,chapterNumber:sourceChapter.number,
+      sceneId:scene.id,sceneNumber:scene.number,
+      date:typeof scene.date==="string"?scene.date.slice(0,80):null,
+      referencedEntities:relatedNames(scene).slice(0,18),
+      coverage:scene.text.length<=2800?"complete" as const:"partial" as const,
+      windows,matchSignals:match,selectionReason,
+    };
+  });
   return {
     originChapterId:origin.id,originChapterNumber:origin.number,
     trigger:recheck.trigger,scope:"public_prior_scenes_partial_sample",
-    examinedChapterIds:selected.map(s=>s.id),
-    omittedSceneCount:omitted,scenes:selectedScenes,
+    examinedChapterIds:[...new Set(sampledScenes.map(s=>s.chapterId))],
+    omittedSceneCount:Math.max(0,selected.candidateSceneCount-selected.sampled.length),
+    retrieval:{
+      method:selected.method,candidateSceneCount:selected.candidateSceneCount,
+      scannedSceneCount:selected.scannedSceneCount,
+      unscannedSceneCount:selected.unscannedSceneCount,
+      maxSelectedScenes:4,
+    },
+    scenes:sampledScenes,
   };
 }
 
@@ -160,6 +166,12 @@ export function completeContinuityRecheck(book: BookProject, chapter: Chapter,
   chapter.lastContinuityReview = {...chapter.continuityRecheck,completedAt,
     sampledSceneIds:pack.scenes.map(s=>s.sceneId),
     partialCoverage:pack.omittedSceneCount>0 ||
-      pack.scenes.some(s=>s.coverage==="partial")};
+      pack.retrieval.unscannedSceneCount>0 ||
+      pack.scenes.some(s=>s.coverage==="partial"),
+    retrievalMethod:pack.retrieval.method,
+    candidateSceneCount:pack.retrieval.candidateSceneCount,
+    scannedSceneCount:pack.retrieval.scannedSceneCount,
+    unscannedSceneCount:pack.retrieval.unscannedSceneCount,
+  };
   chapter.continuityRecheck = undefined;
 }

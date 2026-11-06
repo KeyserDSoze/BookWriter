@@ -8,6 +8,12 @@ Quando riapri un capitolo già approvato o chiedi all'autopilot di correggere re
 
 La stessa catena è ora attivata anche quando aggiungi, verifichi, escludi o attesti relazioni fra **fonti storiche** in un capitolo già congelato. Il marcatore `historical_evidence` distingue un **dossier documentale modificato** dalla **prosa riscritta**. I capitoli successivi già scritti richiedono una nuova review in ordine; anche il revisore storico vede campioni della prosa precedente, ma tali campioni **non dimostrano fatti storici** e non certificano l'indipendenza dei documenti. [Guida](historical-continuity-rechecks.md) e ADR 0034.
 
+## Recupero mirato delle scene a monte (v0.11.2)
+
+La selezione dei campioni non è più limitata alle sole scene del capitolo d'origine e dell'ultimo predecessore. Un ranking **locale, deterministico e lessicale** cerca anche indizi in **capitoli intermedi**, confrontando entità dichiarate, parole della prosa e date esplicite. Conserva gli ancoraggi originari, massimo quattro scene e due per capitolo, e focalizza le finestre delle scene lunghe intorno alle parole rilevanti con offset letterali.
+
+La UI e i prompt riportano il numero di scene precedenti candidate, di scene effettivamente scansionate (massimo 1.600) e di scene omesse o non analizzate, senza pretendere una copertura esaustiva. Per testi molto lunghi si campionano inizio, mezzo e fine per il ranking. Il risultato non è una verifica semantica e non rende vera una critica. [Guida completa](targeted-continuity-retrieval.md), ADR 0035.
+
 ## Come funziona la rivalidazione
 
 1. Dopo la riapertura o la revisione retroattiva, guarda **Redazione multi-agente → Stato dei capitoli**. La dicitura **Rivalidazione obbligatoria** segnala i capitoli che non possono essere considerati definitivi.

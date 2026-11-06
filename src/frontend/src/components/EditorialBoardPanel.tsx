@@ -237,8 +237,9 @@ export function EditorialBoardPanel({
             ? "fonti storiche aggiornate nel capitolo "
             : "modifica narrativa dal capitolo "}
           {chapter.continuityRecheck.originChapterNumber}.
-          La redazione confronterà campioni delle scene precedenti già congelate,
-          senza considerarli una prova automatica di coerenza.
+          La redazione recupererà campioni mirati delle scene precedenti già congelate,
+          anche nei capitoli intermedi, usando entità, parole e date esplicite.
+          Il ranking locale non dimostra una contraddizione e la copertura può essere parziale.
         </p>}
         <p className="muted text-xs">
           Verifiche completate: {completedReports}{totalSlots ? "/" + totalSlots : ""}.
@@ -297,6 +298,8 @@ export function EditorialBoardPanel({
           {ch.continuityRecheck.originChapterNumber}. Verificare segreti, timeline,
           personaggi e causa-effetto con i dodici agenti prima del nuovo congelamento.
           I capitoli precedenti vanno approvati in ordine.
+          Il confronto recupera scene pertinenti anche nei capitoli intermedi, con
+          campioni testuali limitati: la pertinenza non prova una contraddizione.
         </p>}
         {ch.frozenAt && ch.lastContinuityReview && <p className="mt-2 text-xs muted"
           aria-label={"Storico rivalidazione capitolo " + ch.number}>
@@ -305,8 +308,15 @@ export function EditorialBoardPanel({
             : "la modifica al capitolo "}
           {ch.lastContinuityReview.originChapterNumber} il
           {" "}{new Date(ch.lastContinuityReview.completedAt).toLocaleString("it-IT")}.
+          {ch.lastContinuityReview.retrievalMethod === "local_structured_lexical_v1"
+            ? " Recupero mirato locale: " +
+              ch.lastContinuityReview.sampledSceneIds.length + " scene selezionate su " +
+              (ch.lastContinuityReview.candidateSceneCount ?? 0) + " precedenti; " +
+              (ch.lastContinuityReview.unscannedSceneCount ?? 0) +
+              " non esaminate dal ranking per limite operativo."
+            : ""}
           {ch.lastContinuityReview.partialCoverage
-            ? " Il confronto documentale campiona solo alcune scene o finestre."
+            ? " Il confronto campiona solo alcune scene o finestre, non tutta la continuità."
             : " I campioni identificati non certificano coerenza semantica."}
         </p>}
         {ch.summary && <details className="mt-2">
