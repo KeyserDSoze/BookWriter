@@ -93,6 +93,14 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Conservare revisioni delle fonti precedentemente citate quando si aggiorna un dossier; mai cambiare gli estratti già approvati sotto lo stesso ID.
 - Test su query private, link contraffatti, citazioni inventate, annullamenti di rete, salvataggi concorrenti e Playwright desktop/mobile. Fonte storica ≠ fatto verificato; guidi l'autore a consultare fonti primarie/secondarie.
 
+## Wikisource v0.9.7 — verifica remota opt-in e quarantena volontaria (ADR 0020)
+
+- Il pulsante di riverifica invia al solo host fisso `it.wikisource.org` e **solo dopo consenso** `revids=<int>`, senza query, testo del libro, hash, excerpt, PAT/chiavi. Riutilizzare i limiti HTTPS/CORS di ADR 0019 (150 KB, 12s, no cookies/redirect/referrer). Nessun fetch automatico durante la redazione.
+- Confrontare l'intera identità (pageId, namespace, titolo, revid, timestamp), SHA-256, lunghezza e excerpt all'offset. Distingui `match`, `identity`, `digest`, `excerpt`; errori network/429/CORS/missing non devono mai diventare `match` o `mismatch`. Il risultato della riverifica è **effimero, non persistito**, e non conferma autenticità storica, indipendenza o diritti.
+- In caso di mismatch, avvisare l'autore e offrire **una seconda azione confermata** di quarantena. Solo questa muta il dossier togliendo l'ID da `activeExcerptIds`, mai cancellando versioni o vecchi report; richiedere Web Locks writer/outbox e CAS `updatedAt`, libro pausato, niente ciclo attivo, rewind sinossi/freezes/downstream su capitolo congelato, autosync off e outbox delete atomica.
+- Se la pagina è rinominata la sola divergenza del titolo non prova falsità del documento: richiedere una ricerca approvata e mostrare informazioni neutrali. Non promuovere fonti a `public_domain` o `authenticated`.
+- Test Vitest di hash/manomissione/identità, rollback e concorrenza, Playwright desktop/mobile; riferimenti ADR 0020, `docs/wikisource-reverification.md`, issue #23.
+
 ## Wikisource v0.9.6 — binding esatto alla revisione, non all'originale (ADR 0019)
 
 - La ricerca Wikisource resta solo su 1–3 query pubbliche scritte e approvate dall'autore. Il primo GET `generator=search` **non usa `prop=extracts`**. Il secondo GET deve usare `revids` numerico + `rvprop=ids|timestamp|content&rvslots=main`, stesso host fisso; ID, timestamp, titolo, pagina e namespace devono combaciare o l'intero batch fallisce senza mutare IndexedDB.

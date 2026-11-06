@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.7 — 2026-11-06 (PR in verifica)
+
+**Wikisource: riverifica remota dell'impronta delle revisioni e quarantena volontaria**
+
+- Ogni estratto `itwsr:` attivo può essere **riverificato online** con consenso separato. Il browser invia SOLO il numero della revisione al dominio fisso `it.wikisource.org`, senza trasmettere query, manoscritto, citazioni, segreti, PAT, API key o SHA-256. Un solo GET, nessun retry automatico.
+- Il controllo confronta ID pagina, titolo, namespace, ID/timestamp revisione, digest SHA-256, lunghezza e frase letterale all'offset salvato. Stato mostrato in pagina **soltanto temporaneamente**: non è un certificato della fonte e non viene persistito su libro, backup o GitHub.
+- Un mismatch genera un **avviso**, mai una correzione silenziosa. Il pulsante **Escludi fonte discordante** richiede una seconda conferma dell'autore, rimuove soltanto il riferimento attivo e preserva testo e report già archiviati.
+- Esclusione atomica protetta da Web Locks e CAS `updatedAt`: ripristino sinossi, invalidazione downstream dei freeze, autosync disattivato, outbox cancellata, activity di audit. Nessun fetch nel salvataggio locale. Errore API/CORS/429/timeout non vale né successo né discrepanza e non muta il libro.
+- Nuovi test Vitest di verifica remota (manomissione backup, mismatch, errori), application (concorrenza e rewind) e Playwright desktop/mobile. ADR 0020 e `docs/wikisource-reverification.md`.
+
+**Limiti:** confronto con una risposta online MediaWiki, NON autenticazione di manoscritto originale, fatto storico o diritti. Il controllo è su richiesta e temporaneo, non precede automaticamente ogni review; le fonti locali non riverificate restano trattate come trascrizioni non autenticate.
+
 ## 0.9.6 — 2026-11-06 (PR #31)
 
 **Wikisource: citazioni legate al wikitesto della revisione esatta, non alla pagina corrente**
