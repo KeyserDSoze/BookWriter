@@ -80,5 +80,11 @@ describe("Wikisource browser-only, consenso e provenienza",()=>{
     expect(spy).not.toHaveBeenCalled();
     vi.stubGlobal("fetch",vi.fn(async()=>response([])));
     expect(await searchWikisource([query])).toEqual([]);
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({batchcomplete:true,query:{}}),{
+      headers:{"content-type":"application/json"}})));
+    expect(await searchWikisource([query])).toEqual([]);
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({query:{}}),{
+      headers:{"content-type":"application/json"}})));
+    await expect(searchWikisource([query])).rejects.toThrow(/non valido/);
   });
 });
