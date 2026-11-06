@@ -326,6 +326,14 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - ZIP: `continuityRecheck.trigger` e `lastContinuityReview.trigger` includono il nuovo enum, ma restano `strict` contro stringhe arbitrarie. Lo smoke `tests/release.test.mjs` enumera i dodici use case: quando aggiungi un percorso di rewind, aggiorna test e documentazione.
 - Conservare Web Locks, CAS di revisione, svuotamento outbox, autosync off, citazioni e report storici. Distinguere audit della nuova review da convalida semantica/fattuale. [Guida](docs/historical-continuity-rechecks.md), ADR 0034.
 
+## Recupero mirato di continuità v0.11.2 (ADR 0035, issue #20)
+
+- `src/frontend/src/domain/continuity-retrieval.ts` calcola sul dispositivo un ranking **deterministico e dichiaratamente NON semantico**: entità esplicite, termini testuali e date fra segmento corrente e scene pubbliche precedenti. Non usa canone privato, segreti, scene future, rete, embeddings o nuove chiamate AI; non memorizza indici persistenti.
+- Conservare sempre un ancoraggio dal capitolo origine e dall'ultimo predecessore se diversi, poi scegliere scene pertinenti anche **nei capitoli intermedi**. Massimo 4 scene complessive e 2 per capitolo; 1.600 candidati scansionati con priorità a origine/ultimo e successivi recenti, scansione testuale bounded (16.000 caratteri inizio/mezzo/fine per scena) e al massimo 48 termini query. Mai spacciare il punteggio come qualità semantica.
+- Ogni selezione espone `selectionReason`, `matchSignals`, `candidateSceneCount`, `scannedSceneCount`, `unscannedSceneCount`, `omittedSceneCount` e finestre **letterali** di massimo 1.250 caratteri con offset esatto (preferire termini rilevanti nel mezzo per scene lunghe). Se il limite esclude candidati, il prompt e lo storico devono dichiararlo. L'audit salva la selezione di capitolo, non necessariamente ogni estratto visto dal singolo reviewer.
+- Conservare gli stessi ruoli autorizzati di v0.11.1, mai dare retrieval ai 5 lettori ciechi; `finding.evidence` resta **citazione del segmento corrente**. Il giudice può respingere rilievi infondati, e né la selezione né il freeze certificano contraddizioni, eventi semantici o verità storiche. Schema ZIP legacy compatibile e strict sui nuovi contatori.
+- Test deterministici su scene di capitoli intermedi, mezzo di scene lunghe, offset exact, limite 1.600, nessun futuro/segreto, audit, lettori ciechi, Playwright desktop/mobile. [Guida](docs/targeted-continuity-retrieval.md), ADR 0035.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.

@@ -45,6 +45,8 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
   await board.getByRole("button",{name:"Rivaluta"}).first().click();
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("modifica a monte nel capitolo 1");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("scene pertinenti anche nei capitoli intermedi");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("modifica a monte nel capitolo 1");
   await expect(board.getByText(/Capitolo riaperto. Premi Riprendi/)).toBeVisible();

@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.11.2 — 2026-11-06 (PR #48)
+
+**Recupero locale mirato delle scene per la rivalidazione cross-chapter**
+
+- Recupero **deterministico e locale** `local_structured_lexical_v1`: il ranking confronta entità dichiarate, termini lessicali e date esplicite della scena da rivedere con le scene già congelate a monte. Conserva un ancoraggio al capitolo origine e all'ultimo predecessore, e usa gli slot rimanenti per scene pertinenti **anche in capitoli intermedi**. Massimo quattro scene e due per capitolo; non si effettuano nuove chiamate AI/HTTP.
+- Per le scene lunghe le finestre letterali con offset vengono spostate verso i **termini corrispondenti**, inclusi quelli a metà scena; il resto del testo rimane dichiaratamente non visionato. Ogni scena riporta `matchSignals` e `selectionReason`, senza presentarli come prova di contraddizione.
+- Contatori di candidati, scansionati, non scansionati e omessi nel prompt; massimo **1.600 scene** scansionate, per scena 16.000 caratteri distribuiti fra inizio, centro e fine per ranking. Gli autori vedono nell'audit del freeze ID e conteggi campionati; vecchi report/ZIP restano leggibili e lo schema importato convalida i nuovi contatori in modalità strict.
+- I quattro specialisti autorizzati e il giudice ricevono i campioni; lo storico solo con `historical_evidence` come in v0.11.1, i cinque lettori ciechi restano isolati. `finding.evidence` resta una citazione letterale del **segmento corrente**.
+- Vitest su scena pertinente intermedia, finestre nel mezzo e offset, limiti, privacy, precedenza di origine/ultimo predecessore e audit; Playwright desktop/mobile sull'avviso di rivalidazione; ADR 0035, [guida](targeted-continuity-retrieval.md), issue #20.
+
+**Limiti:** matching lessicale/strutturato ≠ comprensione semantica né rilevamento certo delle contraddizioni. Fatti impliciti, sinonimi, scene oltre il cap e passi non campionati possono sfuggire. Gli agenti devono continuare a ragionare in modo critico; l'audit non certifica la completezza.
+
 ## 0.11.1 — 2026-11-06 (PR #47)
 
 **I dossier storici entrano nella catena di rivalidazione dei capitoli successivi**

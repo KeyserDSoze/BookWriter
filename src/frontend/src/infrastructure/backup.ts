@@ -30,6 +30,10 @@ const continuityAuditSchema = continuityRecheckSchema.extend({
   completedAt: z.string().datetime(),
   sampledSceneIds: z.array(zId).max(4),
   partialCoverage: z.boolean(),
+  retrievalMethod: z.literal("local_structured_lexical_v1").optional(),
+  candidateSceneCount: z.number().int().min(0).max(40_000).optional(),
+  scannedSceneCount: z.number().int().min(0).max(1600).optional(),
+  unscannedSceneCount: z.number().int().min(0).max(40_000).optional(),
 }).strict();
 const chapterSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
