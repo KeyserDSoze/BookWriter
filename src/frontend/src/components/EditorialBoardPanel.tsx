@@ -67,6 +67,27 @@ function RoundDetails({ round, reports, judgment, sources = [], manualSources = 
                     Le posizioni sono proposte dal revisore: una citazione letterale non dimostra
                     incompatibilità storica. Consulta il contesto completo e il giudizio critico.
                   </p>}
+                  {f.historical.conflictContext ? <div className="mt-2 space-y-2 rounded-md
+                    border border-amber-400/50 p-2 break-words" aria-label="Contesto del conflitto">
+                    <p className="font-semibold">Confronto di evento, periodo, luogo ed edizione
+                      (valutazioni del revisore, non verificate)</p>
+                    <p><b>Identità dell'evento proposta:</b> {f.historical.conflictContext.comparison.eventIdentity
+                      === "same" ? "Probabilmente lo stesso" :
+                      f.historical.conflictContext.comparison.eventIdentity === "different"
+                        ? "Eventi differenti" : "Non determinabile"}</p>
+                    <p className="whitespace-pre-wrap">{f.historical.conflictContext.comparison.rationale}</p>
+                    {f.historical.conflictContext.sources.map(scope=><div key={scope.sourceId}
+                      className="border-t border-slate-300 pt-2 dark:border-slate-700">
+                      <p className="font-semibold">Fonte {scope.sourceId}</p>
+                      <p><b>Evento/oggetto:</b> {scope.subject ?? "Non determinato"}</p>
+                      <p><b>Periodo:</b> {scope.period ?? "Non determinato"}</p>
+                      <p><b>Luogo:</b> {scope.place ?? "Non determinato"}</p>
+                      <p><b>Edizione/versione:</b> {scope.edition ?? "Non determinata"}</p>
+                      <p className="whitespace-pre-wrap"><b>Incertezza:</b> {scope.uncertainty}</p>
+                    </div>)}
+                  </div> : f.historical.assessment === "conflicting_excerpts" ?
+                    <p className="muted">Report legacy privo di verifica esplicita del contesto:
+                      l'evento, la data, il luogo e l'edizione restano da controllare.</p> : null}
                   {f.historical.sourceQuote && <p><b>Citazione legacy (singola fonte):</b> “{f.historical.sourceQuote}”</p>}
                   {f.historical.sourceIds.map(id => {
                     const source = sources.find(s => s.id === id);
@@ -119,6 +140,18 @@ function RoundDetails({ round, reports, judgment, sources = [], manualSources = 
                     <b>Giudice: {ruling.action === "accept" ? "Accettato" : "Respinto"}</b>
                   </p>
                   <p><b>Perché:</b> {ruling.rationale}</p>
+                  {ruling.conflictReview && <div className="mt-2 space-y-1 rounded border
+                    border-slate-300 p-2 break-words dark:border-slate-700"
+                    aria-label="Controllo critico del direttore">
+                    <p className="font-semibold">Verifica critica del direttore — evento: {
+                      ruling.conflictReview.eventIdentity === "same" ? "forse identico" :
+                      ruling.conflictReview.eventIdentity === "different" ? "differente" : "incerto"}</p>
+                    <p><b>Cronologia:</b> {ruling.conflictReview.chronology}</p>
+                    <p><b>Geografia:</b> {ruling.conflictReview.geography}</p>
+                    <p><b>Edizione:</b> {ruling.conflictReview.edition}</p>
+                    <p><b>Indipendenza:</b> {ruling.conflictReview.independence}</p>
+                    <p><b>Conclusione:</b> {ruling.conflictReview.conclusion}</p>
+                  </div>}
                   {ruling.action === "accept" && <p><b>Correzione approvata:</b> {ruling.remediation}</p>}
                 </div> : <p className="muted">In attesa del giudizio editoriale.</p>}
               </div>;

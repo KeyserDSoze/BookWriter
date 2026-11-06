@@ -45,6 +45,22 @@ export interface HistoricalSourceEvidence {
   sourceId: string;
   quote: string;
 }
+/** Explicitly *proposed* scope for one source, never a claim of certified origin. */
+export interface HistoricalSourceScope {
+  sourceId: string;
+  subject: string | null;
+  period: string | null;
+  place: string | null;
+  edition: string | null;
+  uncertainty: string;
+}
+export interface HistoricalConflictContext {
+  sources: HistoricalSourceScope[];
+  comparison: {
+    eventIdentity: "same" | "different" | "unknown";
+    rationale: string;
+  };
+}
 export interface HistoricalClaim {
   claim: string;
   assessment: HistoricalAssessment;
@@ -55,6 +71,9 @@ export interface HistoricalClaim {
   sourceEvidence?: HistoricalSourceEvidence[];
   /** Only for conflicting_excerpts; one proposed stance per independently quoted source. */
   sourcePositions?: HistoricalSourcePosition[];
+  /** New historical conflict reports must compare document scope explicitly.
+   * Legacy persisted reports may omit it and remain readable. */
+  conflictContext?: HistoricalConflictContext;
 }
 
 export function normalizeResearchQueries(queries: readonly string[]): string[] {
@@ -109,7 +128,8 @@ export function validateHistoricalClaim(
   // interpretation of their quotes is an LLM hypothesis, NEVER proof of truth.
   const positions = claim.sourcePositions ?? [];
   if (!Array.isArray(positions) ||
-      (claim.assessment !== "conflicting_excerpts" && positions.length > 0))
+      (claim.assessment !== "conflicting_excerpts" && positions.length > 0) ||
+      (claim.assessment !== "conflicting_excerpts" && claim.conflictContext !== undefined))
     throw new Error("Le posizioni delle fonti sono ammesse solo per divergenze documentali.");
   if (claim.assessment === "conflicting_excerpts") {
     if (references.length < 2 || positions.length !== references.length ||
@@ -123,6 +143,28 @@ export function validateHistoricalClaim(
       throw new Error("Divergenza: servono almeno due fonti distinte, posizioni motivate di supporto e smentita per ogni fonte.");
     if (evidence.length !== references.length)
       throw new Error("Divergenza: è richiesta una citazione letterale per ogni fonte.");
+
+    // These checks enforce explicit scope analysis and per-source binding;
+    // they cannot validate what an LLM infers about an event or document.
+    const context = claim.conflictContext;
+    const scopes = context?.sources;
+    const comparison = context?.comparison;
+    const bounded = (value: unknown, min: number, max: number): boolean =>
+      typeof value === "string" && value.trim().length >= min &&
+      value.length <= max && !/[\u0000-\u001f]/.test(value);
+    const scoped = (value: unknown): boolean => value === null ||
+      bounded(value, 4, 200);
+    if (!Array.isArray(scopes) || scopes.length !== references.length ||
+        new Set(scopes.map(s => s?.sourceId)).size !== references.length ||
+        scopes.some(s => !s || !references.includes(s.sourceId) ||
+          !scoped(s.subject) || !scoped(s.period) ||
+          !scoped(s.place) || !scoped(s.edition) ||
+          !bounded(s.uncertainty, 20, 400)) ||
+        !comparison || !["same", "different", "unknown"].includes(comparison.eventIdentity) ||
+        !bounded(comparison.rationale, 30, 600))
+      throw new Error("Contesto storico: indica per ogni fonte evento, periodo, luogo, edizione e incertezze, più una comparazione motivata.");
+    if (comparison.eventIdentity === "different")
+      throw new Error("Contesto storico: eventi dichiarati differenti non costituiscono una divergenza sullo stesso fatto.");
   }
   if (claim.assessment === "unverified") {
     if (references.length || claim.sourceQuote?.trim() || evidence.length)

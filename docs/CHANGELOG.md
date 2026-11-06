@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.4 — 2026-11-06 (PR #39)
+
+**Contesto per ogni divergenza storica e seconda valutazione obbligatoria del direttore**
+
+- I nuovi report `conflicting_excerpts` devono includere `conflictContext`: un record per ciascuna fonte con evento/oggetto, periodo, luogo, edizione e limitazioni. Ogni campo ignoto è `null`, non una supposizione inventata. `comparison.eventIdentity` e una motivazione registrano se l'agente pensa che i documenti descrivano lo stesso evento.
+- Il validatore controlla cardinalità e identità esatta delle fonti, la presenza esplicita di campi mancanti, dimensioni e validità delle motivazioni. Se l'agente dichiara eventi `different`, non può segnalarli come contraddizione sullo stesso fatto. **Non certifica corrispondenza semantica, autenticità, diritti o indipendenza reale.**
+- Per decidere ogni finding di tipo `conflicting_excerpts`, il direttore deve fornire `conflictReview` con valutazione indipendente dell'evento, cronologia, geografia, edizione e indipendenza, più conclusione. Non può accettare una remediation dichiarando contemporaneamente che gli eventi sono differenti; può respingere con motivazione.
+- Il pannello editoriale espone la matrice di contesto e la valutazione del direttore anche da telefono; i report storici v0.10.3 senza nuovi campi restano leggibili con avviso di controllo incompleto. Nessuna nuova ricerca o invio del romanzo a servizi esterni; gli altri undici revisori restano ciechi. Test Vitest, smoke e Playwright desktop/mobile.
+- ADR 0027, documentazione autore, issue #23.
+
+**Limiti:** contesto e identità dell'evento sono ipotesi di modelli AI, non controllo documentale o verifica automatica dei fatti. I nuovi campi non inventano una fonte mancante e non autorizzano modifiche automatiche al canone.
+
 ## 0.10.3 — 2026-11-06 (PR #38)
 
 **Redazione storica: proposte di divergenza fra fonti indipendenti, con verifica testuale e giudizio critico**
