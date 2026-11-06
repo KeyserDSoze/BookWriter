@@ -16,7 +16,7 @@
 - [x] PR #25 (v0.9.1): bibliografia Crossref DOI per capitolo, ricerche autorizzate, metadati distinti dalle prove, revisore e giudice informati, privacy e rewind dei capitoli congelati; CI verde e merge in main, ADR 0014.
 - [x] PR #24 (v0.9.0): dossier storico per capitolo con query pubbliche approvate, link Wikipedia/revisioni, riferimenti validati nel revisore e nel giudice, invalidazione freeze retroattiva; in verifica CI (ADR 0013, issue #23).
 - [x] PR #27 (v0.9.2): citazioni storiche per singola fonte, controlli anti-falsa corroborazione e giudice critico, con regressioni Vitest; ADR 0015.
-- [ ] v0.9.3 (in verifica): catalogo istituzionale Library of Congress con query approvate, metadati separati dalle prove, contesti privati, Web Locks/freeze e test CI (ADR 0016).
+- [x] PR #28 (v0.9.3): catalogo istituzionale Library of Congress con query approvate, metadati separati dalle prove, contesti privati, Web Locks/freeze e test CI (ADR 0016).
 - [ ] Issue #23: fonti primarie e archivi istituzionali, bibliografia controllata, confronti fra fonti, e query estratte dai capitoli solo dopo conferma autore.
 - [ ] Issue #17: ledger storico per cached tokens e tariffe versionate, integrazioni provider-native opzionali e budget distribuito tra dispositivi.
 - [ ] Hardening del lease e revisione automatica del canon delle proposte (#10), OAuth Google/Microsoft (#2).

@@ -1,6 +1,6 @@
 # ADR 0016 — Catalogo istituzionale Library of Congress: piste documentali, non prove
 
-- **Stato:** Proposto per BookWriter v0.9.3 (PR di sviluppo, CI ancora da verificare)
+- **Stato:** Accettato per BookWriter v0.9.3 (PR #28, CI desktop/mobile verde)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0011, 0013, 0014 e 0015
