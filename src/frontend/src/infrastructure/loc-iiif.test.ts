@@ -87,6 +87,17 @@ describe("LoC IIIF metadata source safety",()=>{
    await expect(inspectLocIiif(source,scan,{infoUrl,resourceIndex:0,fileIndex:-1}))
      .rejects.toThrow(/non corrispondenti/);
  });
+ it("rejects conflicting IIIF service identities and unbounded responses",async()=>{
+   mock(meta,{"@id":infoUrl.slice(0,-"/info.json".length),
+     id:"https://tile.loc.gov/image-services/iiif/service:other-page",
+     width:2000,height:3000});
+   await expect(inspectLocIiif(source,scan,{infoUrl,resourceIndex:0,fileIndex:-1}))
+     .rejects.toThrow(/non corrispondenti/);
+   vi.stubGlobal("fetch",vi.fn(async()=>new Response(null,{
+     status:200,headers:{"content-type":"application/json"},
+   })));
+   await expect(listLocIiifCandidates(source.itemId)).rejects.toThrow(/streaming limitabile/);
+ });
  it("network failures and 429 are errors, never proof of a valid image",async()=>{
    vi.stubGlobal("fetch",vi.fn(async()=>{throw new TypeError("Failed to fetch");}));
    await expect(listLocIiifCandidates(source.itemId)).rejects.toThrow(/Failed to fetch/);
