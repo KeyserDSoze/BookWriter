@@ -37,7 +37,7 @@
 
 **Cataloghi d'archivio v0.9.3 (PR #28):** una ricerca consensuale per capitolo di 1–3 argomenti pubblici nel catalogo digitale Library of Congress, con schede e link verificati, data e snapshot conservati, presentati solo a storico e giudice. I metadati NON dimostrano fatti né sono citazioni dei documenti. Guida `docs/institutional-archives.md`, ADR 0016, issue #23.
 
-**Estratti originali v0.9.4 (in verifica):** dopo aver consultato personalmente una scheda della Library of Congress, l'autore può archiviare una breve trascrizione con pagina/folio e base dichiarata dei diritti. La review storica può verificare una citazione nel testo digitato, ma non ha letto o autenticato autonomamente l'originale. Leggi `docs/archival-excerpts.md`, ADR 0017 e issue #23.
+**Estratti originali v0.9.4 (PR #29):** dopo aver consultato personalmente una scheda della Library of Congress, l'autore può archiviare una breve trascrizione con pagina/folio e base dichiarata dei diritti. La review storica può verificare una citazione nel testo digitato, ma non ha letto o autenticato autonomamente l'originale. Leggi `docs/archival-excerpts.md`, ADR 0017 e issue #23.
 
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 

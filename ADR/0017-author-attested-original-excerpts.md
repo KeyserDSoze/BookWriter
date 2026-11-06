@@ -1,6 +1,6 @@
 # ADR 0017 — Estratti originali trascritti dall'autore, con catena di provenienza dichiarata
 
-- **Stato:** Proposto per BookWriter v0.9.4; merge dopo CI
+- **Stato:** Accettato per BookWriter v0.9.4 (PR #29)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0011, 0013–0016

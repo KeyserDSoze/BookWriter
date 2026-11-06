@@ -44,7 +44,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 
 - **PR #28 (v0.9.3)**: adapter read-only Library of Congress e pannello «Archivi istituzionali», consenso esplicito per 1–3 query pubbliche, record di catalogo storicizzati distinti dalle citazioni; privacy dei lettori, rewind dei capitoli e test network. ADR 0016 e `docs/institutional-archives.md`. La funzionalità non certifica fonti primarie e potrebbe incontrare blocchi CORS.
 
-- **PR v0.9.4 (in verifica)**: estratti originali trascritti dall'autore da schede LoC attive, locatore e diritti dichiarati, `locex:...` citabile nella trascrizione con status non autenticato, versioni immutabili, restauro da backup, rewind e separazione dei ruoli; ADR 0017 e `docs/archival-excerpts.md`. Nessuna verifica indipendente dell'originale.
+- **PR #29 (v0.9.4)**: estratti originali trascritti dall'autore da schede LoC attive, locatore e diritti dichiarati, `locex:...` citabile nella trascrizione con status non autenticato, versioni immutabili, restauro da backup, rewind e separazione dei ruoli; ADR 0017 e `docs/archival-excerpts.md`. Nessuna verifica indipendente dell'originale.
 
 ## Come provare GitHub
 
