@@ -9,7 +9,7 @@ import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
 import { BibliographyPanel } from "./BibliographyPanel";
 import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
 import type { HistoricalSource } from "../domain/historical-research";
-import { activeManualEvidence, validateManualExcerpt, type ManualDocumentExcerpt } from "../domain/manual-evidence";
+import { activeManualEvidence, allManualEvidence, type ManualDocumentExcerpt } from "../domain/manual-evidence";
 import { ManualEvidencePanel } from "./ManualEvidencePanel";
 
 function RoundDetails({ round, reports, judgment, sources = [], manualSources = [], activeManualIds = [] }: {
@@ -167,12 +167,12 @@ export function EditorialBoardPanel({
       </div>}
       <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
         sources={chapter.historicalDossier?.sources}
-        manualSources={chapter.historicalDossier?.manualEvidence?.excerpts.filter(validateManualExcerpt)}
+        manualSources={allManualEvidence(chapter.historicalDossier)}
         activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}/> 
       {cycle.priorRounds.map(round => <details key={round.round} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
         <summary className="cursor-pointer text-sm font-semibold">Storico della tornata {round.round}</summary>
         <div className="mt-3"><RoundDetails {...round} sources={chapter.historicalDossier?.sources}
-          manualSources={chapter.historicalDossier?.manualEvidence?.excerpts.filter(validateManualExcerpt)}
+          manualSources={allManualEvidence(chapter.historicalDossier)}
           activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}/></div>
       </details>)}
     </div>}
@@ -202,7 +202,7 @@ export function EditorialBoardPanel({
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           {ch.editorialRounds?.map((round, i) =>
             <div key={i} className="mt-3"><RoundDetails {...round} sources={ch.historicalDossier?.sources}
-                manualSources={ch.historicalDossier?.manualEvidence?.excerpts.filter(validateManualExcerpt)}
+                manualSources={allManualEvidence(ch.historicalDossier)}
                 activeManualIds={activeManualEvidence(ch.historicalDossier).map(x=>x.id)}/></div>)}
         </details>}
       </div>)}
