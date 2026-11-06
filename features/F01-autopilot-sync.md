@@ -18,6 +18,7 @@
 - [x] PR #27 (v0.9.2): citazioni storiche per singola fonte, controlli anti-falsa corroborazione e giudice critico, con regressioni Vitest; ADR 0015.
 - [x] PR #28 (v0.9.3): catalogo istituzionale Library of Congress con query approvate, metadati separati dalle prove, contesti privati, Web Locks/freeze e test CI (ADR 0016).
 - [x] PR #29 (v0.9.4): trascrizioni di originali LoC consultati dall'autore, provenienza/diritti dichiarati, citazioni verificabili solo nella trascrizione, snapshot e test CI (ADR 0017).
+- [x] v0.10.6 (PR #41): proposte di query storiche locali e deterministicamente limitate a temi pubblici/anni espliciti, staging manuale e consenso separato prima di Wikipedia, nessun invio del manoscritto, test Vitest e Playwright (ADR 0029).
 - [x] v0.10.5 (PR #40): dichiarazioni dell'autore su origine condivisa o derivazione di snapshot documentali, storico append-only, esclusione di falsa corroborazione transitiva, riapertura freeze e test desktop/mobile (ADR 0028).
 - [x] v0.10.4 (PR #39): contesto esplicito per fonte (evento, periodo, luogo, edizione, incertezze), giudizio critico autonomo e blocco dei falsi conflitti fra eventi dichiarati diversi; compatibilità report legacy (ADR 0027).
 - [x] v0.10.3 (PR #38): possibili divergenze tra 2–3 fonti storiche indipendenti, citazioni per fonte, motivazioni di supporto/contestazione e direttore critico; nessuna verità certificata (ADR 0026).

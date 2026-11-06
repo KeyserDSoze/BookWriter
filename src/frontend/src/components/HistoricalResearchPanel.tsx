@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { BookOpenCheck, ExternalLink, SearchCheck, ShieldAlert } from "lucide-react";
+import { BookOpenCheck, ExternalLink, Lightbulb, SearchCheck, ShieldAlert } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import { activeHistoricalSources, normalizeResearchQueries } from "../domain/historical-research";
+import { proposeHistoricalQueriesLocally } from "../domain/historical-query-proposals";
 import { researchHistoricalChapter } from "../application/historical-research";
 import { Button } from "./ui/button";
 
@@ -10,11 +11,30 @@ export function HistoricalResearchPanel({
 }: { book: BookProject; chapter: Chapter; onRefresh: () => Promise<void> }) {
   const [queries, setQueries] = useState((chapter.historicalDossier?.queries ?? []).join("\n"));
   const [busy, setBusy] = useState(false);
+  const [proposals, setProposals] = useState<string[] | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const dossier = chapter.historicalDossier;
   const sources = activeHistoricalSources(dossier);
   const locked = busy || book.status === "running" || !!book.editorialCycle;
+  const draftQueries = queries.split("\n").map(s => s.trim()).filter(Boolean);
+
+  function proposeLocally() {
+    // No provider call, no browser storage, no query generation by an AI.
+    setProposals(proposeHistoricalQueriesLocally(chapter.scenes));
+    setError("");
+    setMessage("");
+  }
+  function stageProposal(proposal: string) {
+    if (locked) return;
+    setQueries(current => {
+      const draft = current.split("\n").map(s => s.trim()).filter(Boolean);
+      if (draft.length >= 5 ||
+          draft.some(s => s.toLocaleLowerCase("it") === proposal.toLocaleLowerCase("it")))
+        return current;
+      return [...draft, proposal].join("\n");
+    });
+  }
 
   async function research() {
     setError(""); setMessage("");
@@ -59,6 +79,43 @@ export function HistoricalResearchPanel({
         una frase per riga, massimo cinque. Il browser non invia automaticamente
         contenuto delle scene, segreti, timeline privata o credenziali a Wikipedia.
       </p>
+      <div className="space-y-2 rounded-md border border-slate-300 p-2 text-xs dark:border-slate-700">
+        <p className="font-semibold">Proposte locali dal capitolo (non inviate)</p>
+        <p className="muted">
+          Il browser riconosce soltanto alcuni temi storici pubblici predefiniti e anni
+          scritti vicino al tema. Non copia frasi, nomi o segreti del romanzo.
+          Il risultato non certifica un fatto e può essere incompleto. Controlla
+          ogni proposta prima di inserirla nella bozza e prima del consenso alla ricerca.
+        </p>
+        <Button size="sm" variant="outline" disabled={locked || !chapter.scenes.length}
+          onClick={proposeLocally}><Lightbulb size={16}/>
+          Genera proposte locali
+        </Button>
+        {proposals !== null && <div aria-live="polite" className="space-y-2">
+          {proposals.length ? <div aria-label="Proposte di ricerca solo locali" className="space-y-2">
+            {proposals.map(proposal => {
+              const staged = draftQueries.some(s => s.toLocaleLowerCase("it") ===
+                proposal.toLocaleLowerCase("it"));
+              return <div key={proposal} className="flex flex-wrap items-center gap-2
+                rounded border border-slate-200 p-2 dark:border-slate-700">
+                <span className="min-w-0 flex-1 break-words">{proposal}</span>
+                <Button size="sm" variant="outline"
+                  aria-label={"Aggiungi alla bozza: " + proposal}
+                  disabled={locked || staged || draftQueries.length >= 5}
+                  onClick={() => stageProposal(proposal)}>
+                  {staged ? "Nella bozza" : "Aggiungi alla bozza"}
+                </Button>
+              </div>;
+            })}
+          </div> : <p className="muted">
+            Nessun tema tra quelli riconosciuti. Inserisci manualmente un argomento pubblico.
+          </p>}
+          <p className="muted">
+            Finché non premi «Cerca fonti pubbliche» e confermi, nessuna proposta
+            viene inviata a Wikipedia né salvata nel dossier.
+          </p>
+        </div>}
+      </div>
       <label className="block text-xs font-semibold">
         Argomenti storici autorizzati dall'autore
         <textarea aria-label={"Ricerche storiche capitolo " + chapter.number}
