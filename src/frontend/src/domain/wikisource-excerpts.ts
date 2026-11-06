@@ -129,6 +129,7 @@ export function extendWikisourceDossier(
     ...(previous?.archiveCatalog?{archiveCatalog:previous.archiveCatalog}:{}),
     ...(previous?.manualEvidence?{manualEvidence:previous.manualEvidence}:{}),
     ...(previous?.locOcr?{locOcr:previous.locOcr}:{}),
+    ...(previous?.sourceRelations ? {sourceRelations:previous.sourceRelations} : {}),
     wikisource:{
       queries:approved,excerpts:[...all.values()],
       activeExcerptIds:[...new Set(found.map(item=>item.id))],

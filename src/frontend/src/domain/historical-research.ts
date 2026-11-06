@@ -32,6 +32,17 @@ export interface ChapterHistoricalDossier {
   manualEvidence?: ChapterManualEvidence;
   wikisource?: ChapterWikisourceExcerpts;
   locOcr?: ChapterLocOcr;
+  /** Append-only author declarations about dependencies between exact source snapshots. */
+  sourceRelations?: HistoricalSourceRelation[];
+}
+export type HistoricalSourceRelationKind = "same_original" | "derived" | "unknown";
+export interface HistoricalSourceRelation {
+  id: string;
+  sourceAId: string;
+  sourceBId: string;
+  relation: HistoricalSourceRelationKind;
+  note: string;
+  recordedAt: string;
 }
 export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "conflicting_excerpts" | "unverified";
 /** Model-proposed interpretation, not a machine-verified historical fact. */
@@ -115,6 +126,104 @@ export function activeHistoricalSources(dossier?: ChapterHistoricalDossier): His
   const active = new Set(dossier.activeSourceIds);
   return dossier.sources.filter(s => active.has(s.id) && validateHistoricalSource(s));
 }
+/** Only snapshots eligible for current reviewer citations may be related. */
+export function activeHistoricalEvidenceIds(dossier?: ChapterHistoricalDossier): string[] {
+  return [...new Set([
+    ...activeHistoricalSources(dossier).map(s => s.id),
+    ...activeManualEvidence(dossier).map(s => s.id),
+    ...activeWikisourceExcerpts(dossier).map(s => s.id),
+    ...activeLocOcrExcerpts(dossier).map(s => s.id),
+  ])];
+}
+function relationKey(a: string, b: string): string {
+  return a < b ? a + "|" + b : b + "|" + a;
+}
+/** Imported books are untrusted. Invalid relation history cannot silently erase a dependency. */
+function historicalRelationHistory(dossier?: ChapterHistoricalDossier): HistoricalSourceRelation[] {
+  const history = dossier?.sourceRelations;
+  if (history === undefined) return [];
+  if (!Array.isArray(history) || history.length > 60)
+    throw new Error("Storico della provenienza delle fonti non valido o pieno.");
+  const ids = new Set<string>();
+  for (let i = 0; i < history.length; i++) {
+    const entry = history[i];
+    const ms = typeof entry?.recordedAt === "string" ? Date.parse(entry.recordedAt) : NaN;
+    if (!entry || !Number.isSafeInteger(ms) ||
+        entry.id !== "srcrel:" + ms + ":" + i || ids.has(entry.id) ||
+        typeof entry.sourceAId !== "string" || typeof entry.sourceBId !== "string" ||
+        entry.sourceAId >= entry.sourceBId ||
+        !["same_original", "derived", "unknown"].includes(entry.relation) ||
+        typeof entry.note !== "string" || entry.note.trim().length < 24 ||
+        entry.note.length > 400 || /[\u0000-\u001f]/.test(entry.note)) {
+      throw new Error("Storico di relazioni fra fonti manomesso o non valido.");
+    }
+    ids.add(entry.id);
+  }
+  return history;
+}
+/** The latest author declaration for a pair wins, only while both exact snapshots remain active. */
+export function activeHistoricalSourceRelations(
+  dossier?: ChapterHistoricalDossier,
+): HistoricalSourceRelation[] {
+  const history = historicalRelationHistory(dossier);
+  const active = new Set(activeHistoricalEvidenceIds(dossier));
+  const latest = new Map<string, HistoricalSourceRelation>();
+  for (const entry of history)
+    latest.set(relationKey(entry.sourceAId, entry.sourceBId), entry);
+  return [...latest.values()].filter(entry =>
+    active.has(entry.sourceAId) && active.has(entry.sourceBId));
+}
+/** A voluntary local declaration, not proof of an original or of legal rights. */
+export function appendHistoricalSourceRelation(
+  dossier: ChapterHistoricalDossier | undefined,
+  sourceIdA: string, sourceIdB: string,
+  relation: HistoricalSourceRelationKind, note: string, recordedAt: string,
+): ChapterHistoricalDossier {
+  if (!dossier) throw new Error("Acquisisci prima due fonti nel dossier storico.");
+  const history = historicalRelationHistory(dossier);
+  if (history.length >= 60)
+    throw new Error("Storico delle relazioni pieno: effettua un backup.");
+  if (!["same_original","derived","unknown"].includes(relation) ||
+      typeof sourceIdA !== "string" || typeof sourceIdB !== "string" ||
+      sourceIdA === sourceIdB ||
+      !activeHistoricalEvidenceIds(dossier).includes(sourceIdA) ||
+      !activeHistoricalEvidenceIds(dossier).includes(sourceIdB))
+    throw new Error("Le due fonti devono essere distinte, citabili e attive.");
+  const reason = typeof note === "string" ? note.trim() : "";
+  const time = Date.parse(recordedAt);
+  if (!Number.isSafeInteger(time) || !reason || reason.length < 24 ||
+      reason.length > 400 || /[\u0000-\u001f]/.test(reason))
+    throw new Error("Motiva il legame fra fonti in 24–400 caratteri senza righe di controllo.");
+  const [sourceAId, sourceBId] = [sourceIdA, sourceIdB].sort();
+  const item: HistoricalSourceRelation = {
+    id: "srcrel:" + time + ":" + history.length,
+    sourceAId, sourceBId, relation, note: reason, recordedAt,
+  };
+  return {...dossier, sourceRelations: [...history, item]};
+}
+/** A source pair can have distinct URLs yet inherit the same original.
+ * Propagate only explicit author-declared dependencies transitively; never
+ * treat absent relations or "unknown" as proof of independence.
+ */
+export function dependentHistoricalSourceIds(
+  sourceIds: readonly string[], dossier?: ChapterHistoricalDossier,
+): boolean {
+  if (sourceIds.length < 2) return false;
+  const parent = new Map<string,string>();
+  const root = (id: string): string => {
+    let current = id;
+    while (parent.get(current) && parent.get(current) !== current)
+      current = parent.get(current)!;
+    return current;
+  };
+  for (const entry of activeHistoricalSourceRelations(dossier)) {
+    if (entry.relation === "unknown") continue;
+    const a = root(entry.sourceAId), b = root(entry.sourceBId);
+    if (a !== b) parent.set(a,b);
+  }
+  const roots = sourceIds.map(id => root(id));
+  return new Set(roots).size !== roots.length;
+}
 export function validateHistoricalClaim(
   claim: HistoricalClaim | undefined, dossier?: ChapterHistoricalDossier,
 ): void {
@@ -191,6 +300,8 @@ export function validateHistoricalClaim(
   // Two revisions/transcriptions of the same underlying document cannot fake independent corroboration.
   if (new Set(sources.map(s => s!.identity)).size !== sources.length)
     throw new Error("Revisioni dello stesso documento non sono fonti indipendenti.");
+  if (dependentHistoricalSourceIds(references, dossier))
+    throw new Error("Le fonti condividono un originale o una derivazione dichiarata dall'autore: non sono riscontri indipendenti.");
 
   if (evidence.length) {
     if (claim.sourceQuote?.trim())
@@ -243,5 +354,6 @@ export function extendHistoricalDossier(
     ...(previous?.manualEvidence ? { manualEvidence: previous.manualEvidence } : {}),
     ...(previous?.wikisource ? { wikisource: previous.wikisource } : {}),
     ...(previous?.locOcr ? { locOcr: previous.locOcr } : {}),
+    ...(previous?.sourceRelations ? { sourceRelations: previous.sourceRelations } : {}),
   };
 }

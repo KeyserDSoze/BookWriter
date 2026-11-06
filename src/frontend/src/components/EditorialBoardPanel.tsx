@@ -6,6 +6,7 @@ import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, type EditorialRound,
 import { reopenChapterReview } from "../application/editorial-control";
 import { Button } from "./ui/button";
 import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
+import { HistoricalSourceRelationsPanel } from "./HistoricalSourceRelationsPanel";
 import { BibliographyPanel } from "./BibliographyPanel";
 import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
 import { LocOcrPanel } from "./LocOcrPanel";
@@ -268,6 +269,7 @@ export function EditorialBoardPanel({
           <p className="mt-2 whitespace-pre-wrap text-xs">{ch.summary}</p>
         </details>}
         <HistoricalResearchPanel key={ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+        <HistoricalSourceRelationsPanel key={"relations-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <BibliographyPanel key={"doi-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <ArchiveCatalogPanel key={"archive-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <LocOcrPanel key={"ocr-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>

@@ -231,3 +231,98 @@ test("divergenze documentali desktop/mobile: il report distingue posizioni e pro
   }));
   expect(width.actual).toBeLessThanOrEqual(width.expected+1);
 });
+
+
+test("relazioni tra fonti desktop/mobile: consenso, audit e riapertura capitoli",async({page})=>{
+  await page.goto("/");
+  await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Le cronache");
+  await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
+    .fill("Romanzo ambientato nel periodo del telegrafo.");
+  await page.getByRole("button",{name:"Crea libro"}).click();
+  await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const tx=open.result.transaction("books","readwrite"),store=tx.objectStore("books");
+      const all=store.getAll();
+      all.onerror=()=>reject(all.error);
+      all.onsuccess=()=>{
+        const book=all.result[0] as Record<string,unknown>;
+        const t="2026-11-06T12:00:00.000Z";
+        const sources=[42,43].map(pageId=>({
+          id:"itwiki:"+pageId+":210",provider:"it.wikipedia.org",
+          pageId,revisionId:210,title:"Telegrafo "+pageId,
+          url:"https://it.wikipedia.org/wiki/Telegrafo",
+          query:"Telegrafo elettrico nel 1848",
+          retrievedAt:t,excerpt:"Un resoconto descrive l'uso del telegrafo nel secolo XIX.",
+        }));
+        book.status="paused";book.phase="prose";
+        book.chapters=[{id:"ch-relation",number:1,title:"Il dispaccio",purpose:"Fatto narrativo",
+          frozenAt:t,summary:"Una cronaca apparentemente affidabile.",bookSummaryAtFreeze:"Sintesi.",
+          scenes:[{id:"scene-1",number:1,title:"Messaggio",objective:"Avvisare",
+            text:"Mara invia un messaggio attraverso il telegrafo.",status:"canon"}],
+          historicalDossier:{queries:["Telegrafo elettrico nel 1848"],
+            sources,activeSourceIds:sources.map(s=>s.id),
+            searchedAt:t,unansweredQueries:[]},
+        }];
+        book.bookSummary="Sintesi.";
+        store.put(book,book.id as string);
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  const panel=page.getByRole("region",{name:"Redazione multi-agente"});
+  await panel.locator("summary").filter({hasText:"Provenienza e dipendenze fra fonti"}).click();
+  await panel.getByRole("combobox",{name:"Prima fonte relazione capitolo 1"})
+    .selectOption("itwiki:42:210");
+  await panel.getByRole("combobox",{name:"Seconda fonte relazione capitolo 1"})
+    .selectOption("itwiki:43:210");
+  await panel.getByRole("combobox",{name:"Tipo relazione capitolo 1"}).selectOption("derived");
+  await panel.getByRole("textbox",{name:"Motivazione relazione capitolo 1"})
+    .fill("L'autore ha confrontato i riferimenti: la seconda voce riprende l'originale della prima.");
+  const external:string[]=[];
+  page.on("request",req=>{
+    if (["it.wikipedia.org","www.loc.gov","it.wikisource.org"].some(host => req.url().includes(host)))
+      external.push(req.url());
+  });
+  page.once("dialog",async dialog=>{
+    expect(dialog.message()).toContain("DICHIARAZIONE LOCALE DI PROVENIENZA");
+    expect(dialog.message()).toContain("itwiki:42:210");
+    expect(dialog.message()).toContain("itwiki:43:210");
+    expect(dialog.message()).not.toContain("Mara invia");
+    await dialog.accept();
+  });
+  await panel.getByRole("button",{name:"Registra relazione di provenienza"}).click();
+  await expect(panel.getByText(/Dichiarazione salvata. Capitolo e successivi riaperti/))
+    .toBeVisible();
+  await expect(panel.getByText(/Una fonte deriva dall'altra/)).toBeVisible();
+  const state=await page.evaluate(()=>new Promise<{
+    frozen:boolean;stage:string;sourceRelations:number;autosync:boolean|undefined;
+  }>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const tx=open.result.transaction("books","readonly"),q=tx.objectStore("books").getAll();
+      q.onerror=()=>reject(q.error);
+      q.onsuccess=()=>{
+        const book=q.result[0] as {
+          chapters:Array<{frozenAt?:string;historicalDossier:{sourceRelations:Array<{relation:string}>}}>;
+          editorialCycle?:{stage:string};remote?:{autoSync?:boolean};
+        };
+        resolve({frozen:!!book.chapters[0]?.frozenAt,
+          stage:book.editorialCycle?.stage??"none",
+          sourceRelations:book.chapters[0]!.historicalDossier.sourceRelations.length,
+          autosync:book.remote?.autoSync});
+      };
+    };
+  }));
+  expect(state.frozen).toBe(false);
+  expect(state.stage).toBe("review");
+  expect(state.sourceRelations).toBe(1);
+  expect(external).toEqual([]);
+  const width=await page.evaluate(()=>({
+    actual:document.documentElement.scrollWidth,expected:window.innerWidth,
+  }));
+  expect(width.actual).toBeLessThanOrEqual(width.expected+1);
+});

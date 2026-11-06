@@ -273,6 +273,15 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Gli storici v0.10.3 privi del campo rimangono leggibili e marcati come legacy, senza riscrivere report o capitoli; nessun nuovo fetch, nuovi destinatari dei dossier o promozione delle fonti a fatti verificati.
 - Test di sourceId mancanti o duplicati, null ammessi, contesto incompleto, falsa identità evento, review del giudice e UI responsive. Guida `docs/historical-source-disagreements.md`.
 
+## Relazioni documentali v0.10.5 — dichiarazioni autore e dipendenze conservative (ADR 0028)
+
+- Dossier `sourceRelations` opzionale, **append-only** max 60: `sourceAId`/`sourceBId` ordinati, `relation=same_original|derived|unknown`, `note`, `recordedAt`, `id`. Solo coppie di snapshot attivi e citabili; nessuna scheda DOI/LoC/IIIF come fonte probatoria.
+- Se la dichiarazione più recente per una coppia indica `same_original` o `derived`, il validatore rifiuta multi-source findings che presentano i due ID come indipendenti. La dipendenza è transitiva. `unknown` **non** certifica indipendenza; rettifica solo un legame attivo e mantiene l'audit. Un refresh con nuovo snapshot disattiva automaticamente il vecchio legame.
+- Tutti i punti di estensione dei dossier (`historical, manual, wikisource, bibliography, archival`) devono preservare `sourceRelations`; gli aggiornamenti parziali non cancellano né riassegnano la provenienza.
+- Registrazione esclusivamente su scelta e conferma dell'autore, senza GET, dentro Web Locks writer/outbox, CAS, outbox/activity atomici, autosync off, rewind freeze/downstream. Comunicare se la nota può comparire in backup, GitHub opt-in e nei prompt AI di storico/giudice.
+- Solo storico e direttore critico ricevono le relazioni attive come dati non attendibili; gli altri undici agenti, inclusi i lettori ciechi, non le vedono. Nessuna classificazione automatica di autenticità, copyright o indipendenza reale.
+- Test obbligatori: false corroborazioni dirette e transitive, rettifica `unknown`, snapshot obsolete, dati importati alterati, privacy, CAS e Playwright mobile/desktop sul consenso. Riferimenti: `docs/historical-source-dependencies.md`, ADR 0028, issue #23.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
