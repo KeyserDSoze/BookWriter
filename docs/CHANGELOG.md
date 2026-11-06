@@ -2,6 +2,19 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.9.6 — 2026-11-06 (PR in verifica)
+
+**Wikisource: citazioni legate al wikitesto della revisione esatta, non alla pagina corrente**
+
+- Il lookup storico usa due fasi: ricerca consensuale senza estratti `TextExtracts`, seguita da `query+revisions&revids=...` e `rvprop=ids|timestamp|content&rvslots=main`. Confronto obbligatorio di pagina, namespace, titolo, `revid` e timestamp tra le risposte; l'assenza/mismatch del contenuto causa fallimento del batch senza salvataggi parziali.
+- I nuovi estratti sono **porzioni letterali di wikitesto** di massimo 1000 caratteri scelte da righe di prosa semplice. Nessuna esecuzione di template/trasclusione o text parsing fittizio: pagine prive di righe citabili non producono evidenza.
+- Il browser calcola `SHA-256` dell'intero wikitesto della revisione e salva metodo, offset e lunghezza, con nuovo ID `itwsr:<pageId>:<revid>:<sha256-16>`. Le `sourceEvidence` possono fare riferimento solo a nuovi snapshot attivi con prova strutturale, mai ad associazioni legacy non accertate.
+- **Migrazione conservativa:** gli estratti v0.9.5 `itws:...` restano nello storico e nei report precedenti, ma non sono disponibili alle nuove review perché provenivano dall'estratto della pagina corrente. Riacquisizione solo dopo consenso dell'autore.
+- UI con SHA-256/offset e avvisi visibili; storico con banner legacy, giudice con revisionProof e istruzioni per non confondere coerenza testuale, autenticità dell'opera e stato dei diritti.
+- Lettura API limitata **in streaming a 150 KB**, protezioni su JSON, CORS, HTTP 429, contenuti nascosti o incoerenti, doppia query e assenza di testo. Test su provenienza, migrazione/audit, privacy, fail-closed e Playwright desktop/mobile; ADR 0019 e guida aggiornata.
+
+**Limiti:** hash locale e ID remoto **non autenticano** l'opera/edizione originale né certificano licenza o attendibilità storica. I backup possono essere alterati prima dell'importazione; per verificarli nuovamente serve rifare una consultazione remota. L'API/CORS reale non è certificata dai test con mock.
+
 ## 0.9.5 — 2026-11-06 (PR #30)
 
 **Wikisource: ricerca pubblica consensuale di brevi trascrizioni con ID revisione**

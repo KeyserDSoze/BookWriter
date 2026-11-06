@@ -1,34 +1,43 @@
-# Wikisource: consultazione di trascrizioni storiche revisionate — v0.9.5
+# Trascrizioni Wikisource — v0.9.6: controllo della revisione esatta
 
-BookWriter ora può ottenere **brevi estratti testuali effettivamente restituiti da Wikisource**, con link alla **revisione** e data della consultazione. Non si tratta di una verifica autonoma dell'originale storico: Wikisource ospita *trascrizioni collaborative* e ogni opera può avere un differente stato dei diritti.
+Wikisource ospita **trascrizioni collaborative**. BookWriter può cercare piccoli passaggi testuali verificando che il frammento appartenga **al wikitesto restituito per un preciso ID revisione**, ma **non autentica l'opera storica né la sua licenza**.
 
-## Come funziona
+## Nuova verifica della provenienza testuale
 
-1. Apri il libro e, nella Dashboard, la **Redazione multi-agente**. Prima della review apri la sezione **Trascrizioni Wikisource** del capitolo.
-2. Scrivi **1–3 ricerche pubbliche** (una per riga, 5–110 caratteri ciascuna) che sei disposto a comunicare a `it.wikisource.org`. Non immettere passaggi inediti, password, token, nomi segreti dei personaggi o identificativi riservati.
-3. Premi **Cerca trascrizioni Wikisource**. Viene mostrato un dialogo con **tutte le frasi da inviare**, il destinatario, la natura dei testi e il possibile effetto sull'approvazione dei capitoli. La ricerca parte **solo dopo conferma**.
-4. Per ogni testo utile BookWriter salva titolo, ID pagina, ID revisione e data, breve estratto, query e timestamp. Il collegamento apre la revisione pubblicata. Puoi verificarne l'estratto nell'edizione originale e consultarne autori, cronologia, edizione e diritti.
-5. Il revisore storico può associare una citazione letterale al riferimento `itws:<pageId>:<revisionId>`. Il software controlla che la frase citata compaia **nell'estratto effettivamente recuperato**, non in una scheda di catalogo né in un altro testo. Il direttore editoriale valuta pertinenza, affidabilità, data, possibili anacronismi e la remediation proposta, e può respingerla motivando.
-6. Gli altri undici agenti non hanno accesso agli estratti. Come per le altre fonti, un aggiornamento dopo il freeze riapre quel capitolo e invalida i successivi; l'autosync viene spento e bisogna rieseguire la review.
+Dalla v0.9.6 la ricerca si svolge in **due passaggi**:
 
-## Distinzioni importantissime
+1. Dopo che l'autore ha confermato 1–3 query pubbliche, la ricerca MediaWiki restituisce **pagina, titolo, ID e timestamp della revisione**. Il sistema **non** usa più gli estratti `TextExtracts` della pagina corrente.
+2. BookWriter chiama `GET https://it.wikisource.org/w/api.php` per leggere **l'esatta revisione numerica**, verificando che ID pagina, titolo, namespace, ID e data revisione siano gli stessi del primo risultato.
+3. Il software seleziona una **sottostringa letterale contigua** da una riga semplice di wikitesto, non una rielaborazione HTML. Non esegue template e **non trasclude** pagine. Se la revisione contiene soltanto template/markup, non inventa testo leggibile: mostra nessun estratto utilizzabile.
+4. Calcola il fingerprint **SHA-256 del wikitesto** ricevuto e salva posizione del frammento, lunghezza, timestamp e ID. La citazione del revisore deve combaciare con il frammento collegato a quella revisione.
 
-| Identificatore | Che cosa indica | Che cosa NON prova |
-| --- | --- | --- |
-| `itwiki:...` | Estratto da una voce Wikipedia con riferimento di revisione | Fonte primaria o verità storica |
-| `itws:...` | Estratto di **trascrizione collaborativa Wikisource** e ID revisione ricevuto dal servizio | Autenticità dell'originale, correttezza storica, pubblico dominio |
-| `loc:...` | Scheda descrittiva Library of Congress | Contenuto del documento: non citabile come testo |
-| `locex:...` | Trascrizione **inserita e attestata dall'autore**, non recuperata dall'app | Confronto indipendente con l'originale |
-| `crossref:...` | Soli metadati bibliografici DOI | Testo letto o valutazione del contenuto |
+**Attenzione:** SHA-256 e offset attestano un controllo **locale sui dati arrivati dall'API**, non una firma crittografica di Wikisource, non una verifica indipendente di documenti d'epoca e non un'assicurazione giuridica. I contenuti in backup JSON potrebbero essere stati modificati prima dell'importazione.
 
-**Diritti**: il riutilizzo di opere Wikisource può essere regolato da pubblico dominio oppure licenze e altre condizioni; non tutti gli originali sono automaticamente privi di copyright. Per qualsiasi frase destinata a un libro pubblicato, controlla le condizioni della **singola opera**, l'attribuzione degli autori/contributori e gli eventuali obblighi ShareAlike. Questo strumento non fornisce consulenza legale e non dichiara `public_domain` sulle trascrizioni.
+## Come usarlo
 
-## Privacy, limiti e conservazione
+Apri **Dashboard → Redazione multi-agente → Trascrizioni Wikisource**, digita da una a tre ricerche storiche **pubbliche**, premi **Cerca trascrizioni Wikisource** e leggi il dialogo con tutte le stringhe esatte che stai per inviare. Conferma solo se non contengono indizi riservati o dati personali: l'app non genera ricerche dal testo privato del romanzo e non trasmette API key o segreti, ma invia integralmente le parole inserite.
 
-L'app usa soltanto `GET https://it.wikisource.org/w/api.php` dopo conferma, senza API key, cookies, redirect o invio di manoscritto e segreti privati. Max **due pagine per query**, tre query e **sei** estratti alla volta, risposta limitata a 150 KB e timeout 12 secondi. I risultati sono conservati in IndexedDB, negli ZIP e — se decidi di sincronizzare il libro — anche nel repository GitHub. Se il repository è pubblico anche le query e i riferimenti diventano pubblici; **la redazione AI invia gli estratti selezionati al modello storico e al giudice configurati dall'autore**.
+Apri il link all'**esatta revisione** per confrontare il passo, la cronologia editoriale, gli autori, l'opera/edizione e i **diritti di citazione e riproduzione** prima di riutilizzarlo nel libro. La ricerca è conservata localmente (IndexedDB/ZIP) e può confluire in un repository GitHub **pubblico** se attivi la sincronizzazione. Gli estratti vengono inoltre inviati **solo** allo specialista storico e al direttore editoriale tramite il modello AI configurato: gli altri undici agenti non ricevono il testo.
 
-Si conservano fino a 70 snapshot delle revisioni. Un nuovo aggiornamento disattiva le versioni precedenti non recuperate nella stessa ricerca, ma le lascia disponibili come storico per i giudizi già archiviati. Se il servizio non fornisce il plugin `TextExtracts`, non consente CORS, risponde 429 o la rete fallisce, **non viene salvato nessun risultato parziale**. L'assenza di estratti non dimostra che un documento non esista.
+L'aggiornamento di un capitolo congelato richiede una nuova review e invalida i freeze successivi. Autosync viene disattivato e l'outbox bloccata/cancellata nell'operazione atomica, come nelle altre ricerche.
 
-**Limite tecnico**: l'API può associare l'estratto corrente a metadati di revisione non atomicamente. Il software memorizza gli ID restituiti, ma non ha verificato sul server che l'estratto coincida esattamente con il testo storico della specifica revisione: confrontalo manualmente aprendo il link alla revisione, soprattutto prima di ripubblicare.
+## Nuovi identificativi e migrazione
 
-Per i dettagli: [ADR 0018](../ADR/0018-wikisource-versioned-transcriptions.md), [Fonti storiche](historical-sources.md), [Issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).
+| ID | Stato attuale |
+| --- | --- |
+| `itwsr:<pageId>:<revisionId>:<sha256-16>` | Nuovo frammento con wikitesto specifico letto e impronta SHA-256. **Citabile** solo se attivo e con `sourceEvidence` letterale per fonte |
+| `itws:<pageId>:<revisionId>` | Legacy v0.9.5: l'estratto poteva riferirsi alla pagina corrente, non alla revisione. **Solo audit**: non citabile in nuove review; devi ripetere la ricerca col tuo consenso |
+| `itwiki:` | Wikipedia terziaria, non autenticazione storica |
+| `loc:` | Scheda LoC: metadati, **non citabile** come documento |
+| `locex:` | Trascrizione dell'autore, non verificata indipendentemente |
+| `crossref:` | Metadati DOI, non contenuto integrale consultato |
+
+Le vecchie fonti v0.9.5 restano nello storico e nei backup per preservare gli audit. Il nuovo pannello le mostra come **non verificate rispetto alla revisione**. Solo la riacquisizione con consenso può creare una versione con prova di appartenenza, senza inventare un legame per quelle precedenti.
+
+## Limiti e diritti
+
+Il browser esegue fino a tre richieste di ricerca e sei richieste separate per revisione (massimo due candidati/query), con `origin=*`, nessun cookie, credenziale, redirect o referer, timeout 12 secondi, limite **150 KB per risposta** e lettura streaming limitata. Un errore CORS/HTTP 429/rete/JSON o una risposta con pagina, revisione o timestamp discordanti blocca **l'intera operazione**: i dati precedenti restano invariati. L'assenza di testo non prova l'inesistenza del documento; il markup trascluso potrebbe impedire estratti leggibili.
+
+Le opere Wikisource possono avere licenze differenti; l'app mantiene `community_transcription_unverified` e `work_rights_not_verified`. Non pubblicare brani di terzi senza verificare pubblico dominio, attribuzione, obblighi editoriali e regole della giurisdizione applicabile. La disponibilità di una frase in un wikitesto **non prova che il fatto storico narrato sia vero**.
+
+Riferimenti: [ADR 0019](../ADR/0019-wikisource-exact-revision-proof.md), [ADR 0018](../ADR/0018-wikisource-versioned-transcriptions.md) e [issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).

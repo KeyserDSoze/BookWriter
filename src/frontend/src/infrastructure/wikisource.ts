@@ -60,9 +60,31 @@ async function readMediaWiki(
     const declared=Number(response.headers.get("content-length")??0);
     if(!Number.isFinite(declared) || declared>MAX_BYTES)
       throw new Error("Risposta Wikisource troppo grande.");
-    const raw=await response.text();
-    if(new TextEncoder().encode(raw).byteLength>MAX_BYTES)
-      throw new Error("Risposta Wikisource troppo grande.");
+    // Revision wikitext can be large: stop streaming as soon as the byte cap
+    // is exceeded instead of allocating an unbounded response in memory.
+    const reader=response.body?.getReader();
+    let raw="";
+    if(reader){
+      const decoder=new TextDecoder();
+      let bytes=0;
+      try{
+        while(true){
+          const chunk=await reader.read();
+          if(chunk.done)break;
+          bytes+=chunk.value.byteLength;
+          if(bytes>MAX_BYTES){
+            await reader.cancel();
+            throw new Error("Risposta Wikisource troppo grande.");
+          }
+          raw+=decoder.decode(chunk.value,{stream:true});
+        }
+        raw+=decoder.decode();
+      }finally{reader.releaseLock();}
+    }else{
+      raw=await response.text();
+      if(new TextEncoder().encode(raw).byteLength>MAX_BYTES)
+        throw new Error("Risposta Wikisource troppo grande.");
+    }
     let data:ResponseData;
     try{data=JSON.parse(raw) as ResponseData;}
     catch{throw new Error("Risposta Wikisource non contiene JSON valido.");}

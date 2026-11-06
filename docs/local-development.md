@@ -46,6 +46,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 
 - **PR #29 (v0.9.4)**: estratti originali trascritti dall'autore da schede LoC attive, locatore e diritti dichiarati, `locex:...` citabile nella trascrizione con status non autenticato, versioni immutabili, restauro da backup, rewind e separazione dei ruoli; ADR 0017 e `docs/archival-excerpts.md`. Nessuna verifica indipendente dell'originale.
 
+- **v0.9.6 (PR in verifica)**: Wikisource due fasi search + exact `revids`, sottostringa letterale da wikitext, SHA-256/offset, disattivazione delle fonti legacy v0.9.5 nelle nuove review e test fail-closed su revisioni incoerenti. ADR 0019, `docs/wikisource-transcriptions.md`.
 - **v0.9.5 (PR #30)**: consultazione consensuale di estratti Wikisource con ID revisione, limiti GET/browser e privacy, ruoli storico/giudice soltanto, quote validate contro il testo recuperato, conservazione versioni/backup e diritti non automaticamente verificati (ADR 0018, `docs/wikisource-transcriptions.md`).
 
 ## Come provare GitHub
