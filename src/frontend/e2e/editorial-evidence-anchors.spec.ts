@@ -53,7 +53,7 @@ test("prova letterale verificata e report legacy: indicazione chiara desktop/mob
   await board.locator("summary").filter({hasText:"Stile e lingua"}).first().click();
   const verified=board.getByLabel("Prova narrativa verificata 1:style:0:0");
   await expect(verified.getByText(/Citazione letterale nel segmento 1/)).toBeVisible();
-  await expect(verified.getByText(/Mara trova una lettera/)).toBeVisible();
+  await expect(verified.getByText(/Testo trovato:.*Mara trova una lettera/)).toBeVisible();
   await expect(verified.getByText(/Corrispondenza di testo, NON prova/)).toBeVisible();
   await board.locator("summary").filter({hasText:"Lettore generalista"}).first().click();
   await expect(board.getByText(/Report precedente, modificato o senza ancoraggio valido/))
