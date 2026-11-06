@@ -15,12 +15,13 @@ import {
 const at="2026-11-06T02:45:00.000Z";
 const query="Telegrafo e lettere nel 1848";
 const source:WikisourceExcerpt={
-  id:"itws:42:321",provider:"it.wikisource.org",pageId:42,revisionId:321,
+  id:"itwsr:42:321:aaaaaaaaaaaaaaaa",provider:"it.wikisource.org",pageId:42,revisionId:321,
   title:"Lettere del 1848",url:"https://it.wikisource.org/wiki/Lettere_del_1848",
   excerpt:"La stazione telegrafica inviava dispacci per tutto l'inverno dell'anno 1848.",
   query,retrievedAt:at,revisionAt:"2025-06-18T09:30:00.000Z",
   evidenceStatus:"community_transcription_unverified",
   rightsStatus:"work_rights_not_verified",
+  revisionProof:{method:"exact_revid_wikitext",contentSha256:"a".repeat(64),contentLength:1500,excerptOffset:15},
 };
 const dossier=()=>extendWikisourceDossier(undefined,[query],[source],at);
 describe("Estratti revisionati Wikisource: identità, evidenza e provenienza",()=>{
@@ -33,19 +34,41 @@ describe("Estratti revisionati Wikisource: identità, evidenza e provenienza",()
     expect(()=>wikisourcePageUrl("../evil")).toThrow();
     expect(()=>wikisourcePageUrl("https://attacker.tld")).toThrow();
     expect(validateWikisourceExcerpt(source)).toBe(true);
+    expect(validateWikisourceExcerpt({...source,id:"itws:42:321"})).toBe(false);
+    expect(validateWikisourceExcerpt({...source,revisionProof:{...source.revisionProof!,excerptOffset:1499}})).toBe(false);
     expect(validateWikisourceExcerpt({...source,url:"https://it.wikisource.org.evil.example/wiki/Lettere_del_1848"})).toBe(false);
     expect(validateWikisourceExcerpt({...source,id:"itws:42:999"})).toBe(false);
     expect(validateWikisourceExcerpt({...source,rightsStatus:"public_domain" as never})).toBe(false);
     expect(validateWikisourceExcerpt({...source,revisionId:0})).toBe(false);
   });
+  it("conserva le fonti legacy v0.9.5 per audit senza autorizzarne nuove citazioni",()=>{
+    const legacy={...source,id:"itws:42:321",revisionProof:undefined};
+    expect(validateWikisourceExcerpt(legacy)).toBe(true);
+    const original=dossier();
+    const imported={...original,wikisource:{
+      ...original.wikisource!,excerpts:[legacy],activeExcerptIds:[legacy.id],
+    }};
+    expect(allWikisourceExcerpts(imported)).toHaveLength(1);
+    expect(activeWikisourceExcerpts(imported)).toEqual([]);
+    expect(()=>validateHistoricalClaim({
+      claim:"Il telegrafo veniva utilizzato nel 1848.",
+      assessment:"consistent_with_excerpt",sourceIds:[legacy.id],
+      sourceEvidence:[{sourceId:legacy.id,quote:"La stazione telegrafica inviava dispacci"}],
+    },imported)).toThrow(/obsoleta/);
+    expect(()=>extendWikisourceDossier(undefined,[query],[legacy],at))
+      .toThrow(/non corrispondono/);
+    const upgraded=extendWikisourceDossier(imported,[query],[source],at);
+    expect(allWikisourceExcerpts(upgraded)).toHaveLength(2);
+    expect(activeWikisourceExcerpts(upgraded).map(s=>s.id)).toEqual([source.id]);
+  });
   it("archivia snapshot immutabili; un refresh non è conferma dell'originale",()=>{
     const first=dossier();
-    const changed={...source,id:"itws:42:322",revisionId:322,
+    const changed={...source,id:"itwsr:42:322:aaaaaaaaaaaaaaaa",revisionId:322,
       excerpt:source.excerpt+" Nel mese successivo la linea venne riparata."};
     const later=extendWikisourceDossier(first,[query],[changed],"2026-11-06T02:46:00.000Z");
     expect(allWikisourceExcerpts(later)).toHaveLength(2);
-    expect(activeWikisourceExcerpts(later).map(x=>x.id)).toEqual(["itws:42:322"]);
-    expect(activeWikisourceExcerpts(first).map(x=>x.id)).toEqual(["itws:42:321"]);
+    expect(activeWikisourceExcerpts(later).map(x=>x.id)).toEqual(["itwsr:42:322:aaaaaaaaaaaaaaaa"]);
+    expect(activeWikisourceExcerpts(first).map(x=>x.id)).toEqual(["itwsr:42:321:aaaaaaaaaaaaaaaa"]);
     expect(()=>extendWikisourceDossier(first,[query],
       [{...source,excerpt:"Dati alterati sotto la stessa revisione nota"}],at))
       .toThrow(/testo differente/);
@@ -68,7 +91,7 @@ describe("Estratti revisionati Wikisource: identità, evidenza e provenienza",()
       claim:"La stazione era attiva.",assessment:"consistent_with_excerpt",
       sourceIds:[source.id],sourceEvidence:[{sourceId:source.id,quote:"Scritto non presente in questa trascrizione"}],
     },d)).toThrow(/fonte associata/);
-    const second={...source,revisionId:322,id:"itws:42:322"};
+    const second={...source,revisionId:322,id:"itwsr:42:322:aaaaaaaaaaaaaaaa"};
     const two=extendWikisourceDossier(d,[query],[source,second],at);
     expect(()=>validateHistoricalClaim({
       claim:"La stazione era attiva.",assessment:"consistent_with_excerpt",
@@ -139,6 +162,7 @@ describe("Estratti revisionati Wikisource: identità, evidenza e provenienza",()
     expect(judge.prompt).toContain('"evidenceStatus":"community_transcription_unverified"');
     expect(judge.prompt).toContain('"quoteMatches":true');
     expect(judge.prompt).toContain('"rightsStatus":"work_rights_not_verified"');
+    expect(judge.prompt).toContain('"method":"exact_revid_wikitext"');
     expect(judge.system).toContain("NON autenticità");
   });
 });

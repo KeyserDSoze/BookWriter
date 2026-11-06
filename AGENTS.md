@@ -93,6 +93,15 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Conservare revisioni delle fonti precedentemente citate quando si aggiorna un dossier; mai cambiare gli estratti già approvati sotto lo stesso ID.
 - Test su query private, link contraffatti, citazioni inventate, annullamenti di rete, salvataggi concorrenti e Playwright desktop/mobile. Fonte storica ≠ fatto verificato; guidi l'autore a consultare fonti primarie/secondarie.
 
+## Wikisource v0.9.6 — binding esatto alla revisione, non all'originale (ADR 0019)
+
+- La ricerca Wikisource resta solo su 1–3 query pubbliche scritte e approvate dall'autore. Il primo GET `generator=search` **non usa `prop=extracts`**. Il secondo GET deve usare `revids` numerico + `rvprop=ids|timestamp|content&rvslots=main`, stesso host fisso; ID, timestamp, titolo, pagina e namespace devono combaciare o l'intero batch fallisce senza mutare IndexedDB.
+- Estrarre **solo una sottostringa letterale contigua** di una riga leggibile del wikitesto della revisione, senza espansione di template, trasclusioni o conversioni non reversibili; skip conservativo se nessuna riga idonea. Hash SHA-256 dell'intero wikitesto, offset e lunghezza conservati nel nuovo ID `itwsr:<pageId>:<revid>:<16hexdigest>` e `revisionProof.method=exact_revid_wikitext`. La corrispondenza è locale con il contenuto restituito dall'API, non autenticazione storica o prova legale.
+- `itws:<pageId>:<revid>` dalla v0.9.5 era associato a un `extract` potenzialmente della pagina corrente: mantenere i record **solo per audit** in `allWikisourceExcerpts`, non passarli a `activeWikisourceExcerpts`/nuove citazioni. Non migrare automaticamente né inventare hash da testo legacy: richiedere un nuovo consenso e una nuova lettura per `revids`.
+- Lettura HTTP/CORS con timeout 12s e streaming limitato a 150KB **per risposta**, max 3+6 GET, niente cookie/referrer/redirect/credenziali. Ogni mismatch, JSON malformato, fonte nascosta o API non accessibile fallisce chiuso. Nessun proxy.
+- Il giudice riceve `revisionProof` e avvisi `community_transcription_unverified`/`work_rights_not_verified`; soltanto storico e giudice vedono i testi. Non confondere prova di inclusione in wikitesto con autenticità del documento originale, data storica, indipendenza o pubblico dominio. Nessuna frase esterna entra automaticamente nel romanzo.
+- Test su URL, mismatch revid/timestamp/pagina, template-only, 429/CORS, timeout, snippet letterale, vecchi backup, isolamenti agenti, Playwright desktop/mobile. ADR 0019, `docs/wikisource-transcriptions.md`, issue #23.
+
 ## Wikisource v0.9.5 — estratti revisionati di trascrizioni collaborative (ADR 0018)
 
 - Solo 1–3 query pubbliche **scritte dall'autore** e confermate prima di chiamare `https://it.wikisource.org/w/api.php`, senza trasmettere prosa, canone, segreti o credenziali. Richieste GET seriali, `origin=*`, `credentials:omit`, `redirect:error`, timeout, JSON limitato 150 KB, 2 pagine per query. Nessun proxy, OCR o endpoint arbitrario.

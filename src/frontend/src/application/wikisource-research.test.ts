@@ -12,13 +12,14 @@ import { attachWikisourceResearch } from "./wikisource-research";
 const query="Lettere e telegrafo nel 1848";
 const at="2026-11-06T02:40:00.000Z";
 const source:WikisourceExcerpt={
-  id:"itws:42:321",provider:"it.wikisource.org",pageId:42,revisionId:321,
+  id:"itwsr:42:321:aaaaaaaaaaaaaaaa",provider:"it.wikisource.org",pageId:42,revisionId:321,
   revisionAt:"2025-01-15T10:00:00Z",title:"Lettere dal 1848",
   url:"https://it.wikisource.org/wiki/Lettere_dal_1848",
   excerpt:"La stazione telegrafica durante l'inverno trasmise numerose lettere urgenti.",
   query,retrievedAt:at,
   evidenceStatus:"community_transcription_unverified",
   rightsStatus:"work_rights_not_verified",
+  revisionProof:{method:"exact_revid_wikitext",contentSha256:"a".repeat(64),contentLength:1500,excerptOffset:10},
 };
 async function fixture(frozen=false):Promise<BookProject>{
   const b=newBook("Romanzo storico riservato","Il segreto","Sobrio","Adulti");
@@ -60,6 +61,7 @@ describe("Ricerca Wikisource local-first con consenso",()=>{
     expect(JSON.stringify(searchMock.mock.calls)).not.toContain("passaggio privato");
     const stored=await getBook(b.id);
     expect(stored?.chapters[0]?.historicalDossier?.wikisource?.excerpts[0]?.revisionId).toBe(321);
+    expect(stored?.chapters[0]?.historicalDossier?.wikisource?.excerpts[0]?.revisionProof?.method).toBe("exact_revid_wikitext");
     expect(stored?.chapters[0]?.scenes[0]?.text).toBe("Mara invia una lettera.");
     expect(stored?.remote?.autoSync).toBe(false);
     expect(await getOutbox(b.id)).toBeUndefined();

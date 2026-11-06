@@ -3,7 +3,7 @@ import { BookText, ExternalLink, SearchCheck, ShieldAlert } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import {
   activeWikisourceExcerpts, allWikisourceExcerpts, normalizeWikisourceQueries,
-  wikisourceRevisionUrl,
+  wikisourceRevisionUrl, hasExactRevisionProof,
 } from "../domain/wikisource-excerpts";
 import { attachWikisourceResearch } from "../application/wikisource-research";
 import { Button } from "./ui/button";
@@ -32,8 +32,8 @@ export function WikisourcePanel({
       "",
       "Le parole possono rivelare indizi o temi del progetto: annulla se sono riservate.",
       "Nessuna scena, canone privato, segreto o chiave AI viene aggiunto automaticamente.",
-      "Riceverai brevi ESTRATTI di trascrizioni collaborative, con identificativo di revisione.",
-      "Una trascrizione Wikisource NON autentica l'originale e NON certifica che l'opera sia di pubblico dominio.",
+      "Il programma leggerà il WIKITESTO della specifica revisione, e archivierà un frammento letterale e l'impronta SHA-256.",
+      "Le pagine che contengono solo modelli o testo trascluso senza un frammento letterale saranno scartate. Una trascrizione Wikisource NON autentica l'originale e NON certifica che l'opera sia di pubblico dominio.",
       "Verifica sempre attribuzione, testo della singola opera e condizioni di riutilizzo prima della pubblicazione.",
       "Il dossier può essere incluso nei backup e sincronizzato su GitHub. Le nuove review inviano estratti allo storico e al giudice.",
       "La ricerca disabilita autosync e riapre i capitoli già congelati, invalidando i successivi.",
@@ -59,7 +59,9 @@ export function WikisourcePanel({
     <div className="mt-3 space-y-3 text-xs">
       <p className="muted">
         Wikisource contiene trascrizioni pubbliche modificate dalla comunità: non è un archivio
-        che autentica gli originali. Cerca solo argomenti pubblici, massimo tre, una frase per riga.
+        che autentica gli originali. BookWriter legge il wikitesto della revisione esatta,
+        senza basarsi su TextExtracts, e salva un frammento letterale con SHA-256.
+        Cerca solo argomenti pubblici, massimo tre, una frase per riga.
         La ricerca è volontaria e non trasferisce parti del romanzo.
       </p>
       <label className="block font-semibold">
@@ -90,21 +92,29 @@ export function WikisourcePanel({
           {" "}({new Date(s.revisionAt).toLocaleString("it-IT")}) · query «{s.query}»</p>
         <p className="mt-2 whitespace-pre-wrap">{s.excerpt}</p>
         <p className="muted mt-1">
-          Citazione verificabile SOLO contro questo estratto. Diritti dell'opera NON verificati:
-          consulta la pagina originale, la sua cronologia, autori, attribuzioni e licenze.
+          Frammento letterale del WIKITESTO della revisione richiesta, confrontato sul contenuto remoto.
+          SHA-256 wikitesto: {s.revisionProof!.contentSha256.slice(0,16)}… · offset {s.revisionProof!.excerptOffset}.
+          La verifica riguarda solo la corrispondenza testuale, NON autenticità dell'opera o diritti.
         </p>
+        <p className="muted mt-1">Contenuto non utilizzabile automaticamente come pubblico dominio:
+          verifica licenza, attribuzione e fedeltà all'edizione originale.</p>
       </div>)}
       {!!old.length&&<details className="rounded border p-2">
         <summary className="cursor-pointer font-semibold">
           Revisioni storiche non più attive ({old.length})
         </summary>
-        <p className="muted mt-1">Conservate per audit, non disponibili per nuove citazioni.</p>
+        <p className="muted mt-1">Conservate per audit, non disponibili per nuove citazioni.
+          Le fonti della v0.9.5 prive di prova sulla revisione sono ora disattivate: ripeti la ricerca per ottenerla.</p>
         {old.map(s=><div className="mt-2 border-t pt-2" key={s.id}>
           <a href={wikisourceRevisionUrl(s.revisionId)} target="_blank"
             rel="noopener noreferrer" className="text-blue-700 underline dark:text-blue-300">
             {s.title} · revisione {s.revisionId}
           </a>
           <p className="whitespace-pre-wrap">{s.excerpt}</p>
+          {!hasExactRevisionProof(s)&&<p className="text-amber-700 dark:text-amber-300">
+            Fonte v0.9.5: estratto non dimostrato appartenere alla revisione citata.
+            Solo storico, non riutilizzabile in nuovi rilievi.
+          </p>}
         </div>)}
       </details>}
       <p className="muted">

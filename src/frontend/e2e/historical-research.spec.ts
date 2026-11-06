@@ -44,14 +44,23 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
     }]})});
   });
   await page.route(/https:\/\/it\.wikisource\.org\/w\/api\.php\?/,async route=>{
-    wikisourceCalls.push(route.request().url());
+    const url=route.request().url();
+    wikisourceCalls.push(url);
+    const exact=new URL(url).searchParams.has("revids");
+    const pages=exact?[{
+      pageid:81,ns:0,title:"Lettere del 1848",
+      revisions:[{revid:421,timestamp:"2025-01-15T10:00:00Z",
+        slots:{main:{contentmodel:"wikitext",
+          content:"{{Intestazione|titolo=Lettere}}\nLa stazione telegrafica inviava dispacci durante l'inverno del 1848.\n"}},
+      }],
+    }]:[{
+      pageid:81,ns:0,title:"Lettere del 1848",
+      extract:"FRASE ATTUALE NON UTILIZZABILE COME CITAZIONE",
+      revisions:[{revid:421,timestamp:"2025-01-15T10:00:00Z"}],
+    }];
     await route.fulfill({status:200,headers:{
       "content-type":"application/json","access-control-allow-origin":"*",
-    },body:JSON.stringify({query:{pages:[{
-      pageid:81,ns:0,title:"Lettere del 1848",
-      extract:"La stazione telegrafica inviava dispacci durante l'inverno del 1848.",
-      revisions:[{revid:421,timestamp:"2025-01-15T10:00:00Z"}],
-    }]}})});
+    },body:JSON.stringify({query:{pages}})});
   });
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
     if(route.request().method()==="OPTIONS"){
@@ -197,10 +206,13 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   });
   await editorial.getByRole("button",{name:"Cerca trascrizioni Wikisource"}).click();
   await expect(editorial.getByRole("link",{name:/Lettere del 1848/})).toBeVisible({timeout:15000});
-  expect(wikisourceCalls).toHaveLength(1);
+  expect(wikisourceCalls).toHaveLength(2);
   expect(new URL(wikisourceCalls[0]!).searchParams.get("gsrsearch"))
     .toBe("Telegrafo elettrico in Italia 1848");
   expect(wikisourceCalls[0]).not.toContain("stanza");
+  expect(new URL(wikisourceCalls[1]!).searchParams.get("revids")).toBe("421");
+  expect(new URL(wikisourceCalls[1]!).searchParams.get("rvprop")).toBe("ids|timestamp|content");
+  expect(wikisourceCalls[1]).not.toContain("Mara");
   await editorial.locator("summary").filter({hasText:"Estratti da originali consultati dall'autore"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Collocazione originale capitolo 1"})
     .fill("Page 12, column 2");
@@ -233,14 +245,14 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
   expect(specialist?.prompt).toContain("loc:2020123456");
   expect(specialist?.prompt).toContain("locex:2020123456");
-  expect(specialist?.prompt).toContain("itws:81:421");
+  expect(specialist?.prompt).toContain("itwsr:81:421:");
   expect(specialist?.prompt).toContain("community_transcription_unverified");
   expect(specialist?.system).toContain("CIASCUN sourceId");
   const judgeCall=modelCalls.find(x=>x.system.includes("direttore editoriale CRITICO"));
   expect(judgeCall?.prompt).toContain('"quoteMatches":true');
   expect(judgeCall?.prompt).toContain("loc:2020123456");
   expect(judgeCall?.prompt).toContain("locex:2020123456");
-  expect(judgeCall?.prompt).toContain("itws:81:421");
+  expect(judgeCall?.prompt).toContain("itwsr:81:421:");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwiki:42:321"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
@@ -250,7 +262,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("locex:2020123456"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
-    !x.prompt.includes("itws:81:421"))).toBe(true);
+    !x.prompt.includes("itwsr:81:421:"))).toBe(true);
   await editorial.getByText(/Giudizi archiviati \(1\)/).click();
   await editorial.getByText(/Plausibilità e accuratezza storica ·/).click();
   await expect(editorial.getByText(/Citazione associata/)).toBeVisible();

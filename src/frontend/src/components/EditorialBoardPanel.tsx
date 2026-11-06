@@ -68,7 +68,9 @@ function RoundDetails({ round, reports, judgment, sources = [], manualSources = 
                       {evidence&&<p className="mt-1 whitespace-pre-wrap">
                         <b>Citazione associata alla trascrizione:</b> “{evidence.quote}”
                       </p>}
-                      <p className="muted">Confrontata con l'estratto ottenuto da Wikisource, non con l'originale storico.</p>
+                      <p className="muted">Confrontata con il frammento della revisione richiesta, non con l'originale storico.
+                        {wikisource.revisionProof ? " SHA-256 wikitesto: " + wikisource.revisionProof.contentSha256.slice(0,16) + "…" :
+                          " Vecchia fonte v0.9.5 priva di prova per la revisione."}</p>
                       {!activeWikisourceIds.includes(id)&&<p className="text-amber-700 dark:text-amber-300">
                         Revisione conservata per audit, non più attiva per nuove review.
                       </p>}

@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Citazioni legate al wikitesto della revisione (v0.9.6)
+
+BookWriter non associa più `TextExtracts` della pagina corrente a un `revid`. Dopo ricerca consensuale, richiede il **contenuto wikitext del preciso ID di revisione**, ne controlla identità/timestamp, seleziona un frammento letterale e conserva SHA-256 e offset. Solo `itwsr:...` attivi sono citabili con `sourceEvidence` per fonte. I vecchi `itws:` della v0.9.5 restano in archivio **non citabili** nelle nuove review fino a nuova ricerca approvata. Il controllo non certifica l'autenticità dell'opera, la data storica o i diritti. [Guida Wikisource](wikisource-transcriptions.md), ADR 0019.
+
 ## Estratti revisionati Wikisource (v0.9.5)
 
 La nuova ricerca Wikisource avviene solo dopo consenso dell'autore sulle query pubbliche. Restituisce brevi **trascrizioni collaborative effettivamente recuperate** e etichettate `itws:<pageId>:<revisionId>`. Lo specialista può citare solo una frase presente nell'estratto della **specifica revisione attiva**; il direttore distingue corrispondenza letterale e autenticità storica, che l'app non certifica. Il testo della singola opera può avere copyright o obblighi di attribuzione: la biblioteca collaborativa non è una garanzia di pubblico dominio. Guida [Wikisource](wikisource-transcriptions.md), ADR 0018.
