@@ -5,6 +5,8 @@ import { activeInstitutionalInspections } from "../domain/institutional-inspecti
 import { activeLocOcrExcerpts,allLocOcrExcerpts,
   type LocOcrRights } from "../domain/loc-ocr";
 import { attachLocOcrExcerpt } from "../application/loc-ocr";
+import { attachLocScanCollation } from "../application/loc-scan-collation";
+import { activeLocScanCollations } from "../domain/loc-scan-collation";
 import { quarantineLocOcrSource } from "../application/loc-ocr-audit";
 import { auditStoredLocOcrExcerpt,type LocOcrAuditResult } from "../infrastructure/loc-ocr";
 import type { BookProject,Chapter } from "../domain/types";
@@ -19,6 +21,7 @@ export function LocOcrPanel({
   const eligible=inspections.filter(i=>i.hasTextResourceLink&&i.accessRestricted!==true&&
     catalog.some(item=>item.id===i.catalogItemId));
   const active=activeLocOcrExcerpts(dossier);
+  const collations=activeLocScanCollations(dossier);
   const inactive=allLocOcrExcerpts(dossier).filter(x=>!active.some(a=>a.id===x.id));
   const [inspectionId,setInspectionId]=useState(eligible[0]?.id??"");
   const selected=eligible.find(i=>i.id===inspectionId)??eligible[0];
@@ -31,6 +34,11 @@ export function LocOcrPanel({
   const [message,setMessage]=useState("");
   const [auditResults,setAuditResults]=useState<Record<string,LocOcrAuditResult>>({});
   const [auditingId,setAuditingId]=useState<string|null>(null);
+  const [collatingId,setCollatingId]=useState<string|null>(null);
+  const [pageLocator,setPageLocator]=useState("");
+  const [observedText,setObservedText]=useState("");
+  const [observedAttested,setObservedAttested]=useState(false);
+  const [rightsConfirmed,setRightsConfirmed]=useState(false);
   const locked=busy||book.status==="running"||!!book.editorialCycle;
 
   async function importExcerpt(){
@@ -121,6 +129,40 @@ export function LocOcrPanel({
       setError(error instanceof Error?error.message:"Esclusione OCR non riuscita.");
     }finally{setAuditingId(null);}
   }
+  async function collate(sourceId:string){
+    const source=active.find(x=>x.id===sourceId);
+    if(!source||locked||auditingId||!observedAttested||!rightsConfirmed)return;
+    if(!window.confirm([
+      "COLLAZIONE SCANSIONE ORIGINALE E OCR",
+      "L'autore dichiara di avere aperto la scansione dalla scheda LoC "+source.itemId+":",
+      source.url,
+      "Pagina o folio osservato: "+pageLocator.trim(),
+      "Trascrizione da immagine (NON da OCR):",
+      observedText.trim(),
+      "Dichiaro di poter conservare questo breve brano e inviarlo ai modelli AI, ai backup e a GitHub.",
+      "Il programma confronterà soltanto DUE TESTI: NON scaricherà immagini né ne leggerà i pixel.",
+      "La somiglianza testuale NON certifica l'originale, la data o i diritti.",
+      "Il risultato sarà salvato nello storico. Se il capitolo era congelato, riaprirà le review e disabiliterà autosync.",
+      "Confermi il salvataggio?",
+    ].join("\n")))return;
+    setBusy(true);setError("");setMessage("");
+    try{
+      const result=await attachLocScanCollation(book.id,chapter.id,book.updatedAt,{
+        ocrSourceId:sourceId,pageLocator:pageLocator.trim(),
+        observedText:observedText.trim(),
+        observedOriginalAttested:true,excerptRightsAttested:true,
+      });
+      setCollatingId(null);setObservedText("");setPageLocator("");
+      setObservedAttested(false);setRightsConfirmed(false);
+      setMessage(result.comparison==="text_overlap"?
+        "Trascrizione osservata e OCR coincidono dopo normalizzazione di spazi e maiuscole; immagine NON verificata dal software.":
+        "DISCORDANZA: il testo trascritto dalla scansione NON compare nell'OCR. Riesamina fonte e review.");
+      if(result.reopened)setMessage(x=>x+" Capitolo e successivi da rivalutare.");
+      await onRefresh();
+    }catch(cause){
+      setError(cause instanceof Error?cause.message:"Collazione con scansione non riuscita.");
+    }finally{setBusy(false);}
+  }
   return <details className="mt-3 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
     <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
       <BookOpenText size={16}/> Estratti OCR istituzionali · {active.length} attivi
@@ -189,6 +231,65 @@ export function LocOcrPanel({
         <p className="muted">Diritti dichiarati dall'autore: {e.rightsBasis}. {e.rightsNote}.
           Stato: <b>NON verificati dal software</b>. La frase coincide solo col testo OCR recuperato,
           non necessariamente con il documento originale.</p>
+        {collations.filter(c=>c.ocrSourceId===e.id).map(c=><div key={c.id}
+          className="mt-2 rounded-md border border-slate-300 p-2 dark:border-slate-600">
+          <p className="font-semibold">Collazione visiva dichiarata dall'autore · {new Date(c.observedAt).toLocaleString("it-IT")}</p>
+          <p>Pagina/folio: {c.pageLocator}. Il collegamento istituzionale è
+            <a href={c.scanPageUrl} target="_blank" rel="noopener noreferrer" className="underline"> la scheda LoC</a>,
+            non una scansione autenticata o un'immagine scaricata.</p>
+          <p className="mt-1 whitespace-pre-wrap">Testo letto e digitato dall'autore: {c.observedText}</p>
+          {c.comparison==="text_overlap"
+            ?<p className="text-green-700 dark:text-green-300">Testi compatibili dopo normalizzazione di spazi e maiuscole.
+              Nessuna verifica automatica dei pixel, dell'originale o dei diritti.</p>
+            :<p role="alert" className="text-red-700 dark:text-red-300">
+              Discordanza tra trascrizione visiva dichiarata dall'autore e testo OCR.
+              Esamina l'originale prima di approvare un rilievo storico.</p>}
+        </div>)}
+        <div className="mt-2">
+          <Button size="sm" variant="outline" disabled={locked||!!auditingId}
+            onClick={()=>{setCollatingId(collatingId===e.id?null:e.id);
+              setPageLocator("");setObservedText("");
+              setObservedAttested(false);setRightsConfirmed(false);}}>
+            {collatingId===e.id?"Chiudi collazione":"Confronta OCR con scansione"}
+          </Button>
+          {collatingId===e.id&&<div className="mt-2 space-y-2 rounded border border-slate-200 p-2 dark:border-slate-700">
+            <p>Apri la <a href={e.url} target="_blank" rel="noopener noreferrer"
+              className="font-semibold underline">scheda LoC originale</a> e visualizza
+              personalmente l'immagine della pagina. Se non c'è una scansione leggibile,
+              non attestare la consultazione. BookWriter non scarica né analizza le immagini.</p>
+            <label className="block font-semibold">Pagina / folio esatto osservato
+              <input className="field mt-1" aria-label={"Pagina scansione OCR "+chapter.number}
+                maxLength={140} value={pageLocator} disabled={locked}
+                onChange={ev=>setPageLocator(ev.target.value)}
+                placeholder="Pagina 12, colonna 2"/>
+            </label>
+            <label className="block font-semibold">Breve frase letta direttamente nell'immagine (36–900 caratteri)
+              <textarea className="field mt-1 min-h-24"
+                aria-label={"Trascrizione scansione OCR "+chapter.number}
+                maxLength={900} value={observedText} disabled={locked}
+                onChange={ev=>setObservedText(ev.target.value)}
+                placeholder="Trascrivi esattamente una frase visibile nella scansione; non copiarla dall'OCR."/>
+            </label>
+            <label className="flex items-start gap-2">
+              <input type="checkbox" checked={observedAttested} disabled={locked}
+                onChange={ev=>setObservedAttested(ev.target.checked)}/>
+              <span>Dichiaro di avere visto personalmente la scansione del documento e
+                trascritto questa frase dall'immagine, non dal file OCR.</span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input type="checkbox" checked={rightsConfirmed} disabled={locked}
+                onChange={ev=>setRightsConfirmed(ev.target.checked)}/>
+              <span>Confermo di aver verificato la base per conservare questo breve brano e
+                autorizzo il possibile invio nei backup, a GitHub e ai modelli AI.</span>
+            </label>
+            <Button size="sm" variant="outline"
+              disabled={locked||!observedAttested||!rightsConfirmed||
+                pageLocator.trim().length<4||observedText.trim().length<36}
+              onClick={()=>void collate(e.id)}>
+              Salva collazione con scansione
+            </Button>
+          </div>}
+        </div>
         <div className="mt-2 space-y-2">
           <Button size="sm" variant="outline" disabled={locked||!!auditingId}
             onClick={()=>void verifySource(e.id)}>
