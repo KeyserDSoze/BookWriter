@@ -2,6 +2,17 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.8 — 2026-11-06 (PR #44)
+
+**Rilasci npm più riproducibili: lockfile generato realmente e installazioni fail-closed**
+
+- Generato `src/frontend/package-lock.json` **da npm 10 su Node 22, collegato al registro npm reale**, senza ricostruzione manuale. Due installazioni pulite consecutive da lock con `npm ci` verificate sul runner GitHub Actions. Il bootstrap temporaneo è stato rimosso prima del merge.
+- CI e GitHub Pages usano `npm ci --no-audit --no-fund` invece di `npm install`. Se manifest e lockfile divergono l'installazione fallisce anziché risolvere automaticamente versioni diverse. Entrambi i workflow controllano anche che npm non abbia modificato il lock.
+- Nuovi smoke test verificano root e versione, dipendenze dirette, versioni esatte di Tailwind/Vite, presenza di un vero albero npm, protocolli HTTPS e integrità sha degli archivi pubblici; controllano anche entrambi i workflow.
+- ADR 0031, guida alla manutenzione del lockfile e aggiornamenti README/AGENTS/feature, issue #43. Nessuna modifica alla prosa, ai libri salvati, alle API di ricerca o al routing modelli.
+
+**Limiti:** il lockfile riduce il drift delle versioni ma non rende immutabili ambiente runner, registry, piattaforme native o provider. Non sostituisce i test, non verifica automaticamente la sicurezza di tutti i pacchetti e non garantisce un sito raggiungibile prima di Pages verde.
+
 ## 0.10.7 — 2026-11-06 (PR #42)
 
 **Ripristino CI e deploy Pages dopo risoluzione incoerente delle dipendenze Tailwind**

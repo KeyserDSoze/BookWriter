@@ -20,7 +20,9 @@ jobs:
         with:
           node-version: 22
       - name: Install
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+      - name: Verify npm lock unchanged
+        run: git diff --exit-code -- package-lock.json
       - name: Typecheck
         run: npm run typecheck
       - name: Tests
