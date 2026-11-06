@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.0 — 2026-11-06 (PR #35)
+
+**Library of Congress OCR: riverifica live opzionale del file esatto e quarantena volontaria**
+
+- Per ogni breve fonte `lococr:` attiva, pulsante **Riverifica OCR online** con consenso separato: prima GET al dettaglio canonico `www.loc.gov/item/<id>/?fo=json`, seconda GET **solo** al file `.txt` specifico archiviato, se è ancora fra le risorse istituzionali ammesse. Due host HTTPS fissi e allowlist: nessun romanzo, citazione, hash, nota diritti, query o credenziale inviata alla Library.
+- Controllo rigido di identità documento, presenza del file nel catalogo, divieti di download/accesso, **SHA-256 del contenuto**, lunghezza e frase letterale allo stesso offset. Esiti distinti (`identity|resource|digest|excerpt`). Gli errori CORS/429/rete/JSON/risorsa negata **non diventano un esito positivo o negativo**. La verifica è temporanea nella schermata: non modifica libro, IndexedDB, ZIP, GitHub né stato dei diritti.
+- Con discordanza, pulsante **Escludi OCR discordante** disponibile solo dopo un secondo consenso esplicito. Elimina soltanto l'ID dalle fonti attive, preservando tutti gli snapshot, audit, report precedenti e prosa. Se il capitolo era congelato, riapre la review e invalida i freeze successivi con recupero sinossi. Web Locks writer/outbox, CAS `updatedAt`, autosync off, outbox e activity in transazione atomica; nessuna rete nella quarantena.
+- Lo stesso parser di risorse applica il blocco per `access_restricted`, `download_restricted` e `rights_restricted` ai metadati e singole risorse, rifiutando flag incoerenti e URL non consentite. Streaming limitato 240 KB JSON / 160 KB file OCR, 12 secondi per GET, niente redirect/cookie/referrer o proxy.
+- Test Vitest di ritorno live, backup con hash/frase/offset alterati, host/risorsa non più consentita, copyright/restrizioni sopraggiunte, CORS/429/HTML, CAS/freeze, Playwright desktop/mobile per doppio consenso, privacy e confronto; ADR 0023, `docs/loc-ocr-reverification.md`.
+
+**Limiti:** SHA-256 e testo remote **non autenticano la scansione storica, la verità dei fatti, il copyright o l'accuratezza OCR**. Il controllo non è automatico durante le review; i test con risposte simulate non attestano CORS reale né disponibilità di OCR per tutte le collezioni LoC.
+
 ## 0.9.9 — 2026-11-06 (PR #34)
 
 **Library of Congress: brevi OCR istituzionali recuperati realmente con diritti attestati dall'autore**

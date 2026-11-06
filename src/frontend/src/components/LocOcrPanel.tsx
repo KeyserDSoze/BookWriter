@@ -5,6 +5,8 @@ import { activeInstitutionalInspections } from "../domain/institutional-inspecti
 import { activeLocOcrExcerpts,allLocOcrExcerpts,
   type LocOcrRights } from "../domain/loc-ocr";
 import { attachLocOcrExcerpt } from "../application/loc-ocr";
+import { quarantineLocOcrSource } from "../application/loc-ocr-audit";
+import { auditStoredLocOcrExcerpt,type LocOcrAuditResult } from "../infrastructure/loc-ocr";
 import type { BookProject,Chapter } from "../domain/types";
 import { Button } from "./ui/button";
 
@@ -27,9 +29,12 @@ export function LocOcrPanel({
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
+  const [auditResults,setAuditResults]=useState<Record<string,LocOcrAuditResult>>({});
+  const [auditingId,setAuditingId]=useState<string|null>(null);
   const locked=busy||book.status==="running"||!!book.editorialCycle;
 
   async function importExcerpt(){
+    setAuditResults({});
     setError("");setMessage("");
     if(!item||!selected||!attested||rightsNote.trim().length<16){
       setError("Seleziona una scheda ispezionata e attesta la base dei diritti.");
@@ -67,6 +72,55 @@ export function LocOcrPanel({
     }finally{setBusy(false);}
   }
 
+  async function verifySource(sourceId:string){
+    if(locked||auditingId)return;
+    const source=active.find(x=>x.id===sourceId);
+    if(!source)return;
+    if(!window.confirm([
+      "RIVERIFICA REMOTA OCR LIBRARY OF CONGRESS",
+      "Rileggeremo da www.loc.gov la sola scheda pubblica "+source.itemId+".",
+      "Se il file è ancora ammesso, leggeremo il file .txt sul dominio tile.loc.gov:",
+      source.textUrl,
+      "Sono due GET massime: non inviamo il libro, l'estratto, SHA-256, note sui diritti, ricerche private, API key o PAT.",
+      "Confronteremo la risorsa dichiarata, la SHA-256, la lunghezza e la citazione all'offset originale.",
+      "Il risultato sarà SOLO temporaneo nella schermata: nessun backup o modifica del libro.",
+      "Un confronto positivo NON autentica la scansione storica né certifica il copyright.",
+      "In caso di discordanza potrai decidere separatamente se escludere la fonte dalle nuove review.",
+      "Vuoi procedere?",
+    ].join("\n")))return;
+    setAuditingId(sourceId);
+    setAuditResults(prev=>{const next={...prev};delete next[sourceId];return next;});
+    setError("");setMessage("");
+    try{
+      const outcome=await auditStoredLocOcrExcerpt(source);
+      setAuditResults(prev=>({...prev,[sourceId]:outcome}));
+    }catch(error){
+      setError(error instanceof Error?error.message:"Riverifica OCR LoC non disponibile.");
+    }finally{setAuditingId(null);}
+  }
+  async function quarantine(sourceId:string){
+    if(locked||auditingId||auditResults[sourceId]?.matches!==false)return;
+    if(!window.confirm([
+      "ESCLUDERE UNA FONTE OCR DISCORDANTE?",
+      "ID: "+sourceId,
+      "La verifica online NON coincide con lo snapshot locale.",
+      "La fonte non sarà più citabile nelle nuove review; snapshot, testi e report precedenti saranno conservati per audit.",
+      "Se il capitolo è congelato verranno riaperti questo e i successivi; autosync sarà disabilitato.",
+      "La discordanza NON prova che l'opera storica originale sia falsa.",
+      "Confermi l'esclusione?",
+    ].join("\n")))return;
+    setAuditingId(sourceId);
+    setError("");setMessage("");
+    try{
+      const result=await quarantineLocOcrSource(book.id,chapter.id,book.updatedAt,sourceId);
+      setAuditResults(prev=>{const next={...prev};delete next[sourceId];return next;});
+      setMessage("Fonte OCR esclusa dai nuovi rilievi; storico preservato."+
+        (result.reopened?" Review del capitolo e dei successivi da ripetere.":""));
+      await onRefresh();
+    }catch(error){
+      setError(error instanceof Error?error.message:"Esclusione OCR non riuscita.");
+    }finally{setAuditingId(null);}
+  }
   return <details className="mt-3 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
     <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
       <BookOpenText size={16}/> Estratti OCR istituzionali · {active.length} attivi
@@ -135,6 +189,27 @@ export function LocOcrPanel({
         <p className="muted">Diritti dichiarati dall'autore: {e.rightsBasis}. {e.rightsNote}.
           Stato: <b>NON verificati dal software</b>. La frase coincide solo col testo OCR recuperato,
           non necessariamente con il documento originale.</p>
+        <div className="mt-2 space-y-2">
+          <Button size="sm" variant="outline" disabled={locked||!!auditingId}
+            onClick={()=>void verifySource(e.id)}>
+            {auditingId===e.id?"Controllo OCR in corso…":"Riverifica OCR online"}
+          </Button>
+          {auditResults[e.id]?.matches===true&&<p role="status" className="text-green-700 dark:text-green-300">
+            Confronto OCR remoto riuscito il {new Date(auditResults[e.id]!.checkedAt).toLocaleString("it-IT")}:
+            riferimento istituzionale, SHA-256, lunghezza e frase coincidono.
+            NON autentica l'originale o la licenza; risultato solo temporaneo.
+          </p>}
+          {auditResults[e.id]?.matches===false&&<div className="space-y-2">
+            <p role="alert" className="text-red-700 dark:text-red-300">
+              Discordanza OCR remota ({auditResults[e.id]!.reason}):
+              la risorsa o il contenuto non coincide con lo snapshot.
+              Non usarla come nuova prova finché non hai ricontrollato la fonte.
+              Una modifica del catalogo non prova che l'opera storica sia falsa.
+            </p>
+            <Button size="sm" variant="outline" disabled={locked||!!auditingId}
+              onClick={()=>void quarantine(e.id)}>Escludi OCR discordante</Button>
+          </div>}
+        </div>
       </div>)}
       {inactive.length>0&&<details className="rounded-md border border-slate-200 p-2 dark:border-slate-700">
         <summary className="font-semibold">Storico OCR non più attivi ({inactive.length})</summary>

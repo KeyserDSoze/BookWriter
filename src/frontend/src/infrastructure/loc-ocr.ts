@@ -74,34 +74,40 @@ async function fixedGet(url:string,maxBytes:number,type:"json"|"text",signal?:Ab
     signal?.removeEventListener("abort",abort);
   }
 }
-function findTextResource(payload:JsonObject):string{
+function allowedTextResources(payload:JsonObject):string[]{
   const item=payload.item;
   if(!isObject(item))throw new Error("LoC non ha restituito il record documentale.");
-  if(item.access_restricted!==undefined &&
-      typeof item.access_restricted!=="boolean")
-    throw new Error("Flag di accesso LoC non valido: nessuna risorsa acquisita.");
-  if(item.access_restricted===true || item.download_restricted===true)
+  for(const flag of ["access_restricted","download_restricted","rights_restricted"]){
+    if(item[flag]!==undefined&&typeof item[flag]!=="boolean")
+      throw new Error("Flag di accesso LoC non valido: nessuna risorsa acquisita.");
+  }
+  if(item.access_restricted===true || item.download_restricted===true ||
+    item.rights_restricted===true)
     throw new Error("Accesso o download ristretto dichiarato dalla Library of Congress.");
   const resources=[
     ...(Array.isArray(payload.resources)?payload.resources:[]),
     ...(Array.isArray(item.resources)?item.resources:[]),
   ];
+  const permitted:string[]=[];
   for(const resource of resources){
     if(!isObject(resource))continue;
-    // Object-level rights/download restrictions take precedence over a .txt link.
-    if(resource.download_restricted===true || resource.rights_restricted===true)
-      continue;
-    if((resource.download_restricted!==undefined &&
-       typeof resource.download_restricted!=="boolean") ||
-       (resource.rights_restricted!==undefined &&
-       typeof resource.rights_restricted!=="boolean"))
-      continue;
+    if(resource.download_restricted===true || resource.rights_restricted===true ||
+      resource.access_restricted===true)continue;
+    if(["download_restricted","rights_restricted","access_restricted"].some(flag=>
+      resource[flag]!==undefined&&typeof resource[flag]!=="boolean"))continue;
     for(const key of ["fulltext_file","fulltext_derivative","djvu_text_file"]){
       const value=resource[key];
-      if(typeof value==="string"&&trustedLocTextUrl(value))return value;
+      if(typeof value==="string"&&trustedLocTextUrl(value)&&!permitted.includes(value))
+        permitted.push(value);
     }
   }
-  throw new Error("Il record LoC non espone un file .txt ammesso sul servizio istituzionale; nessuna acquisizione.");
+  return permitted;
+}
+function findTextResource(payload:JsonObject):string{
+  const first=allowedTextResources(payload)[0];
+  if(!first)
+    throw new Error("Il record LoC non espone un file .txt ammesso sul servizio istituzionale; nessuna acquisizione.");
+  return first;
 }
 /** Only literal readable text, no OCR correction or reconstructed words. */
 export function selectLocOcrExcerpt(raw:string):{excerpt:string;offset:number}|undefined{
@@ -168,4 +174,54 @@ export async function fetchLocOcrExcerpt(
   if(!validLocOcrExcerpt(source))
     throw new Error("La provenienza OCR LoC non supera i controlli di integrità.");
   return source;
+}
+
+export type LocOcrAuditReason="match"|"identity"|"resource"|"digest"|"excerpt";
+export interface LocOcrAuditResult {
+  matches:boolean;
+  reason:LocOcrAuditReason;
+  checkedAt:string;
+}
+/** On-demand check against current institutional metadata AND the exact previously
+ * archived OCR text URL. Never blindly trust a URL or digest imported from ZIP.
+ * An unavailable file, API failure, CORS/429 and access restriction cause an
+ * error, NOT a false mismatch or a claim of historical inauthenticity.
+ *
+ * No book, excerpt, hash, query, rights statement, key or PAT is sent to LoC.
+ * The result is ephemeral: persistent quarantine requires separate author consent.
+ */
+export async function auditStoredLocOcrExcerpt(
+  saved:LocOcrExcerpt,signal?:AbortSignal,
+):Promise<LocOcrAuditResult>{
+  if(!validLocOcrExcerpt(saved))
+    throw new Error("Fonte OCR non valida: non è possibile verificarla online.");
+  const checkedAt=new Date().toISOString();
+  const itemUrl=locItemUrl(saved.itemId);
+  const metadata=await fixedGet(itemUrl+"?fo=json",MAX_METADATA_BYTES,"json",signal);
+  let parsed:unknown;
+  try{parsed=JSON.parse(metadata);}
+  catch{throw new Error("API LoC non ha restituito JSON valido.");}
+  if(!isObject(parsed)||!isObject(parsed.item))
+    throw new Error("Dettaglio istituzionale LoC non disponibile.");
+  if(!trustedIdentity(parsed.item.id,saved.itemId))
+    return {matches:false,reason:"identity",checkedAt};
+  // A change in access/rights flags should block downloading, NOT be treated
+  // as evidence of a forged OCR document.
+  const resources=allowedTextResources(parsed);
+  if(!resources.includes(saved.textUrl))
+    return {matches:false,reason:"resource",checkedAt};
+  const raw=await fixedGet(saved.textUrl,MAX_TEXT_BYTES,"text",signal);
+  if(raw.length>MAX_TEXT_BYTES)
+    throw new Error("Testo OCR LoC troppo grande.");
+  if(/^\s*<(?:!doctype\s+html|html|head|body|script|\?xml)\b/i.test(raw))
+    throw new Error("La risorsa LoC non è un file OCR testuale.");
+  if(!crypto?.subtle?.digest)
+    throw new Error("Web Crypto necessario per la verifica dell'OCR.");
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(raw));
+  const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+  if(hash!==saved.contentSha256||raw.length!==saved.contentLength)
+    return {matches:false,reason:"digest",checkedAt};
+  if(raw.slice(saved.excerptOffset,saved.excerptOffset+saved.excerpt.length)!==saved.excerpt)
+    return {matches:false,reason:"excerpt",checkedAt};
+  return {matches:true,reason:"match",checkedAt};
 }
