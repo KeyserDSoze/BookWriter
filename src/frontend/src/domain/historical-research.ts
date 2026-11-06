@@ -1,5 +1,6 @@
 import type { ChapterBibliography } from "./bibliography";
 import type { ChapterArchiveCatalog } from "./archival-catalog";
+import { activeManualEvidence, type ChapterManualEvidence } from "./manual-evidence";
 
 /** Research is deliberately separate from narrative canon and model assertions.
  * Wikipedia entries are tertiary leads; they are never certified historical truth.
@@ -26,6 +27,7 @@ export interface ChapterHistoricalDossier {
   unansweredQueries: string[];
   bibliography?: ChapterBibliography;
   archiveCatalog?: ChapterArchiveCatalog;
+  manualEvidence?: ChapterManualEvidence;
 }
 export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "unverified";
 /** A quotation belongs to exactly one retrieved source revision. */
@@ -98,12 +100,18 @@ export function validateHistoricalClaim(
   }
   if (!references.length)
     throw new Error("Un rilievo storico documentato deve citare almeno una fonte.");
-  const byId = new Map(activeHistoricalSources(dossier).map(s => [s.id, s]));
+  const wiki = activeHistoricalSources(dossier).map(s => ({
+    id:s.id, excerpt:s.excerpt, identity:"itwiki:" + s.pageId,
+  }));
+  const originals = activeManualEvidence(dossier).map(s => ({
+    id:s.id, excerpt:s.text, identity:"loc-original:" + s.itemId,
+  }));
+  const byId = new Map([...wiki,...originals].map(s => [s.id,s]));
   const sources = references.map(id => byId.get(id));
   if (sources.some(s => !s)) throw new Error("Fonte storica inesistente, obsoleta o non approvata.");
-  // Two revisions of the same Wikipedia page cannot masquerade as independent corroboration.
-  if (new Set(sources.map(s => s!.pageId)).size !== sources.length)
-    throw new Error("Revisioni della stessa pagina Wikipedia non sono fonti indipendenti.");
+  // Two revisions/transcriptions of the same underlying document cannot fake independent corroboration.
+  if (new Set(sources.map(s => s!.identity)).size !== sources.length)
+    throw new Error("Revisioni dello stesso documento non sono fonti indipendenti.");
 
   if (evidence.length) {
     if (claim.sourceQuote?.trim())
@@ -123,7 +131,7 @@ export function validateHistoricalClaim(
   }
   // Legacy single-source reports may have one sourceQuote; never allow that
   // old shape to imply evidence for two or three separate sources.
-  if (references.length !== 1)
+  if (references.length !== 1 || references[0]?.startsWith("locex:"))
     throw new Error("Ogni fonte citata richiede una citazione propria in sourceEvidence.");
   const quote = claim.sourceQuote?.trim().toLocaleLowerCase("it") ?? "";
   if (quote.length < 12 || !sources[0]!.excerpt.toLocaleLowerCase("it").includes(quote))
@@ -153,5 +161,6 @@ export function extendHistoricalDossier(
     unansweredQueries: normalized.filter(q => !newSources.some(s => s.query === q)),
     ...(previous?.bibliography ? { bibliography: previous.bibliography } : {}),
     ...(previous?.archiveCatalog ? { archiveCatalog: previous.archiveCatalog } : {}),
+    ...(previous?.manualEvidence ? { manualEvidence: previous.manualEvidence } : {}),
   };
 }

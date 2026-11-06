@@ -93,6 +93,15 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Conservare revisioni delle fonti precedentemente citate quando si aggiorna un dossier; mai cambiare gli estratti già approvati sotto lo stesso ID.
 - Test su query private, link contraffatti, citazioni inventate, annullamenti di rete, salvataggi concorrenti e Playwright desktop/mobile. Fonte storica ≠ fatto verificato; guidi l'autore a consultare fonti primarie/secondarie.
 
+## Trascrizioni originali v0.9.4 — attestazione autore, non autenticazione (ADR 0017)
+
+- La selezione di una scheda LoC attiva, la collocazione precisa, una breve trascrizione (24–1200), dichiarazione esplicita dei diritti e motivazione sono obbligatori per un `ManualDocumentExcerpt`. La data/edizione può essere ignota; ogni versione ha ID/timestamp immutabile.
+- L'autore deve aver consultato autonomamente l'originale, dichiarare pubblico dominio verificato o licenza/permesso ottenuti, spuntare un checkbox e confermare una finestra con **l'intero testo** e avviso sulla successiva trasmissione ai modelli AI/GitHub/backup. L'app non autentica il testo, la licenza o il diritto al riutilizzo, e non effettua fetch durante l'inserimento.
+- Gli ID `locex:...` diventano citabili dal solo revisore storico con `sourceEvidence[{sourceId,quote}]`, confrontato letteralmente con la **trascrizione inserita dall'autore**, mai con il documento originale. Gli ID `loc:...` di catalogo e `crossref:...` non diventano mai prova. Due trascrizioni dello stesso originale LoC non contano come indipendenti.
+- Ogni report e schermata deve indicare **author_transcribed_unverified**, collocazione e dichiarazione diritti. Il direttore non può interpretare `quoteMatches` come autenticazione storica. Gli altri undici ruoli non ricevono trascrizioni.
+- Snapshot fino a 40 versioni, 5 attive, con filtro sulla scheda catalografica esatta ancora attiva; refresh Wikipedia/DOI/LoC preservano i testi archiviati, ma una scheda ritirata disattiva le nuove citazioni. Riapertura downstream, sinossi lossless, Web Locks, fencing `updatedAt`, autosync off e outbox cancellata. Nuove CI Playwright desktop/mobile obbligatorie.
+- Riferimenti `docs/archival-excerpts.md`, ADR 0017, issue #23.
+
 ## Cataloghi istituzionali v0.9.3 — Library of Congress (ADR 0016)
 
 - `ChapterHistoricalDossier.archiveCatalog` conserva soltanto schede di catalogo LoC, **non** testi integrali o estratti verificati: gli ID `loc:...` non sono ammessi in `historical.sourceIds` né diventano prove di fatti storici.
@@ -186,6 +195,8 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.
+- La versione mostrata in UI deve essere **derivata direttamente** da `src/frontend/package.json`: vietato fissare un valore nel componente.
+- Dopo il merge `Cleanup merged branches` può rimuovere solo i branch di PR effettivamente unite, senza PR aperte e con HEAD **identica** allo SHA del merge PR; mai eliminare `main`, branch di lavoro attivi o forzare push. Vedi `docs/branch-maintenance.md`.
 - Lo smoke test `tests/release.test.mjs` fallisce se una versione non compare nel changelog.
 - Prima di fare merge, verificare typecheck, Vitest, smoke, build e Playwright mobile/desktop sulla **HEAD** della PR, non su un commit precedente.
 - Dopo il merge verificare deploy GitHub Pages e non confondere CI verde con disponibilità del dominio; documentare errori o blocchi.

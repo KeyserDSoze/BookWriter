@@ -1,0 +1,61 @@
+name: Cleanup merged branches
+
+# Never delete work from open PRs or branches with new commits after merge.
+# This job runs only inside this repository after main is updated.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: bookwriter-merged-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove only merged PR heads that have not changed since merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tempdir="$(mktemp -d)"
+          trap 'rm -rf "$tempdir"' EXIT
+
+          # Closed is not necessarily merged. Require merged_at and a same-repo head.
+          gh api --paginate "repos/$GH_REPO/pulls?state=closed&per_page=100" \
+            --jq '.[] | select(.merged_at != null) | select(.head.repo.full_name == .base.repo.full_name) | [.head.ref, .head.sha] | @tsv' > "$tempdir/merged.tsv"
+          gh api --paginate "repos/$GH_REPO/pulls?state=open&per_page=100" \
+            --jq '.[].head.ref' > "$tempdir/open.txt"
+
+          removed=0
+          while IFS=$'\t' read -r branch expected_sha; do
+            # Only known topic branch families. Main and arbitrary references are untouchable.
+            if [[ ! "$branch" =~ ^(feat|docs|test)/[a-zA-Z0-9._/-]+$ ]] ||
+               [[ "$branch" == *".."* ]] || [[ "$branch" == *"//"* ]]; then
+              continue
+            fi
+            if grep -Fxq -- "$branch" "$tempdir/open.txt"; then
+              echo "Conservato (PR aperta): $branch"
+              continue
+            fi
+
+            # For squash merges the feature commits are not ancestors of main.
+            # A merged PR AND exact unchanged HEAD are the necessary conditions.
+            current_sha="$(gh api "repos/$GH_REPO/git/ref/heads/$branch" --jq '.object.sha' 2>/dev/null || true)"
+            if [[ -z "$current_sha" ]] || [[ "$current_sha" != "$expected_sha" ]]; then
+              echo "Conservato (assente o modificato): $branch"
+              continue
+            fi
+            echo "Eliminazione branch di PR integrata: $branch"
+            gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$branch"
+            removed=$((removed + 1))
+          done < "$tempdir/merged.tsv"
+          echo "Branch di PR integrate eliminati: $removed"

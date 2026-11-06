@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## Trascrizioni manuali e citazioni (v0.9.4)
+
+Una trascrizione `locex:...` può essere associata a una scheda LoC attiva **solo dopo** che l'autore ha letto l'originale, fornito collocazione, breve citazione letterale e dichiarato diritti e motivazione. Il validatore può associare un `sourceEvidence` alla trascrizione, ma **non** certifica autenticità storica o licenza. I semplici record `loc:...` restano piste, non evidenze. Guida [estratti](archival-excerpts.md), ADR 0017.
+
 ## Catalogo istituzionale LoC (v0.9.3)
 
 Puoi cercare schede di possibili fonti archivistiche della Library of Congress con fino a tre query digitate e confermate dall'autore. Il catalogo viene conservato separatamente da Wikipedia e dai DOI, è visibile solo a revisore storico e direttore e **non costituisce evidenza**: nessun estratto dei documenti è stato acquisito. La sua consultazione può fallire per CORS senza modificare il libro. [Guida](institutional-archives.md), ADR 0016.
