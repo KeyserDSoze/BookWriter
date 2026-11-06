@@ -2,6 +2,8 @@
 
 Il pannello **Redazione multi-agente → Archivi istituzionali**, presente su ogni capitolo, permette di individuare schede di oggetti digitalizzati presso la Library of Congress degli Stati Uniti. È un primo passo verso la ricerca d'archivio prevista nell'[issue #23](https://github.com/KeyserDSoze/BookWriter/issues/23).
 
+**Nuovo in v0.9.8:** per una scheda già attiva è disponibile **Verifica accesso e diritti della scheda**, consultazione con consenso degli avvisi specifici sul documento. Nessun file/OCR viene acquisito e il testo degli avvisi non vale come licenza: [guida dedicata](institutional-item-inspection.md), ADR 0021.
+
 ## Uso
 
 1. Apri il capitolo prima che inizi la redazione e apri **Archivi istituzionali**.

@@ -5,6 +5,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   let wikipediaCalls:string[]=[];
   const crossrefCalls:string[]=[];
   const archiveCalls:string[]=[];
+  const inspectionCalls:string[]=[];
   const wikisourceCalls:string[]=[];
   const modelCalls:Array<{system:string;prompt:string}>=[];
   await page.route(/https:\/\/it\.wikipedia\.org\/w\/api\.php\?/,async route=>{
@@ -42,6 +43,17 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
       title:"Telegraph correspondence in 1848",date:"1848",
       description:["Historic correspondence digitized by the Library of Congress."],
     }]})});
+  });
+  await page.route(/https:\/\/www\.loc\.gov\/item\/2020123456\/\?/,async route=>{
+    inspectionCalls.push(route.request().url());
+    await route.fulfill({status:200,headers:{
+      "content-type":"application/json","access-control-allow-origin":"*",
+    },body:JSON.stringify({item:{
+      id:"https://www.loc.gov/item/2020123456/",
+      digitized:true,access_restricted:true,
+      rights_advisory:["Rights restricted: contact the Library before reuse."],
+      access_advisory:["Onsite reading may be required."],
+    },resources:[{fulltext_file:"https://tile.loc.gov/OCR-unread.txt"}]})});
   });
   await page.route(/https:\/\/it\.wikisource\.org\/w\/api\.php\?/,async route=>{
     const url=route.request().url();
@@ -195,6 +207,21 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(new URL(archiveCalls[0]!).searchParams.get("q")).toBe("telegraph correspondence 1848");
   expect(archiveCalls[0]).not.toContain("Mara");
   expect(archiveCalls[0]).not.toContain("stanza");
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("SOLO i metadati");
+    expect(dialog.message()).toContain("2020123456");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Verifica accesso e diritti della scheda"}).click();
+  await expect(editorial.getByText("Rights restricted: contact the Library before reuse."))
+    .toBeVisible({timeout:15_000});
+  await expect(editorial.getByText(/Stato diritti:/)).toBeVisible();
+  expect(inspectionCalls).toHaveLength(1);
+  expect(new URL(inspectionCalls[0]!).searchParams.get("fo")).toBe("json");
+  expect(inspectionCalls[0]).not.toContain("telegraph correspondence");
+  expect(inspectionCalls[0]).not.toContain("Mara");
+  expect(inspectionCalls[0]).not.toContain("OCR-unread");
   await editorial.locator("summary").filter({hasText:"Trascrizioni Wikisource"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Ricerche Wikisource capitolo 1"})
     .fill("Telegrafo elettrico in Italia 1848");
@@ -258,6 +285,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
   expect(specialist?.prompt).toContain("loc:2020123456");
   expect(specialist?.prompt).toContain("locex:2020123456");
+  expect(specialist?.prompt).toContain("Rights restricted: contact the Library before reuse.");
+  expect(specialist?.prompt).toContain("catalog_metadata_only");
   expect(specialist?.prompt).toContain("itwsr:81:421:");
   expect(specialist?.prompt).toContain("community_transcription_unverified");
   expect(specialist?.system).toContain("CIASCUN sourceId");
@@ -265,6 +294,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(judgeCall?.prompt).toContain('"quoteMatches":true');
   expect(judgeCall?.prompt).toContain("loc:2020123456");
   expect(judgeCall?.prompt).toContain("locex:2020123456");
+  expect(judgeCall?.prompt).toContain("Rights restricted: contact the Library before reuse.");
   expect(judgeCall?.prompt).toContain("itwsr:81:421:");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwiki:42:321"))).toBe(true);
@@ -274,6 +304,8 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
     !x.prompt.includes("loc:2020123456"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("locex:2020123456"))).toBe(true);
+  expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
+    !x.prompt.includes("Rights restricted: contact the Library before reuse."))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwsr:81:421:"))).toBe(true);
   await editorial.getByText(/Giudizi archiviati \(1\)/).click();
