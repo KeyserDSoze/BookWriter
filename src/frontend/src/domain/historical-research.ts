@@ -1,4 +1,5 @@
 import type { ChapterBibliography } from "./bibliography";
+import type { ChapterArchiveCatalog } from "./archival-catalog";
 
 /** Research is deliberately separate from narrative canon and model assertions.
  * Wikipedia entries are tertiary leads; they are never certified historical truth.
@@ -24,6 +25,7 @@ export interface ChapterHistoricalDossier {
   searchedAt: string;
   unansweredQueries: string[];
   bibliography?: ChapterBibliography;
+  archiveCatalog?: ChapterArchiveCatalog;
 }
 export type HistoricalAssessment = "consistent_with_excerpt" | "contradicts_excerpt" | "unverified";
 /** A quotation belongs to exactly one retrieved source revision. */
@@ -150,5 +152,6 @@ export function extendHistoricalDossier(
     queries: normalized, sources: [...all.values()], activeSourceIds, searchedAt,
     unansweredQueries: normalized.filter(q => !newSources.some(s => s.query === q)),
     ...(previous?.bibliography ? { bibliography: previous.bibliography } : {}),
+    ...(previous?.archiveCatalog ? { archiveCatalog: previous.archiveCatalog } : {}),
   };
 }

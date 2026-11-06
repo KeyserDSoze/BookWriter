@@ -4,6 +4,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   test.setTimeout(120_000);
   let wikipediaCalls:string[]=[];
   const crossrefCalls:string[]=[];
+  const archiveCalls:string[]=[];
   const modelCalls:Array<{system:string;prompt:string}>=[];
   await page.route(/https:\/\/it\.wikipedia\.org\/w\/api\.php\?/,async route=>{
     const url=route.request().url();
@@ -30,6 +31,16 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
       issued:{"date-parts":[[2015,6,1]]},
       abstract:"TESTO NON LEGGERE COME PROVA",
     }})});
+  });
+  await page.route(/https:\/\/www\.loc\.gov\/search\/\?/,async route=>{
+    archiveCalls.push(route.request().url());
+    await route.fulfill({status:200,headers:{
+      "content-type":"application/json","access-control-allow-origin":"*",
+    },body:JSON.stringify({results:[{
+      id:"https://www.loc.gov/item/2020123456/",
+      title:"Telegraph correspondence in 1848",date:"1848",
+      description:["Historic correspondence digitized by the Library of Congress."],
+    }]})});
   });
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
     if(route.request().method()==="OPTIONS"){
@@ -148,6 +159,22 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(crossrefCalls[0]).toContain("api.crossref.org/works/10.1000/xyz123");
   expect(crossrefCalls[0]).not.toContain("Mara");
   expect(crossrefCalls[0]).not.toContain("stanza");
+  await editorial.getByText(/Archivi istituzionali/).click();
+  await editorial.getByRole("textbox",{name:"Ricerche archivistiche capitolo 1"})
+    .fill("telegraph correspondence 1848");
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("www.loc.gov");
+    expect(dialog.message()).toContain("telegraph correspondence 1848");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Cerca schede archivistiche"}).click();
+  await expect(editorial.getByRole("link",{name:/Telegraph correspondence in 1848/}))
+    .toBeVisible({timeout:15000});
+  expect(archiveCalls).toHaveLength(1);
+  expect(new URL(archiveCalls[0]!).searchParams.get("q")).toBe("telegraph correspondence 1848");
+  expect(archiveCalls[0]).not.toContain("Mara");
+  expect(archiveCalls[0]).not.toContain("stanza");
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect(editorial.getByText(/Congelato il/)).toBeVisible({timeout:85_000});
   expect(modelCalls.filter(x=>x.system.includes("revisore letterario INDIPENDENTE"))).toHaveLength(12);
@@ -157,13 +184,17 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(specialist?.prompt).toContain("Il telegrafo elettrico");
   expect(specialist?.prompt).toContain("10.1000/xyz123");
   expect(specialist?.prompt).toContain("BIBLIOGRAFIA DOI");
+  expect(specialist?.prompt).toContain("loc:2020123456");
   expect(specialist?.system).toContain("CIASCUN sourceId");
   const judgeCall=modelCalls.find(x=>x.system.includes("direttore editoriale CRITICO"));
   expect(judgeCall?.prompt).toContain('"quoteMatches":true');
+  expect(judgeCall?.prompt).toContain("loc:2020123456");
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("itwiki:42:321"))).toBe(true);
   expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
     !x.prompt.includes("10.1000/xyz123"))).toBe(true);
+  expect(modelCalls.filter(x=>x.system.includes("Lettore ")).every(x=>
+    !x.prompt.includes("loc:2020123456"))).toBe(true);
   await editorial.getByText(/Giudizi archiviati \(1\)/).click();
   await editorial.getByText(/Plausibilità e accuratezza storica ·/).click();
   await expect(editorial.getByText(/Citazione associata/)).toBeVisible();

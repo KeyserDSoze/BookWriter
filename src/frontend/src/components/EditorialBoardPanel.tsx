@@ -7,6 +7,7 @@ import { reopenChapterReview } from "../application/editorial-control";
 import { Button } from "./ui/button";
 import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
 import { BibliographyPanel } from "./BibliographyPanel";
+import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
 import type { HistoricalSource } from "../domain/historical-research";
 
 function RoundDetails({ round, reports, judgment, sources = [] }: {
@@ -176,6 +177,7 @@ export function EditorialBoardPanel({
         </details>}
         <HistoricalResearchPanel key={ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <BibliographyPanel key={"doi-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+        <ArchiveCatalogPanel key={"archive-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           {ch.editorialRounds?.map((round, i) =>

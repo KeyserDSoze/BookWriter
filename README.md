@@ -35,6 +35,8 @@
 
 **Integrità delle citazioni v0.9.2 (PR #27):** le evidenze storiche di un rilievo devono riportare una citazione letterale distinta per ogni fonte attiva; il giudice vede il legame fra estratto e citazione. ADR 0015.
 
+**Cataloghi d'archivio v0.9.3 (PR #28):** una ricerca consensuale per capitolo di 1–3 argomenti pubblici nel catalogo digitale Library of Congress, con schede e link verificati, data e snapshot conservati, presentati solo a storico e giudice. I metadati NON dimostrano fatti né sono citazioni dei documenti. Guida `docs/institutional-archives.md`, ADR 0016, issue #23.
+
 **Ancora da implementare:** OAuth Google/Microsoft, hardening transazionale del lease tra dispositivi, retrieval semantico completo del canone, verifica storica approfondita con fonti primarie/istituzionali, ZIP snapshot remoti, import Narrarium generico, parità Narrarium e ledger dei costi avanzato per sessione/dispositivi. Non affidare documenti importanti solo al browser senza backup.
 
 ## Obiettivi
