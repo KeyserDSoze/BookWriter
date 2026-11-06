@@ -1,6 +1,6 @@
 # ADR 0024 — Collazione visiva dell'autore: OCR LoC vs scansione, senza autenticazione automatica
 
-- **Stato:** Proposto per v0.10.1, PR in verifica
+- **Stato:** Accettato per v0.10.1 (PR #36)
 - **Data:** 2026-11-06
 - **Issue:** [#23](https://github.com/KeyserDSoze/BookWriter/issues/23)
 - **Predecessori:** ADR 0016, 0017, 0021–0023
