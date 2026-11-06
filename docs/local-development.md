@@ -46,6 +46,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 
 - **PR #29 (v0.9.4)**: estratti originali trascritti dall'autore da schede LoC attive, locatore e diritti dichiarati, `locex:...` citabile nella trascrizione con status non autenticato, versioni immutabili, restauro da backup, rewind e separazione dei ruoli; ADR 0017 e `docs/archival-excerpts.md`. Nessuna verifica indipendente dell'originale.
 
+- **v0.9.9 (PR in verifica)**: importazione volontaria di breve OCR .txt LoC da risorsa allowlist, consenso e diritti attestati, quote per fonte e impronta/offset, test privacy/locks/freeze/E2E mobile-desktop (ADR 0022, `docs/loc-ocr-excerpts.md`).
 - **v0.9.8 (PR #33)**: ispezione di una scheda LoC attiva con consenso e recupero di avvisi sui diritti/accesso, metadata only, storico versionato, nessuna prova OCR, test dominio/rete/locks e E2E desktop/mobile (ADR 0021, `docs/institutional-item-inspection.md`).
 - **v0.9.7 (PR #32)**: riverifica opt-in di una fonte Wikisource contro l'esatta revisione online, confronto hash/digest/offset e quarantena con secondo consenso, Web Locks e rewind; nessuna fonte viene autenticata automaticamente (ADR 0020, `docs/wikisource-reverification.md`).
 - **v0.9.6 (PR #31)**: Wikisource due fasi search + exact `revids`, sottostringa letterale da wikitext, SHA-256/offset, disattivazione delle fonti legacy v0.9.5 nelle nuove review e test fail-closed su revisioni incoerenti. ADR 0019, `docs/wikisource-transcriptions.md`.

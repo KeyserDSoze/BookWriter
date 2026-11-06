@@ -36,6 +36,10 @@ Quando aggiorni le fonti, l'autosync viene disabilitato e la coda remota obsolet
 
 Non puoi modificare il dossier mentre l'autopilot sta lavorando o è in corso una tornata editoriale. Concludi o risolvi il ciclo prima di cambiare le fonti; pianifica le ricerche preferibilmente **prima** che il capitolo entri in review.
 
+## OCR istituzionale LoC attestato dall'autore (v0.9.9)
+
+Lo specialista storico può citare `lococr:` soltanto per **una frase letterale** acquisita in un singolo file testuale LoC, con SHA-256/offset conservati. Il testo è **OCR non autenticato** e i diritti sono **dichiarati dall'autore**, quindi né una frase corrispondente né una scheda LoC dimostrano da sole verità storica o licenza. Fonte attiva solo con scheda/ispezione LoC esatte ancora attive; il giudice valuta errori OCR, contesto, edizione e diritti. Guida [OCR istituzionale](loc-ocr-excerpts.md), ADR 0022.
+
 ## Riverifica remota facoltativa (v0.9.7)
 
 Per le fonti Wikisource `itwsr:`, «Riverifica revisione online» effettua un nuovo GET per il solo ID pubblico di revisione e confronta risposta, SHA-256, lunghezza e offset con lo snapshot in memoria, **senza modificare il libro**. Su discordanza, l'autore può escludere la fonte con una seconda conferma: le vecchie citazioni rimangono consultabili, le nuove review non la ricevono e i freeze dipendenti sono invalidati. Né verifica positiva né hash sono attestati di veridicità o copyright. [Guida](wikisource-reverification.md), ADR 0020.
