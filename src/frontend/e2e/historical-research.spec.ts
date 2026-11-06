@@ -248,6 +248,23 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(inspectionCalls).toHaveLength(2); // metadata inspection + OCR source identification
   expect(ocrCalls[0]).toBe("https://tile.loc.gov/storage-services/service/tests/telegraph.txt");
   expect(ocrCalls[0]).not.toContain("Mara");
+  page.once("dialog",dialog=>{
+    expect(dialog.message()).toContain("RIVERIFICA REMOTA OCR");
+    expect(dialog.message()).toContain("2020123456");
+    expect(dialog.message()).toContain("tile.loc.gov");
+    expect(dialog.message()).not.toContain("stanza segreta");
+    return dialog.accept();
+  });
+  await editorial.getByRole("button",{name:"Riverifica OCR online"}).click();
+  await expect(editorial.getByText(/Confronto OCR remoto riuscito/))
+    .toBeVisible({timeout:15_000});
+  expect(inspectionCalls).toHaveLength(3);
+  expect(ocrCalls).toHaveLength(2);
+  expect(inspectionCalls[2]).toContain("www.loc.gov/item/2020123456/");
+  expect(ocrCalls[1]).toBe("https://tile.loc.gov/storage-services/service/tests/telegraph.txt");
+  expect(inspectionCalls[2]).not.toContain("Mara");
+  expect(inspectionCalls[2]).not.toContain("SHA-256");
+  expect(ocrCalls[1]).not.toContain("Mara");
   await editorial.locator("summary").filter({hasText:"Trascrizioni Wikisource"}).click({timeout:10_000});
   await editorial.getByRole("textbox",{name:"Ricerche Wikisource capitolo 1"})
     .fill("Telegrafo elettrico in Italia 1848");
