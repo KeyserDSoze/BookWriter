@@ -96,5 +96,6 @@ export function extendChapterBibliography(
     unansweredQueries: previous?.unansweredQueries ?? [],
     bibliography,
     ...(previous?.archiveCatalog ? {archiveCatalog:previous.archiveCatalog} : {}),
+    ...(previous?.manualEvidence ? {manualEvidence:previous.manualEvidence} : {}),
   };
 }
