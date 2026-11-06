@@ -1,3 +1,4 @@
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { createEditorialCycle } from "../domain/editorial-board";
 import { activeArchivalItems } from "../domain/archival-catalog";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
@@ -45,6 +46,7 @@ export async function attachInstitutionalInspection(
       const oldSummary=reopened?synopsisBeforeChapter(book.chapters,target.number):undefined;
       target.historicalDossier=dossier;
       if(reopened){
+        markHistoricalEvidenceChanged(book, target);
         for(const dependent of book.chapters)if(dependent.number>=target.number){
           dependent.frozenAt=undefined;
           dependent.summary=undefined;

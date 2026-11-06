@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { markDownstreamContinuity } from "../domain/cross-chapter-continuity";
+import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
 import { encryptLocal } from "./crypto";
 import { getDb, listBooks, saveActivity, saveBook, saveSettings } from "./db";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
@@ -102,13 +102,13 @@ describe("Backup portabile BookWriter", () => {
       scenes:[{id:"s-"+n,number:1,title:"Scena",objective:"Scoprire",
         text:"Mara conosce il guardiano e porta una chiave.",status:"canon" as const}],
     }));
-    markDownstreamContinuity(original,original.chapters[0]!,"author_reopen",["s-1"]);
+    markHistoricalEvidenceChanged(original,original.chapters[0]!);
     await saveBook(original,false);
     const zip=await createBackup("content");
     const parsed=await readBackup(zip as File);
     const restored=parsed.books.find(b=>b.title==="Il primo manoscritto")!;
     expect(restored.chapters[1]?.continuityRecheck).toMatchObject({
-      originChapterId:"ch-1",trigger:"author_reopen",originSceneIds:["s-1"],
+      originChapterId:"ch-1",trigger:"historical_evidence",originSceneIds:[],
     });
     const bytes=new Uint8Array(await zip.arrayBuffer());
     const entries=unzipSync(bytes);

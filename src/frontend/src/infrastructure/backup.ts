@@ -22,7 +22,7 @@ const sceneSchema = z.object({
 const continuityRecheckSchema = z.object({
   originChapterId: zId,
   originChapterNumber: z.number().int().min(1).max(200),
-  trigger: z.enum(["author_reopen","retroactive_revision"]),
+  trigger: z.enum(["author_reopen","retroactive_revision","historical_evidence"]),
   requestedAt: z.string().datetime(),
   originSceneIds: z.array(zId).max(50),
 }).strict();

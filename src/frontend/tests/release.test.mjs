@@ -70,6 +70,24 @@ test("CI e Pages richiedono npm ci anziché risoluzioni dinamiche", async () => 
   }
 });
 
+test("Tutti i rewind storici riaprono anche la catena di rivalidazione", async () => {
+  const names = [
+    "historical-research", "historical-bibliography", "archival-catalog",
+    "institutional-inspection", "loc-iiif", "loc-ocr",
+    "loc-ocr-audit", "loc-scan-collation", "manual-evidence",
+    "wikisource-research", "wikisource-audit", "historical-source-relations",
+  ];
+  for (const name of names) {
+    const source = await readFile(new URL("../src/application/" + name + ".ts",
+      import.meta.url), "utf8");
+    assert.match(source, /import \{ markHistoricalEvidenceChanged \} from/);
+    assert.match(source, /if\s*\((?:reopen|reopened|restart)\)\s*\{\s*markHistoricalEvidenceChanged\(book,\s*(?:target|chapter)\);/,
+      "Rivalidazione mancante nel rewind storico: " + name);
+    assert.match(source, /synopsisBeforeChapter/);
+    assert.match(source, /outbox/);
+  }
+});
+
 test("Non compilare segreti nel frontend", async () => {
   const config = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
   assert.doesNotMatch(config, /VITE_(?:PASSWORD|PAT|API_KEY|SECRET)/);

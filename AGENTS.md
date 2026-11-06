@@ -319,6 +319,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Il gate delle prove v0.10.9 continua ad accettare `finding.evidence` soltanto dal segmento **corrente**: le scene precedenti sono contesto da citare nel `reason`, non un'alternativa alla prova nel segmento. Al nuovo freeze, `completeContinuityRecheck` registra un audit di campionamento e rimuove il marker, non certifica coerenza semantica. Niente nuovi modelli o HTTP; il contesto aggiuntivo può aumentare i costi (budget/preflight esistenti).
 - Test: origine più antica, priorità scene, finestre e offset, no futuro/privacy lettori, ruolo specialista e giudice, predecessore non congelato, Web Locks/outbox, UI mobile/desktop. Non assumere che il marker sia stato introdotto per ogni meccanismo storico già esistente; ADR 0033, `docs/cross-chapter-continuity.md`, issue #20.
 
+## Convergenza dei dossier storici v0.11.1 (ADR 0034, issue #20/#23)
+
+- **Tutti e dodici** i percorsi di aggiornamento/attestazione/quarantena del dossier che riaprono un capitolo **congelato** devono chiamare `markHistoricalEvidenceChanged(book, chapter)` **dentro il ramo di rewind**, dopo il preflight `synopsisBeforeChapter`, e prima di azzerare freeze/sinossi. Il helper registra `ContinuityTrigger="historical_evidence"` sui capitoli successivi già scritti, conserva il marker dell'origine più antica e invalida lo storico dell'origine; non contiene testo, segreti né ID di scene false. Non impostare il trigger se si aggiungono informazioni a un capitolo che non era congelato.
+- I prompt della rivalidazione storica usano le stesse finestre pubbliche con offset della v0.11.0: quattro specialisti più il revisore `historical` **solo con trigger historical_evidence**, e il giudice. Non dichiarare che la prosa precedente provi un fatto o l'indipendenza di una fonte. I cinque lettori ciechi mantengono il perimetro ristretto; il finding cita sempre **solo il segmento corrente**.
+- ZIP: `continuityRecheck.trigger` e `lastContinuityReview.trigger` includono il nuovo enum, ma restano `strict` contro stringhe arbitrarie. Lo smoke `tests/release.test.mjs` enumera i dodici use case: quando aggiungi un percorso di rewind, aggiorna test e documentazione.
+- Conservare Web Locks, CAS di revisione, svuotamento outbox, autosync off, citazioni e report storici. Distinguere audit della nuova review da convalida semantica/fattuale. [Guida](docs/historical-continuity-rechecks.md), ADR 0034.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.

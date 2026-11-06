@@ -2,6 +2,19 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.11.1 — 2026-11-06 (PR #47)
+
+**I dossier storici entrano nella catena di rivalidazione dei capitoli successivi**
+
+- Tutti i **dodici** use-case storici con rewind di un capitolo congelato (Wikipedia, Crossref, LoC, OCR, collazioni, IIIF, Wikisource, trascrizioni manuali, relazioni di provenienza e quarantene) marcano ora i capitoli già scritti di valle con il trigger strutturato `historical_evidence`. L'origine più antica ancora pendente resta prioritaria e l'audit precedente viene invalidato.
+- **Distinzione esplicita fra aggiornamento delle fonti e riscrittura della prosa**: il marker contiene solo ID, capitolo e causa; la sola operazione sul dossier non modifica le scene. Resta il rewind conservativo delle sinossi, outbox e autosync.
+- Oltre ai quattro specialisti di continuità, in questa sola circostanza anche lo specialista storico vede **campioni letterali delle scene pubbliche precedenti** e il direttore riceve un avviso che le scene del romanzo **non sono fonti documentali**. I cinque lettori ciechi non ricevono il nuovo contesto.
+- La UI distingue `dossier storico modificato` da una correzione narrativa e continua a non presentare il nuovo freeze come certificazione storica o semantica.
+- Backup ZIP con nuovo trigger vincolato all'enum, versioni precedenti compatibili; test unitari su catena, OCR/trascrizioni, isolamento ruoli e audit, smoke su tutte e dodici le integrazioni, e Playwright desktop/mobile per la provenienza connessa al rewind.
+- ADR 0034, [guida](historical-continuity-rechecks.md), issue #20 e #23; nessuna nuova ricerca automatica o nuova chiamata AI.
+
+**Limiti:** l'aggiornamento di una fonte non dimostra contraddizioni storiche, i campioni non coprono ogni scena e non certificano l'indipendenza delle fonti. I prompt dei revisori possono essere più lunghi. I controlli si applicano ai dodici percorsi esistenti, non a modifiche future non ancora integrate.
+
 ## 0.11.0 — 2026-11-06 (PR #46)
 
 **Catena di rivalidazione della continuità dopo modifiche retroattive**

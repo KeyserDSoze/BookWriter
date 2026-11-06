@@ -75,6 +75,9 @@ describe("Salvataggio locale di citazioni da originali consultati dall'autore",(
     expect(saved?.editorialCycle?.chapterId).toBe("c1");
     expect(saved?.status).toBe("paused");
     expect(saved?.phase).toBe("chapterReview");
+    expect(saved?.chapters[1]?.continuityRecheck).toMatchObject({
+      originChapterId:"c1",trigger:"historical_evidence",originSceneIds:[],
+    });
   });
   it("rifiuta condizioni di diritti non confermate o fonte non più attiva senza corrompere il libro",async()=>{
     const b=await fixture();
