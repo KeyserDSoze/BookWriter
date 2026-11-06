@@ -159,7 +159,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   expect(crossrefCalls[0]).toContain("api.crossref.org/works/10.1000/xyz123");
   expect(crossrefCalls[0]).not.toContain("Mara");
   expect(crossrefCalls[0]).not.toContain("stanza");
-  await editorial.getByText(/Archivi istituzionali/).click();
+  await editorial.getByText(/^Archivi istituzionali ·/).click();
   await editorial.getByRole("textbox",{name:"Ricerche archivistiche capitolo 1"})
     .fill("telegraph correspondence 1848");
   page.once("dialog",dialog=>{
