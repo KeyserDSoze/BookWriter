@@ -62,6 +62,10 @@ Il costo può essere **elevato**: per N segmenti di testo, ci sono almeno **12 �
 
 Nel pannello Wikisource l'autore può richiedere un nuovo GET pubblico **solo per il `revid`** della fonte, senza trasmettere manoscritto o query: il browser confronta in memoria identità, SHA-256, lunghezza e offset del frammento con quelli archiviati. Il risultato è **effimero** e non equivale ad autenticare opera o licenza. In caso di discordanza, il sistema avverte l'autore; solo con **ulteriore conferma** una fonte viene esclusa dalle nuove review, mantenendola negli audit, riaprendo capitoli congelati e invalidando i successivi. Un guasto CORS/rete è un errore, non una prova negativa. [Guida](wikisource-reverification.md), ADR 0020.
 
+## Collazione visiva dichiarata dall'autore (v0.10.1)
+
+L'autore può confrontare una **breve frase digitata dopo aver consultato personalmente la scansione LoC** con la citazione OCR già acquisita, registrando pagina/folio e due dichiarazioni su consultazione e diritti. La funzione confronta **due stringhe**, non pixel o immagini: `text_overlap` è una coincidenza normalizzata, `text_discrepancy` una differenza da chiarire. Solo storico e giudice critico ricevono la collazione non autenticata, gli altri undici agenti no. `locscan:` non è mai una fonte indipendente né un testo dell'originale verificato dal software. [Guida](loc-scan-collation.md), ADR 0024.
+
 ## Confronto remoto e quarantena OCR LoC (v0.10.0)
 
 Il nuovo pulsante di riverifica confronta `lococr:` con l'**esatto file istituzionale ancora autorizzato dal catalogo**: ID, URL, SHA-256, lunghezza, offset e breve frase. Si tratta di una verifica della **coerenza della risposta remota**, non della scansione originale, della verità storica o del copyright. Risultato **effimero in UI**; nessuna modifica al libro. Con mismatch, solo una **seconda conferma** può rimuovere l'ID dalle fonti attive, conservando report e prosa e riaprendo i frozen. Lo storico e il giudice non ricevono nuove attestazioni di licenza; gli altri 11 revisori non vedono OCR. [Guida](loc-ocr-reverification.md), ADR 0023.

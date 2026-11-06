@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.10.1 — 2026-11-06 (PR in verifica)
+
+**Library of Congress: collazione assistita dall'autore della scansione rispetto all'OCR, senza falsa verifica visiva**
+
+- Nuova azione **Confronta OCR con scansione** accanto a ogni `lococr:` attivo. La UI apre la **scheda canonica LoC** già registrata (non un'immagine inventata). L'autore deve leggere **personalmente** la scansione se presente, specificare pagina/folio (4–140 caratteri) e trascrivere dalla pagina una breve frase (36–900 caratteri). Due checkbox distinte per attestazione della consultazione visiva e base dei diritti/condivisione AI/GitHub/ZIP; il dialogo finale mostra **l'intera trascrizione** e le conseguenze del salvataggio.
+- Nessun download o OCR di immagini e nessuna richiesta API: confronto **locale deterministico di due stringhe**, usando solo normalizzazione NFKC, minuscole e collasso spazi. `text_overlap` significa contenimento testuale, `text_discrepancy` significa che il testo dichiarato non compare nell'OCR: **non sono autenticazioni dell'originale storico o del copyright**.
+- Snapshot append-only `locscan:<itemId>:<timestamp>:<sha16 OCR>` sotto `locOcr.collations`, massimo 40 record. Si conserva OCR esatto, hash, scheda/ispezione di origine, collocazione/pagina, testo osservato, data e attestazioni; i precedenti rimangono in audit. Se OCR/scheda/ispezione diventano obsoleti, le vecchie collazioni non sono fornite alle nuove review.
+- Solo **revisore storico e giudice critico** ricevono collazioni come dati esterni non attendibili. Una discrepanza deve fare sorgere dubbi su una remediation basata sul solo OCR. Gli altri undici revisori restano ciechi; `locscan:` non può diventare un ID di fonte indipendente in `historical.sourceIds`. Nessun testo esterno viene aggiunto alla prosa.
+- Persistenza IndexedDB atomica sotto Web Locks writer/outbox e CAS `updatedAt`, disattivazione autosync/outbox, activity, recupero sinossi e riapertura congelati/downstream. Nessuna modifica del romanzo. Test Vitest di stringhe, attestazioni, refresh, isolamento agenti e transazioni + Playwright desktop/mobile sul consenso e assenza rete. ADR 0024 e `docs/loc-scan-collation.md`.
+
+**Limiti:** il software NON ha analizzato la scansione visuale; l'autore potrebbe sbagliare pagina, copiare dall'OCR o non avere i diritti. La corrispondenza di due testi digitati non dimostra provenienza visiva, verità, autenticità o licenza. In una prossima tranche valutare collegamento puntuale a pagina IIIF e relativi permessi, senza inventare un'identità delle immagini.
+
 ## 0.10.0 — 2026-11-06 (PR #35)
 
 **Library of Congress OCR: riverifica live opzionale del file esatto e quarantena volontaria**
