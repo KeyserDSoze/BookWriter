@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { z } from "zod";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import type { SceneMergeDraft } from "../domain/scene-merge";
+import { narrativeConflictSchema, narrativeReviewSchema } from "../domain/editorial-board";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
@@ -35,10 +36,34 @@ const continuityAuditSchema = continuityRecheckSchema.extend({
   scannedSceneCount: z.number().int().min(0).max(1600).optional(),
   unscannedSceneCount: z.number().int().min(0).max(40_000).optional(),
 }).strict();
+// Preserve legacy editorial reports, but validate NEW structured narratives
+// even in imported archives. Imported judgments are NOT authenticated.
+const archivedFindingSchema = z.object({
+  narrativeConflict: narrativeConflictSchema.optional(),
+}).passthrough();
+const archivedReportSchema = z.object({
+  findings: z.array(archivedFindingSchema).max(12),
+}).passthrough();
+const archivedJudgmentSchema = z.object({
+  decisions: z.array(z.object({
+    narrativeReview: narrativeReviewSchema.optional(),
+  }).passthrough()).max(600),
+}).passthrough();
+const archivedRoundSchema = z.object({
+  reports: z.array(archivedReportSchema).max(480),
+  judgment: archivedJudgmentSchema,
+}).passthrough();
+const archivedCycleSchema = z.object({
+  reports: z.array(archivedReportSchema).max(480),
+  judgment: archivedJudgmentSchema.optional(),
+  priorRounds: z.array(archivedRoundSchema).max(3),
+}).passthrough();
+
 const chapterSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
   purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
   continuityRecheck: continuityRecheckSchema.optional(),
+  editorialRounds: z.array(archivedRoundSchema).max(3).optional(),
   lastContinuityReview: continuityAuditSchema.optional(),
 }).passthrough();
 const memorySchema = z.object({
@@ -87,6 +112,7 @@ const bookSchema = z.object({
   chapters: z.array(chapterSchema).max(200),
   narrativeEventDecisions: z.array(narrativeEventDecisionSchema).max(400).optional(),
   narrativeAliasDecisions: z.array(narrativeAliasDecisionSchema).max(120).optional(),
+  editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
   revision: z.object({
