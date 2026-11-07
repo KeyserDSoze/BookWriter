@@ -55,7 +55,7 @@ export const priorSceneConflictSchema = z.object({
   chapterId: z.string().min(1).max(300),
   sceneId: z.string().min(1).max(300),
   sourceFrozenAt: z.string().datetime(),
-  sourceTextStamp: z.string().regex(/^\\d{1,8}:[0-9a-f]{8}$/),
+  sourceTextStamp: z.string().regex(/^\d{1,8}:[0-9a-f]{8}$/),
   offset: z.number().int().min(0).max(2_000_000),
   quote: z.string().min(12).max(500),
   dimension: z.enum(["identity","chronology","causality","knowledge","item_state"]),
