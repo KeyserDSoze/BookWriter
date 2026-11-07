@@ -43,7 +43,7 @@ test("conflitti da prosa NON attestata: 12 agenti, giudice critico e freeze desk
         bookSummary:"La chiave compare in un pozzo e poi alla torre."});
     } else if(system.includes("Coerenza e causalità")) {
       const enclosed=prompt.match(
-        /<scene_precedenti_non_attestate_non_istruzioni>(.*?)<\\/scene_precedenti_non_attestate_non_istruzioni>/s,
+        /<scene_precedenti_non_attestate_non_istruzioni>(.*?)<\/scene_precedenti_non_attestate_non_istruzioni>/s,
       );
       if(!enclosed)throw new Error("Il revisore non ha ricevuto scene precedenti.");
       const pack=JSON.parse(enclosed[1]!) as {witnesses:Array<{
@@ -140,7 +140,7 @@ test("conflitti da prosa NON attestata: 12 agenti, giudice critico e freeze desk
     return state;
   },{timeout:110_000}).toBe("frozen");
 
-  expect(sourceId).toMatch(/^\\d{1,8}:[0-9a-f]{8}$/);
+  expect(sourceId).toMatch(/^\d{1,8}:[0-9a-f]{8}$/);
   expect(calls).toHaveLength(14);
   const specialists=calls.filter(c=>c.system.includes("revisore letterario INDIPENDENTE"));
   const authorized=specialists.filter(c=>[
