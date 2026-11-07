@@ -78,16 +78,6 @@ test("conoscenze dei personaggi: 12 agenti, percorso della notizia e rigetto mot
             sourceFrozenAt:witness.sourceFrozenAt,sourceTextStamp:witness.sourceTextStamp,
             offset:witness.offset+position,quote:needle,dimension:"knowledge",
             hypothesis:"Una dichiarazione di sapere potrebbe contraddire una precedente rivelazione.",
-          },
-          knowledgeReview:{
-            priorClaimMode:"direct_narration",
-            priorReason:"La fonte precedente racconta un ritrovamento come fatto del narratore.",
-            currentClaimMode:"dialogue_or_report",
-            currentReason:"La scena corrente riferisce una dichiarazione, non prova l'accesso al segreto.",
-            accessPath:"plausible_unshown",
-            accessReason:"Una conversazione tra i capitoli potrebbe spiegare il sapere non descritto.",
-            assessment:"explainable_or_unknown",
-            conclusion:"L'assenza di una scena informativa non esclude un apprendimento fuori campo.",
           }}]});
     }
     await route.fulfill({status:200,headers:{
