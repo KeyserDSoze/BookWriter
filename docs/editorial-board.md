@@ -1,4 +1,10 @@
-# Redazione multi-agente di BookWriter — v0.11.9
+# Redazione multi-agente di BookWriter — v0.11.10
+
+## Giudizio critico strutturato sui conflitti narrativi (v0.11.10)
+
+Se uno dei quattro specialisti autorizzati segnala un conflitto collegato a una **specifica attestazione precedente ancora valida**, il giudice deve valutare separatamente **identità del soggetto, cronologia effettiva, causalità e spiegazioni artistiche** (flashback, omonimi, sogni e narratori inaffidabili). Il rilievo porta sempre una prova letterale **nel segmento corrente** e una fonte precedente con ID reale nel pack ricevuto. La dashboard mostra l'ipotesi dello specialista e la conclusione motivata del giudice, che può **respingere** anche una critica con citazioni perfettamente valide, evitando riscritture forzate.
+
+Una remediation di questa categoria viene autorizzata solo se il giudice valuta supportato il conflitto, ritiene lo stesso soggetto, non trova una spiegazione artistica plausibile e motiva un'incompatibilità cronologica o causale; il software **rivalida entrambe le prove prima del repair, anche dopo un import o resume**. I cinque lettori ciechi non ricevono attestazioni o segreti. Gli altri finding e gli storici rimangono compatibili e non hanno un requisito di decisione strutturata aggiuntivo. Si tratta di un controllo fallibile, non di un certificato di coerenza. [Guida](structured-narrative-adjudication.md), ADR 0043, issue #20.
 
 ## Testimoni contestuali attestati (v0.11.9)
 

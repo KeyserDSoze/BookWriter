@@ -64,6 +64,15 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
                   Report precedente, modificato o senza ancoraggio valido: la prova narrativa non è confermata nel segmento attuale.
                   Una nuova correzione richiede una review verificata.
                 </p>}
+                {f.narrativeConflict && <div className="rounded border border-amber-400/50
+                  p-2 break-words" aria-label={"Ipotesi di conflitto narrativo " + f.id}>
+                  <p className="font-semibold">Ipotesi narrativa attestata, non contraddizione accertata</p>
+                  <p><b>Dimensione:</b> {f.narrativeConflict.dimension}</p>
+                  <p><b>Fonte precedente:</b> {f.narrativeConflict.priorEventDecisionId}</p>
+                  <p><b>Ipotesi dello specialista:</b> {f.narrativeConflict.hypothesis}</p>
+                  <p className="muted">Solo il giudice può valutare il contesto e approvare o
+                    respingere la remediation. La fonte è un'annotazione, non un fatto certificato.</p>
+                </div>}
                 <p><b>Problema:</b> {f.reason}</p>
                 <p><b>Remediation proposta:</b> {f.remediation}</p>
                 {f.historical && <div className="space-y-1 rounded-md border border-slate-300 p-2 dark:border-slate-700">
@@ -158,6 +167,25 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
                     <b>Giudice: {ruling.action === "accept" ? "Accettato" : "Respinto"}</b>
                   </p>
                   <p><b>Perché:</b> {ruling.rationale}</p>
+                  {ruling.narrativeReview && <div className="mt-2 space-y-1 rounded border
+                    border-slate-300 p-2 break-words dark:border-slate-700"
+                    aria-label="Giudizio narrativo strutturato">
+                    <p className="font-semibold">Analisi narrativa indipendente — {
+                      ruling.narrativeReview.assessment === "supported_conflict"
+                        ? "incoerenza plausibilmente supportata" :
+                        ruling.narrativeReview.assessment === "explained_or_nonconflicting"
+                          ? "spiegazione alternativa" : "prove insufficienti"}</p>
+                    <p><b>Identità:</b> {ruling.narrativeReview.subjectIdentity} —
+                      {" "}{ruling.narrativeReview.identityReason}</p>
+                    <p><b>Cronologia:</b> {ruling.narrativeReview.chronology} —
+                      {" "}{ruling.narrativeReview.chronologyReason}</p>
+                    <p><b>Causalità:</b> {ruling.narrativeReview.causality} —
+                      {" "}{ruling.narrativeReview.causalityReason}</p>
+                    <p><b>Contesto artistico:</b> {ruling.narrativeReview.artisticContext} —
+                      {" "}{ruling.narrativeReview.artisticReason}</p>
+                    <p><b>Conclusione critica:</b> {ruling.narrativeReview.conclusion}</p>
+                    <p className="muted">Valutazioni fallibili del giudice, non conferma del canone.</p>
+                  </div>}
                   {ruling.conflictReview && <div className="mt-2 space-y-1 rounded border
                     border-slate-300 p-2 break-words dark:border-slate-700"
                     aria-label="Controllo critico del direttore">

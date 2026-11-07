@@ -71,3 +71,5 @@
 - [x] v0.11.8: registro append-only di alias motivati legati a due attestazioni correnti, revoche/staleness senza riattivazioni, ZIP strict, Web Locks/CAS/outbox e confronti read-only; nessuna modifica canone né prompt dei revisori (ADR 0041, issue #20).
 
 - [x] v0.11.9: recupero locale limitato a 8 testimoni attestati di capitoli precedenti durante le review dei 4 specialisti e giudice se c'è finding ancorato, con alias diretti validi, limiti e privacy dei cinque lettori ciechi; nessun verdetto automatico (ADR 0042, issue #20).
+
+- [x] v0.11.10: giudizio critico strutturato su rilievi narrativi con testimone precedente valido, quattro dimensioni motivate, gate locale per accept/retry prima del repair anche dopo import; ZIP strict per metadata e UI di audit (ADR 0043, issue #20).
