@@ -198,6 +198,22 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
                     <p><b>Conclusione critica:</b> {ruling.narrativeReview.conclusion}</p>
                     <p className="muted">Valutazioni fallibili del giudice, non conferma del canone.</p>
                   </div>}
+                  {ruling.knowledgeReview && <div className="mt-2 space-y-1 rounded border
+                    border-slate-300 p-2 break-words dark:border-slate-700"
+                    aria-label="Valutazione percorso delle conoscenze">
+                    <p className="font-semibold">Come ha appreso l'informazione? — {
+                      ruling.knowledgeReview.assessment === "supported_knowledge_conflict"
+                        ? "possibile incompatibilità motivata" : "conoscenza non dimostrata"}</p>
+                    <p><b>Citazione precedente:</b> {ruling.knowledgeReview.priorClaimMode} —
+                      {" "}{ruling.knowledgeReview.priorReason}</p>
+                    <p><b>Citazione corrente:</b> {ruling.knowledgeReview.currentClaimMode} —
+                      {" "}{ruling.knowledgeReview.currentReason}</p>
+                    <p><b>Accesso all'informazione:</b> {ruling.knowledgeReview.accessPath} —
+                      {" "}{ruling.knowledgeReview.accessReason}</p>
+                    <p><b>Conclusione:</b> {ruling.knowledgeReview.conclusion}</p>
+                    <p className="muted">Un nome o una voce non provano che il personaggio sappia davvero un segreto.
+                      La valutazione del giudice non modifica il canone.</p>
+                  </div>}
                   {ruling.conflictReview && <div className="mt-2 space-y-1 rounded border
                     border-slate-300 p-2 break-words dark:border-slate-700"
                     aria-label="Controllo critico del direttore">

@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.11
+# Redazione multi-agente di BookWriter — v0.11.12
+
+## Come può conoscere quella notizia? (v0.11.12)
+
+Quando uno specialista autorizzato collega un rilievo di **conoscenza** a un evento attestato o una scena precedente congelata, il giudice deve valutare **narrazione diretta, discorso riportato, sogno/ipotesi e possibilità di accesso fuori scena**. Oltre alle consuete quattro dimensioni, archivia un `knowledgeReview` strict con ragioni autonome per fonte precedente, scena corrente e percorso di apprendimento. La dashboard mostra il giudizio in **Valutazione percorso delle conoscenze**.
+
+Una correzione di knowledge è ammissibile solo se il giudice valuta entrambe le fonti come narrazione diretta, l'accesso alla notizia come esplicitamente impossibile, il conflitto come supportato e conserva tutti gli altri requisiti del gate narrativo (stesso soggetto, nessuna spiegazione artistica). **Il semplice fatto che manchi una scena intermedia non basta**: una conversazione non mostrata, una voce o un narratore inaffidabile permettono di respingere il rilievo senza riscrittura. La provenienza viene rivalidata prima e dopo la chiamata AI di remediation. I cinque lettori ciechi e i finding di altre dimensioni mantengono le rispettive regole. La AI non certifica semantica, causalità o intenzione artistica. [Guida](knowledge-provenance-review.md), ADR 0045, issue #20.
+
+
 
 ## Confronti con citazioni di scene non attestate (v0.11.11)
 

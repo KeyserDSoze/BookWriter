@@ -1,5 +1,18 @@
 # Changelog — BookWriter
 
+## 0.11.12 — 2026-11-07 (PR #58)
+
+**Giudizio epistemico sul sapere dei personaggi**
+
+- `knowledgeReview` strict aggiuntivo e obbligatorio per decisioni del giudice relative a `narrativeConflict.dimension=knowledge` (eventi attestati) o `priorSceneConflict.dimension=knowledge` (scene precedenti non attestate). Valuta **modalità narrativa della fonte precedente e corrente**, **percorso di accesso alla notizia**, **fondatezza del conflitto** e ragioni indipendenti.
+- Il giudice può respingere falsi conflitti sulla conoscenza con spiegazione: dialoghi, dicerie, sogni, narrazione incerta e apprendimento fuori scena sono compatibili con il testo. In questi casi il software non autorizza remediation. `accept` di conflitti knowledge richiede, oltre al `narrativeReview` preesistente con stesso soggetto, assenza di spiegazione artistica e conflitto ritenuto supportato, **entrambe le fonti classificate narrazione diretta, percorso di accesso esplicitamente escluso e valutazione epistemica supported_knowledge_conflict**.
+- Per conflitti di altra dimensione `knowledgeReview` è vietato; legacy ancora leggibili, ma un vecchio conflitto di conoscenza senza valutazione nuova non può ottenere nuove riscritture dopo resume/import.
+- Il gate si ripete nel `repairPrompt` e alla callback sul libro fresco prima di salvare testo AI, come da v0.11.11. Dashboard con riquadro autonomo **Valutazione percorso delle conoscenze**. ZIP valida rigorosamente il nuovo campo in `editorialCycle`, `editorialRounds` e `priorRounds`.
+- Test Vitest su entrambi i tipi di fonte, ragioni brevi/campi extra, narrazione diretta/dialoghi/sogni/accesso fuori scena, gating e staleness; ZIP round-trip e payload malevoli; Playwright desktop/mobile su ciclo 12 agenti, giudice che respinge e prosa invariata. ADR 0045, [guida](knowledge-provenance-review.md), issue #20.
+
+**Limiti:** la modalità di una frase resta un'interpretazione del modello, non una classificazione semantica certificata. Nessuna nuova chiamata AI, accesso supplementare ai cinque lettori ciechi, modifica automatica del canone o grafo persistente delle conoscenze. Le istruzioni aggiuntive possono usare più token delle chiamate già previste.
+
+
 ## 0.11.11 — 2026-11-07 (PR #57)
 
 **Confronto critico su scene precedenti congelate senza attestazioni autore**
