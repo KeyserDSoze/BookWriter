@@ -1,6 +1,6 @@
 # ADR 0042 — Testimoni narrativi attestati nella redazione contestuale
 
-- **Stato:** proposto per v0.11.9
+- **Stato:** accettato per v0.11.9 (PR #55)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0032, 0033, 0035–0041
