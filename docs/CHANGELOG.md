@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.13 — 2026-11-07 (PR in preparazione)
+## 0.11.13 — 2026-11-07 (PR #59)
 
 **Piste locali di trasmissione di informazioni tra personaggi**
 
