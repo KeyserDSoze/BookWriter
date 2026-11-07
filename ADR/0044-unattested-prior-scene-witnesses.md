@@ -1,6 +1,6 @@
 # ADR 0044 — Confronti su scene precedenti non attestate e rivalidazione prima della scrittura
 
-- **Stato:** proposto per v0.11.11
+- **Stato:** accettato per v0.11.11 (PR #57)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Predecessori:** ADR 0032, 0035, 0042–0043
