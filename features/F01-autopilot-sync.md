@@ -81,3 +81,5 @@
 - [x] v0.11.13: piste bounded di possibili comunicazioni fra nomi in prosa precedente congelata (max 4), giudice con disposizione per ogni pista e blocco conservativo di false remediation di `knowledge`, ZIP strict e audit UI (ADR 0046, issue #20).
 
 - [x] v0.11.14: registro autore append-only di `knowledge_mention` correnti con `learned_directly|reported_by_other|still_secret`, CAS+Web Locks, autosync disabilitato, audit/staleness e ZIP strict; nessun invio automatico ai modelli o aggiornamento del canone (ADR 0047, issue #20).
+
+- [x] v0.11.15: opt-in e revoca append-only per interpretazione knowledge e cinque soli destinatari editoriali, pacchetto minimo e fail-closed, nessun nuovo dato ai lettori ciechi; ZIP revoca permessi importati, CAS/locks e UI (ADR 0048, issue #20).
