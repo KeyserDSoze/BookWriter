@@ -1,5 +1,18 @@
 # Changelog — BookWriter
 
+## 0.11.9 — 2026-11-07 (PR #55)
+
+**Prove precedenti dell'autore nella review contestuale con giudice critico**
+
+- Le chiamate esistenti ai quattro specialisti di **continuità**, **timeline**, **segreti** e **voce dei personaggi** ricevono ora, quando pertinenti, fino a **8 testimoni precedenti** validati localmente dalle decisioni evento `affirmed`, anche senza modifiche retroattive. I testimoni includono citazioni letterali, offset, capitolo/scena, ID dell'attestazione, conteggio fonti pertinenti/omesse e provenienza `literal_name|saved_alias`.
+- La selezione è basata su nomi **interi**, non sottostringhe, e soltanto su capitoli precedenti congelati; un alias diretto è usato solo se registrato come `linked` con **entrambe le attestazioni fonte precedenti**. Nessun alias temporaneo o transitivo, nessuna fonte futura/non canonica/stale.
+- Il giudice riceve i testimoni solo quando i findings hanno **ancora narrativa corrente**; le istruzioni rendono espliciti i controlli critici su identità, flashback, cronologia, dialoghi e POV. Può respingere una remediation non giustificata, sempre motivandola. `finding.evidence` rimane citazione del **solo segmento corrente** e il gate non è allentato.
+- I **cinque lettori ciechi** e gli altri specialisti non ricevono questo pack. Nessun segreto, motivazione dell'autore, dossier privato o dati futuri viene copiato nel nuovo pacchetto. Nessuna chiamata AI aggiuntiva, persistenza, migrazione ZIP, auto-remediation o aggiornamento a memoria, oggetti, segreti o timeline.
+- Test Vitest su prove valide, invalidazioni, privacy, copertura e alias; test di integrazione prompt giudice indipendente; Playwright desktop/mobile su 12 chiamate isolate e rilievo respinto con freeze. ADR 0042, `docs/attested-contextual-review.md`, issue #20.
+
+**Limite:** recupero lessicale/strutturato non semantico; fino a 8 fonti può aumentare i token della review già prevista. La presenza di una frase o attestazione non dimostra un'incoerenza.
+
+
 ## 0.11.8 — 2026-11-07 (PR #54)
 
 **Registro locale persistente delle ipotesi alias motivate**
