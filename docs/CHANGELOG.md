@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.15 — 2026-11-07 (PR in preparazione)
+## 0.11.15 — 2026-11-07 (PR #61)
 
 **Consenso esplicito per singola conoscenza e destinatario AI**
 
