@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Giudice narrativo strutturato v0.11.10:** i conflitti esplicitamente collegati a un testimone precedente richiedono una decisione critica per identità, cronologia, causalità e spiegazioni artistiche prima di autorizzare una remediation. Il gate è rivalidato anche dopo resume/import, senza rendere le attestazioni fatti canonici. [Guida](docs/structured-narrative-adjudication.md), ADR 0043, issue #20.
+
 **Testimoni nella redazione v0.11.9:** i quattro specialisti di continuità e il giudice critico possono confrontare brevi attestazioni narrative pubbliche precedenti pertinenti alla scena, anche nelle review ordinarie. Il giudice può respingere false contraddizioni; i cinque lettori ciechi non vedono il nuovo contesto. [Guida](docs/attested-contextual-review.md), ADR 0042, issue #20.
 
 **Registro alias v0.11.8:** l'autore può registrare, rettificare ed escludere con motivazione una coppia di nomi ancorata a due attestazioni correnti. Lo storico attraversa reload e backup ZIP, ma si invalida se la prosa o le decisioni sorgente cambiano, senza convertire nomi in identità canoniche. [Guida](docs/persisted-author-aliases.md), ADR 0041, issue #20.
