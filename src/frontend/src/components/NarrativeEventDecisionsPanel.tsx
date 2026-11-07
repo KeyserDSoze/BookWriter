@@ -6,6 +6,9 @@ import { currentNarrativeEventDecision, MAX_EVENT_DECISIONS, type NarrativeEvent
 import { recordNarrativeEventDecision } from "../application/narrative-event-decisions";
 import { buildNarrativeEventLedger } from "../domain/narrative-event-ledger";
 import { buildNarrativeContinuityHints } from "../domain/narrative-continuity-hints";
+import { buildNarrativeAliasRegistry, MAX_ALIAS_DECISIONS,
+  type NarrativeAliasDecision } from "../domain/narrative-alias-decisions";
+import { recordNarrativeAliasDecision } from "../application/narrative-alias-decisions";
 import { Button } from "./ui/button";
 
 function eventKey(event: NarrativeEventCandidate): string {
@@ -22,11 +25,16 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
   const [secondAlias,setSecondAlias] = useState("");
   const [aliasPreview,setAliasPreview] =
     useState<{bookId:string; first:string; second:string}|null>(null);
+  const [aliasNote,setAliasNote] = useState("");
   const [message,setMessage] = useState("");
   const [error,setError] = useState("");
   const index = buildNarrativeEventCandidateIndex(book);
   const history = book.narrativeEventDecisions ?? [];
   const ledger = buildNarrativeEventLedger(book);
+  const aliasRegistry = buildNarrativeAliasRegistry(book);
+  const aliasHistory = book.narrativeAliasDecisions ?? [];
+  const currentAliasIds = new Set([...aliasRegistry.linked,...aliasRegistry.separated]
+    .map(entry=>entry.decision.id));
   const actorNames = [...new Map(ledger.currentAffirmed.map(({candidate}) =>
     [candidate.actor.normalize("NFC").toLocaleLowerCase("it"),candidate.actor])).values()]
     .sort((a,b)=>a.localeCompare(b,"it"));
@@ -59,7 +67,28 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
     } finally { setBusy(false); }
   }
 
-  if (!book.chapters.some(ch=>!!ch.frozenAt) && !history.length) return null;
+  async function saveAlias(verdict: NarrativeAliasDecision["verdict"]) {
+    if (busy || !chosenFirst || !chosenSecond) return;
+    const note = aliasNote.trim();
+    if (!window.confirm(
+      "Registrare " + (verdict==="linked"?"un possibile legame":"l'esclusione del legame") +
+      " fra questi due nomi? La decisione motivata resterà nello storico e nel backup. " +
+      "Non aggiorna automaticamente identità canoniche, prosa o segreti. " +
+      "L'autosync verrà disabilitato e la coda GitHub svuotata.",
+    )) return;
+    setBusy(true);setMessage("");setError("");
+    try {
+      await recordNarrativeAliasDecision(book.id,book.updatedAt,
+        chosenFirst,chosenSecond,verdict,note);
+      setAliasNote("");setAliasPreview(null);
+      await onRefresh();
+      setMessage("Decisione alias registrata. Il canone è invariato e l'autosync è disabilitato.");
+    } catch (cause) {
+      setError(cause instanceof Error?cause.message:"Decisione alias non salvata.");
+    } finally {setBusy(false);}
+  }
+
+  if (!book.chapters.some(ch=>!!ch.frozenAt) && !history.length && !aliasHistory.length) return null;
   return <details className="mt-4 min-w-0 rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
     <summary className="cursor-pointer font-semibold">
       Indice eventi candidati ({index.events.length}) — prosa congelata e decisioni autore
