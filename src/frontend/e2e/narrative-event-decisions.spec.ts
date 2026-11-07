@@ -370,14 +370,14 @@ test("alias motivati desktop/mobile: salva, riapri, rettifica e isola canone e r
   page.once("dialog",d=>d.accept());
   await board.getByRole("button",{name:"Annota come avvenuto"}).nth(1).click();
   const hints=board.locator('details[aria-label="Tracce di continuità da verificare"]');
-  await hints.locator("summary").first().first().click();
+  await hints.locator("summary").first().click();
   await hints.getByRole("combobox",{name:"Primo nome del confronto"}).selectOption("Mara");
   await hints.getByRole("combobox",{name:"Secondo nome del confronto"}).selectOption("Ombra");
   await hints.getByRole("textbox",{name:"Motivazione decisione alias"})
     .fill("Ombra è il soprannome di Mara nella versione attuale.");
   page.once("dialog",d=>d.accept());
   await hints.getByRole("button",{name:"Registra legame motivato"}).click();
-  await expect(hints.locator("summary").first().first()).toContainText("(1)");
+  await expect(hints.locator("summary").first()).toContainText("(1)");
   await expect(hints.getByText(/Alias motivato in registro:/)).toBeVisible();
   await expect(hints.locator("p").filter({hasText:"Motivazione del legame:"}).first()).toBeVisible();
   await page.reload();
