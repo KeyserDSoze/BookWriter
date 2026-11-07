@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.12
+# Redazione multi-agente di BookWriter — v0.11.13
+
+## Piste di comunicazione fra personaggi (v0.11.13)
+
+La redazione può segnalare fino a quattro **formule letterali** precedenti di comunicazione fra personaggi, come «Elio rivela a Mara che…», da scene canoniche già congelate. Il sistema cerca il destinatario e almeno un termine tematico in comune col segmento corrente, con offset e fonte esatti e limiti di scansione visibili. Questi sono **indizi di possibile accesso a una notizia**, non prove che il personaggio l'abbia ricevuta, creduta o compresa.
+
+Solo i quattro specialisti di continuità/timeline/segreti/voce e il giudice, se esiste un finding `knowledge` ancorato, ricevono il nuovo contesto. I cinque lettori ciechi restano senza questa prosa aggiuntiva e senza segreti. Se ci sono piste pertinenti il giudice deve classificarle singolarmente come possibile accesso, non pertinente, racconto inattendibile o indeterminato, motivando. Una pista `possible_path` o `unknown` **blocca l'approvazione** del conflitto di conoscenza; il giudice può rigettarlo senza riscrittura. Gli altri gate narrativi restano obbligatori e sono rivalidati anche prima del salvataggio AI. [Guida](information-transfer-traces.md), ADR 0046, issue #20.
+
+
 
 ## Come può conoscere quella notizia? (v0.11.12)
 
