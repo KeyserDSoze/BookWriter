@@ -109,6 +109,7 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
     .fill("SEGRETO-ALIAS-AUTORE-MAI-TRASMESSO al modello editoriale.");
   page.once("dialog",d=>d.accept());
   await hints.getByRole("button",{name:"Registra legame motivato"}).click();
+  await expect(board.getByText(/Decisione alias registrata/)).toBeVisible();
   const savedWitness=await page.evaluate(()=>new Promise<{
     eventId:string|undefined;aliasCount:number;
   }>((resolve,reject)=>{
