@@ -1,6 +1,6 @@
 # ADR 0045 — Giudizio epistemico sui conflitti relativi alla conoscenza dei personaggi
 
-- **Stato:** proposto per v0.11.12
+- **Stato:** accettato per v0.11.12 (PR #58)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0042, 0043, 0044
