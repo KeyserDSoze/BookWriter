@@ -16,7 +16,7 @@ Ogni scelta richiede conferma. Una scelta successiva rettifica la precedente sen
 
 ## Privacy, backup e sincronizzazione
 
-Queste note possono contenere spoiler e segreti. **Non sono inviate automaticamente ai revisori, al giudice o ai modelli AI nella v0.11.14**, e nessuna nuova chiamata AI viene effettuata. La decisione disabilita l'autosync per il libro e svuota la coda di sincronizzazione. I **backup ZIP**, sia solo contenuti sia completi, includono però lo storico; un **push GitHub manuale** potrebbe pubblicarlo. Evita repository pubblici per dati sensibili.
+Queste note possono contenere spoiler e segreti. **In v0.11.14 non erano inviate ai revisori o ai modelli AI; dalla v0.11.15 servono consensi separati per ogni ruolo autorizzato**, e nessuna nuova chiamata AI viene effettuata. La decisione disabilita l'autosync per il libro e svuota la coda di sincronizzazione. I **backup ZIP**, sia solo contenuti sia completi, includono però lo storico; un **push GitHub manuale** potrebbe pubblicarlo. Evita repository pubblici per dati sensibili.
 
 Il sistema non modifica automaticamente `memory.secrets`, le schede dei personaggi, la timeline, la prosa o il canone. I registri importati vengono validati come struttura e rivalidati con le fonti correnti, ma l'importazione **non autentica l'identità di chi ha scritto le decisioni**.
 
@@ -25,3 +25,8 @@ Il sistema non modifica automaticamente `memory.secrets`, le schede dei personag
 Il registro supporta soltanto menzioni esplicite di conoscenza che l'indice lessicale riesce a trovare e che l'autore ha già confermato; non permette di dedurre automaticamente informazioni da pronomi, conversazioni indirette o segreti mai pronunciati. Non è ancora un grafo completo di ciò che tutti i personaggi sanno. La connessione delle annotazioni ai prompt dei revisori richiederà una futura decisione progettuale sulla privacy e sul consenso.
 
 Riferimenti: [ADR 0047](../ADR/0047-author-attested-knowledge-interpretations.md), [indice attestazioni](narrative-event-decisions.md), [piste di comunicazione](information-transfer-traces.md), [issue #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+
+
+## Consensi facoltativi dalla v0.11.15
+
+La condivisione rimane disabilitata per impostazione predefinita; nella nuova sezione puoi autorizzare singoli specialisti o il giudice, **mai i lettori ciechi**, e revocare per le richieste AI future. Nei prompt autorizzati appaiono solo classificazione e breve citazione precedente, non le motivazioni private. Il backup conserva lo storico ma **l'importazione revoca i permessi attivi**. Vedi [guida al consenso](knowledge-sharing-consent.md) e ADR 0048.
