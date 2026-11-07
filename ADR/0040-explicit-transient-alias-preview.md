@@ -1,6 +1,6 @@
 # ADR 0040 — Anteprima alias esplicita, limitata a una coppia e non persistente
 
-- **Stato:** proposto per v0.11.7
+- **Stato:** accettato per v0.11.7 (PR #53)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Predecessore:** ADR 0039 — segnali consultivi fra attestazioni valide
