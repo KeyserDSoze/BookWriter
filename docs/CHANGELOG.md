@@ -2,6 +2,17 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.11.3 — 2026-11-07 (PR #49)
+
+**Indice locale consultivo delle menzioni di eventi narrativi**
+
+- `narrative-event-candidates.ts` costruisce **sul dispositivo** un indice effimero di menzioni letterali in scene **canoniche e congelate**: conoscenze dichiarate («scopre che»), consegne di oggetti («consegna a») e cambiamenti di stato («scompare», «parte», ecc.), con capitolo/scena, soggetto, eventuale destinatario, data dichiarata, citazione letterale e **offset verificabile**.
+- Ogni elemento resta `unverified_literal_pattern`: può riferirsi a dialoghi, sogni o menzogne. **Non** modifica il canone, segreti, timeline, conoscenze o possessi e non certifica fatti/contraddizioni. Dopo una riapertura, il capitolo non congelato **esce** automaticamente dall'indice.
+- Nuovo riquadro espandibile «Indice eventi candidati» nel pannello redazione, con quote e provenance consultabili; massimo 30 visualizzati. I campioni cross-chapter possono includere fino a quattro menzioni per scena per **solo** gli specialisti autorizzati e il direttore. I cinque lettori ciechi non ricevono questo contesto aggiuntivo; il gate del finding resta il segmento corrente.
+- Limiti dichiarati: primi **20.000 caratteri per scena**, 4 menzioni per scena, 1.600 scene e 80 voci per libro; niente rete, nuovi modelli o richieste AI. Test Vitest e Playwright desktop/mobile su citazioni, privacy, stato congelato, dialoghi, negazioni e limiti. ADR 0036, [guida](narrative-event-candidates.md), issue #20.
+
+**Limite esplicito:** schemi lessicali italiani ristretti, NON comprensione semantica di ciò che personaggi sanno o possiedono. Servirà una futura conferma autore per promuovere una menzione a fatto del canone.
+
 ## 0.11.2 — 2026-11-06 (PR #48)
 
 **Recupero locale mirato delle scene per la rivalidazione cross-chapter**

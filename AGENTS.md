@@ -334,6 +334,13 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Conservare gli stessi ruoli autorizzati di v0.11.1, mai dare retrieval ai 5 lettori ciechi; `finding.evidence` resta **citazione del segmento corrente**. Il giudice può respingere rilievi infondati, e né la selezione né il freeze certificano contraddizioni, eventi semantici o verità storiche. Schema ZIP legacy compatibile e strict sui nuovi contatori.
 - Test deterministici su scene di capitoli intermedi, mezzo di scene lunghe, offset exact, limite 1.600, nessun futuro/segreto, audit, lettori ciechi, Playwright desktop/mobile. [Guida](docs/targeted-continuity-retrieval.md), ADR 0035.
 
+## Indice locale delle menzioni evento v0.11.3 (ADR 0036)
+
+- `narrative-event-candidates.ts` estrae **solo ipotesi di menzioni letterali** da scene `canon` di capitoli `frozenAt`. `knowledge_mention`, `item_transfer_mention`, `state_change_mention` NON sono fatti verificati né mutazioni di `memory` (segreti, conoscenze, oggetti o timeline). Dialoghi, bugie, sogni e narrazione inaffidabile possono contenere gli stessi schemi. L'indice è effimero, senza rete, AI extra o stato duplicato.
+- Mantenere quote ed offset **identici** a `scene.text.slice(offset,offset+quote.length)`, ID e numeri capitolo/scena, eventuale data della scena e `evidenceStatus=unverified_literal_pattern`. Scanner bounded 20.000 caratteri per scena, max quattro menzioni per scena, 1.600 scene già congelate e 80 menzioni totali; mostrare in UI i limiti, non promettere copertura totale o semantica. Cap. riaperti/non congelati e scene draft **non** entrano nell'indice.
+- Nei campioni di `ContinuityEvidenceScene` si possono includere menzioni della **stessa scena pubblica precedente**; soltanto quattro specialisti autorizzati e giudice, più lo storico quando `historical_evidence`, le ricevono nel prompt. Nessuna espansione del contesto dei cinque lettori ciechi; `finding.evidence` cita **solo il segmento corrente**, il giudice può respingere una critica fondata solo sull'ipotesi.
+- UI consultiva, nessuna promozione automatica nel canon né approvazione di remediation; una futura attestazione autore richiederà una nuova ADR. Testare dialoghi/negazioni, provenienza letterale, limiti, privacy e riaperture. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
+
 ## Rilasci e changelog
 
 - Ogni modifica utente pubblicata su `main` aumenta `src/frontend/package.json` con SemVer e aggiunge una nota corrispondente in `docs/CHANGELOG.md` con PR, funzionalità e limitazioni.

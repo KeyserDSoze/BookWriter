@@ -1,4 +1,5 @@
 import type { BookProject, Chapter, Scene } from "./types";
+import { extractNarrativeEventCandidates, type NarrativeEventCandidate } from "./narrative-event-candidates";
 import { retrievePriorContinuityScenes, targetedLiteralWindows, type RetrievalMatch,
   type RankedPriorScene } from "./continuity-retrieval";
 
@@ -38,6 +39,8 @@ export interface ContinuityEvidenceScene {
   /** The matching signals explain selection, NOT a verified inconsistency. */
   matchSignals: RetrievalMatch;
   selectionReason: RankedPriorScene["selectionReason"];
+  /** Literal event mentions, NEVER canonical facts; max 4 per sampled scene. */
+  eventCandidates?: NarrativeEventCandidate[];
 }
 
 export interface ContinuityEvidencePack {
@@ -132,6 +135,7 @@ export function buildContinuityEvidence(book: BookProject, chapter: Chapter,
       referencedEntities:relatedNames(scene).slice(0,18),
       coverage:scene.text.length<=2800?"complete" as const:"partial" as const,
       windows,matchSignals:match,selectionReason,
+      eventCandidates:extractNarrativeEventCandidates(sourceChapter,scene),
     };
   });
   return {

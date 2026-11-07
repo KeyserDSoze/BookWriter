@@ -8,6 +8,10 @@ Quando riapri un capitolo già approvato o chiedi all'autopilot di correggere re
 
 La stessa catena è ora attivata anche quando aggiungi, verifichi, escludi o attesti relazioni fra **fonti storiche** in un capitolo già congelato. Il marcatore `historical_evidence` distingue un **dossier documentale modificato** dalla **prosa riscritta**. I capitoli successivi già scritti richiedono una nuova review in ordine; anche il revisore storico vede campioni della prosa precedente, ma tali campioni **non dimostrano fatti storici** e non certificano l'indipendenza dei documenti. [Guida](historical-continuity-rechecks.md) e ADR 0034.
 
+## Menzioni esplicite di eventi nei campioni (v0.11.3)
+
+Le scene pubbliche precedenti selezionate dal ranking possono contenere fino a quattro **menzioni letterali non verificate** di un'informazione scoperta, un oggetto consegnato o un cambio di stato, con frase e offset. Il direttore deve leggere il contesto, non promuoverle a fatti certi né accettare una remediation basata soltanto sull'etichetta del pattern. L'autore può consultare un indice locale nel pannello redazione. Nessun canone segreto o capitolo futuro viene indicizzato. [Guida](narrative-event-candidates.md), ADR 0036.
+
 ## Recupero mirato delle scene a monte (v0.11.2)
 
 La selezione dei campioni non è più limitata alle sole scene del capitolo d'origine e dell'ultimo predecessore. Un ranking **locale, deterministico e lessicale** cerca anche indizi in **capitoli intermedi**, confrontando entità dichiarate, parole della prosa e date esplicite. Conserva gli ancoraggi originari, massimo quattro scene e due per capitolo, e focalizza le finestre delle scene lunghe intorno alle parole rilevanti con offset letterali.
