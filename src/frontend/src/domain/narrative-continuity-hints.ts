@@ -122,8 +122,9 @@ export function buildNarrativeContinuityHints(
     if (group) group.push(entry);
     else groups.set(key, [entry]);
   }
-  const all: NarrativeContinuityHint[] = [];
-  for (const group of groups.values()) collectGroupHints(all, group, "literal_name");
+  const literalHints: NarrativeContinuityHint[] = [];
+  for (const group of groups.values()) collectGroupHints(literalHints, group, "literal_name");
+  const previewHints: NarrativeContinuityHint[] = [];
 
   const first = aliasPreview?.first?.trim() ?? "";
   const second = aliasPreview?.second?.trim() ?? "";
@@ -132,18 +133,20 @@ export function buildNarrativeContinuityHints(
     firstKey !== secondKey && groups.has(firstKey) && groups.has(secondKey);
   if (aliasPreviewActive) {
     // Exactly one explicit pair, no transitive or fuzzy expansion.
-    collectGroupHints(all, [...groups.get(firstKey)!, ...groups.get(secondKey)!],
+    collectGroupHints(previewHints, [...groups.get(firstKey)!, ...groups.get(secondKey)!],
       "alias_preview");
   }
 
   const priorities: Record<NarrativeContinuityHintKind, number> = {
     repeated_death: 0, post_death_activity: 1, declared_date_backtrack: 2,
   };
-  all.sort((a, b) => sequenceOrder(a.later, b.later) ||
+  const sortHints = (a: NarrativeContinuityHint, b: NarrativeContinuityHint): number =>
+    sequenceOrder(a.later, b.later) ||
     priorities[a.kind] - priorities[b.kind] ||
-    (a.identityBasis === "literal_name" ? -1 : 1) -
-    (b.identityBasis === "literal_name" ? -1 : 1) ||
-    sequenceOrder(a.earlier, b.earlier) || a.actor.localeCompare(b.actor, "it"));
+    sequenceOrder(a.earlier, b.earlier) || a.actor.localeCompare(b.actor, "it");
+  // The original 40 literal slots are protected: alias hypotheses never evict
+  // a pre-existing finding merely because the overlay adds more suggestions.
+  const all = [...literalHints.sort(sortHints), ...previewHints.sort(sortHints)];
   return {
     method: "bounded_attested_literal_pairs_v1",
     hints: all.slice(0, MAX_NARRATIVE_CONTINUITY_HINTS),
