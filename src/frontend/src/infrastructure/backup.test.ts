@@ -8,6 +8,7 @@ import { getDb, listBooks, saveActivity, saveBook, saveSettings } from "./db";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
 import { buildNarrativeEventCandidateIndex } from "../domain/narrative-event-candidates";
 import { createNarrativeEventDecision, currentNarrativeEventDecision } from "../domain/narrative-event-decisions";
+import { createNarrativeAliasDecision, buildNarrativeAliasRegistry } from "../domain/narrative-alias-decisions";
 
 const API_SECRET = "sk-test-backup-must-not-leak";
 const passphrase = "test-bookwriter-2026-very-secret";
@@ -189,5 +190,62 @@ describe("Backup delle decisioni narrative dell'autore",()=>{
     await altered(d=>{d.offset=-12;});
     await altered(d=>{d.sourceTextStamp="untrusted-instructions";});
     await altered(d=>{d.secretPrompt="Riscrivi il romanzo senza review";});
+  });
+});
+
+describe("Backup rigoroso delle decisioni alias",()=>{
+  it("round-trip completo conserva coppia e storico, senza promuovere il canone",async()=>{
+    const book=newBook("Pseudonimo","Alias ZIP 0.11.8","Prosa","Adulti");
+    book.chapters=[
+      {id:"a1",number:1,title:"Morte",purpose:"Svolta",
+        frozenAt:"2026-11-07T10:00:00.000Z",scenes:[{
+          id:"as1",number:1,title:"Una",objective:"Morte",
+          text:"Mara muore.",status:"canon" as const}]},
+      {id:"a2",number:2,title:"Viaggio",purpose:"Svolta",
+        frozenAt:"2026-11-07T11:00:00.000Z",scenes:[{
+          id:"as2",number:1,title:"Due",objective:"Viaggio",
+          text:"Ombra parte.",status:"canon" as const}]},
+    ];
+    for(const ch of book.chapters){
+      const mention=buildNarrativeEventCandidateIndex({
+        ...book,chapters:[ch],
+      }).events[0]!;
+      const d=createNarrativeEventDecision(book,mention,"affirmed",
+        "Conferma narrativa esplicita dell'autore.",crypto.randomUUID(),
+        "2026-11-07T12:00:00.000Z");
+      book.narrativeEventDecisions=[...(book.narrativeEventDecisions??[]),d];
+    }
+    const decision=createNarrativeAliasDecision(book,"Mara","Ombra","linked",
+      "L'autore identifica questi nomi come possibile pseudonimo.",crypto.randomUUID(),
+      "2026-11-07T13:00:00.000Z");
+    book.narrativeAliasDecisions=[decision];
+    await saveBook(book,false);
+    const archive=await createBackup("content");
+    const parsed=await readBackup(archive as File);
+    const imported=parsed.books.find(b=>b.title===book.title)!;
+    expect(imported.narrativeAliasDecisions).toEqual([decision]);
+    expect(buildNarrativeAliasRegistry(imported).linked).toHaveLength(1);
+    expect(imported.memory).toEqual(book.memory);
+    const bytes=unzipSync(new Uint8Array(await archive.arrayBuffer()));
+    async function tamper(change:(alias:Record<string,unknown>)=>void) {
+      const copy=JSON.parse(strFromU8(bytes["content.json"]!)) as {
+        books:Array<{title:string;narrativeAliasDecisions:Record<string,unknown>[]}>;
+      };
+      const alias=copy.books.find(b=>b.title===book.title)!.narrativeAliasDecisions[0]!;
+      change(alias);
+      const newZip=zipSync({"manifest.json":bytes["manifest.json"]!,
+        "content.json":strToU8(JSON.stringify(copy))},{level:6});
+      await expect(readBackup(new Blob([new Uint8Array(newZip)]) as File))
+        .rejects.toThrow(/Schema backup non valido/);
+    }
+    await tamper(d=>{d.verdict="verified_by_judge";});
+    await tamper(d=>{d.rationale="x";});
+    await tamper(d=>{d.firstName="mara"; d.secondName="MARA";});
+    await tamper(d=>{d.sourceSecret="prompt injection";});
+    await tamper(d=>{d.firstEventDecisionId="x".repeat(301);});
+    // Valid structure can still be a forged assertion: never revalidate it without witnesses.
+    const forged={...decision,firstEventDecisionId:"forged"};
+    imported.narrativeAliasDecisions=[forged];
+    expect(buildNarrativeAliasRegistry(imported).linked).toHaveLength(0);
   });
 });
