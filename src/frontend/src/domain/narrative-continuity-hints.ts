@@ -10,6 +10,8 @@ export interface NarrativeContinuityHint {
   kind: NarrativeContinuityHintKind;
   /** A human-selected alias preview is never a canonical identity claim. */
   identityBasis: "literal_name" | "alias_preview" | "saved_alias";
+  /** Only for persisted motivated comparisons, NOT canonical identity evidence. */
+  aliasRationale?: string;
   actor: string;
   earlier: CurrentEventLedgerEntry;
   later: CurrentEventLedgerEntry;
@@ -65,6 +67,7 @@ function collectGroupHints(
   all: NarrativeContinuityHint[],
   group: CurrentEventLedgerEntry[],
   basis: NarrativeContinuityHint["identityBasis"],
+  aliasRationale?: string,
 ): void {
   const sequence = [...group].sort(sequenceOrder);
   let lastDeath: CurrentEventLedgerEntry | undefined;
@@ -76,7 +79,7 @@ function collectGroupHints(
     later: CurrentEventLedgerEntry, explanation: string): void => {
     if (!eligible(earlier, later)) return;
     all.push({kind, identityBasis: basis, actor: later.candidate.actor,
-      earlier, later, explanation});
+      earlier, later, explanation, ...(aliasRationale ? {aliasRationale} : {})});
   };
 
   for (const entry of sequence) {
@@ -136,7 +139,8 @@ export function buildNarrativeContinuityHints(
     savedKeys.add(key);
     const first = groups.get(nameKey(entry.decision.firstName));
     const second = groups.get(nameKey(entry.decision.secondName));
-    if (first && second) collectGroupHints(savedHints, [...first, ...second], "saved_alias");
+    if (first && second) collectGroupHints(savedHints, [...first, ...second],
+      "saved_alias", entry.decision.rationale);
   }
   const previewHints: NarrativeContinuityHint[] = [];
 
