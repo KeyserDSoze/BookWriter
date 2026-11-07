@@ -51,6 +51,18 @@ const memorySchema = z.object({
   currentState: z.string(),
 });
 const routeSchema = z.object({ endpointId: z.string(), modelId: z.string() });
+const narrativeEventDecisionSchema = z.object({
+  id: zId, chapterId: zId, sceneId: zId,
+  kind: z.enum(["knowledge_mention","item_transfer_mention","state_change_mention"]),
+  quote: z.string().min(1).max(180),
+  offset: z.number().int().min(0).max(2_000_000),
+  sourceFrozenAt: z.string().datetime(),
+  // Lightweight freshness marker, NOT a cryptographic signature.
+  sourceTextStamp: z.string().regex(/^\d{1,8}:[0-9a-f]{8}$/),
+  verdict: z.enum(["affirmed","dismissed"]),
+  rationale: z.string().min(12).max(500),
+  decidedAt: z.string().datetime(),
+}).strict();
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -64,6 +76,7 @@ const bookSchema = z.object({
   audienceReviews: z.array(z.string()),
   adversarial: z.string().optional(),
   chapters: z.array(chapterSchema).max(200),
+  narrativeEventDecisions: z.array(narrativeEventDecisionSchema).max(400).optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
   revision: z.object({

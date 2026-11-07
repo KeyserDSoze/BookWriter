@@ -11,6 +11,7 @@ export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "ou
 import type { ChapterEditorialCycle, EditorialRound } from "./editorial-board";
 import type { ChapterHistoricalDossier } from "./historical-research";
 import type { ContinuityRecheck, ContinuityRecheckAudit } from "./cross-chapter-continuity";
+import type { NarrativeEventDecision } from "./narrative-event-decisions";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -126,6 +127,8 @@ export interface BookProject {
   audienceReviews: string[];
   adversarial?: string;
   chapters: Chapter[];
+  /** Author annotations only: never automatic updates of narrative memory. */
+  narrativeEventDecisions?: NarrativeEventDecision[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;

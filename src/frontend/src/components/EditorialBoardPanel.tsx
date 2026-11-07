@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BookCheck, RotateCcw, ShieldAlert, Users } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
-import { buildNarrativeEventCandidateIndex } from "../domain/narrative-event-candidates";
+import { NarrativeEventDecisionsPanel } from "./NarrativeEventDecisionsPanel";
 import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
 import { reopenChapterReview } from "../application/editorial-control";
@@ -198,7 +198,6 @@ export function EditorialBoardPanel({
   const totalSlots = cycle?.reports[0]?.segmentCount ?
     cycle.reports[0].segmentCount * EDITORIAL_ROLES.length : null;
   const pending = cycle?.judgment ? acceptedRepairs(cycle).length : 0;
-  const eventIndex = buildNarrativeEventCandidateIndex(book);
 
   async function reopen(chapterId: string) {
     if (busy || book.status === "running") return;
@@ -278,37 +277,7 @@ export function EditorialBoardPanel({
           activeWikisourceIds={activeWikisourceExcerpts(chapter.historicalDossier).map(x=>x.id)}/></div>
       </details>)}
     </div>}
-    {book.chapters.some(ch => !!ch.frozenAt) && <details className="mt-4 min-w-0 rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
-      <summary className="cursor-pointer font-semibold">
-        Indice eventi candidati ({eventIndex.events.length}) — solo prosa congelata
-      </summary>
-      <p className="muted mt-2 text-xs">
-        Rilevamenti letterali locali: conoscenze menzionate, consegne e cambi di stato.
-        NON sono fatti confermati: possono essere dialoghi, menzogne o narrazione inaffidabile.
-        Non modificano il canone né certificano contraddizioni.
-        Scene analizzate: {eventIndex.scannedSceneCount};
-        non analizzate: {eventIndex.unscannedSceneCount}.
-        {eventIndex.eventLimitReached && " Raggiunto il limite di 80 eventi mostrati."}
-      </p>
-      <ul className="mt-2 space-y-2">
-        {eventIndex.events.slice(0,30).map((event, index) =>
-          <li key={event.chapterId + ":" + event.sceneId + ":" + event.offset + ":" + index}
-            className="min-w-0 rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
-            <span className="font-semibold">
-              Cap. {event.chapterNumber} · scena {event.sceneNumber} · {event.kind}
-            </span>
-            <p className="mt-1 break-words">«{event.quote}»</p>
-            <p className="muted mt-1 break-words">
-              Testo letterale a offset {event.offset} · soggetto: {event.actor}
-              {event.recipient ? " · destinatario: " + event.recipient : ""}
-              {event.sceneDate ? " · data dichiarata: " + event.sceneDate : ""}
-            </p>
-          </li>)}
-      </ul>
-      {eventIndex.events.length > 30 && <p className="muted mt-2 text-xs">
-        Mostrati i primi 30 eventi candidati: nessuna selezione equivale a una conferma.
-      </p>}
-    </details>}
+    <NarrativeEventDecisionsPanel key={book.id} book={book} onRefresh={onRefresh}/>
     {book.chapters.length > 0 && <div className="mt-4 space-y-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold"><BookCheck size={17}/> Stato dei capitoli</h3>
       {book.chapters.map(ch => <div key={ch.id} className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
