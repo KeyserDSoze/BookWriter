@@ -192,8 +192,9 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
         <p className="muted mt-1 text-xs">
           Solo dopo la tua scelta esplicita si aggiungono piste di confronto fra due nomi
           presenti nelle attestazioni correnti. Non si dichiara che siano la stessa persona:
-          l'ipotesi vale soltanto in questa scheda, non viene salvata, esportata o inviata all'AI.
-          Un solo abbinamento alla volta; nessun collegamento implicito con altri alias.
+          l'anteprima non viene salvata, esportata o inviata all'AI.
+          Puoi registrare separatamente una decisione motivata nello storico;
+          nessun collegamento implicito con altri alias.
         </p>
         {actorNames.length < 2 ? <p className="muted mt-2 text-xs">
           Occorrono almeno due nomi distinti con attestazioni valide per confrontarli.
@@ -232,13 +233,80 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
           Anteprima attiva: {activeAliasPair.first} ↔ {activeAliasPair.second}.
           I segnali originari rimangono sempre visibili. Nessuna identità confermata.
         </p>}
+        {actorNames.length >= 2 && <div className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
+          <label className="block text-xs font-semibold">
+            Motivazione della decisione alias (12–500 caratteri)
+            <textarea className="field mt-1 min-h-20" maxLength={500}
+              aria-label="Motivazione decisione alias" value={aliasNote}
+              onChange={e=>setAliasNote(e.target.value)}/>
+          </label>
+          <p className="muted my-2 text-xs">
+            Il salvataggio memorizza le due attestazioni sorgenti, la motivazione e lo
+            storico delle rettifiche. Un nuovo freeze o una rettifica di una fonte
+            invalida il legame senza cancellarlo dallo storico. Non modifica il canone.
+            {" "}Decisioni archiviate: {aliasHistory.length}/{MAX_ALIAS_DECISIONS}.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy || book.status==="running" ||
+              (!!book.editorialCycle && book.editorialCycle.stage!=="blocked") ||
+              aliasHistory.length>=MAX_ALIAS_DECISIONS || !chosenFirst || !chosenSecond ||
+              chosenFirst.normalize("NFC").toLocaleLowerCase("it") ===
+              chosenSecond.normalize("NFC").toLocaleLowerCase("it") ||
+              aliasNote.trim().length<12 || aliasNote.trim().length>500}
+              onClick={()=>void saveAlias("linked")}>Registra legame motivato</Button>
+            <Button disabled={busy || book.status==="running" ||
+              (!!book.editorialCycle && book.editorialCycle.stage!=="blocked") ||
+              aliasHistory.length>=MAX_ALIAS_DECISIONS || !chosenFirst || !chosenSecond ||
+              chosenFirst.normalize("NFC").toLocaleLowerCase("it") ===
+              chosenSecond.normalize("NFC").toLocaleLowerCase("it") ||
+              aliasNote.trim().length<12 || aliasNote.trim().length>500}
+              onClick={()=>void saveAlias("separated")}>Escludi legame motivato</Button>
+          </div>
+        </div>}
       </fieldset>
+      <details aria-label="Storico decisioni alias"
+        className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
+        <summary className="cursor-pointer font-semibold">
+          Registro alias motivati ({aliasRegistry.linked.length} legami correnti)
+        </summary>
+        <p className="muted mt-2 text-xs">
+          Non sono identità canoniche, né fatti autenticati. Revoche correnti:
+          {" "}{aliasRegistry.separated.length};
+          decisioni rettificate o non correnti: {aliasRegistry.nonCurrentCount}.
+          Nessuna fusione automatica o deduzione transitiva tra coppie.
+        </p>
+        {aliasRegistry.linked.length>0 && <ul className="mt-2 space-y-1">
+          {aliasRegistry.linked.map(({decision})=><li key={decision.id}
+            className="break-words rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+            <b>{decision.firstName} ↔ {decision.secondName}</b> · autore: {decision.rationale}
+            <p className="muted">Sorgenti: {decision.firstEventDecisionId} / {
+              decision.secondEventDecisionId}</p>
+          </li>)}
+        </ul>}
+        {aliasHistory.length>0 && <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto">
+          {[...aliasHistory].reverse().map(d=><li key={d.id}
+            className="break-words rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+            <b>{d.verdict==="linked"?"Legame proposto":"Legame escluso"}</b>
+            {" "}· {d.firstName} / {d.secondName} · {d.decidedAt} ·
+            {" "}{currentAliasIds.has(d.id)?"corrente":"storico/non corrente"}
+            <p>{d.rationale}</p>
+          </li>)}
+        </ul>}
+        {aliasHistory.length===0 && <p className="muted mt-2 text-xs">
+          Nessuna decisione alias ancora archiviata.
+        </p>}
+        <p className="muted mt-2 text-xs">
+          Gli audit importati da ZIP non autenticano l'identità dell'autore.
+          Sono dichiarazioni consultive, non istruzioni ai revisori.
+        </p>
+      </details>
       <p className="muted mt-2 text-xs">
         Confronti locali di sole attestazioni autore attualmente valide. Le frasi sono prove
         testuali, non dimostrano una contraddizione: flashback, ritorni, omonimi o svolte
         fantastiche possono spiegare ogni sequenza. Non vengono avviate nuove review AI,
         modifiche al canone, ai segreti, alla timeline o agli oggetti.
-        {" "}Attestazioni esaminate: {hints.inspectedAttestationCount}.
+        {" "}Attestazioni esaminate: {hints.inspectedAttestationCount};
+        coppie alias motivate correnti: {hints.savedAliasPairCount}.
         {hints.omittedHintCount > 0 &&
           " Altre " + hints.omittedHintCount + " tracce omesse dal limite di 40."}
       </p>
@@ -248,11 +316,13 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
         {hints.hints.map((hint,i)=><li key={hint.earlier.decision.id + ":" +
           hint.later.decision.id + ":" + hint.kind + ":" + i}
           className="rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
-          {hint.identityBasis === "alias_preview" && <p className="mb-1 font-semibold
+          {hint.identityBasis !== "literal_name" && <p className="mb-1 font-semibold
             text-amber-700 dark:text-amber-300">
-            Solo anteprima alias: «{hint.earlier.candidate.actor}» e
+            {hint.identityBasis==="alias_preview"?"Solo anteprima alias:":"Alias motivato in registro:"}
+            {" "}«{hint.earlier.candidate.actor}» e
             «{hint.later.candidate.actor}» ipotizzati come stessa identità dall'autore,
             non certificati dal software.
+            {hint.aliasRationale && " Motivazione del legame: "+hint.aliasRationale}
           </p>}
           <p className="font-semibold">
             {hint.kind === "repeated_death" ? "Morte menzionata più volte" :
