@@ -1,5 +1,19 @@
 # Changelog — BookWriter
 
+## 0.11.10 — 2026-11-07 (PR in preparazione)
+
+**Giudizio narrativo strutturato e gating prudente delle remediation**
+
+- Gli specialisti `continuity`, `timeline`, `secrets`, `characterVoice` possono marcare `narrativeConflict` solo se citano un `priorEventDecisionId` **già presente fra i testimoni precedenti realmente forniti nel loro prompt**. L'ID viene rivalidato al salvataggio; `finding.evidence` resta prova letterale **solo del segmento corrente**.
+- Il giudice indipendente deve fornire `narrativeReview` per ogni conflitto marcato, con valutazioni/motivazioni separate su **identità**, **cronologia**, **causalità**, **contesto artistico** e una conclusione. Un giudizio strutturato è rifiutato per finding senza marca; i legacy rimangono compatibili.
+- Per `accept`, il gate richiede fonte ancora corrente, stesso soggetto ritenuto tale dal giudice, nessuna spiegazione artistica plausibile, conflitto ritenuto supportato e almeno un'incompatibilità di cronologia o causalità. I falsi positivi possono essere **respinti motivatamente**, senza riscrivere. Prima di ogni `chapterRepair` il gate viene ripetuto, anche dopo resume o import ZIP.
+- Dashboard con ipotesi marcate dello specialista, ID testimone e quadro narrativo critico leggibile; backup ZIP contenuto/completo con validazione rigorosa dei due nuovi metadati nei rapporti e nelle decisioni, senza invalidare gli altri campi legacy.
+- Test Vitest su fonti, limiti, schema/decisioni, falsi positivi, contesto artistico, resume/import e ZIP ostili; Playwright desktop/mobile su flusso con 12 agenti, giudice che respinge con quattro dimensioni, scena invariata.
+- Nessuna nuova chiamata AI, stato canonico, migrazione obbligatoria, accesso ai segreti dei cinque lettori ciechi o promozione automatica di identità. [Guida](structured-narrative-adjudication.md), ADR 0043, issue #20.
+
+**Limite:** il giudice rimane fallibile e le condizioni strutturate non certificano verità semantica. Il nuovo controllo riguarda solo le ipotesi con testimone precedente attestato; i prompt più lunghi possono usare più token nelle chiamate esistenti.
+
+
 ## 0.11.9 — 2026-11-07 (PR #55)
 
 **Prove precedenti dell'autore nella review contestuale con giudice critico**
