@@ -219,7 +219,7 @@ function nextWork(book: BookProject): Work | null {
             const current = b.editorialCycle;
             const ch = b.chapters.find(c => c.id === cycle.chapterId);
             if (!current || !ch) throw new Error("Il ciclo editoriale è cambiato.");
-            const report = validateReport(current, next.role, next.segment, next.segmentCount, text, ch);
+            const report = validateReport(current, next.role, next.segment, next.segmentCount, text, ch, book);
             current.reports.push(report);
             if (!nextReviewSlot(b, current)) current.stage = "adjudicate";
           },
@@ -238,7 +238,7 @@ function nextWork(book: BookProject): Work | null {
             if (!current) throw new Error("Ciclo editoriale non disponibile.");
             const chapter = b.chapters.find(c => c.id === current.chapterId);
             if (!chapter) throw new Error("Capitolo del giudice non disponibile.");
-            current.judgment = validateJudgment(current, text, chapter);
+            current.judgment = validateJudgment(current, text, chapter, book);
             current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
             current.repairCursor = 0;
             current.summaryCursor = 0;
