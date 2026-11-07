@@ -61,3 +61,5 @@
 - [ ] Se pagina viene sospesa, al ritorno la UI indica attività sospesa e propone resume. Non promettere esecuzione in background.
 - [ ] Esportazione reale e valida di EPUB, PDF e DOCX.
 - [ ] `npm run typecheck`, `npm run test`, `npm run build` e test e2e documentati nella CI, senza credenziali in fixtures.
+
+- [x] v0.11.5: paginazione 30/80 delle menzioni candidate e registro derivato delle sole attestazioni autore correnti, con confronto manuale per nome esatto fra capitoli e storico delle rettifiche invariato. Nessuna semantica di contraddizione garantita (ADR 0038, issue #20).
