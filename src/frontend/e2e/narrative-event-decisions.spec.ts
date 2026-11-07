@@ -40,6 +40,9 @@ test("decisioni autore desktop/mobile: conferma, rettifica, audit e invalidazion
   page.once("dialog",d=>d.accept());
   await board.getByRole("button",{name:"Annota come avvenuto"}).click();
   await expect(board.getByText(/Interpretazione attuale: annotato come avvenuto/)).toBeVisible();
+  await board.locator("summary").filter({hasText:"Registro attestazioni correnti"}).click();
+  await expect(board.getByText(/Registro attestazioni correnti \(1\)/)).toBeVisible();
+  await expect(board.getByText(/Solo dichiarazioni dell'autore ancora ancorate/)).toBeVisible();
   await note.fill("Il guardiano ha mentito: non è un fatto del romanzo.");
   page.once("dialog",d=>d.accept());
   await board.getByRole("button",{name:"Respingi menzione"}).click();
@@ -90,4 +93,47 @@ test("decisioni autore desktop/mobile: conferma, rettifica, audit e invalidazion
     scroll:document.documentElement.scrollWidth,width:window.innerWidth,
   }));
   expect(width.scroll).toBeLessThanOrEqual(width.width+1);
+});
+
+test("indice paginato desktop/mobile: la menzione 31 è raggiungibile senza nuova rete",async({page})=>{
+  await page.goto("/");
+  await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Trentuno scene");
+  await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
+    .fill("Il romanzo contiene più di trenta menzioni.");
+  await page.getByRole("button",{name:"Crea libro"}).click();
+  await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+    const req=indexedDB.open("bookwriter");
+    req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{
+      const tx=req.result.transaction("books","readwrite");
+      const store=tx.objectStore("books"),get=store.getAll();
+      get.onerror=()=>reject(get.error);
+      get.onsuccess=()=>{
+        const b=get.result[0] as {id:string;status:string;phase:string;chapters:unknown[]};
+        b.status="paused";b.phase="completed";
+        b.chapters=[{id:"ch1",number:1,title:"Capitolo",purpose:"Tracce",
+          frozenAt:"2026-11-07T10:00:00Z",
+          scenes:Array.from({length:31},(_,i)=>({
+            id:"s"+(i+1),number:i+1,title:"Scena",objective:"Traccia",
+            text:"Mara scompare.",status:"canon",
+          }))}];
+        store.put(b,b.id);
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  const board=page.getByRole("region",{name:"Redazione multi-agente"});
+  await board.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
+  await expect(board.getByText(/Menzioni 1–30 di 31/)).toBeVisible();
+  await expect(board.getByText("Cap. 1 · scena 31 · state_change_mention")).toHaveCount(0);
+  await board.getByRole("button",{name:"Pagina successiva"}).click();
+  await expect(board.getByText(/Menzioni 31–31 di 31/)).toBeVisible();
+  await expect(board.getByText("Cap. 1 · scena 31 · state_change_mention")).toBeVisible();
+  await board.getByRole("button",{name:"Pagina precedente"}).click();
+  await expect(board.getByText(/Menzioni 1–30 di 31/)).toBeVisible();
+  const dimensions=await page.evaluate(()=>({
+    content:document.documentElement.scrollWidth,viewport:window.innerWidth,
+  }));
+  expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport+1);
 });
