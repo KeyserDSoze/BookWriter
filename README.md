@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Piste di comunicazione v0.11.13:** la redazione confronta fino a quattro menzioni testuali di notizie raccontate fra personaggi in capitoli precedenti. Il giudice deve valutare se siano possibili vie d'accesso, non fatti certi; un accesso plausibile o indeterminato blocca l'approvazione di un falso conflitto di conoscenza. [Guida](docs/information-transfer-traces.md), ADR 0046, issue #20.
+
 **Conoscenze dei personaggi v0.11.12:** il giudice deve motivare le differenze fra narrazione diretta, voci, sogni e accesso plausibile fuori scena quando un rilievo segnala ciò che un personaggio sa. Il gate blocca una riscrittura fondata su conoscenze non dimostrate. [Guida](docs/knowledge-provenance-review.md), ADR 0045, issue #20.
 
 **Confronti su scene non attestate v0.11.11:** i quattro specialisti di continuità possono citare fino a tre estratti letterali di capitoli precedenti congelati, anche senza annotazioni evento dell'autore. Il giudice valuta identità, cronologia, causalità e spiegazioni artistiche prima di autorizzare qualsiasi intervento; le fonti vengono rivalidate al salvataggio del repair. Il testo non diventa un fatto canonico. [Guida](docs/unattested-scene-review.md), ADR 0044, issue #20.

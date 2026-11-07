@@ -1,5 +1,18 @@
 # Changelog — BookWriter
 
+## 0.11.13 — 2026-11-07 (PR #59)
+
+**Piste locali di trasmissione di informazioni tra personaggi**
+
+- Nuovo `buildInformationTransferTrace` locale e bounded: fino a **4 menzioni letterali** di comunicazioni fra due nomi da capitoli precedenti congelati e scene canoniche; massimo 240 scene scansionate, 6k caratteri per scena e 10k per query. Frase originale/offset, mittente/destinatario, tema condiviso, fonte, freeze e timbro testo, contatori di candidati/scene omessi. Riconoscimento lessicale italiano, non comprensione semantica.
+- I quattro specialisti `continuity,timeline,secrets,characterVoice` vedono i nuovi estratti nelle chiamate esistenti; i cinque lettori ciechi e gli altri tre specialisti **non** li ricevono. Il giudice riceve il pack solo per finding `knowledge` con ancora corrente, non per rilievi generici. Una comunicazione citata NON significa notizia appresa o vera.
+- Per conflitti di `knowledge` con piste pertinenti, `informationTransferReview` **strict** aggiunge un giudizio motivato per ogni ID testimone effettivamente presente (`possible_path|unrelated|unreliable_report|unknown`). Nessun ID inventato, duplicato o obsoleto. `possible_path` e `unknown` **impediscono di approvare** una remediation fondata su accesso impossibile; il giudice può respingere. Restano tutti i requisiti `narrativeReview` e `knowledgeReview` della v0.11.12.
+- Validazione al giudizio, in `repairPrompt` e nella callback sul libro fresco prima del salvataggio di prosa AI. Dashboard con riquadro `Esame dei possibili passaggi informativi`; ZIP strict per il nuovo campo nei giudizi e storici, legacy ancora leggibili.
+- Test Vitest per citazioni/offset, privato e futuro esclusi, termini/nomi, limiti, 12 ruoli, rifiuti e gate; ZIP ostili/round-trip; Playwright desktop/mobile con comunicazione precedente, giudice critico e freeze senza riscrittura. ADR 0046, [guida](information-transfer-traces.md), issue #20.
+
+**Limiti:** indizi lessicali, copertura parziale, possibile dialogo inattendibile. Non si certifica un evento né si crea un grafo canonico. Nessuna nuova chiamata AI/HTTP, modifica canon/memoria/segreti/possessi/timeline o nuovo stato top-level; più token nelle richieste esistenti sono possibili.
+
+
 ## 0.11.12 — 2026-11-07 (PR #58)
 
 **Giudizio epistemico sul sapere dei personaggi**

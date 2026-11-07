@@ -214,6 +214,25 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
                     <p className="muted">Un nome o una voce non provano che il personaggio sappia davvero un segreto.
                       La valutazione del giudice non modifica il canone.</p>
                   </div>}
+                  {ruling.informationTransferReview && <div className="mt-2 space-y-1 rounded border
+                    border-slate-300 p-2 break-words dark:border-slate-700"
+                    aria-label="Esame dei possibili passaggi informativi">
+                    <p className="font-semibold">Possibili comunicazioni precedenti — non fatti accertati</p>
+                    {ruling.informationTransferReview.candidateAssessments.map(assessment=>
+                      <div key={assessment.candidateId} className="border-t border-slate-300 pt-1
+                        dark:border-slate-700">
+                        <p><b>Pista:</b> {assessment.candidateId}</p>
+                        <p><b>Valutazione:</b> {assessment.disposition==="possible_path"
+                          ? "Possibile percorso della notizia" :
+                          assessment.disposition==="unrelated" ? "Non pertinente" :
+                            assessment.disposition==="unreliable_report" ?
+                              "Racconto non attendibile" : "Non determinabile"}</p>
+                        <p><b>Motivazione:</b> {assessment.rationale}</p>
+                      </div>)}
+                    <p><b>Conclusione del giudice:</b> {ruling.informationTransferReview.conclusion}</p>
+                    <p className="muted">I riferimenti corrispondono a citazioni di scene precedenti;
+                      non dimostrano né la consegna né la comprensione del messaggio.</p>
+                  </div>}
                   {ruling.conflictReview && <div className="mt-2 space-y-1 rounded border
                     border-slate-300 p-2 break-words dark:border-slate-700"
                     aria-label="Controllo critico del direttore">
