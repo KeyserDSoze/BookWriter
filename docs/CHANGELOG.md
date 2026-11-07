@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.12 — 2026-11-07 (PR in preparazione)
+## 0.11.12 — 2026-11-07 (PR #58)
 
 **Giudizio epistemico sul sapere dei personaggi**
 
