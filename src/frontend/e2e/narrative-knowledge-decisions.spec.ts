@@ -41,7 +41,7 @@ test("registro conoscenze autore: conferma, rettifica, storico e invalidazione d
   await expect(board.getByText(/Interpretazione attuale: annotato come avvenuto/)).toBeVisible();
 
   const knowledge=board.locator('details[aria-label="Registro conoscenze autore"]');
-  await expect(knowledge.locator("> summary")).toContainText("Conoscenze interpretate dall'autore (0)");
+  await expect(knowledge.locator("> summary")).toContainText("Conoscenze interpretate dall'autore (0 correnti)");
   await knowledge.locator("> summary").click();
   await expect(knowledge.getByLabel("Menzione di conoscenza attestata")).toBeVisible();
   const note=knowledge.getByRole("textbox",{name:"Motivazione conoscenza autore"});
