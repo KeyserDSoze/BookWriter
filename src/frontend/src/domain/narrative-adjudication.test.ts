@@ -4,7 +4,7 @@ import { extractNarrativeEventCandidates } from "./narrative-event-candidates";
 import { createNarrativeEventDecision } from "./narrative-event-decisions";
 import { buildAttestedReviewContext } from "./attested-editorial-context";
 import { adjudicationPrompt, chapterSegments, createEditorialCycle,
-  validateJudgment, validateReport } from "./editorial-board";
+  repairPrompt, validateJudgment, validateReport } from "./editorial-board";
 
 function sample():BookProject {
   const book=newBook("Romanzo di Mara", "Conflitto", "Sobrio", "Adulti");
@@ -148,6 +148,19 @@ describe("Giudizio critico strutturato su conflitti narrativi attestati",()=>{
       assessment:"insufficient_evidence",
     })),chapter,book);
     expect(rejected.verdict).toBe("freeze");
+  });
+  it("l'import o la riapertura dopo giudizio non permettono di saltare il gate alla riparazione",()=>{
+    const book=sample(),{chapter,cycle,id}=validated(book);
+    const approved=validateJudgment(cycle,decide(id,"accept",narrativeReview()),chapter,book);
+    cycle.judgment=approved;
+    expect(repairPrompt(book,cycle,"s2").prompt).toContain("Chiarire con una frase");
+    // Anche se la decisione salvata resta su accept, la fonte rivalidata è obsoleta.
+    book.chapters[0]!.frozenAt="2026-11-08T09:00:00Z";
+    expect(()=>repairPrompt(book,cycle,"s2")).toThrow(/testimone precedente non più corrente/);
+    // Un giudizio importato manipolato senza le quattro dimensioni è rifiutato.
+    book.chapters[0]!.frozenAt="2026-11-07T09:00:00Z";
+    delete cycle.judgment.decisions[0]!.narrativeReview;
+    expect(()=>repairPrompt(book,cycle,"s2")).toThrow(/deve confrontare identità/i);
   });
   it("non impone il nuovo schema ai vecchi finding senza marca e vieta il campo spurio",()=>{
     const book=sample(),{chapter,cycle,id}=validated(book);
