@@ -1,6 +1,6 @@
 # ADR 0048 — Consenso per singola conoscenza e per destinatario editoriale AI
 
-- **Stato:** proposto per v0.11.15
+- **Stato:** accettato per v0.11.15 (PR #61)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0011, 0042–0047
