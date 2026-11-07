@@ -115,6 +115,8 @@ test("registro conoscenze autore: conferma, rettifica, storico e invalidazione d
   const stale=after.locator('details[aria-label="Registro conoscenze autore"]');
   await expect(stale.locator("> summary")).toContainText("(0 correnti)");
   await stale.locator("> summary").click();
+  await stale.locator('details[aria-label="Storico interpretazioni conoscenze"] > summary')
+    .click();
   await expect(stale.getByText(/Decisioni non correnti: 2/)).toBeVisible();
   expect(requests).toEqual([]);
   const width=await page.evaluate(()=>
