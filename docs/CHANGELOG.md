@@ -1,5 +1,18 @@
 # Changelog — BookWriter
 
+## 0.11.8 — 2026-11-07 (PR #54)
+
+**Registro locale persistente delle ipotesi alias motivate**
+
+- Nuovo storico append-only `BookProject.narrativeAliasDecisions` (max 120): scelta esplicita e motivazione dell'autore (12–500 caratteri) su due nomi, conferma o esclusione del legame, ancorate agli ID di **due attestazioni evento correnti**.
+- Revalidazione a ogni consultazione: la decisione più recente sulla coppia prevale senza riattivare quelle vecchie; freeze cambiati, scene mutate, rettifiche/rifiuti delle attestazioni rendono gli alias **storici**, mai fatti canonici.
+- Scrittura atomica con Web Locks, CAS, attività e svuotamento outbox, autosync disabilitato. ZIP import/export compatibile con backup precedenti, nuovi campi strict per evitare payload ostili e nessuna modifica delle credenziali remote dopo import.
+- Nei segnali di continuità vengono aggiunte le coppie motivate ancora correnti (`identityBasis=saved_alias`) **dopo** i segnali letterali, **prima** delle anteprime temporanee; limite 40 e omissioni contate. Senza inferenze transitive, deduzioni di identità o modifiche a canone, memoria, segreti, possessi e timeline.
+- Vitest su rettifiche, staleness, backup manomessi, concorrenza, outbox e confronti; Playwright desktop/mobile su conferma, reload, revoca e isolamento rete. ADR 0041, `docs/persisted-author-aliases.md` e issue #20.
+
+**Limiti:** decisioni attribuite all'autore ma non autentiche dopo import; ancore locali non firmate, legami consultivi non certificati; nessuna espansione dei prompt dei dodici agenti.
+
+
 ## 0.11.7 — 2026-11-07 (PR #53)
 
 **Anteprima temporanea e consensuale degli alias nei segnali di continuità**

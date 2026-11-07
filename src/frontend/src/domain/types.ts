@@ -12,6 +12,7 @@ import type { ChapterEditorialCycle, EditorialRound } from "./editorial-board";
 import type { ChapterHistoricalDossier } from "./historical-research";
 import type { ContinuityRecheck, ContinuityRecheckAudit } from "./cross-chapter-continuity";
 import type { NarrativeEventDecision } from "./narrative-event-decisions";
+import type { NarrativeAliasDecision } from "./narrative-alias-decisions";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -129,6 +130,8 @@ export interface BookProject {
   chapters: Chapter[];
   /** Author annotations only: never automatic updates of narrative memory. */
   narrativeEventDecisions?: NarrativeEventDecision[];
+  /** Author-only alias interpretations, never canonical identities. */
+  narrativeAliasDecisions?: NarrativeAliasDecision[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
