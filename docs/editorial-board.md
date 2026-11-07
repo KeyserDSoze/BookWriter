@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.14
+# Redazione multi-agente di BookWriter — v0.11.15
+
+## Consenso mirato dell'autore per trasmettere conoscenze AI (v0.11.15)
+
+Il registro privato della v0.11.14 **rimane privato per impostazione predefinita**. L'autore può ora selezionare individualmente una conoscenza attestata e **solo** i destinatari autorizzati fra continuità, timeline, segreti, voce personaggi e giudice. La condivisione trasmette ai provider AI configurati un pacchetto bounded di sole **brevi citazioni da capitoli precedenti**, attore, posizione e `learned_directly|reported_by_other|still_secret`, **mai** le motivazioni private e le note su segreti. I cinque lettori ciechi, gli altri specialisti e il writer non ricevono il nuovo pack.
+
+Il giudice lo vede soltanto per finding di **knowledge** ancora ancorati alla prosa corrente e se è stato scelto come destinatario. La revoca, la rettifica, la riapertura o la riattestazione della fonte bloccano futuri invii senza cancellare l'audit; le richieste già inviate non sono cancellabili dal software. ZIP importati **revocano i permessi attivi** e richiedono nuovo consenso locale. I dati sono interpretazioni fallibili e non cambiano né il canone né la logica del giudice. [Guida](knowledge-sharing-consent.md), ADR 0048, issue #20.
+
+
 
 ## Conoscenze interpretate dall'autore, senza trasmissione AI (v0.11.14)
 
