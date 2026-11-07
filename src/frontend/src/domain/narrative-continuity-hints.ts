@@ -7,6 +7,8 @@ export type NarrativeContinuityHintKind =
 
 export interface NarrativeContinuityHint {
   kind: NarrativeContinuityHintKind;
+  /** A human-selected alias preview is never a canonical identity claim. */
+  identityBasis: "literal_name" | "alias_preview";
   actor: string;
   earlier: CurrentEventLedgerEntry;
   later: CurrentEventLedgerEntry;
@@ -17,6 +19,13 @@ export interface NarrativeContinuityHintIndex {
   hints: NarrativeContinuityHint[];
   omittedHintCount: number;
   inspectedAttestationCount: number;
+  /** Only true for a valid, explicitly requested pair of attested names. */
+  aliasPreviewActive: boolean;
+}
+
+export interface NarrativeAliasPreview {
+  first: string;
+  second: string;
 }
 
 export const MAX_NARRATIVE_CONTINUITY_HINTS = 40;
@@ -43,73 +52,106 @@ function sequenceOrder(a: CurrentEventLedgerEntry, b: CurrentEventLedgerEntry): 
     a.decision.id.localeCompare(b.decision.id);
 }
 
-/** Read-only and local: never infer aliases, private memory, possessions or causal truth.
- * Date comparisons use ONLY valid YYYY-MM-DD scene labels, never the narrative's actual clock. */
-export function buildNarrativeContinuityHints(book: BookProject): NarrativeContinuityHintIndex {
+function nameKey(name: string): string {
+  return name.normalize("NFC").toLocaleLowerCase("it");
+}
+
+/** Emit only anchored literal comparisons. An alias preview emits CROSS-name
+ * comparisons exclusively, so it can never suppress the original literal findings. */
+function collectGroupHints(
+  all: NarrativeContinuityHint[],
+  group: CurrentEventLedgerEntry[],
+  basis: NarrativeContinuityHint["identityBasis"],
+): void {
+  const sequence = [...group].sort(sequenceOrder);
+  let lastDeath: CurrentEventLedgerEntry | undefined;
+  let lastDated: CurrentEventLedgerEntry | undefined;
+  const eligible = (a: CurrentEventLedgerEntry, b: CurrentEventLedgerEntry): boolean =>
+    inLaterChapter(a, b) && (basis === "literal_name" ||
+      nameKey(a.candidate.actor) !== nameKey(b.candidate.actor));
+  const add = (kind: NarrativeContinuityHintKind, earlier: CurrentEventLedgerEntry,
+    later: CurrentEventLedgerEntry, explanation: string): void => {
+    if (!eligible(earlier, later)) return;
+    all.push({kind, identityBasis: basis, actor: later.candidate.actor,
+      earlier, later, explanation});
+  };
+
+  for (const entry of sequence) {
+    const day = isoSceneDay(entry.candidate.sceneDate);
+    if (day) {
+      if (lastDated && day < isoSceneDay(lastDated.candidate.sceneDate)!) {
+        add("declared_date_backtrack", lastDated, entry,
+          "Le date ISO dichiarate nelle scene diminuiscono nell'ordine dei capitoli. " +
+          "Flashback o una narrazione non lineare possono essere intenzionali.");
+      }
+      lastDated = entry;
+    }
+    if (entry.candidate.kind !== "state_change_mention") continue;
+    const action = entry.candidate.detail.toLocaleLowerCase("it");
+    if (action === "risorge") {
+      // Hypothetical aliasing may include an intermediate resurrection from either name.
+      // It suppresses only this overlay's subsequent comparisons, not literal findings.
+      lastDeath = undefined;
+    } else if (action === "muore") {
+      if (lastDeath) {
+        add("repeated_death", lastDeath, entry,
+          "Due menzioni di morte potrebbero riferirsi alla stessa persona, senza una " +
+          "menzione attestata di resurrezione intermedia. Verificare contesto e omonimie.");
+      }
+      lastDeath = entry;
+    } else if (lastDeath && LATER_ACTIONS.has(action)) {
+      add("post_death_activity", lastDeath, entry,
+        "Dopo una menzione attestata di morte, una successiva azione potrebbe " +
+        "riguardare la stessa persona. Flashback, omonimie o svolte fantastiche " +
+        "possono spiegarla.");
+    }
+  }
+}
+
+/** Read-only, local, and bounded. Alias previews are author-selected, temporary,
+ * non-transitive, and ADD only comparisons across the selected names. They never
+ * create identity claims, change the base findings, or change the book. */
+export function buildNarrativeContinuityHints(
+  book: BookProject, aliasPreview?: NarrativeAliasPreview,
+): NarrativeContinuityHintIndex {
   const attested = buildNarrativeEventLedger(book).currentAffirmed;
   const groups = new Map<string, CurrentEventLedgerEntry[]>();
   for (const entry of attested) {
-    const key = entry.candidate.actor.normalize("NFC").toLocaleLowerCase("it");
+    const key = nameKey(entry.candidate.actor);
     const group = groups.get(key);
     if (group) group.push(entry);
     else groups.set(key, [entry]);
   }
-  const all: NarrativeContinuityHint[] = [];
-  for (const group of groups.values()) {
-    group.sort(sequenceOrder);
-    let lastDeath: CurrentEventLedgerEntry | undefined;
-    let lastDated: CurrentEventLedgerEntry | undefined;
-    for (const entry of group) {
-      const day = isoSceneDay(entry.candidate.sceneDate);
-      if (day) {
-        if (lastDated && inLaterChapter(lastDated, entry) &&
-            day < isoSceneDay(lastDated.candidate.sceneDate)!) {
-          all.push({
-            kind: "declared_date_backtrack", actor: entry.candidate.actor,
-            earlier: lastDated, later: entry,
-            explanation: "Le date ISO dichiarate nelle scene diminuiscono nell'ordine dei capitoli. " +
-              "Un flashback o una narrazione non lineare possono essere intenzionali.",
-          });
-        }
-        lastDated = entry;
-      }
-      if (entry.candidate.kind !== "state_change_mention") continue;
-      const action = entry.candidate.detail.toLocaleLowerCase("it");
-      if (action === "risorge") {
-        // An explicit resurrection between two attestations explains the literal sequence;
-        // this still does not prove anyone actually came back to life.
-        lastDeath = undefined;
-      } else if (action === "muore") {
-        if (lastDeath && inLaterChapter(lastDeath, entry)) {
-          all.push({
-            kind: "repeated_death", actor: entry.candidate.actor,
-            earlier: lastDeath, later: entry,
-            explanation: "Due menzioni di morte dello stesso nome compaiono in capitoli distinti, " +
-              "senza una menzione attestata di resurrezione intermedia. Verificare contesto e omonimie.",
-          });
-        }
-        lastDeath = entry;
-      } else if (lastDeath && LATER_ACTIONS.has(action) &&
-                 inLaterChapter(lastDeath, entry)) {
-        all.push({
-          kind: "post_death_activity", actor: entry.candidate.actor,
-          earlier: lastDeath, later: entry,
-          explanation: "Dopo una menzione attestata di morte, lo stesso nome compie un'altra " +
-            "azione in un capitolo successivo. Flashback, omonimie o svolte fantastiche possono spiegarlo.",
-        });
-      }
-    }
+  const literalHints: NarrativeContinuityHint[] = [];
+  for (const group of groups.values()) collectGroupHints(literalHints, group, "literal_name");
+  const previewHints: NarrativeContinuityHint[] = [];
+
+  const first = aliasPreview?.first?.trim() ?? "";
+  const second = aliasPreview?.second?.trim() ?? "";
+  const firstKey = nameKey(first), secondKey = nameKey(second);
+  const aliasPreviewActive = firstKey.length > 0 && secondKey.length > 0 &&
+    firstKey !== secondKey && groups.has(firstKey) && groups.has(secondKey);
+  if (aliasPreviewActive) {
+    // Exactly one explicit pair, no transitive or fuzzy expansion.
+    collectGroupHints(previewHints, [...groups.get(firstKey)!, ...groups.get(secondKey)!],
+      "alias_preview");
   }
+
   const priorities: Record<NarrativeContinuityHintKind, number> = {
     repeated_death: 0, post_death_activity: 1, declared_date_backtrack: 2,
   };
-  all.sort((a, b) => sequenceOrder(a.later, b.later) ||
+  const sortHints = (a: NarrativeContinuityHint, b: NarrativeContinuityHint): number =>
+    sequenceOrder(a.later, b.later) ||
     priorities[a.kind] - priorities[b.kind] ||
-    sequenceOrder(a.earlier, b.earlier) || a.actor.localeCompare(b.actor, "it"));
+    sequenceOrder(a.earlier, b.earlier) || a.actor.localeCompare(b.actor, "it");
+  // The original 40 literal slots are protected: alias hypotheses never evict
+  // a pre-existing finding merely because the overlay adds more suggestions.
+  const all = [...literalHints.sort(sortHints), ...previewHints.sort(sortHints)];
   return {
     method: "bounded_attested_literal_pairs_v1",
     hints: all.slice(0, MAX_NARRATIVE_CONTINUITY_HINTS),
     omittedHintCount: Math.max(0, all.length - MAX_NARRATIVE_CONTINUITY_HINTS),
     inspectedAttestationCount: attested.length,
+    aliasPreviewActive,
   };
 }

@@ -81,3 +81,90 @@ describe("Segnali consultivi fra attestazioni ancora valide",()=>{
     expect(index.omittedHintCount).toBe(10);
   });
 });
+
+
+describe("Anteprima esplicita e temporanea di una coppia alias",()=>{
+  it("aggiunge solo confronti fra i due nomi selezionati, senza scrivere il libro",()=>{
+    const book=fixture(["Mara muore.","Ombra parte."]);
+    affirm(book,0);affirm(book,1);
+    const before=structuredClone(book);
+    const base=buildNarrativeContinuityHints(book);
+    expect(base.hints).toHaveLength(0);
+    expect(base.aliasPreviewActive).toBe(false);
+    const preview=buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"});
+    expect(preview.aliasPreviewActive).toBe(true);
+    expect(preview.hints).toMatchObject([{
+      kind:"post_death_activity", identityBasis:"alias_preview",
+      earlier:{candidate:{actor:"Mara",quote:"Mara muore"}},
+      later:{candidate:{actor:"Ombra",quote:"Ombra parte"}},
+    }]);
+    expect(book).toEqual(before);
+  });
+  it("non sopprime mai segnali di nome letterale già presenti",()=>{
+    const book=fixture(["Mara muore.","Mara parte.","Ombra fugge."]);
+    affirm(book,0); affirm(book,1); affirm(book,2);
+    const base=buildNarrativeContinuityHints(book).hints;
+    const preview=buildNarrativeContinuityHints(book,{first:"Ombra",second:"Mara"}).hints;
+    expect(base).toHaveLength(1);
+    expect(base[0]!.identityBasis).toBe("literal_name");
+    expect(preview.filter(h=>h.identityBasis==="literal_name")).toEqual(base);
+    expect(preview.some(h=>h.identityBasis==="alias_preview" &&
+      h.later.candidate.actor==="Ombra")).toBe(true);
+  });
+  it("rifiuta nomi identici, sconosciuti o privi di decisioni correnti",()=>{
+    const book=fixture(["Mara muore.","Ombra parte."]);
+    affirm(book,0); affirm(book,1);
+    for(const pair of [
+      {first:"Mara",second:"mara"}, {first:"Mara",second:"Inventato"},
+      {first:"",second:"Ombra"},
+    ]) {
+      const idx=buildNarrativeContinuityHints(book,pair);
+      expect(idx.aliasPreviewActive).toBe(false);
+      expect(idx.hints).toHaveLength(0);
+    }
+    book.chapters[1]!.frozenAt=undefined;
+    expect(buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"})
+      .aliasPreviewActive).toBe(false);
+  });
+  it("le rettifiche e le decisioni respinte escludono il nome dal confronto",()=>{
+    const book=fixture(["Mara muore.","Ombra parte."]);
+    affirm(book,0);affirm(book,1);
+    affirm(book,1,0,"dismissed");
+    const preview=buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"});
+    expect(preview.aliasPreviewActive).toBe(false);
+    expect(preview.hints).toHaveLength(0);
+  });
+  it("una risurrezione attestata fra gli alias impedisce la pista post-mortem",()=>{
+    const book=fixture(["Mara muore.","Ombra risorge.","Ombra parte."]);
+    affirm(book,0); affirm(book,1); affirm(book,2);
+    const preview=buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"});
+    expect(preview.aliasPreviewActive).toBe(true);
+    expect(preview.hints).toHaveLength(0);
+  });
+  it("confronta date ISO per nomi diversi solo dopo la scelta esplicita",()=>{
+    const book=fixture(["Mara parte.","Ombra arriva."],["2030-06-10","2030-05-01"]);
+    affirm(book,0); affirm(book,1);
+    expect(buildNarrativeContinuityHints(book).hints).toHaveLength(0);
+    const preview=buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"});
+    expect(preview.hints.map(h=>[h.kind,h.identityBasis]))
+      .toEqual([["declared_date_backtrack","alias_preview"]]);
+  });
+});
+
+
+describe("Limite con anteprima alias",()=>{
+  it("i segnali temporanei non spostano fuori dalle prime 40 piste letterali",()=>{
+    const book=fixture([
+      "Mara muore.",
+      ...Array.from({length:42},()=>"Mara parte."),
+      "Ombra parte.",
+    ]);
+    for(let i=0;i<book.chapters.length;i++) affirm(book,i);
+    const base=buildNarrativeContinuityHints(book);
+    const overlay=buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"});
+    expect(base.hints).toHaveLength(MAX_NARRATIVE_CONTINUITY_HINTS);
+    expect(overlay.aliasPreviewActive).toBe(true);
+    expect(overlay.hints).toEqual(base.hints);
+    expect(overlay.omittedHintCount).toBe(base.omittedHintCount+1);
+  });
+});

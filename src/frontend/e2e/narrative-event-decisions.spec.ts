@@ -225,3 +225,100 @@ test("segnali consultivi desktop/mobile: due attestazioni, date e nessuna scritt
   }));
   expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport+1);
 });
+
+
+test("anteprima alias esplicita e non persistita su desktop e mobile",async({page})=>{
+  await page.goto("/");
+  await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("L'ombra di Mara");
+  await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
+    .fill("Il nome Ombra potrebbe essere un soprannome di Mara.");
+  await page.getByRole("button",{name:"Crea libro"}).click();
+  await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+    const req=indexedDB.open("bookwriter");
+    req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{
+      const tx=req.result.transaction("books","readwrite");
+      const store=tx.objectStore("books"),get=store.getAll();
+      get.onerror=()=>reject(get.error);
+      get.onsuccess=()=>{
+        const book=get.result[0] as {id:string;status:string;phase:string;chapters:unknown[]};
+        book.status="paused";book.phase="completed";
+        book.chapters=[
+          {id:"c1",number:1,title:"Primo",purpose:"Morte",
+            frozenAt:"2026-11-07T10:00:00Z",
+            scenes:[{id:"s1",number:1,title:"Morte",objective:"Svolta",
+              text:"Mara muore.",status:"canon"}]},
+          {id:"c2",number:2,title:"Secondo",purpose:"Viaggio",
+            frozenAt:"2026-11-07T11:00:00Z",
+            scenes:[{id:"s2",number:1,title:"Partenza",objective:"Svolta",
+              text:"Ombra parte.",status:"canon"}]},
+        ];
+        store.put(book,book.id);
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  const board=page.getByRole("region",{name:"Redazione multi-agente"});
+  await board.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
+  const notes=board.getByRole("textbox",{name:/Motivazione evento/});
+  const outbound:string[]=[];
+  page.on("request",r=>{
+    if(r.url().includes("api.openai.com")||r.url().includes("api.github.com"))
+      outbound.push(r.url());
+  });
+  await notes.nth(0).fill("L'autore conferma il primo evento narrativo.");
+  page.once("dialog",d=>d.accept());
+  await board.getByRole("button",{name:"Annota come avvenuto"}).nth(0).click();
+  await notes.nth(1).fill("L'autore conferma il secondo evento narrativo.");
+  page.once("dialog",d=>d.accept());
+  await board.getByRole("button",{name:"Annota come avvenuto"}).nth(1).click();
+
+  const hints=board.locator('details[aria-label="Tracce di continuità da verificare"]');
+  await hints.locator("summary").click();
+  await expect(hints.locator("summary")).toContainText("(0)");
+  await hints.getByRole("combobox",{name:"Primo nome del confronto"}).selectOption("Mara");
+  await hints.getByRole("combobox",{name:"Secondo nome del confronto"}).selectOption("Ombra");
+  page.once("dialog",d=>d.accept());
+  await hints.getByRole("button",{name:"Confronta temporaneamente"}).click();
+  await expect(hints.locator("summary")).toContainText("(1)");
+  await expect(hints.getByText(/Anteprima attiva: Mara ↔ Ombra/)).toBeVisible();
+  await expect(hints.getByText(/Solo anteprima alias:/)).toBeVisible();
+  await hints.getByRole("button",{name:"Azzera confronto"}).click();
+  await expect(hints.locator("summary")).toContainText("(0)");
+  page.once("dialog",d=>d.accept());
+  await hints.getByRole("button",{name:"Confronta temporaneamente"}).click();
+  await expect(hints.locator("summary")).toContainText("(1)");
+  await page.reload();
+  const reopened=page.getByRole("region",{name:"Redazione multi-agente"});
+  await reopened.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
+  const again=reopened.locator('details[aria-label="Tracce di continuità da verificare"]');
+  await expect(again.locator("summary")).toContainText("(0)");
+  const stored=await page.evaluate(()=>new Promise<{
+    decisions:number;texts:string[];frozen:number;secrets:unknown;aliasStored:boolean;
+  }>((resolve,reject)=>{
+    const req=indexedDB.open("bookwriter");
+    req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{
+      const q=req.result.transaction("books","readonly").objectStore("books").getAll();
+      q.onerror=()=>reject(q.error);
+      q.onsuccess=()=>{
+        const b=q.result[0] as {
+          narrativeEventDecisions:unknown[];chapters:Array<{frozenAt?:string;scenes:Array<{text:string}>}>;
+          memory:{secrets:unknown};aliasPreview?:unknown;
+        };
+        resolve({decisions:b.narrativeEventDecisions.length,
+          texts:b.chapters.map(ch=>ch.scenes[0]!.text),
+          frozen:b.chapters.filter(ch=>!!ch.frozenAt).length,
+          secrets:b.memory.secrets,aliasStored:"aliasPreview" in b});
+      };
+    };
+  }));
+  expect(stored).toEqual({decisions:2,texts:["Mara muore.","Ombra parte."],
+    frozen:2,secrets:{},aliasStored:false});
+  expect(outbound).toEqual([]);
+  const dimensions=await page.evaluate(()=>({
+    content:document.documentElement.scrollWidth,viewport:window.innerWidth,
+  }));
+  expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport+1);
+});

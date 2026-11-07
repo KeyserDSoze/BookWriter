@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.7 — 2026-11-07 (PR #53)
+
+**Anteprima temporanea e consensuale degli alias nei segnali di continuità**
+
+- Da «Tracce di continuità da verificare» l'autore può scegliere **due nomi distinti con attestazioni correnti**, confermare una singola ipotesi alias e visualizzare confronti **aggiuntivi** tra nomi diversi. Nessun riconoscimento automatico, transitorio o fuzzy.
+- I segnali di nome letterale restano invariati e non vengono cancellati dal confronto. Le nuove piste riportano **entrambi i nomi**, citazioni, offset, capitoli e motivazioni con etichetta `alias_preview`; i nomi non diventano una singola entità canonica.
+- La scelta vive **soltanto nello stato React della scheda** ed è associata all'ID del libro: azzeramento esplicito o reload la rimuovono. Nessuna modifica a IndexedDB/ZIP/GitHub snapshot, credenziali, canone, segreti, possessi, timeline o prompt dei dodici revisori.
+- Confronto locale, massimo 40 segnali complessivi e omissioni dichiarate. Test Vitest su coppie inesistenti, rettifiche, staleness, additività, risurrezione/date e Playwright desktop/mobile su conferma, azzeramento e mancata persistenza. [Guida](explicit-alias-preview.md), ADR 0040, issue #20.
+
+**Limite:** l'anteprima non è un'associazione identitaria verificata né una decisione persistente dell'autore. Nessuna deduzione semantica o correzione automatica.
+
+
 ## 0.11.6 — 2026-11-07 (PR #52)
 
 **Tracce di continuità da attestazioni autore, senza inferenze automatiche**

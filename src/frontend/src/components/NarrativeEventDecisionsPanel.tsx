@@ -18,12 +18,23 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
   const [notes,setNotes] = useState<Record<string,string>>({});
   const [busy,setBusy] = useState(false);
   const [candidatePage,setCandidatePage] = useState(0);
+  const [firstAlias,setFirstAlias] = useState("");
+  const [secondAlias,setSecondAlias] = useState("");
+  const [aliasPreview,setAliasPreview] =
+    useState<{bookId:string; first:string; second:string}|null>(null);
   const [message,setMessage] = useState("");
   const [error,setError] = useState("");
   const index = buildNarrativeEventCandidateIndex(book);
   const history = book.narrativeEventDecisions ?? [];
   const ledger = buildNarrativeEventLedger(book);
-  const hints = buildNarrativeContinuityHints(book);
+  const actorNames = [...new Map(ledger.currentAffirmed.map(({candidate}) =>
+    [candidate.actor.normalize("NFC").toLocaleLowerCase("it"),candidate.actor])).values()]
+    .sort((a,b)=>a.localeCompare(b,"it"));
+  const chosenFirst = actorNames.includes(firstAlias) ? firstAlias : "";
+  const chosenSecond = actorNames.includes(secondAlias) ? secondAlias : "";
+  const activeAliasPair = aliasPreview?.bookId === book.id
+    ? {first:aliasPreview.first, second:aliasPreview.second} : undefined;
+  const hints = buildNarrativeContinuityHints(book,activeAliasPair);
   const pageCount = Math.max(1, Math.ceil(index.events.length/30));
   const page = Math.min(candidatePage,pageCount-1);
   const pageStart = page*30;
@@ -147,6 +158,52 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
       <summary className="cursor-pointer font-semibold">
         Tracce di continuità da verificare ({hints.hints.length})
       </summary>
+      <fieldset className="mt-3 min-w-0 rounded border border-slate-300 p-2 dark:border-slate-700">
+        <legend className="font-semibold text-xs">Confronto temporaneo tra due nomi</legend>
+        <p className="muted mt-1 text-xs">
+          Solo dopo la tua scelta esplicita si aggiungono piste di confronto fra due nomi
+          presenti nelle attestazioni correnti. Non si dichiara che siano la stessa persona:
+          l'ipotesi vale soltanto in questa scheda, non viene salvata, esportata o inviata all'AI.
+          Un solo abbinamento alla volta; nessun collegamento implicito con altri alias.
+        </p>
+        {actorNames.length < 2 ? <p className="muted mt-2 text-xs">
+          Occorrono almeno due nomi distinti con attestazioni valide per confrontarli.
+        </p> : <div className="mt-2 flex flex-wrap items-end gap-2">
+          <label className="min-w-0 flex-1 text-xs font-semibold">
+            Primo nome
+            <select className="field mt-1" aria-label="Primo nome del confronto"
+              value={chosenFirst} onChange={e=>setFirstAlias(e.target.value)}>
+              <option value="">Seleziona un nome</option>
+              {actorNames.map(name=><option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+          <label className="min-w-0 flex-1 text-xs font-semibold">
+            Secondo nome
+            <select className="field mt-1" aria-label="Secondo nome del confronto"
+              value={chosenSecond} onChange={e=>setSecondAlias(e.target.value)}>
+              <option value="">Seleziona un nome</option>
+              {actorNames.map(name=><option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+          <Button disabled={!chosenFirst || !chosenSecond ||
+            chosenFirst.normalize("NFC").toLocaleLowerCase("it") ===
+            chosenSecond.normalize("NFC").toLocaleLowerCase("it")}
+            onClick={()=>{
+              if (!window.confirm("Confrontare temporaneamente questi due nomi come possibile " +
+                "alias narrativo? Non è una conferma d'identità, non modifica il canone, " +
+                "non viene salvata né inviata ai modelli AI.")) return;
+              setAliasPreview({bookId:book.id,first:chosenFirst,second:chosenSecond});
+            }}>Confronta temporaneamente</Button>
+          <Button disabled={!activeAliasPair} onClick={()=>setAliasPreview(null)}>
+            Azzera confronto
+          </Button>
+        </div>}
+        {hints.aliasPreviewActive && activeAliasPair && <p className="mt-2 text-xs"
+          role="status">
+          Anteprima attiva: {activeAliasPair.first} ↔ {activeAliasPair.second}.
+          I segnali originari rimangono sempre visibili. Nessuna identità confermata.
+        </p>}
+      </fieldset>
       <p className="muted mt-2 text-xs">
         Confronti locali di sole attestazioni autore attualmente valide. Le frasi sono prove
         testuali, non dimostrano una contraddizione: flashback, ritorni, omonimi o svolte
@@ -162,6 +219,12 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
         {hints.hints.map((hint,i)=><li key={hint.earlier.decision.id + ":" +
           hint.later.decision.id + ":" + hint.kind + ":" + i}
           className="rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+          {hint.identityBasis === "alias_preview" && <p className="mb-1 font-semibold
+            text-amber-700 dark:text-amber-300">
+            Solo anteprima alias: «{hint.earlier.candidate.actor}» e
+            «{hint.later.candidate.actor}» ipotizzati come stessa identità dall'autore,
+            non certificati dal software.
+          </p>}
           <p className="font-semibold">
             {hint.kind === "repeated_death" ? "Morte menzionata più volte" :
               hint.kind === "post_death_activity" ? "Azione dopo menzione di morte" :

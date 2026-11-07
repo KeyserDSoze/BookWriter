@@ -65,3 +65,5 @@
 - [x] v0.11.5: paginazione 30/80 delle menzioni candidate e registro derivato delle sole attestazioni autore correnti, con confronto manuale per nome esatto fra capitoli e storico delle rettifiche invariato. Nessuna semantica di contraddizione garantita (ADR 0038, issue #20).
 
 - [x] v0.11.6: segnali locali, esplicitamente **non certificati**, fra attestazioni ancora valide (azione dopo morte, morti ripetute, date ISO in ordine inverso), con due prove letterali e motivazioni; nessuna riscrittura o lettura di segreti, CI desktop/mobile (ADR 0039, issue #20).
+
+- [x] v0.11.7: anteprima **esplicita, temporanea e revocabile** di una coppia di alias da attestazioni correnti, confronti cross-name aggiuntivi senza sovrascrivere quelli letterali, zero canone/rete/persistenza (ADR 0040, issue #20).
