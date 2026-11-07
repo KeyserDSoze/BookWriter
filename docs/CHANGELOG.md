@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.11 — 2026-11-07 (PR in preparazione)
+## 0.11.11 — 2026-11-07 (PR #57)
 
 **Confronto critico su scene precedenti congelate senza attestazioni autore**
 
