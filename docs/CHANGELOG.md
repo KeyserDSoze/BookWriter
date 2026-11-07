@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.8 — 2026-11-07 (PR in preparazione)
+## 0.11.8 — 2026-11-07 (PR #54)
 
 **Registro locale persistente delle ipotesi alias motivate**
 
