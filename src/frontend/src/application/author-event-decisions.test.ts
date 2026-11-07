@@ -98,7 +98,8 @@ describe("Decisioni autore atomiche e conservatrici",()=>{
       _name:string,_options:unknown,cb:(lock:object)=>Promise<unknown>
     )=>cb({})}});
     const stored=(await getBook(b.id))!;
-    stored.chapters[0]!.scenes[0]!.text+=" Un finale diverso.";
+    stored.chapters[0]!.scenes[0]!.text=
+      "Mara affida la chiave a Elio. Poi la porta si chiude.";
     await saveBook(stored,false);
     await expect(decideAuthorNarrativeEvent(b.id,stored.updatedAt,event,"confirmed",note,true))
       .rejects.toThrow(/obsoleta/);
