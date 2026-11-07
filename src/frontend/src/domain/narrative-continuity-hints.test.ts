@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { newBook, type BookProject } from "./types";
 import { extractNarrativeEventCandidates } from "./narrative-event-candidates";
 import { createNarrativeEventDecision } from "./narrative-event-decisions";
+import { createNarrativeAliasDecision } from "./narrative-alias-decisions";
 import { buildNarrativeContinuityHints, MAX_NARRATIVE_CONTINUITY_HINTS }
   from "./narrative-continuity-hints";
 
@@ -166,5 +167,56 @@ describe("Limite con anteprima alias",()=>{
     expect(overlay.aliasPreviewActive).toBe(true);
     expect(overlay.hints).toEqual(base.hints);
     expect(overlay.omittedHintCount).toBe(base.omittedHintCount+1);
+  });
+});
+
+
+describe("Confronti da alias registrati e motivati",()=>{
+  it("restano consultabili dopo salvataggio con entrambe le fonti e la ragione",()=>{
+    const book=fixture(["Mara muore.","Ombra parte."]);
+    affirm(book,0); affirm(book,1);
+    const before=structuredClone(book);
+    const linked=createNarrativeAliasDecision(book,"Mara","Ombra","linked",
+      "Ombra è un possibile soprannome usato dall'autore.",crypto.randomUUID(),
+      "2026-11-07T12:00:00Z");
+    book.narrativeAliasDecisions=[linked];
+    const result=buildNarrativeContinuityHints(book);
+    expect(result.savedAliasPairCount).toBe(1);
+    expect(result.hints).toMatchObject([{
+      kind:"post_death_activity",identityBasis:"saved_alias",
+      aliasRationale:"Ombra è un possibile soprannome usato dall'autore.",
+      earlier:{candidate:{actor:"Mara"}},
+      later:{candidate:{actor:"Ombra"}},
+    }]);
+    expect(book.memory).toEqual(before.memory);
+    expect(book.chapters).toEqual(before.chapters);
+    expect(buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"}).hints)
+      .toEqual(result.hints);
+  });
+  it("una revoca append-only rimuove il confronto senza cancellare l'audit",()=>{
+    const book=fixture(["Mara muore.","Ombra parte."]);
+    affirm(book,0);affirm(book,1);
+    book.narrativeAliasDecisions=[
+      createNarrativeAliasDecision(book,"Mara","Ombra","linked",
+        "L'autore ipotizza una sola identità narrativa.",crypto.randomUUID(),
+        "2026-11-07T12:00:00Z"),
+      createNarrativeAliasDecision(book,"Ombra","Mara","separated",
+        "L'autore esclude il collegamento dopo una lettura.",crypto.randomUUID(),
+        "2026-11-07T13:00:00Z"),
+    ];
+    expect(buildNarrativeContinuityHints(book).hints).toHaveLength(0);
+    expect(buildNarrativeContinuityHints(book).savedAliasPairCount).toBe(0);
+    expect(book.narrativeAliasDecisions).toHaveLength(2);
+  });
+  it("una rettifica di fonte o nuovo freeze disattiva i segnali salvati",()=>{
+    const book=fixture(["Mara muore.","Ombra parte."]);
+    affirm(book,0);affirm(book,1);
+    book.narrativeAliasDecisions=[createNarrativeAliasDecision(book,"Mara","Ombra","linked",
+      "L'autore ipotizza che siano un'identità sola.",crypto.randomUUID(),
+      "2026-11-07T12:00:00Z")];
+    affirm(book,1);
+    expect(buildNarrativeContinuityHints(book).hints).toHaveLength(0);
+    book.chapters[0]!.frozenAt=undefined;
+    expect(buildNarrativeContinuityHints(book).savedAliasPairCount).toBe(0);
   });
 });
