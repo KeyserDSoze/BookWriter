@@ -150,3 +150,21 @@ describe("Anteprima esplicita e temporanea di una coppia alias",()=>{
       .toEqual([["declared_date_backtrack","alias_preview"]]);
   });
 });
+
+
+describe("Limite con anteprima alias",()=>{
+  it("i segnali temporanei non spostano fuori dalle prime 40 piste letterali",()=>{
+    const book=fixture([
+      "Mara muore.",
+      ...Array.from({length:42},()=>"Mara parte."),
+      "Ombra parte.",
+    ]);
+    for(let i=0;i<book.chapters.length;i++) affirm(book,i);
+    const base=buildNarrativeContinuityHints(book);
+    const overlay=buildNarrativeContinuityHints(book,{first:"Mara",second:"Ombra"});
+    expect(base.hints).toHaveLength(MAX_NARRATIVE_CONTINUITY_HINTS);
+    expect(overlay.aliasPreviewActive).toBe(true);
+    expect(overlay.hints).toEqual(base.hints);
+    expect(overlay.omittedHintCount).toBe(base.omittedHintCount+1);
+  });
+});
