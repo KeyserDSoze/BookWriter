@@ -1,5 +1,19 @@
 # Changelog — BookWriter
 
+## 0.11.14 — 2026-11-07 (PR in preparazione)
+
+**Registro privato e motivato delle conoscenze dell'autore**
+
+- Nuovo `narrativeKnowledgeDecisions?` nel `BookProject`, **max 160 decisioni append-only**, con fonte `sourceEventDecisionId`, attore ancorato, verdetto `learned_directly|reported_by_other|still_secret`, motivazione (12–500) e timestamp. Sono interpretazioni dell'autore, NON verità semantiche, fatti certificati o memoria canonica.
+- Scelte possibili solo da **attestazioni `knowledge_mention` `affirmed` correnti**: scena canonica congelata, quote/offset, timestamp freeze e checksum attuali. L'ultima decisione per fonte prevale; successiva riapertura, modifica, rigelo o nuova attestazione invalida la vecchia senza cancellare la cronologia. Nessun alias o trasferimento transitivo inferito.
+- Scrittura locale protetta con Web Locks writer+outbox, CAS revisionale, blocco durante autopilot/redazione, transazione atomica libro+attività+outbox. **Autosync disabilitato e outbox svuotato**; log senza rationale/spoiler privati. Nessuna chiamata AI o push automatico.
+- UI nel pannello eventi: scelta fonte attuale, tre classificazioni e motivazione, conferma esplicita, elenco corrente e storico rettifiche/stale. ZIP `content/full` validato con schema **strict** per ogni nuova decisione, max160, enum, date e limiti; legacy leggibile, import non autentica l'autore. Test dominio, application, ZIP chiaro/cifrato/manomesso e Playwright desktop/mobile.
+- **Privacy:** le nuove interpretazioni NON entrano nei prompt dei dodici revisori, del giudice o di altri modelli. Nessuna modifica automatica a canone, `memory.secrets`, inventario, timeline e prosa. La sincronizzazione GitHub *manuale* o l'export ZIP possono comunque divulgare note: l'interfaccia avvisa esplicitamente.
+- ADR 0047, [guida](author-knowledge-registry.md), issue #20, package/lockfile 0.11.14.
+
+**Limiti:** solo eventi di conoscenza riconosciuti dall'indice locale e attestati, non un grafo completo di personaggi e segreti. Una voce narrata non garantisce informazione vera; un campo `still_secret` non aggiorna il canone. I consumatori AI richiederanno un consenso e una policy futura.
+
+
 ## 0.11.13 — 2026-11-07 (PR #59)
 
 **Piste locali di trasmissione di informazioni tra personaggi**
