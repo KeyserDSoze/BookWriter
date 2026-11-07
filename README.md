@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Registro conoscenze dell'autore v0.11.14:** su menzioni `knowledge_mention` già attestate e correnti è possibile annotare con motivazione `appresa direttamente`, `riferita da altri` o `ancora segreta`. Audit append-only, freeze/stamp rivalidati, autosync disabilitato, backup ZIP strict. Le note private non passano automaticamente agli agenti AI e non modificano il canone. [Guida](docs/author-knowledge-registry.md), ADR 0047, issue #20.
+
 **Piste di comunicazione v0.11.13:** la redazione confronta fino a quattro menzioni testuali di notizie raccontate fra personaggi in capitoli precedenti. Il giudice deve valutare se siano possibili vie d'accesso, non fatti certi; un accesso plausibile o indeterminato blocca l'approvazione di un falso conflitto di conoscenza. [Guida](docs/information-transfer-traces.md), ADR 0046, issue #20.
 
 **Conoscenze dei personaggi v0.11.12:** il giudice deve motivare le differenze fra narrazione diretta, voci, sogni e accesso plausibile fuori scena quando un rilievo segnala ciò che un personaggio sa. Il gate blocca una riscrittura fondata su conoscenze non dimostrate. [Guida](docs/knowledge-provenance-review.md), ADR 0045, issue #20.
