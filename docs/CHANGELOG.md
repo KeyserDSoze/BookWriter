@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.5 — 2026-11-07 (PR in preparazione)
+
+**Registro locale delle attestazioni narrative e navigazione completa dell'indice**
+
+- L'indice delle menzioni già rilevate è paginato, 30 alla volta: l'autore può raggiungere anche le posizioni 31–80. Nessun ampliamento dello scanner o nuovi eventi impliciti.
+- Vista derivata delle sole attestazioni autore **ancora valide**, con citazione, offset, motivazione e posizione capitolo/scena. Rettifiche e decisioni obsolete restano nello storico e sono contate separatamente. La vista non dipende dal cap di 80 menzioni.
+- Raggruppamento esplorativo per soggetto letteralmente uguale in più capitoli, per confronto manuale: **non** è una rilevazione semantica di contraddizioni e non riconosce alias/omonimie.
+- Nessuna nuova persistenza, rete, chiamata AI, esposizione ai lettori ciechi o modifica di canone/segreti/timeline/possessi. Test unitari e browser desktop/mobile su staleness, rettifiche, limite di indice e navigazione. ADR 0038, guida `docs/narrative-event-ledger.md`, issue #20.
+
+**Limiti:** l'attestazione è una dichiarazione non autenticata; checksum non crittografico, euristiche incomplete e nessuna prova storica o causale.
+
+
 ## 0.11.4 — 2026-11-07 (PR #50)
 
 **Annotazioni motivate dell'autore su singole menzioni di eventi**
