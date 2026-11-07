@@ -364,3 +364,9 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Registro append-only `BookProject.narrativeEventDecisions` max 400 con ID, testo letterale/offset, `sourceFrozenAt` e checksum locale non crittografico. Riaperture, modifiche o nuovo congelamento rendono i vecchi record **storici**, mai riattivarli automaticamente.
 - Prima del commit usare Web Locks writer/outbox, CAS `updatedAt` e attività atomica; disabilitare autosync, cancellare la coda e avvertire l'autore. Nessuna rete o chiamata AI aggiuntiva.
 - Backup ZIP e snapshot GitHub conservano gli audit con schema rigoroso e limiti; non trattare attestazioni importate come identità verificate. Testare conferma/rettifica, staleness, concorrenza, ZIP e browser desktop/mobile. Vedi `docs/narrative-event-decisions.md`, ADR 0037, issue #20.
+
+## Registro derivato eventi v0.11.5 — solo lettura (ADR 0038)
+
+- L'indice consultivo mostra 30 menzioni per pagina e permette di navigare le 80 menzioni già scoperte; non ampliare i limiti o la semantica implicitamente.
+- `buildNarrativeEventLedger` deve ricalcolare sul dispositivo le attestazioni correnti da **tutti** i record append-only (max 400), rivalidando freeze, scena canonica, timbro, offset/citazione, pattern e ultima rettifica. Le decisioni obsolete rimangono solo nell'audit.
+- Il raggruppamento fra capitoli è per nome letterale del soggetto, NON prova incongruenze, conoscenza, possesso, alias o causalità. Nessuna nuova persistenza, prompt, AI, HTTP o modifica a memoria/segreti/timeline. [Guida](docs/narrative-event-ledger.md), issue #20.
