@@ -44,7 +44,7 @@ const RULES: ReadonlyArray<{
   },
   {
     kind: "item_transfer_mention",
-    pattern: /\b([\p{Lu}][\p{L}'’-]{1,39})\s+(?:consegna|cede|passa)\s+(?:la|il|lo|le|un|una)\s+([\p{L}'’ -]{2,50}?)\s+a\s+([\p{Lu}][\p{L}'’-]{1,39})(?=[\s,.:;!?]|$)/gu,
+    pattern: /\b([\p{Lu}][\p{L}'’-]{1,39})\s+(?:consegna|cede|passa)\s+(?:la|il|lo|le|un|una)\s+([\p{L}'’ -]{2,50}?)\s+a\s+([\p{Lu}][\p{L}'’-]{1,39})(?=\W|$)/gu,
     detailGroup: 2,
     recipientGroup: 3,
   },
