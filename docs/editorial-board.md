@@ -1,4 +1,8 @@
-# Redazione multi-agente di BookWriter — v0.8.0
+# Redazione multi-agente di BookWriter — v0.11.9
+
+## Testimoni contestuali attestati (v0.11.9)
+
+Anche in una review ordinaria, quattro specialisti (continuità, timeline, segreti, voce dei personaggi) possono confrontare fino a otto citazioni pubbliche tratte da eventi di capitoli precedenti congelati, già attestati dall'autore. Le eventuali coppie alias devono essere salvate, valide e sostenute da **due prove precedenti**. Sono **piste non verificate**, non fatti: non diventano automaticamente correzioni o identità canoniche. Il giudice critico riceve il contesto pertinente solo quando esiste un rilievo con prova letterale corrente; può respingerlo perché, per esempio, un flashback o un narratore inattendibile spiegano la sequenza. I cinque lettori ciechi e gli altri specialisti non ricevono questo nuovo pack. Il numero di token usato dalle chiamate esistenti può aumentare. [Guida](attested-contextual-review.md), ADR 0042, issue #20.
 
 Dopo la scrittura e il primo consolidamento delle scene di un capitolo, l'autopilot apre automaticamente una **redazione indipendente**. Il capitolo non viene considerato definitivo né sincronizzato su GitHub finché questo percorso non è concluso.
 
