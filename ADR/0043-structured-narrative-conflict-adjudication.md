@@ -1,6 +1,6 @@
 # ADR 0043 — Giudizio strutturato per conflitti narrativi attestati
 
-- **Stato:** proposto per v0.11.10
+- **Stato:** accettato per v0.11.10 (PR #56)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Predecessori:** ADR 0011, 0032–0033, 0035–0042
