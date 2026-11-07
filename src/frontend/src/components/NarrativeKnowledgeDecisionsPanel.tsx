@@ -192,7 +192,7 @@ export function NarrativeKnowledgeDecisionsPanel({book,onRefresh}:{
             </option>)}
         </select>
       </label>
-      <p className="mt-2 text-xs" role="status">
+      <p className="mt-2 text-xs">
         {activeShare ?
           "Attualmente autorizzati: "+activeShare.permission.recipients
             .map(x=>SHARE_LABELS[x]).join(", ") :
