@@ -13,6 +13,7 @@ import type { ChapterHistoricalDossier } from "./historical-research";
 import type { ContinuityRecheck, ContinuityRecheckAudit } from "./cross-chapter-continuity";
 import type { NarrativeEventDecision } from "./narrative-event-decisions";
 import type { NarrativeAliasDecision } from "./narrative-alias-decisions";
+import type { NarrativeKnowledgeDecision } from "./narrative-knowledge-decisions";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -132,6 +133,8 @@ export interface BookProject {
   narrativeEventDecisions?: NarrativeEventDecision[];
   /** Author-only alias interpretations, never canonical identities. */
   narrativeAliasDecisions?: NarrativeAliasDecision[];
+  /** Author-only knowledge interpretations; NEVER automatically promoted to canonical secrets. */
+  narrativeKnowledgeDecisions?: NarrativeKnowledgeDecision[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
