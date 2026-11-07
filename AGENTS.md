@@ -370,3 +370,9 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - L'indice consultivo mostra 30 menzioni per pagina e permette di navigare le 80 menzioni già scoperte; non ampliare i limiti o la semantica implicitamente.
 - `buildNarrativeEventLedger` deve ricalcolare sul dispositivo le attestazioni correnti da **tutti** i record append-only (max 400), rivalidando freeze, scena canonica, timbro, offset/citazione, pattern e ultima rettifica. Le decisioni obsolete rimangono solo nell'audit.
 - Il raggruppamento fra capitoli è per nome letterale del soggetto, NON prova incongruenze, conoscenza, possesso, alias o causalità. Nessuna nuova persistenza, prompt, AI, HTTP o modifica a memoria/segreti/timeline. [Guida](docs/narrative-event-ledger.md), issue #20.
+
+## Tracce di continuità consultive v0.11.6 (ADR 0039)
+
+- `buildNarrativeContinuityHints` usa **solo** `buildNarrativeEventLedger(book).currentAffirmed`; esclude decisioni `dismissed`, stale e rettificate, senza accedere a memoria privata, nuovi prompt, AI o rete.
+- Tre semplici segnali **non probatori** su identico soggetto letterale e capitoli distinti: azione dopo «muore», seconda «muore» senza «risorge» attestata intermedia e inversione di date dichiarate ISO `YYYY-MM-DD` realmente valide. L'ordine dei capitoli NON dimostra quello degli eventi narrati; la data è metadato corrente, non prova storica.
+- Mostrare sempre entrambe le citazioni/offset e motivazioni dell'autore, alternative narrative, limite 40 segnali e omissioni. Mai auto-remediation, freeze/rewind, sync, cambi a canone/segreti/timeline/possessi o espansioni dei contesti dei cinque lettori ciechi. Guida `docs/attested-continuity-signals.md`, issue #20.
