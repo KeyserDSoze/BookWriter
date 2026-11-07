@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.9 — 2026-11-07 (PR in preparazione)
+## 0.11.9 — 2026-11-07 (PR #55)
 
 **Prove precedenti dell'autore nella review contestuale con giudice critico**
 
