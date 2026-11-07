@@ -120,10 +120,12 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   await page.getByLabel("API key").fill("sk-test-privacy-not-real");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("mock-review-attestations");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
+  await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
   await page.getByRole("button",{name:"Riprendi"}).click();
 
-  await expect.poll(async()=>page.evaluate(()=>new Promise<string>((resolve,reject)=>{
+  await expect.poll(async()=>{
+    const state=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{
     const db=indexedDB.open("bookwriter");db.onerror=()=>reject(db.error);
     db.onsuccess=()=>{
       const q=db.result.transaction("books","readonly").objectStore("books").getAll();
@@ -137,7 +139,10 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
           b.chapters[2]?.frozenAt?"frozen":"pending");
       };
     };
-  })),{timeout:110_000}).toBe("frozen");
+    }));
+    if(state.startsWith("ERROR:")) throw new Error(state);
+    return state;
+  },{timeout:110_000}).toBe("frozen");
 
   expect(calls).toHaveLength(14);
   const specialist=calls.filter(c=>c.system.includes("revisore letterario INDIPENDENTE"));
