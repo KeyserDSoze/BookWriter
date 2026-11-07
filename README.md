@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Conoscenze dei personaggi v0.11.12:** il giudice deve motivare le differenze fra narrazione diretta, voci, sogni e accesso plausibile fuori scena quando un rilievo segnala ciò che un personaggio sa. Il gate blocca una riscrittura fondata su conoscenze non dimostrate. [Guida](docs/knowledge-provenance-review.md), ADR 0045, issue #20.
+
 **Confronti su scene non attestate v0.11.11:** i quattro specialisti di continuità possono citare fino a tre estratti letterali di capitoli precedenti congelati, anche senza annotazioni evento dell'autore. Il giudice valuta identità, cronologia, causalità e spiegazioni artistiche prima di autorizzare qualsiasi intervento; le fonti vengono rivalidate al salvataggio del repair. Il testo non diventa un fatto canonico. [Guida](docs/unattested-scene-review.md), ADR 0044, issue #20.
 
 **Giudice narrativo strutturato v0.11.10:** i conflitti esplicitamente collegati a un testimone precedente richiedono una decisione critica per identità, cronologia, causalità e spiegazioni artistiche prima di autorizzare una remediation. Il gate è rivalidato anche dopo resume/import, senza rendere le attestazioni fatti canonici. [Guida](docs/structured-narrative-adjudication.md), ADR 0043, issue #20.
