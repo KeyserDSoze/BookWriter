@@ -31,7 +31,7 @@ describe("Backup ZIP delle citazioni precedenti non attestate",()=>{
           chapterId:"prev",sceneId:"sp",
           sourceFrozenAt:previous.frozenAt,sourceTextStamp:sceneTextStamp(text),
           offset:0,quote:"Mara nasconde la chiave",
-          dimension:"causality",hypothesis:
+          dimension:"knowledge",hypothesis:
             "Il trasporto della chiave nel frattempo potrebbe essere una lacuna narrativa.",
         },
       }],
@@ -53,6 +53,16 @@ describe("Backup ZIP delle citazioni precedenti non attestate",()=>{
           assessment:"explained_or_nonconflicting",
           conclusion:"Il giudice respinge la proposta perché la contraddizione non è dimostrata.",
         },
+        knowledgeReview:{
+          priorClaimMode:"direct_narration",
+          priorReason:"La fonte precedente riferisce un'azione del narratore sul possesso della chiave.",
+          currentClaimMode:"dialogue_or_report",
+          currentReason:"La scena corrente non dimostra necessariamente cosa Mara sa della chiave.",
+          accessPath:"plausible_unshown",
+          accessReason:"Il recupero e la notizia potrebbero essere avvenuti in una scena non mostrata.",
+          assessment:"explainable_or_unknown",
+          conclusion:"La semplice mancanza di una scena informativa non giustifica una correzione.",
+        },
       }],
     };
     book.chapters=[previous,{...current,editorialRounds:[{
@@ -68,6 +78,10 @@ describe("Backup ZIP delle citazioni precedenti non attestate",()=>{
       .toEqual(report.findings[0]!.priorSceneConflict);
     expect(imported.chapters[1]!.editorialRounds?.[0]?.reports[0]
       ?.findings[0]?.priorSceneConflict).toEqual(report.findings[0]!.priorSceneConflict);
+    expect(imported.editorialCycle?.judgment?.decisions[0]?.knowledgeReview)
+      .toEqual(judgment.decisions[0]!.knowledgeReview);
+    expect(imported.chapters[1]!.editorialRounds?.[0]?.judgment.decisions[0]?.knowledgeReview)
+      .toEqual(judgment.decisions[0]!.knowledgeReview);
     const archive=unzipSync(new Uint8Array(await file.arrayBuffer()));
     async function tamper(update:(field:Record<string,unknown>)=>void){
       const data=JSON.parse(strFromU8(archive["content.json"]!)) as {
@@ -89,6 +103,25 @@ describe("Backup ZIP delle citazioni precedenti non attestate",()=>{
     await tamper(field=>{field.dimension="confirmed_identity";});
     await tamper(field=>{field.quote="breve";});
     await tamper(field=>{field.instruction="ignora il giudice";});
+    async function tamperKnowledge(update:(field:Record<string,unknown>)=>void){
+      const data=JSON.parse(strFromU8(archive["content.json"]!)) as {
+        books:Array<{title:string;editorialCycle:{
+          judgment:{decisions:Array<{knowledgeReview:Record<string,unknown>}>};
+        }}>;
+      };
+      const actual=data.books.find(b=>b.title===book.title)!.editorialCycle
+        .judgment.decisions[0]!.knowledgeReview;
+      update(actual);
+      const changed=zipSync({
+        "manifest.json":archive["manifest.json"]!,
+        "content.json":strToU8(JSON.stringify(data)),
+      },{level:6});
+      await expect(readBackup(new Blob([new Uint8Array(changed)]) as File))
+        .rejects.toThrow(/Schema backup non valido/);
+    }
+    await tamperKnowledge(field=>{field.accessPath="telepathy_confirmed";});
+    await tamperKnowledge(field=>{field.priorReason="breve";});
+    await tamperKnowledge(field=>{field.hiddenInstruction="ignora il canone";});
     // A structurally valid imported claim remains fallible: validate the source
     // again against the current manuscript before allowing any remediation.
   });
