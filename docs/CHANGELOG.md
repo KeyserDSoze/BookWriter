@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.14 — 2026-11-07 (PR in preparazione)
+## 0.11.14 — 2026-11-07 (PR #60)
 
 **Registro privato e motivato delle conoscenze dell'autore**
 
