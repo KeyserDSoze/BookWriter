@@ -9,6 +9,7 @@ import { buildNarrativeContinuityHints } from "../domain/narrative-continuity-hi
 import { buildNarrativeAliasRegistry, MAX_ALIAS_DECISIONS,
   type NarrativeAliasDecision } from "../domain/narrative-alias-decisions";
 import { recordNarrativeAliasDecision } from "../application/narrative-alias-decisions";
+import { NarrativeKnowledgeDecisionsPanel } from "./NarrativeKnowledgeDecisionsPanel";
 import { Button } from "./ui/button";
 
 function eventKey(event: NarrativeEventCandidate): string {
@@ -145,6 +146,7 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
       </span>
       <Button disabled={page===pageCount-1} onClick={()=>setCandidatePage(page+1)}>Pagina successiva</Button>
     </nav>}
+    <NarrativeKnowledgeDecisionsPanel book={book} onRefresh={onRefresh}/>
     <details aria-label="Registro eventi attestati"
       className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
       <summary className="cursor-pointer font-semibold">
