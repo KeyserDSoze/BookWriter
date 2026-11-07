@@ -1,6 +1,6 @@
 # ADR 0047 — Registro privato delle conoscenze interpretate dall'autore
 
-- **Stato:** proposto per v0.11.14
+- **Stato:** accettato per v0.11.14 (PR #60)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0037–0038, 0041–0046
