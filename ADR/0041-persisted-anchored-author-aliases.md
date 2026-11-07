@@ -1,6 +1,6 @@
 # ADR 0041 — Decisioni alias motivate e ancorate alle attestazioni dell'autore
 
-- **Stato:** proposto per v0.11.8
+- **Stato:** accettato per v0.11.8 (PR #54)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Predecessori:** ADR 0037–0040
