@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Anteprima alias v0.11.7:** l'autore può selezionare e confermare temporaneamente due nomi attestati come possibile pseudonimo e confrontare le rispettive tracce, senza fondere entità canoniche, cancellare i segnali originari o inviare dati ai modelli. La scelta si azzera al reload. [Guida](docs/explicit-alias-preview.md), ADR 0040, issue #20.
+
 **Tracce di continuità v0.11.6:** dal registro delle attestazioni valide, BookWriter segnala sequenze letterali da riesaminare in più capitoli (azioni dopo una menzione di morte, morti ripetute, date dichiarate non monotone). Mostra le prove affiancate, non deduce automaticamente contraddizioni e non modifica il canone né chi conosce segreti. [Guida](docs/attested-continuity-signals.md), ADR 0039, issue #20.
 
 **Registro attestazioni v0.11.5:** navigazione a pagine delle menzioni consultive e registro locale delle conferme ancora correnti, raggruppate per nome in più capitoli per confronto manuale. Nessuna contraddizione dedotta automaticamente né modifica al canone. [Guida](docs/narrative-event-ledger.md), ADR 0038, issue #20.
