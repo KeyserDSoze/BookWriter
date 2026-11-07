@@ -67,3 +67,5 @@
 - [x] v0.11.6: segnali locali, esplicitamente **non certificati**, fra attestazioni ancora valide (azione dopo morte, morti ripetute, date ISO in ordine inverso), con due prove letterali e motivazioni; nessuna riscrittura o lettura di segreti, CI desktop/mobile (ADR 0039, issue #20).
 
 - [x] v0.11.7: anteprima **esplicita, temporanea e revocabile** di una coppia di alias da attestazioni correnti, confronti cross-name aggiuntivi senza sovrascrivere quelli letterali, zero canone/rete/persistenza (ADR 0040, issue #20).
+
+- [x] v0.11.8: registro append-only di alias motivati legati a due attestazioni correnti, revoche/staleness senza riattivazioni, ZIP strict, Web Locks/CAS/outbox e confronti read-only; nessuna modifica canone né prompt dei revisori (ADR 0041, issue #20).
