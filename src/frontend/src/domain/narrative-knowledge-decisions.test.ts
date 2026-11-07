@@ -1,6 +1,8 @@
 import {describe,expect,it} from "vitest";
 import {newBook,type BookProject} from "./types";
 import {buildNarrativeEventCandidateIndex} from "./narrative-event-candidates";
+import {createEditorialCycle,reviewerPrompt,adjudicationPrompt,chapterSegments,EDITORIAL_ROLES}
+  from "./editorial-board";
 import {createNarrativeEventDecision} from "./narrative-event-decisions";
 import {buildNarrativeKnowledgeRegistry,createNarrativeKnowledgeDecision,
   MAX_KNOWLEDGE_DECISIONS} from "./narrative-knowledge-decisions";
@@ -88,6 +90,26 @@ describe("Registro privato delle conoscenze interpretate dall'autore",()=>{
     expect(buildNarrativeKnowledgeRegistry(book).current).toHaveLength(0);
     book.narrativeKnowledgeDecisions=[{...d,verdict:"unknown" as typeof d.verdict}];
     expect(buildNarrativeKnowledgeRegistry(book).current).toHaveLength(0);
+  });
+  it("nessun giudizio privato viene aggiunto ai prompt di revisori o direttore",()=>{
+    const book=sample(),source=affirm(book);
+    const decision=createNarrativeKnowledgeDecision(book,source.id,"still_secret",
+      "NOTA_PRIVATA_UNICA_MAI_AL_MODELLO: la scena era un sogno.",
+      crypto.randomUUID(),"2026-11-07T13:00:00.000Z");
+    book.narrativeKnowledgeDecisions=[decision];
+    book.chapters.push({id:"ch2",number:2,title:"Ritorno",purpose:"Verifica",
+      scenes:[{id:"sc2",number:1,title:"Attesa",objective:"Aspettare",
+        text:"Mara dichiara di conoscere la lettera.",status:"canon"}]});
+    const chapter=book.chapters[1]!,cycle=createEditorialCycle(chapter.id);
+    const segment=chapterSegments(chapter)[0]!;
+    for(const role of EDITORIAL_ROLES){
+      const prompt=reviewerPrompt(book,cycle,role,segment,1);
+      expect(prompt.prompt).not.toContain("NOTA_PRIVATA_UNICA_MAI_AL_MODELLO");
+      expect(prompt.prompt).not.toContain("narrativeKnowledgeDecisions");
+    }
+    const judge=adjudicationPrompt(book,cycle);
+    expect(judge.prompt).not.toContain("NOTA_PRIVATA_UNICA_MAI_AL_MODELLO");
+    expect(judge.prompt).not.toContain("narrativeKnowledgeDecisions");
   });
   it("validazioni e cap massimo non attivano side effect",()=>{
     const book=sample(),source=affirm(book);
