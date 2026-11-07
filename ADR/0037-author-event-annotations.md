@@ -1,6 +1,6 @@
 # ADR 0037 — Annotazioni esplicite dell'autore su menzioni narrative
 
-- **Stato:** proposta per v0.11.4 (verifica CI/PR necessaria)
+- **Stato:** accettato per v0.11.4 (PR #50)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Predecessore:** ADR 0036 — menzioni letterali non verificate
@@ -22,4 +22,4 @@ La v0.11.3 riconosce frasi del manoscritto che *potrebbero* descrivere passaggi 
 
 L'app offre ora un audit *umano* e revocabile delle interpretazioni, ma non dispone di un grafo causale o di un registro canonico certificato degli eventi. Se in futuro una decisione guiderà la scrittura, serviranno nuove regole di approvazione, invalidazione downstream, privacy e controllo delle contraddizioni. Gli hash non crittografici non sono firme digitali. Nessuna conclusione semantica o verifica delle fonti viene implicata da una citazione letterale.
 
-Test attesi: Vitest dominio e persistenza/rollback, ZIP ostili, Playwright desktop/mobile e smoke npm/CI; nessun merge prima di CI verde.
+Verifiche PR #50: 287 test Vitest e 36 test Playwright desktop/mobile superati, con TypeScript, lockfile, smoke, build e CI verde.

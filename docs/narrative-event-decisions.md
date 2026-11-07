@@ -1,4 +1,4 @@
-# Annotazioni dell'autore sugli eventi — v0.11.4 (in verifica)
+# Annotazioni dell'autore sugli eventi — v0.11.4
 
 Nella **Redazione multi-agente → Indice eventi candidati** puoi scegliere una frase letterale di un capitolo congelato, scrivere una motivazione da 12 a 500 caratteri e selezionare **Annota come avvenuto** oppure **Respingi menzione**. L'app chiede conferma prima del salvataggio. Una successiva rettifica **non sovrascrive** quella precedente: tutte le decisioni restano consultabili nello storico, con data, scena, citazione e motivazione.
 
