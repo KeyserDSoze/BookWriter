@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.6 — 2026-11-07 (PR #52)
+
+**Tracce di continuità da attestazioni autore, senza inferenze automatiche**
+
+- Confronti deterministici e soltanto consultivi fra attestazioni `affirmed` ancora valide in capitoli diversi: possibile azione successiva a morte, seconda menzione di morte senza una «risorge» attestata intermedia e date di scena ISO `YYYY-MM-DD` in ordine inverso rispetto ai capitoli.
+- Ogni segnale contiene **entrambe le citazioni letterali**, offset, capitoli, scene e ragioni dell'autore; mostra spiegazioni alternative (flashback, omonimie, soprannaturale) e avverte che l'ordine dei capitoli non equivale alla cronologia degli eventi.
+- Max 40 segnali mostrati, conteggio delle omissioni; decisioni stale, respinte e rettificate escluse. Nessuna nuova persistenza, migrazione, rete o AI e nessuna modifica automatica a segreti, oggetti, timeline, prosa, canon o prompt dei lettori.
+- Test unitari su date invalide, rettifiche, risurrezione, staleness, isolamento e limiti; Playwright desktop/mobile con doppia attestazione e verifica del canone immutato. ADR 0039, `docs/attested-continuity-signals.md` e issue #20.
+
+**Limite:** segnali testuali euristici, mai contraddizioni certificate; il controllo dell'autore e il giudice critico restano fondamentali.
+
+
 ## 0.11.5 — 2026-11-07 (PR #51)
 
 **Registro locale delle attestazioni narrative e navigazione completa dell'indice**

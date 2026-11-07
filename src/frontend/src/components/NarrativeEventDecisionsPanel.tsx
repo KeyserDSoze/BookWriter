@@ -5,6 +5,7 @@ import { currentNarrativeEventDecision, MAX_EVENT_DECISIONS, type NarrativeEvent
   from "../domain/narrative-event-decisions";
 import { recordNarrativeEventDecision } from "../application/narrative-event-decisions";
 import { buildNarrativeEventLedger } from "../domain/narrative-event-ledger";
+import { buildNarrativeContinuityHints } from "../domain/narrative-continuity-hints";
 import { Button } from "./ui/button";
 
 function eventKey(event: NarrativeEventCandidate): string {
@@ -22,6 +23,7 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
   const index = buildNarrativeEventCandidateIndex(book);
   const history = book.narrativeEventDecisions ?? [];
   const ledger = buildNarrativeEventLedger(book);
+  const hints = buildNarrativeContinuityHints(book);
   const pageCount = Math.max(1, Math.ceil(index.events.length/30));
   const page = Math.min(candidatePage,pageCount-1);
   const pageStart = page*30;
@@ -139,6 +141,59 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
           <p className="muted">Tracce da confrontare manualmente; nessuna incoerenza accertata.</p>
         </li>)}
       </ul>}
+    </details>
+    <details aria-label="Tracce di continuità da verificare"
+      className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
+      <summary className="cursor-pointer font-semibold">
+        Tracce di continuità da verificare ({hints.hints.length})
+      </summary>
+      <p className="muted mt-2 text-xs">
+        Confronti locali di sole attestazioni autore attualmente valide. Le frasi sono prove
+        testuali, non dimostrano una contraddizione: flashback, ritorni, omonimi o svolte
+        fantastiche possono spiegare ogni sequenza. Non vengono avviate nuove review AI,
+        modifiche al canone, ai segreti, alla timeline o agli oggetti.
+        {" "}Attestazioni esaminate: {hints.inspectedAttestationCount}.
+        {hints.omittedHintCount > 0 &&
+          " Altre " + hints.omittedHintCount + " tracce omesse dal limite di 40."}
+      </p>
+      {hints.hints.length === 0 ? <p className="muted mt-2 text-xs">
+        Nessuna sequenza lessicale selezionata: non significa che la storia sia coerente.
+      </p> : <ul className="mt-2 max-h-80 space-y-2 overflow-y-auto">
+        {hints.hints.map((hint,i)=><li key={hint.earlier.decision.id + ":" +
+          hint.later.decision.id + ":" + hint.kind + ":" + i}
+          className="rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+          <p className="font-semibold">
+            {hint.kind === "repeated_death" ? "Morte menzionata più volte" :
+              hint.kind === "post_death_activity" ? "Azione dopo menzione di morte" :
+              "Date dichiarate in ordine inverso"} · {hint.actor}
+          </p>
+          <p className="mt-1 break-words">
+            <b>Prima, cap. {hint.earlier.candidate.chapterNumber} · scena {
+              hint.earlier.candidate.sceneNumber}:</b> «{hint.earlier.decision.quote}»
+            {" "}· offset {hint.earlier.decision.offset}
+            {hint.earlier.candidate.sceneDate &&
+              " · data dichiarata: " + hint.earlier.candidate.sceneDate}
+          </p>
+          <p className="mt-1 break-words">
+            <b>Poi, cap. {hint.later.candidate.chapterNumber} · scena {
+              hint.later.candidate.sceneNumber}:</b> «{hint.later.decision.quote}»
+            {" "}· offset {hint.later.decision.offset}
+            {hint.later.candidate.sceneDate &&
+              " · data dichiarata: " + hint.later.candidate.sceneDate}
+          </p>
+          <p className="muted mt-1 break-words">{hint.explanation}</p>
+          <p className="mt-1 break-words">Motivi dell'autore:
+            {" "}{hint.earlier.decision.rationale} / {hint.later.decision.rationale}
+          </p>
+        </li>)}
+      </ul>}
+      <p className="muted mt-2 text-xs">
+        Il confronto usa nomi letterali e ordine dei capitoli, non verifica l'ordine degli
+        eventi raccontati. Le date si confrontano solo se espresse come YYYY-MM-DD,
+        e sono metadati correnti della scena, non date autenticate all'annotazione.
+        La risurrezione esplicita attestata interrompe il solo confronto lessicale con
+        una morte precedente; non prova una spiegazione narrativa.
+      </p>
     </details>
     {history.length > 0 && <details className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
       <summary className="cursor-pointer font-semibold">
