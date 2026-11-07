@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.7 — 2026-11-07 (PR in preparazione)
+## 0.11.7 — 2026-11-07 (PR #53)
 
 **Anteprima temporanea e consensuale degli alias nei segnali di continuità**
 
