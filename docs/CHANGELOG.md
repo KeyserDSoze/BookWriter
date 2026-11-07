@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.5 — 2026-11-07 (PR in preparazione)
+## 0.11.5 — 2026-11-07 (PR #51)
 
 **Registro locale delle attestazioni narrative e navigazione completa dell'indice**
 
