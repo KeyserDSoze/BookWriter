@@ -23,7 +23,7 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
           frozenAt:at,summary:"Sinossi del capitolo "+number,
           bookSummaryAtFreeze:"Sinossi completa fino al capitolo "+number,
           scenes:[{id:"s-"+number,number:1,title:"Scena",objective:"Proseguire",
-            text:"Mara incontra un guardiano mentre custodisce una chiave.",status:"canon",
+            text:number===1?"Mara consegna la chiave a Elio.":"Mara incontra un guardiano mentre custodisce una chiave.",status:"canon",
             characters:["Mara"],items:["chiave"]}],
         }));
         store.put(book,book.id as string);
@@ -33,6 +33,11 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
   }));
   await page.reload();
   const board=page.getByRole("region",{name:"Redazione multi-agente"});
+  const eventSummary=board.locator("summary").filter({hasText:"Indice eventi candidati"});
+  await expect(eventSummary).toContainText("(1)");
+  await eventSummary.click();
+  await expect(board.getByText("«Mara consegna la chiave a Elio»")).toBeVisible();
+  await expect(board.getByText(/Testo letterale a offset 0/)).toBeVisible();
   const outbound:string[]=[];
   page.on("request",req=>{
     if(req.url().includes("api.openai.com")||req.url().includes("it.wikipedia.org"))

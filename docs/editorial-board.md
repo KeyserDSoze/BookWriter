@@ -4,6 +4,10 @@ Dopo la scrittura e il primo consolidamento delle scene di un capitolo, l'autopi
 
 La schermata **Dashboard → Redazione multi-agente** mostra quali verifiche sono in corso, le criticità trovate, le correzioni suggerite, le decisioni dell'editor e lo stato di ogni capitolo.
 
+## Indice consultivo delle menzioni di eventi (v0.11.3)
+
+La redazione mostra **Indice eventi candidati**, calcolato dai capitoli già congelati: frasi esplicite su scoperte, consegne di oggetti e cambiamenti di stato con citazione originale e offset. Sono **menzioni**, anche quando pronunciate in dialoghi o racconti inaffidabili; non costituiscono canone, non autorizzano automaticamente correzioni e scompaiono se il capitolo viene riaperto. I campioni precedenti forniti ai revisori della continuità e al giudice possono includerle, ma i cinque lettori ciechi restano separati. [Guida](narrative-event-candidates.md), ADR 0036, issue #20.
+
 ## Recupero mirato della continuità (v0.11.2)
 
 In una nuova review cross-chapter, i quattro specialisti di continuità e il giudice ricevono fino a quattro scene pubbliche precedenti scelte per corrispondenza di entità, lessico e date: **anche in capitoli intermedi**, preservando il capitolo d'origine e l'ultimo predecessore. Lo storico vede i campioni solo se è cambiato il dossier. Finestre con offset e segnali spiegano la selezione; contatori e limiti di scansione non permettono di chiamarla una verifica esaustiva né semantica. I cinque lettori ciechi restano separati. [Guida](targeted-continuity-retrieval.md), ADR 0035, issue #20.

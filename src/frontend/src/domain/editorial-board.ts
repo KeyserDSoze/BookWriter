@@ -261,6 +261,10 @@ export function reviewerPrompt(book: BookProject, cycle: ChapterEditorialCycle,
             "alle scene precedenti valore di fonti documentali indipendenti. "
           : "La causa è una modifica narrativa a monte. ") +
         "Confronta causa-effetto, date, relazioni, oggetti e rivelazioni con il segmento corrente. " +
+        "I campioni possono contenere eventCandidates: riconoscimenti letterali e NON fatti del canon. " +
+        "Sono possibili dialoghi, menzogne, sogni e negazioni indirette: NON assumere che qualcuno " +
+        "conosca davvero un segreto o possieda un oggetto per la sola presenza della frase. " +
+        "Verifica sempre la scena, la timeline e la motivazione prima di proporre una correzione. " +
         "Il retrieval è LOCALE e LESSICALE/STRUTTURATO, non semantico: matchedTerms, " +
         "matchSignals e selectionReason sono indizi di pertinenza, NON prove di errore. " +
         "La selezione raggiunge anche capitoli intermedi; candidateSceneCount e " +
@@ -488,6 +492,9 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
         bound(JSON.stringify(continuityPack),14000,"Campione di continuità") +
         ". Se trigger=historical_evidence, è cambiato il dossier documentale, NON necessariamente " +
         "la prosa: non dichiarare fatti storici verificati tramite questi frammenti del romanzo. " +
+        "eventCandidates sono solo ipotesi TESTUALI ancorate con quote e offset. Non sono " +
+        "canone, non attestano trasferimento effettivo, conoscenze reali o contraddizioni. " +
+        "Rifiuta ogni rilievo fondato soltanto su un candidato privo di confronto contestuale. " +
         "Il ranking local_structured_lexical_v1 seleziona scene pertinenti anche da " +
         "capitoli intermedi per entità, parole e date, ma NON dimostra contraddizioni. " +
         "Esamina selectionReason, matchSignals e unscannedSceneCount, non " +
