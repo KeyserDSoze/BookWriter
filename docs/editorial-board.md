@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.13
+# Redazione multi-agente di BookWriter — v0.11.14
+
+## Conoscenze interpretate dall'autore, senza trasmissione AI (v0.11.14)
+
+L'autore può registrare un'interpretazione motivata di come un personaggio conosca una notizia **soltanto su una menzione `knowledge_mention` già confermata e ancora valida** in una scena congelata. Le opzioni sono `learned_directly`, `reported_by_other` e `still_secret`; rettifiche, invalidazioni e storico rimangono consultabili. Una riscrittura, riapertura o riattestazione della scena rende non corrente la classificazione ancorata al vecchio ID. Nessuna decisione diventa automaticamente canone.
+
+Il nuovo registro è **privato e consultivo**, e non viene incluso nei prompt dei 12 revisori, del direttore o di altri modelli AI: i cinque lettori ciechi non ricevono nuove informazioni. Il salvataggio disabilita l'autosync, cancella la coda GitHub e non modifica `memory.secrets`. Attenzione: un export ZIP e un push GitHub **manuale** possono comunque contenere le interpretazioni. Serve consenso esplicito per un eventuale uso AI nelle prossime versioni. [Guida](author-knowledge-registry.md), ADR 0047, issue #20.
+
+
 
 ## Piste di comunicazione fra personaggi (v0.11.13)
 
