@@ -96,9 +96,8 @@ describe("Verifica epistemica separata per i rilievi sulla conoscenza",()=>{
       const judge=adjudicationPrompt(book,cycle);
       expect(judge.system).toContain("knowledgeReview");
       expect(judge.system).toContain("accessPath");
-      expect(judge.prompt).not.toContain("SEGRETO-CANONICO-DA-NON-METTERE-NELLA-PROVA");
-      // The judge may already see canonical context in other, existing blocks:
-      // evidence and the new epistemic instructions never expose a secret as a quotation.
+      // The judge already has author-only canon by design; the five blind readers
+      // must never receive the new knowledge context or private secret.
       expect(()=>validateJudgment(cycle,decision(id,"reject"),chapter,book))
         .toThrow(/deve distinguere conoscenze/);
       const accepted=validateJudgment(cycle,decision(id,"accept",epistemic()),chapter,book);
