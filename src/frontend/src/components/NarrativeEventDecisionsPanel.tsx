@@ -4,6 +4,7 @@ import { buildNarrativeEventCandidateIndex, type NarrativeEventCandidate } from 
 import { currentNarrativeEventDecision, MAX_EVENT_DECISIONS, type NarrativeEventDecision }
   from "../domain/narrative-event-decisions";
 import { recordNarrativeEventDecision } from "../application/narrative-event-decisions";
+import { buildNarrativeEventLedger } from "../domain/narrative-event-ledger";
 import { Button } from "./ui/button";
 
 function eventKey(event: NarrativeEventCandidate): string {
@@ -15,10 +16,15 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
 }) {
   const [notes,setNotes] = useState<Record<string,string>>({});
   const [busy,setBusy] = useState(false);
+  const [candidatePage,setCandidatePage] = useState(0);
   const [message,setMessage] = useState("");
   const [error,setError] = useState("");
   const index = buildNarrativeEventCandidateIndex(book);
   const history = book.narrativeEventDecisions ?? [];
+  const ledger = buildNarrativeEventLedger(book);
+  const pageCount = Math.max(1, Math.ceil(index.events.length/30));
+  const page = Math.min(candidatePage,pageCount-1);
+  const pageStart = page*30;
 
   async function decide(event: NarrativeEventCandidate, verdict: NarrativeEventDecision["verdict"]) {
     if (busy) return;
@@ -55,7 +61,7 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
     {message && <p role="status" className="mt-2 text-emerald-700 dark:text-emerald-300">{message}</p>}
     {error && <p role="alert" className="mt-2 text-red-700 dark:text-red-300">{error}</p>}
     <ul className="mt-2 space-y-2">
-      {index.events.slice(0,30).map(event=>{
+      {index.events.slice(pageStart,pageStart+30).map(event=>{
         const key = eventKey(event);
         const note = notes[key] ?? "";
         const current = currentNarrativeEventDecision(book,event);
@@ -88,9 +94,52 @@ export function NarrativeEventDecisionsPanel({book,onRefresh}: {
         </li>;
       })}
     </ul>
-    {index.events.length > 30 && <p className="muted mt-2 text-xs">
-      Mostrate solo le prime 30 menzioni. La selezione non equivale a una conferma.
-    </p>}
+    {index.events.length > 30 && <nav aria-label="Pagine menzioni narrative"
+      className="mt-3 flex flex-wrap items-center gap-2">
+      <Button disabled={page===0} onClick={()=>setCandidatePage(page-1)}>Pagina precedente</Button>
+      <span className="muted text-xs" role="status">
+        Menzioni {pageStart+1}–{Math.min(index.events.length,pageStart+30)}
+        {" "}di {index.events.length} · pagina {page+1}/{pageCount}
+      </span>
+      <Button disabled={page===pageCount-1} onClick={()=>setCandidatePage(page+1)}>Pagina successiva</Button>
+    </nav>}
+    <details aria-label="Registro eventi attestati"
+      className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
+      <summary className="cursor-pointer font-semibold">
+        Registro attestazioni correnti ({ledger.currentAffirmed.length})
+      </summary>
+      <p className="muted mt-2 text-xs">
+        Solo dichiarazioni dell'autore ancora ancorate alla stessa scena canonica congelata:
+        non sono fatti verificati dal software, né certificazioni storiche. Nessuna correzione
+        o modifica di segreti, inventari e timeline deriva da questo elenco.
+        {" "}Menzioni respinte correnti: {ledger.currentDismissed.length};
+        decisioni superate/non correnti: {ledger.nonCurrentCount}.
+      </p>
+      {ledger.currentAffirmed.length===0 ? <p className="muted mt-2 text-xs">
+        Nessuna menzione attestata attualmente valida.
+      </p> : <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">
+        {ledger.currentAffirmed.map(({decision,candidate})=><li key={decision.id}
+          className="rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+          <p className="font-semibold">{candidate.actor} · cap. {candidate.chapterNumber},
+            scena {candidate.sceneNumber} · {candidate.kind}</p>
+          <p className="break-words">«{decision.quote}» · offset {decision.offset}</p>
+          <p className="break-words">Decisione autore: {decision.rationale}</p>
+        </li>)}
+      </ul>}
+      <p className="muted mt-3 text-xs">
+        Soggetti con menzioni attestate in più capitoli: {ledger.crossChapterActors.length}.
+        Il confronto usa solo il nome letterale, non riconosce alias e non dimostra contraddizioni.
+      </p>
+      {ledger.crossChapterActors.length>0 && <ul className="mt-2 space-y-1">
+        {ledger.crossChapterActors.map(group=><li key={group.actor}
+          className="break-words rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+          <b>{group.actor}</b> · {group.entries.length} menzioni in
+          {" "}{new Set(group.entries.map(e=>e.candidate.chapterId)).size} capitoli
+          {" "}({group.entries.map(e=>"cap. "+e.candidate.chapterNumber).join(", ")})
+          <p className="muted">Tracce da confrontare manualmente; nessuna incoerenza accertata.</p>
+        </li>)}
+      </ul>}
+    </details>
     {history.length > 0 && <details className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
       <summary className="cursor-pointer font-semibold">
         Storico decisioni autore ({history.length}) — incluse quelle superate
