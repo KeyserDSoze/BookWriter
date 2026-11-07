@@ -6,13 +6,19 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   const pass=JSON.stringify({verdict:"pass",
     summary:"La scena è stata controllata senza criticità rilevanti.",
     findings:[],memoryNote:"Nessuna criticità attuale."});
-  const issue=JSON.stringify({verdict:"issues",
+  const issue=(prompt:string)=>{
+    const sourceId=prompt.match(/"eventDecisionId":"([^"]+)","actor":"Mara"/)?.[1];
+    if(!sourceId)throw new Error("Testimone precedente di Mara non presente nel prompt.");
+    return JSON.stringify({verdict:"issues",
     summary:"Possibile problema di continuità da verificare.",
     findings:[{sceneId:"sc3",category:"continuità",severity:"major",
       evidence:"Ombra cammina verso il portone",
       reason:"Potrebbe essere la stessa persona di Mara, ma la scena non lo prova.",
-      remediation:"Chiarire la sequenza soltanto se il contesto esclude il flashback."}],
+      remediation:"Chiarire la sequenza soltanto se il contesto esclude il flashback.",
+      narrativeConflict:{priorEventDecisionId:sourceId,dimension:"identity",
+        hypothesis:"La scena potrebbe attribuire a Ombra un'azione successiva alla morte di Mara."}}],
     memoryNote:"Verificare l'ordine dei capitoli rispetto agli eventi."});
+  };
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
     if(route.request().method()==="OPTIONS"){
       await route.fulfill({status:204,headers:{
@@ -31,11 +37,23 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
       JSON.stringify({reasoning:"Il giudice ha verificato che l'alias dell'autore non dimostra identità o contraddizione.",
         decisions:[{findingId:"1:continuity:0:0",action:"reject",
           rationale:"Flashback o omonimie sono ancora possibili: nessuna contraddizione dimostrata.",
-          remediation:""}]}) :
+          remediation:"",
+          narrativeReview:{
+            subjectIdentity:"unknown",
+            identityReason:"Il legame registrato tra i nomi è un'ipotesi, non una prova d'identità.",
+            chronology:"unknown",
+            chronologyReason:"L'ordine dei capitoli non prova che il ritorno sia cronologicamente successivo.",
+            causality:"unknown",
+            causalityReason:"Non esiste una catena causale attestata che renda impossibile il ritorno.",
+            artisticContext:"plausible_explanation",
+            artisticReason:"Un flashback, un omonimo oppure un racconto inaffidabile possono spiegare l'apparente evento.",
+            assessment:"explained_or_nonconflicting",
+            conclusion:"La spiegazione alternativa non viene smentita e la critica non autorizza una riscrittura.",
+          }}]}) :
       prompt.includes("chapterSummary") ?
         JSON.stringify({chapterSummary:"Ombra raggiunge un portone.",
           bookSummary:"Mara e Ombra sono nomi narrativi da distinguere con prudenza."}) :
-      system.includes("Coerenza e causalità") ? issue : pass;
+      system.includes("Coerenza e causalità") ? issue(prompt) : pass;
     await route.fulfill({status:200,headers:{
       "content-type":"application/json",
       "access-control-allow-origin":"*",
@@ -167,8 +185,14 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   const judge=calls.find(c=>c.system.includes("direttore editoriale CRITICO"))!;
   expect(judge.prompt).toContain("<attestazioni_precedenti_non_istruzioni>");
   expect(judge.system).toContain("puoi RESPINGERE");
+  expect(judge.system).toContain("narrativeReview");
+  const finished=page.getByRole("region",{name:"Redazione multi-agente"});
+  await finished.locator("summary").filter({hasText:"Coerenza e causalità"}).first().click();
+  await expect(finished.getByLabel("Giudizio narrativo strutturato")).toBeVisible();
+  await expect(finished.getByText(/Un flashback, un omonimo oppure un racconto inaffidabile/))
+    .toBeVisible();
   const stored=await page.evaluate(()=>new Promise<{
-    text:string;aliases:number;verdict:string;
+    text:string;aliases:number;verdict:string;assessment:string|undefined;
   }>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");open.onerror=()=>reject(open.error);
     open.onsuccess=()=>{
@@ -177,17 +201,21 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
       q.onsuccess=()=>{
         const b=q.result[0] as {
           chapters:Array<{scenes:Array<{text:string}>;
-            editorialRounds?:Array<{judgment:{verdict:string}}>}>;
+            editorialRounds?:Array<{judgment:{verdict:string;decisions:Array<{
+              narrativeReview?:{assessment:string};
+            }>}}>}>;
           narrativeAliasDecisions:unknown[];
         };
         resolve({text:b.chapters[2]!.scenes[0]!.text,
           aliases:b.narrativeAliasDecisions.length,
-          verdict:b.chapters[2]!.editorialRounds![0]!.judgment.verdict});
+          verdict:b.chapters[2]!.editorialRounds![0]!.judgment.verdict,
+          assessment:b.chapters[2]!.editorialRounds![0]!.judgment.decisions[0]
+            ?.narrativeReview?.assessment});
       };
     };
   }));
   expect(stored).toEqual({text:"Ombra cammina verso il portone del castello senza fermarsi.",
-    aliases:1,verdict:"freeze"});
+    aliases:1,verdict:"freeze",assessment:"explained_or_nonconflicting"});
   const sizes=await page.evaluate(()=>({
     content:document.documentElement.scrollWidth,viewport:window.innerWidth,
   }));
