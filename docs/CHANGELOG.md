@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.10 — 2026-11-07 (PR in preparazione)
+## 0.11.10 — 2026-11-07 (PR #56)
 
 **Giudizio narrativo strutturato e gating prudente delle remediation**
 
