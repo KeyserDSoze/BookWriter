@@ -1,6 +1,6 @@
 # ADR 0046 — Piste letterali di trasmissione delle informazioni fra personaggi
 
-- **Stato:** proposto per v0.11.13
+- **Stato:** accettato per v0.11.13 (PR #59)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0011, 0042–0045
