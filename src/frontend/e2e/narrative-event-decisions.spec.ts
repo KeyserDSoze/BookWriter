@@ -195,7 +195,7 @@ test("segnali consultivi desktop/mobile: due attestazioni, date e nessuna scritt
   await page.reload();
   const after=page.getByRole("region",{name:"Redazione multi-agente"});
   await after.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
-  await expect(after.locator('details[aria-label="Tracce di continuità da verificare"] summary'))
+  await expect(after.locator('details[aria-label="Tracce di continuità da verificare"] > summary'))
     .toContainText("Tracce di continuità da verificare (2)");
   const stored=await page.evaluate(()=>new Promise<{
     decisions:number;frozen:number;texts:string[];secrets:unknown;
@@ -293,7 +293,7 @@ test("anteprima alias esplicita e non persistita su desktop e mobile",async({pag
   const reopened=page.getByRole("region",{name:"Redazione multi-agente"});
   await reopened.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
   const again=reopened.locator('details[aria-label="Tracce di continuità da verificare"]');
-  await expect(again.locator("summary")).toContainText("(0)");
+  await expect(again.locator("summary").first()).toContainText("(0)");
   const stored=await page.evaluate(()=>new Promise<{
     decisions:number;texts:string[];frozen:number;secrets:unknown;aliasStored:boolean;
   }>((resolve,reject)=>{
@@ -401,7 +401,7 @@ test("alias motivati desktop/mobile: salva, riapri, rettifica e isola canone e r
   await page.reload();
   const after=page.getByRole("region",{name:"Redazione multi-agente"});
   await after.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
-  await expect(after.locator('details[aria-label="Tracce di continuità da verificare"] summary').first())
+  await expect(after.locator('details[aria-label="Tracce di continuità da verificare"] > summary').first())
     .toContainText("(0)");
   const stored=await page.evaluate(()=>new Promise<{
     aliases:number;events:number;autosync:boolean|undefined;texts:string[];frozen:number;secrets:unknown;
