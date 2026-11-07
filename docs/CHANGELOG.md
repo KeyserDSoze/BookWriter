@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.6 — 2026-11-07 (PR in preparazione)
+## 0.11.6 — 2026-11-07 (PR #52)
 
 **Tracce di continuità da attestazioni autore, senza inferenze automatiche**
 
