@@ -77,3 +77,5 @@
 - [x] v0.11.11: confronto locale di scene precedenti canoniche congelate senza attestazioni autore (3 finestre), ipotesi letterale `priorSceneConflict`, giudice critico strutturato, gate su libri freschi anche al salvataggio del repair e ZIP strict (ADR 0044, issue #20).
 
 - [x] v0.11.12: giudizio epistemico strict per conflitti sul sapere dei personaggi, con modalità narrativa fonte/corrente, percorso dell'informazione, condizioni conservative di accept e invalidazione al repair; UI e ZIP legacy-safe (ADR 0045, issue #20).
+
+- [x] v0.11.13: piste bounded di possibili comunicazioni fra nomi in prosa precedente congelata (max 4), giudice con disposizione per ogni pista e blocco conservativo di false remediation di `knowledge`, ZIP strict e audit UI (ADR 0046, issue #20).
