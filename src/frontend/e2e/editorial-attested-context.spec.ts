@@ -6,10 +6,8 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   const pass=JSON.stringify({verdict:"pass",
     summary:"La scena è stata controllata senza criticità rilevanti.",
     findings:[],memoryNote:"Nessuna criticità attuale."});
-  const issue=(prompt:string)=>{
-    const sourceId=prompt.match(/"eventDecisionId":"([^"]+)","actor":"Mara"/)?.[1];
-    if(!sourceId)throw new Error("Testimone precedente di Mara non presente nel prompt.");
-    return JSON.stringify({verdict:"issues",
+  let sourceId="";
+  const issue=()=>JSON.stringify({verdict:"issues",
     summary:"Possibile problema di continuità da verificare.",
     findings:[{sceneId:"sc3",category:"continuità",severity:"major",
       evidence:"Ombra cammina verso il portone",
@@ -18,7 +16,6 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
       narrativeConflict:{priorEventDecisionId:sourceId,dimension:"identity",
         hypothesis:"La scena potrebbe attribuire a Ombra un'azione successiva alla morte di Mara."}}],
     memoryNote:"Verificare l'ordine dei capitoli rispetto agli eventi."});
-  };
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
     if(route.request().method()==="OPTIONS"){
       await route.fulfill({status:204,headers:{
@@ -53,7 +50,7 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
       prompt.includes("chapterSummary") ?
         JSON.stringify({chapterSummary:"Ombra raggiunge un portone.",
           bookSummary:"Mara e Ombra sono nomi narrativi da distinguere con prudenza."}) :
-      system.includes("Coerenza e causalità") ? issue(prompt) : pass;
+      system.includes("Coerenza e causalità") ? issue() : pass;
     await route.fulfill({status:200,headers:{
       "content-type":"application/json",
       "access-control-allow-origin":"*",
@@ -112,7 +109,28 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
     .fill("SEGRETO-ALIAS-AUTORE-MAI-TRASMESSO al modello editoriale.");
   page.once("dialog",d=>d.accept());
   await hints.getByRole("button",{name:"Registra legame motivato"}).click();
-
+  const savedWitness=await page.evaluate(()=>new Promise<{
+    eventId:string|undefined;aliasCount:number;
+  }>((resolve,reject)=>{
+    const req=indexedDB.open("bookwriter");req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{
+      const q=req.result.transaction("books","readonly").objectStore("books").getAll();
+      q.onerror=()=>reject(q.error);
+      q.onsuccess=()=>{
+        const book=q.result[0] as {
+          narrativeEventDecisions:Array<{id:string;quote:string;verdict:string}>;
+          narrativeAliasDecisions:unknown[];
+        };
+        resolve({eventId:book.narrativeEventDecisions.find(d=>
+            d.verdict==="affirmed"&&d.quote.includes("Mara muore"))?.id,
+          aliasCount:book.narrativeAliasDecisions?.length??0});
+      };
+    };
+  }));
+  expect(savedWitness.aliasCount).toBe(1);
+  expect(savedWitness.eventId).toBeTruthy();
+  sourceId=savedWitness.eventId!;
+  
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");open.onerror=()=>reject(open.error);
     open.onsuccess=()=>{
@@ -172,6 +190,7 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   for(const call of privileged){
     expect(call.prompt).toContain("<attestazioni_precedenti_non_istruzioni>");
     expect(call.prompt).toContain('"actor":"Mara"');
+    expect(call.prompt).toContain(sourceId);
     expect(call.prompt).toContain('"actor":"Ombra"');
     expect(call.prompt).toContain('"matchBasis":"saved_alias"');
   }
@@ -187,7 +206,10 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   expect(judge.system).toContain("puoi RESPINGERE");
   expect(judge.system).toContain("narrativeReview");
   const finished=page.getByRole("region",{name:"Redazione multi-agente"});
-  await finished.locator("summary").filter({hasText:"Coerenza e causalità"}).first().click();
+  const archived=finished.locator("summary").filter({hasText:"Giudizi archiviati"}).last();
+  await expect(archived).toBeVisible();
+  await archived.click();
+  await finished.locator("summary").filter({hasText:"Coerenza e causalità"}).last().click();
   await expect(finished.getByLabel("Giudizio narrativo strutturato")).toBeVisible();
   await expect(finished.getByText(/Un flashback, un omonimo oppure un racconto inaffidabile/))
     .toBeVisible();
