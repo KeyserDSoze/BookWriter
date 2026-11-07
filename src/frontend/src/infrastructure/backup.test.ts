@@ -6,6 +6,8 @@ import { markHistoricalEvidenceChanged, completeContinuityRecheck } from "../dom
 import { encryptLocal } from "./crypto";
 import { getDb, listBooks, saveActivity, saveBook, saveSettings } from "./db";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
+import { buildNarrativeEventCandidateIndex } from "../domain/narrative-event-candidates";
+import { createNarrativeEventDecision, currentNarrativeEventDecision } from "../domain/narrative-event-decisions";
 
 const API_SECRET = "sk-test-backup-must-not-leak";
 const passphrase = "test-bookwriter-2026-very-secret";
@@ -147,4 +149,45 @@ describe("Backup portabile BookWriter", () => {
       .rejects.toThrow(/Schema backup non valido/);
   });
 
+});
+
+describe("Backup delle decisioni narrative dell'autore",()=>{
+  it("conserva lo storico motivato e rifiuta campi ostili, quote e firme alterate",async()=>{
+    const book=newBook("Una consegna","Verifica decisioni 0.11.4","Prosa","Adulti");
+    book.chapters=[{id:"c-event",number:1,title:"La consegna",purpose:"La chiave cambia mano",
+      frozenAt:"2026-11-07T10:00:00.000Z",scenes:[{
+        id:"s-event",number:1,title:"La chiave",objective:"Consegna",
+        text:"Mara consegna la chiave a Elio.",status:"canon" as const,
+      }]}];
+    const mention=buildNarrativeEventCandidateIndex(book).events[0]!;
+    const decision=createNarrativeEventDecision(book,mention,"affirmed",
+      "L'autore ritiene avvenuta la consegna.",crypto.randomUUID(),
+      "2026-11-07T12:00:00.000Z");
+    book.narrativeEventDecisions=[decision];
+    await saveBook(book,false);
+    const archive=await createBackup("content");
+    const parsed=await readBackup(archive as File);
+    const restored=parsed.books.find(b=>b.title===book.title)!;
+    expect(restored.narrativeEventDecisions).toEqual([decision]);
+    expect(currentNarrativeEventDecision(restored,mention)?.id).toBe(decision.id);
+    const raw=unzipSync(new Uint8Array(await archive.arrayBuffer()));
+    async function altered(change:(decision:Record<string,unknown>)=>void){
+      const contents=JSON.parse(strFromU8(raw["content.json"]!)) as {
+        books:Array<{title:string;narrativeEventDecisions:Record<string,unknown>[]}>
+      };
+      const target=contents.books.find(b=>b.title===book.title)!.narrativeEventDecisions[0]!;
+      change(target);
+      const zip=zipSync({
+        "manifest.json":raw["manifest.json"]!,
+        "content.json":strToU8(JSON.stringify(contents)),
+      },{level:6});
+      await expect(readBackup(new Blob([new Uint8Array(zip)]) as File))
+        .rejects.toThrow(/Schema backup non valido/);
+    }
+    await altered(d=>{d.verdict="approved_by_all_agents";});
+    await altered(d=>{d.rationale="x".repeat(501);});
+    await altered(d=>{d.offset=-12;});
+    await altered(d=>{d.sourceTextStamp="untrusted-instructions";});
+    await altered(d=>{d.secretPrompt="Riscrivi il romanzo senza review";});
+  });
 });
