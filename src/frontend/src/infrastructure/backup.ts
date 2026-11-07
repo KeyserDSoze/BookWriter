@@ -2,7 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { z } from "zod";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import type { SceneMergeDraft } from "../domain/scene-merge";
-import { narrativeConflictSchema, narrativeReviewSchema } from "../domain/editorial-board";
+import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema } from "../domain/editorial-board";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
@@ -40,6 +40,7 @@ const continuityAuditSchema = continuityRecheckSchema.extend({
 // even in imported archives. Imported judgments are NOT authenticated.
 const archivedFindingSchema = z.object({
   narrativeConflict: narrativeConflictSchema.optional(),
+  priorSceneConflict: priorSceneConflictSchema.optional(),
 }).passthrough();
 const archivedReportSchema = z.object({
   findings: z.array(archivedFindingSchema).max(12),

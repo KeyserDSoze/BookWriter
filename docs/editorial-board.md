@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.10
+# Redazione multi-agente di BookWriter — v0.11.11
+
+## Confronti con citazioni di scene non attestate (v0.11.11)
+
+Durante una normale review i quattro specialisti autorizzati possono ora leggere **fino a tre finestre** di prosa già congelata e canonica dei capitoli precedenti, anche quando l'autore non ha confermato eventi nel registro. La selezione resta limitata/lessicale: una frase da un romanzo non prova l'azione, l'identità o la cronologia, e le altre scene possono non essere state esaminate. Un finding marcato `priorSceneConflict` deve avere due citazioni verificabili: quella corrente e quella precedente, con scena, freeze, timbro e offset. Gli altri specialisti e i cinque lettori ciechi non ricevono il nuovo pack.
+
+Il giudice applica la valutazione strutturata di identità, cronologia, causalità e spiegazioni artistiche della v0.11.10, può **rigettare motivatamente** e non deve confondere un ricordo, un sogno o un'ellissi con un'incoerenza. Per accettare una correzione marcata serve un conflitto supportato; le fonti vengono rivalidate prima dell'intervento e di nuovo al salvataggio della prosa AI. Nessuna modifica automatica del canone o nuove chiamate AI. [Guida](unattested-scene-review.md), ADR 0044, issue #20.
+
+
 
 ## Giudizio critico strutturato sui conflitti narrativi (v0.11.10)
 

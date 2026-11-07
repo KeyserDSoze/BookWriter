@@ -219,7 +219,7 @@ function nextWork(book: BookProject): Work | null {
             const current = b.editorialCycle;
             const ch = b.chapters.find(c => c.id === cycle.chapterId);
             if (!current || !ch) throw new Error("Il ciclo editoriale è cambiato.");
-            const report = validateReport(current, next.role, next.segment, next.segmentCount, text, ch, book);
+            const report = validateReport(current, next.role, next.segment, next.segmentCount, text, ch, b);
             current.reports.push(report);
             if (!nextReviewSlot(b, current)) current.stage = "adjudicate";
           },
@@ -238,7 +238,7 @@ function nextWork(book: BookProject): Work | null {
             if (!current) throw new Error("Ciclo editoriale non disponibile.");
             const chapter = b.chapters.find(c => c.id === current.chapterId);
             if (!chapter) throw new Error("Capitolo del giudice non disponibile.");
-            current.judgment = validateJudgment(current, text, chapter, book);
+            current.judgment = validateJudgment(current, text, chapter, b);
             current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
             current.repairCursor = 0;
             current.summaryCursor = 0;
@@ -263,6 +263,13 @@ function nextWork(book: BookProject): Work | null {
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             const scene = ch?.scenes.find(x => x.id === sceneId);
             if (!scene || !b.editorialCycle) throw new Error("Scena da correggere assente.");
+            if (b.editorialCycle.stage !== "repair" ||
+                b.editorialCycle.chapterId !== cycle.chapterId)
+              throw new Error("Ciclo editoriale cambiato durante la remediation.");
+            // The scene and its prior source might have changed while the AI
+            // request was in flight. Re-run the provenance gate against the
+            // very same book revision being written, not the planning snapshot.
+            repairPrompt(b,b.editorialCycle,sceneId);
             scene.text = text.trim();
             scene.status = "draft";
             scene.summary = undefined;

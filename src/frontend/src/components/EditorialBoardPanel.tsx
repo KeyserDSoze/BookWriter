@@ -64,6 +64,18 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
                   Report precedente, modificato o senza ancoraggio valido: la prova narrativa non è confermata nel segmento attuale.
                   Una nuova correzione richiede una review verificata.
                 </p>}
+                {f.priorSceneConflict && <div className="rounded border border-amber-400/50
+                  p-2 break-words" aria-label={"Ipotesi da scena precedente " + f.id}>
+                  <p className="font-semibold">Confronto con prosa precedente NON attestata</p>
+                  <p><b>Dimensione:</b> {f.priorSceneConflict.dimension}</p>
+                  <p><b>Fonte:</b> {f.priorSceneConflict.chapterId} / {f.priorSceneConflict.sceneId};
+                    {" "}offset {f.priorSceneConflict.offset}</p>
+                  <p><b>Citazione precedente:</b> «{f.priorSceneConflict.quote}»</p>
+                  <p><b>Ipotesi:</b> {f.priorSceneConflict.hypothesis}</p>
+                  <p className="muted">La frase è soltanto prosa verificata, non
+                    una conferma di evento, cronologia o identità. Il giudice
+                    può respingere il rilievo. Fonte rivalidata prima del repair.</p>
+                </div>}
                 {f.narrativeConflict && <div className="rounded border border-amber-400/50
                   p-2 break-words" aria-label={"Ipotesi di conflitto narrativo " + f.id}>
                   <p className="font-semibold">Ipotesi narrativa attestata, non contraddizione accertata</p>

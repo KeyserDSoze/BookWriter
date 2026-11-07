@@ -1,5 +1,19 @@
 # Changelog — BookWriter
 
+## 0.11.11 — 2026-11-07 (PR #57)
+
+**Confronto critico su scene precedenti congelate senza attestazioni autore**
+
+- Nuovo `buildUnattestedSceneContext` locale e deterministico: massimo 3 finestre letterali di prosa **canoniche e congelate, da capitoli precedenti**, derivate dal ranking già bounded (massimo 1.600 candidati esaminati, quattro selezionati internamente). Offset, timestamp di freeze, impronta locale non crittografica, indicatori lessicali e conteggi dei limiti; nessun segreto, canone privato, fonte futura, AI o rete nel pack.
+- Solo i quattro specialisti `continuity/timeline/secrets/characterVoice` possono marcare `priorSceneConflict` con scena capitolo, quote/offset/timbro e ipotesi. Citazione verificata nella **finestra realmente fornita al revisore**, oltre alla `finding.evidence` del segmento corrente. Non si può combinare con `narrativeConflict` da evento attestato. Ruoli non autorizzati e fonti obsoleti rifiutati.
+- Il giudice indipendente fornisce lo stesso `narrativeReview` su identità, cronologia, causalità e contesto artistico. Può respingere motivatamente un conflitto fallace; `accept` richiede fonte corrente, valutazione supportata, identità comune ritenuta tale, nessuna spiegazione artistica plausibile e incompatibilità cronologica o causale. Il giudizio è **fallibile**, non verità narrativa.
+- Validazione ripetuta nel `repairPrompt` **e nella callback di salvataggio della prosa AI su libro fresco**, proteggendo da sorgenti mutate durante la chiamata, pause e ZIP import. `validateReport` e `validateJudgment` usano il libro attuale della transazione. ZIP con schema rigoroso per la nuova marcatura annidata in cicli e storici, legacy compatibile.
+- Dashboard con citazione precedente e offset e motivazioni del giudice; test Vitest su fonti false, freeze, modifiche, ruoli, alias, limiti, fallback, privacy, rigetto, repair, ZIP ostili; Playwright desktop/mobile su 12 agenti, nessuna attestazione, giudice che respinge senza correzioni.
+- Nessuna chiamata AI extra, nuova migrazione, mutazione autonoma del canone, memoria, segreti, inventari o timeline; nuovi pack possono aumentare i token delle richieste esistenti. ADR 0044, [guida](unattested-scene-review.md), issue #20.
+
+**Limiti:** ranking lessicale NON semantico e a copertura parziale; citazioni dalla prosa NON attestano l'avvenimento, l'identità o la causalità. I finding ordinari fuori da questa marca seguono ancora il controllo editoriale esistente.
+
+
 ## 0.11.10 — 2026-11-07 (PR #56)
 
 **Giudizio narrativo strutturato e gating prudente delle remediation**
