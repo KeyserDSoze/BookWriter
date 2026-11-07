@@ -277,7 +277,7 @@ export function EditorialBoardPanel({
           activeWikisourceIds={activeWikisourceExcerpts(chapter.historicalDossier).map(x=>x.id)}/></div>
       </details>)}
     </div>}
-    <NarrativeEventDecisionsPanel book={book} onRefresh={onRefresh}/>
+    <NarrativeEventDecisionsPanel key={book.id} book={book} onRefresh={onRefresh}/>
     {book.chapters.length > 0 && <div className="mt-4 space-y-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold"><BookCheck size={17}/> Stato dei capitoli</h3>
       {book.chapters.map(ch => <div key={ch.id} className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">

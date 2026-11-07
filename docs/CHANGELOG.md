@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.4 — 2026-11-07 (PR in verifica)
+
+**Annotazioni motivate dell'autore su singole menzioni di eventi**
+
+- Dal pannello redazione l'autore può registrare `affirmed`/`dismissed` per una menzione letterale congelata con motivazione, conferma esplicita, citazione/offset e storico append-only (massimo 400 record). Una decisione non è una modifica automatica al canone né una prova semantica.
+- Riaperture, nuovo `frozenAt`, citazione cambiata o modifica della scena rendono la decisione **non corrente** senza cancellare lo storico; il checksum rapido è solo un indicatore di freschezza non crittografico.
+- Web Locks, CAS `updatedAt`, attività e commit IndexedDB atomico; autosync spento e outbox svuotata per richiedere nuova scelta manuale sulla pubblicazione. Nessuna nuova chiamata HTTP/AI e nessuna esposizione ai 5 lettori ciechi.
+- Snapshot del libro e ZIP preservano lo storico, con schema stretto e limiti anti-payload ostile; un ZIP importato non autentica la decisione. Guida `docs/narrative-event-decisions.md`, ADR 0037 e issue #20.
+- TypeScript, Vitest, smoke npm e Playwright desktop/mobile da convalidare prima del merge.
+
+**Limite:** nessun aggiornamento automatico a timeline, canone, segreti, oggetti o prompt editoriali; occorrono policy future per la promozione di eventi in memoria causale.
+
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
 ## 0.11.3 — 2026-11-07 (PR #49)

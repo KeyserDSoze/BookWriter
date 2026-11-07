@@ -357,3 +357,10 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Aggiornare ADR, `docs/`, `features/` e README quando cambiano comportamento o sicurezza.
 - UI mobile-first: breakpoint reali, sidebar a sheet, controlli touch di almeno 44 px, focus visibile, aria live sugli stati, accessibilità WCAG, riduzione movimento, tema chiaro/scuro.
 - Scrivere messaggi di audit utili al lettore: "cosa ho fatto", "cosa farò", "cosa è cambiato", "come intervenire".
+
+## Annotazioni eventi v0.11.4 — conferma autore non canonica (ADR 0037)
+
+- Solo per menzioni `unverified_literal_pattern` di scene canoniche in capitoli congelati: motivazione 12–500 caratteri e conferma esplicita per `affirmed|dismissed`. Non aggiornare automaticamente memoria, segreti, possessi, timeline, prosa o prompt dei revisori.
+- Registro append-only `BookProject.narrativeEventDecisions` max 400 con ID, testo letterale/offset, `sourceFrozenAt` e checksum locale non crittografico. Riaperture, modifiche o nuovo congelamento rendono i vecchi record **storici**, mai riattivarli automaticamente.
+- Prima del commit usare Web Locks writer/outbox, CAS `updatedAt` e attività atomica; disabilitare autosync, cancellare la coda e avvertire l'autore. Nessuna rete o chiamata AI aggiuntiva.
+- Backup ZIP e snapshot GitHub conservano gli audit con schema rigoroso e limiti; non trattare attestazioni importate come identità verificate. Testare conferma/rettifica, staleness, concorrenza, ZIP e browser desktop/mobile. Vedi `docs/narrative-event-decisions.md`, ADR 0037, issue #20.
