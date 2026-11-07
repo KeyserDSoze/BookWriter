@@ -1,6 +1,6 @@
 # ADR 0038 — Registro consultivo delle attestazioni e navigazione delle menzioni
 
-- **Stato:** proposto per v0.11.5
+- **Stato:** accettato per v0.11.5 (PR #51)
 - **Data:** 2026-11-07
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Predecessori:** ADR 0036 e ADR 0037
