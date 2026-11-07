@@ -261,6 +261,10 @@ export function reviewerPrompt(book: BookProject, cycle: ChapterEditorialCycle,
             "alle scene precedenti valore di fonti documentali indipendenti. "
           : "La causa è una modifica narrativa a monte. ") +
         "Confronta causa-effetto, date, relazioni, oggetti e rivelazioni con il segmento corrente. " +
+        "I campioni possono contenere authorConfirmedEvents: SOLO interpretazioni dichiarate " +
+        "dall'autore con fonte ancora valida, distinte da eventCandidates non verificati. " +
+        "Non sono autenticazioni indipendenti né prove di contraddizione; verifica il contesto " +
+        "e ragiona criticamente sulla continuità. " +
         "I campioni possono contenere eventCandidates: riconoscimenti letterali e NON fatti del canon. " +
         "Sono possibili dialoghi, menzogne, sogni e negazioni indirette: NON assumere che qualcuno " +
         "conosca davvero un segreto o possieda un oggetto per la sola presenza della frase. " +
@@ -492,6 +496,9 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
         bound(JSON.stringify(continuityPack),14000,"Campione di continuità") +
         ". Se trigger=historical_evidence, è cambiato il dossier documentale, NON necessariamente " +
         "la prosa: non dichiarare fatti storici verificati tramite questi frammenti del romanzo. " +
+        "authorConfirmedEvents sono interpretazioni dichiarate dall'autore e verificate " +
+        "solo rispetto al testo congelato corrente: non sono prova tecnica di autenticità " +
+        "o infallibilità. Possono essere contestate con motivazione; non inventare consenso. " +
         "eventCandidates sono solo ipotesi TESTUALI ancorate con quote e offset. Non sono " +
         "canone, non attestano trasferimento effettivo, conoscenze reali o contraddizioni. " +
         "Rifiuta ogni rilievo fondato soltanto su un candidato privo di confronto contestuale. " +

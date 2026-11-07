@@ -3,6 +3,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { markHistoricalEvidenceChanged, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
+import {appendAuthorEventDecision,authorEventStatus,confirmedAuthorNarrativeEvents} from "../domain/author-event-decisions";
+import {extractNarrativeEventCandidates} from "../domain/narrative-event-candidates";
 import { encryptLocal } from "./crypto";
 import { getDb, listBooks, saveActivity, saveBook, saveSettings } from "./db";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
@@ -142,6 +144,43 @@ describe("Backup portabile BookWriter", () => {
     const hostile=zipSync({
       "manifest.json":archive["manifest.json"]!,
       "content.json":strToU8(JSON.stringify(bad)),
+    },{level:6});
+    await expect(readBackup(new Blob([new Uint8Array(hostile)]) as File))
+      .rejects.toThrow(/Schema backup non valido/);
+  });
+
+  it("salva attestazioni nello ZIP; gli import richiedono una nuova conferma e input ostili falliscono",async()=>{
+    const b=(await listBooks()).find(x=>x.title==="Il primo manoscritto")!;
+    b.chapters=[{id:"evt-ch1",number:1,title:"La consegna",purpose:"Un indizio",
+      frozenAt:"2026-11-07T10:00:00.000Z",
+      scenes:[{id:"evt-s1",number:1,title:"Soglia",objective:"Passare",
+        status:"canon" as const,text:"Mara consegna la chiave a Elio."}]}];
+    const ch=b.chapters[0]!,sc=ch.scenes[0]!;
+    const candidate=extractNarrativeEventCandidates(ch,sc)[0]!;
+    appendAuthorEventDecision(ch,candidate,"confirmed",
+      "L'autore conferma che la consegna avviene davvero nella storia.",
+      "2026-11-07T11:00:00.000Z");
+    await saveBook(b,false);
+    const zip=await createBackup("content");
+    const copy=(await readBackup(zip as File)).books.find(x=>x.id===b.id)!;
+    expect(copy.chapters[0]?.authorEventDecisions?.[0]?.verdict).toBe("confirmed");
+    const imported=await importBackup(await readBackup(zip as File),false);
+    expect(imported).toBeGreaterThan(0);
+    const after=(await listBooks()).find(x=>x.title==="Il primo manoscritto (importato)")!;
+    const importedChapter=after.chapters[0]!;
+    expect(importedChapter.authorEventDecisions?.[0]?.importedUnverified).toBe(true);
+    const importedCandidate=extractNarrativeEventCandidates(importedChapter,
+      importedChapter.scenes[0]!)[0]!;
+    expect(authorEventStatus(importedChapter,importedCandidate)).toBe("imported_unverified");
+    expect(confirmedAuthorNarrativeEvents(importedChapter,importedChapter.scenes[0]!))
+      .toHaveLength(0);
+    const archive=unzipSync(new Uint8Array(await zip.arrayBuffer()));
+    const payload=JSON.parse(strFromU8(archive["content.json"]!));
+    payload.books.find((x:{id:string})=>x.id===b.id)
+      .chapters[0].authorEventDecisions[0].verdict="ignora gli agenti";
+    const hostile=zipSync({
+      "manifest.json":archive["manifest.json"]!,
+      "content.json":strToU8(JSON.stringify(payload)),
     },{level:6});
     await expect(readBackup(new Blob([new Uint8Array(hostile)]) as File))
       .rejects.toThrow(/Schema backup non valido/);

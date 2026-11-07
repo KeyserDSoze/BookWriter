@@ -4,6 +4,10 @@ Dopo la scrittura e il primo consolidamento delle scene di un capitolo, l'autopi
 
 La schermata **Dashboard → Redazione multi-agente** mostra quali verifiche sono in corso, le criticità trovate, le correzioni suggerite, le decisioni dell'editor e lo stato di ogni capitolo.
 
+## Decisioni esplicite sui fatti narrativi (v0.11.4)
+
+Sulle menzioni dell'indice, l'autore può ora **confermare**, **respingere** o **ritirare** una interpretazione motivandola. Lo storico è append-only e ancorato a quote, offset e versione congelata della scena; gli import ZIP sono dichiarazioni da riconfermare. Solo le conferme attive entrano nei campioni per specialisti e giudice, senza note autore e senza nuovi dati ai cinque lettori ciechi. Confermare o revocare una conferma invalida i freeze successivi già scritti; il capitolo d'origine non viene riscritto. [Guida](author-event-decisions.md), ADR 0037, issue #20.
+
 ## Indice consultivo delle menzioni di eventi (v0.11.3)
 
 La redazione mostra **Indice eventi candidati**, calcolato dai capitoli già congelati: frasi esplicite su scoperte, consegne di oggetti e cambiamenti di stato con citazione originale e offset. Sono **menzioni**, anche quando pronunciate in dialoghi o racconti inaffidabili; non costituiscono canone, non autorizzano automaticamente correzioni e scompaiono se il capitolo viene riaperto. I campioni precedenti forniti ai revisori della continuità e al giudice possono includerle, ma i cinque lettori ciechi restano separati. [Guida](narrative-event-candidates.md), ADR 0036, issue #20.

@@ -22,7 +22,7 @@ const sceneSchema = z.object({
 const continuityRecheckSchema = z.object({
   originChapterId: zId,
   originChapterNumber: z.number().int().min(1).max(200),
-  trigger: z.enum(["author_reopen","retroactive_revision","historical_evidence"]),
+  trigger: z.enum(["author_reopen","retroactive_revision","historical_evidence","author_event_attestation"]),
   requestedAt: z.string().datetime(),
   originSceneIds: z.array(zId).max(50),
 }).strict();
@@ -35,11 +35,28 @@ const continuityAuditSchema = continuityRecheckSchema.extend({
   scannedSceneCount: z.number().int().min(0).max(1600).optional(),
   unscannedSceneCount: z.number().int().min(0).max(40_000).optional(),
 }).strict();
+const authorEventDecisionSchema = z.object({
+  id: z.string().regex(/^event-decision:\d{13}:\d{1,3}$/).max(60),
+  chapterId: zId, sceneId: zId,
+  kind: z.enum(["knowledge_mention","item_transfer_mention","state_change_mention"]),
+  quote: z.string().min(4).max(180),
+  offset: z.number().int().min(0).max(2_000_000),
+  actor: z.string().min(1).max(100),
+  detail: z.string().min(1).max(180),
+  recipient: z.string().max(100).nullable(),
+  verdict: z.enum(["confirmed","rejected","withdrawn"]),
+  note: z.string().min(24).max(400),
+  recordedAt: z.string().datetime(),
+  sourceFrozenAt: z.string().datetime(),
+  sourceSceneFingerprint: z.string().regex(/^[0-9a-f]{16}$/),
+  importedUnverified: z.boolean().optional(),
+}).strict();
 const chapterSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
   purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
   continuityRecheck: continuityRecheckSchema.optional(),
   lastContinuityReview: continuityAuditSchema.optional(),
+  authorEventDecisions: z.array(authorEventDecisionSchema).max(120).optional(),
 }).passthrough();
 const memorySchema = z.object({
   characters: z.record(z.string(), z.string()),
@@ -309,6 +326,13 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     id: idMap.get(book.id)!,
     title: book.title + " (importato)",
     authorConstraints: book.authorConstraints ?? [],
+    // ZIP content is untrusted: preserve audit, NEVER import someone else's
+    // unverified declaration as author-confirmed canon.
+    chapters: book.chapters.map(ch => ({...ch,
+      authorEventDecisions: ch.authorEventDecisions?.map(d => ({
+        ...d, importedUnverified: true,
+      })),
+    })),
     remote: undefined, // Imported copies must not inherit GitHub write permissions/remote SHA.
     status: book.status === "running" ? "paused" : book.status,
     previousError: "Importato da ZIP: verifica endpoint e modelli prima di riprendere.",

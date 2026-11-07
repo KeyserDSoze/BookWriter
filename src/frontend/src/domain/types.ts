@@ -11,6 +11,7 @@ export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "ou
 import type { ChapterEditorialCycle, EditorialRound } from "./editorial-board";
 import type { ChapterHistoricalDossier } from "./historical-research";
 import type { ContinuityRecheck, ContinuityRecheckAudit } from "./cross-chapter-continuity";
+import type { AuthorEventDecision } from "./author-event-decisions";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -87,6 +88,8 @@ export interface Chapter {
   continuityRecheck?: ContinuityRecheck;
   /** Evidence sample and source of the last finished downstream recheck, not a semantic certificate. */
   lastContinuityReview?: ContinuityRecheckAudit;
+  /** Append-only explicit author interpretations of literal candidate events. */
+  authorEventDecisions?: AuthorEventDecision[];
 }
 export interface NarrativeMemory {
   characters: Record<string, string>;

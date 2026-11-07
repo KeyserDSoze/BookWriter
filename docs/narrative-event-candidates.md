@@ -4,6 +4,10 @@ L'applicazione mostra nella **Redazione multi-agente** un nuovo riquadro espandi
 
 Ogni risultato contiene numero di capitolo e scena, frase **letterale** trovata, offset nel testo originale, soggetto, eventuale destinatario e data indicata nella scena. Le citazioni provengono soltanto dalla prosa già congelata: non vengono lette memorie private o capitoli successivi. Il tutto viene calcolato sul dispositivo senza nuove ricerche online, chiamate AI né sincronizzazioni.
 
+## Conferma manuale dell'autore (v0.11.4)
+
+Nella stessa scheda puoi ora aprire «Decisione autore» su una delle prime 30 menzioni: scegli conferma, rifiuto o revoca, inserisci una motivazione e accetti una finestra di consenso. Non si aggiorna automaticamente il canon privato; una nuova conferma o la revoca di una conferma richiede review dei capitoli successivi già scritti. Le decisioni importate da ZIP sono da riconfermare, e cambiare il testo rende obsolete le dichiarazioni precedenti. [Guida](author-event-decisions.md), ADR 0037.
+
 ## Come interpretare l'indice
 
 Una voce con `evidenceStatus=unverified_literal_pattern` significa «il software ha individuato questa **costruzione testuale**», non «l'evento è avvenuto davvero nel mondo narrativo». Una persona può raccontare una menzogna, sognare un fatto o parlare al condizionale. L'estrattore **non** aggiorna il canone, i segreti o l'elenco di chi possiede un oggetto.

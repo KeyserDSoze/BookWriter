@@ -2,6 +2,18 @@
 
 Ogni rilascio su `main` deve avere una voce verificabile. Le PR descrivono il comportamento rilasciato; le issue raccolgono lavoro incompleto e criteri di accettazione.
 
+## 0.11.4 — 2026-11-07 (PR #50)
+
+**Conferme, rifiuti e revoche esplicite degli eventi narrativi candidati**
+
+- Dall'«Indice eventi candidati» l'autore può **confermare**, **respingere** o **ritirare** l'interpretazione di una singola menzione, con motivazione obbligatoria di 24–400 caratteri e conferma esplicita. Decisioni **append-only** per capitolo (max 120), quote/offset, origine, timestamp, revisione congelata e fingerprint dell'intera scena: le decisioni diventano obsolete su modifiche al testo o riapertura.
+- Solo le conferme **ancora valide** diventano `author_confirmed_interpretation` nei campioni cross-chapter per specialisti autorizzati e direttore, **senza** motivazioni private. I cinque lettori ciechi non ricevono nuovi dati. L'interpretazione è una dichiarazione umana locale, NON firma crittografica, prova storica o consenso AI; non aggiorna automaticamente `memory`.
+- Una **nuova conferma** o la revoca/contestazione di una conferma riapre conservativamente la review dei capitoli successivi già scritti, lasciando congelata la scena sorgente e invariata la prosa. Nuovo trigger `author_event_attestation`. Web Locks, CAS, transazione IndexedDB di libro+audit+outbox, autosync disabilitato, outbox cancellata e nessuna richiesta AI/web.
+- Backup ZIP: storico facoltativo e strettamente convalidato; importazioni preservano decisioni con `importedUnverified=true` e richiedono una **riconferma locale** per evitare promozioni automatiche da dati non attendibili. Test Vitest su validazione delle citazioni, revoche, fingerprint, invalidazioni, privacy, CAS/outbox/import e Playwright desktop/mobile sul flusso reale.
+- ADR 0037, [guida autore](author-event-decisions.md), issue #20.
+
+**Limiti:** nessun motore di possesso, causalità o conoscenze canoniche dedotte; la fingerprint non è una firma digitale e le prime 30 menzioni sono quelle con comandi UI. Confermare un fatto non implica che una critica sia corretta o che il romanzo sia coerente.
+
 ## 0.11.3 — 2026-11-07 (PR #49)
 
 **Indice locale consultivo delle menzioni di eventi narrativi**

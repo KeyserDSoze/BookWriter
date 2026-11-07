@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BookCheck, RotateCcw, ShieldAlert, Users } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import { buildNarrativeEventCandidateIndex } from "../domain/narrative-event-candidates";
+import { AuthorEventDecisionControls } from "./AuthorEventDecisionControls";
 import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
 import { reopenChapterReview } from "../application/editorial-control";
@@ -285,7 +286,9 @@ export function EditorialBoardPanel({
       <p className="muted mt-2 text-xs">
         Rilevamenti letterali locali: conoscenze menzionate, consegne e cambi di stato.
         NON sono fatti confermati: possono essere dialoghi, menzogne o narrazione inaffidabile.
-        Non modificano il canone né certificano contraddizioni.
+        Le decisioni confermate dall'autore sono dichiarazioni tracciate, non
+        certificazioni; modificare il testo o riaprire il capitolo le rende obsolete.
+        Confermare o ritirare una conferma invalida la review dei successivi.
         Scene analizzate: {eventIndex.scannedSceneCount};
         non analizzate: {eventIndex.unscannedSceneCount}.
         {eventIndex.eventLimitReached && " Raggiunto il limite di 80 eventi mostrati."}
@@ -303,11 +306,32 @@ export function EditorialBoardPanel({
               {event.recipient ? " · destinatario: " + event.recipient : ""}
               {event.sceneDate ? " · data dichiarata: " + event.sceneDate : ""}
             </p>
+            <AuthorEventDecisionControls book={book}
+              chapter={book.chapters.find(ch=>ch.id===event.chapterId)!}
+              candidate={event} onRefresh={onRefresh}/>
           </li>)}
       </ul>
       {eventIndex.events.length > 30 && <p className="muted mt-2 text-xs">
-        Mostrati i primi 30 eventi candidati: nessuna selezione equivale a una conferma.
+        Mostrati i primi 30 eventi candidati: gli altri richiedono una futura paginazione.
       </p>}
+      {book.chapters.some(ch=>(ch.authorEventDecisions?.length??0)>0)&&
+        <details className="mt-3 rounded border border-slate-300 p-2 dark:border-slate-700">
+          <summary className="cursor-pointer text-xs font-semibold">
+            Storico delle decisioni autore ({book.chapters.reduce((n,ch)=>
+              n+(ch.authorEventDecisions?.length??0),0)})
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {book.chapters.flatMap(ch=>(ch.authorEventDecisions??[]).map(decision=>({
+              chapter:ch,decision}))).slice(-30).reverse().map(({chapter:ch,decision})=>
+              <li key={decision.id+":"+ch.id} className="rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+                Cap. {ch.number} · scena {decision.sceneId} · {decision.verdict}
+                {decision.importedUnverified?" · importata, da riconfermare":""}
+                <p className="mt-1 break-words">«{decision.quote}»</p>
+                <p className="muted mt-1 whitespace-pre-wrap">{decision.note}</p>
+                <p className="muted mt-1">{new Date(decision.recordedAt).toLocaleString("it-IT")}</p>
+              </li>)}
+          </ul>
+        </details>}
     </details>}
     {book.chapters.length > 0 && <div className="mt-4 space-y-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold"><BookCheck size={17}/> Stato dei capitoli</h3>

@@ -1,10 +1,11 @@
 import type { BookProject, Chapter, Scene } from "./types";
 import { extractNarrativeEventCandidates, type NarrativeEventCandidate } from "./narrative-event-candidates";
+import { confirmedAuthorNarrativeEvents, type ConfirmedNarrativeEvent } from "./author-event-decisions";
 import { retrievePriorContinuityScenes, targetedLiteralWindows, type RetrievalMatch,
   type RankedPriorScene } from "./continuity-retrieval";
 
 /** Revalidation is a pending obligation, not a claim that any contradiction exists. */
-export type ContinuityTrigger = "author_reopen" | "retroactive_revision" | "historical_evidence";
+export type ContinuityTrigger = "author_reopen" | "retroactive_revision" | "historical_evidence" | "author_event_attestation";
 
 export interface ContinuityRecheck {
   originChapterId: string;
@@ -41,6 +42,8 @@ export interface ContinuityEvidenceScene {
   selectionReason: RankedPriorScene["selectionReason"];
   /** Literal event mentions, NEVER canonical facts; max 4 per sampled scene. */
   eventCandidates?: NarrativeEventCandidate[];
+  /** Author attested interpretation only. This is NOT technical authentication. */
+  authorConfirmedEvents?: ConfirmedNarrativeEvent[];
 }
 
 export interface ContinuityEvidencePack {
@@ -136,6 +139,7 @@ export function buildContinuityEvidence(book: BookProject, chapter: Chapter,
       coverage:scene.text.length<=2800?"complete" as const:"partial" as const,
       windows,matchSignals:match,selectionReason,
       eventCandidates:extractNarrativeEventCandidates(sourceChapter,scene),
+      authorConfirmedEvents:confirmedAuthorNarrativeEvents(sourceChapter,scene),
     };
   });
   return {

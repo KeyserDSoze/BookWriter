@@ -8,6 +8,10 @@ Quando riapri un capitolo già approvato o chiedi all'autopilot di correggere re
 
 La stessa catena è ora attivata anche quando aggiungi, verifichi, escludi o attesti relazioni fra **fonti storiche** in un capitolo già congelato. Il marcatore `historical_evidence` distingue un **dossier documentale modificato** dalla **prosa riscritta**. I capitoli successivi già scritti richiedono una nuova review in ordine; anche il revisore storico vede campioni della prosa precedente, ma tali campioni **non dimostrano fatti storici** e non certificano l'indipendenza dei documenti. [Guida](historical-continuity-rechecks.md) e ADR 0034.
 
+## Eventi confermati dall'autore e rivalidazione (v0.11.4)
+
+Una nuova conferma esplicita di una menzione come fatto narrativo o la revoca di una precedente conferma riapre **solo i capitoli successivi già scritti** tramite `author_event_attestation`; l'origine rimane congelata. Solo le attestazioni locali ancora valide vengono inviate nei campioni precedenti a specialisti e giudice, senza le motivazioni e senza aggiungere informazioni ai lettori ciechi. Sono interpretazioni autoriali, non autenticazioni tecniche o certificazioni semantiche. [Guida](author-event-decisions.md), ADR 0037.
+
 ## Menzioni esplicite di eventi nei campioni (v0.11.3)
 
 Le scene pubbliche precedenti selezionate dal ranking possono contenere fino a quattro **menzioni letterali non verificate** di un'informazione scoperta, un oggetto consegnato o un cambio di stato, con frase e offset. Il direttore deve leggere il contesto, non promuoverle a fatti certi né accettare una remediation basata soltanto sull'etichetta del pattern. L'autore può consultare un indice locale nel pannello redazione. Nessun canone segreto o capitolo futuro viene indicizzato. [Guida](narrative-event-candidates.md), ADR 0036.
