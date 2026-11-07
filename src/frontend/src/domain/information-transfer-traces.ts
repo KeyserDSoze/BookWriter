@@ -83,7 +83,7 @@ export function buildInformationTransferTrace(
         const offset=match.index;
         const stamp=sceneTextStamp(scene.text);
         found.push({
-          id:[ch.id,scene.id,offset,stamp].join("::"),
+          id:[ch.id,scene.id,offset,ch.frozenAt!,stamp].join("::"),
           chapterId:ch.id,chapterNumber:ch.number,
           sceneId:scene.id,sceneNumber:scene.number,
           frozenAt:ch.frozenAt!,sourceTextStamp:stamp,
