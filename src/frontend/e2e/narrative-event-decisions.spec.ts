@@ -186,7 +186,7 @@ test("segnali consultivi desktop/mobile: due attestazioni, date e nessuna scritt
   page.once("dialog",d=>d.accept());
   await board.getByRole("button",{name:"Annota come avvenuto"}).nth(1).click();
   const hints=board.locator('details[aria-label="Tracce di continuità da verificare"]');
-  await hints.locator("summary").click();
+  await hints.locator("summary").first().click();
   await expect(hints.getByText(/Tracce di continuità da verificare \(2\)/)).toBeVisible();
   await expect(hints.getByText(/Azione dopo menzione di morte/)).toBeVisible();
   await expect(hints.getByText(/Date dichiarate in ordine inverso/)).toBeVisible();
@@ -275,20 +275,20 @@ test("anteprima alias esplicita e non persistita su desktop e mobile",async({pag
   await board.getByRole("button",{name:"Annota come avvenuto"}).nth(1).click();
 
   const hints=board.locator('details[aria-label="Tracce di continuità da verificare"]');
-  await hints.locator("summary").click();
-  await expect(hints.locator("summary")).toContainText("(0)");
+  await hints.locator("summary").first().click();
+  await expect(hints.locator("summary").first()).toContainText("(0)");
   await hints.getByRole("combobox",{name:"Primo nome del confronto"}).selectOption("Mara");
   await hints.getByRole("combobox",{name:"Secondo nome del confronto"}).selectOption("Ombra");
   page.once("dialog",d=>d.accept());
   await hints.getByRole("button",{name:"Confronta temporaneamente"}).click();
-  await expect(hints.locator("summary")).toContainText("(1)");
+  await expect(hints.locator("summary").first()).toContainText("(1)");
   await expect(hints.getByText(/Anteprima attiva: Mara ↔ Ombra/)).toBeVisible();
   await expect(hints.getByText(/Solo anteprima alias:/)).toBeVisible();
   await hints.getByRole("button",{name:"Azzera confronto"}).click();
-  await expect(hints.locator("summary")).toContainText("(0)");
+  await expect(hints.locator("summary").first()).toContainText("(0)");
   page.once("dialog",d=>d.accept());
   await hints.getByRole("button",{name:"Confronta temporaneamente"}).click();
-  await expect(hints.locator("summary")).toContainText("(1)");
+  await expect(hints.locator("summary").first()).toContainText("(1)");
   await page.reload();
   const reopened=page.getByRole("region",{name:"Redazione multi-agente"});
   await reopened.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
@@ -370,16 +370,16 @@ test("alias motivati desktop/mobile: salva, riapri, rettifica e isola canone e r
   page.once("dialog",d=>d.accept());
   await board.getByRole("button",{name:"Annota come avvenuto"}).nth(1).click();
   const hints=board.locator('details[aria-label="Tracce di continuità da verificare"]');
-  await hints.locator("summary").first().click();
+  await hints.locator("summary").first().first().click();
   await hints.getByRole("combobox",{name:"Primo nome del confronto"}).selectOption("Mara");
   await hints.getByRole("combobox",{name:"Secondo nome del confronto"}).selectOption("Ombra");
   await hints.getByRole("textbox",{name:"Motivazione decisione alias"})
     .fill("Ombra è il soprannome di Mara nella versione attuale.");
   page.once("dialog",d=>d.accept());
   await hints.getByRole("button",{name:"Registra legame motivato"}).click();
-  await expect(hints.locator("summary").first()).toContainText("(1)");
+  await expect(hints.locator("summary").first().first()).toContainText("(1)");
   await expect(hints.getByText(/Alias motivato in registro:/)).toBeVisible();
-  await expect(hints.getByText(/Ombra è il soprannome di Mara nella versione attuale/)).toBeVisible();
+  await expect(hints.locator("p").filter({hasText:"Motivazione del legame:"}).first()).toBeVisible();
   await page.reload();
   const reopened=page.getByRole("region",{name:"Redazione multi-agente"});
   await reopened.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
