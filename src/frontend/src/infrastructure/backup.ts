@@ -100,6 +100,14 @@ const narrativeAliasDecisionSchema = z.object({
   decidedAt: z.string().datetime(),
 }).strict().refine(d=>d.firstName.trim().normalize("NFC").toLocaleLowerCase("it") !==
   d.secondName.trim().normalize("NFC").toLocaleLowerCase("it"));
+const narrativeKnowledgeDecisionSchema = z.object({
+  id:zId,sourceEventDecisionId:zId,
+  actorName:z.string().min(1).max(60),
+  verdict:z.enum(["learned_directly","reported_by_other","still_secret"]),
+  rationale:z.string().min(12).max(500),
+  decidedAt:z.string().datetime(),
+}).strict();
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -115,6 +123,7 @@ const bookSchema = z.object({
   chapters: z.array(chapterSchema).max(200),
   narrativeEventDecisions: z.array(narrativeEventDecisionSchema).max(400).optional(),
   narrativeAliasDecisions: z.array(narrativeAliasDecisionSchema).max(120).optional(),
+  narrativeKnowledgeDecisions: z.array(narrativeKnowledgeDecisionSchema).max(160).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
