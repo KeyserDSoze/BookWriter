@@ -1,5 +1,6 @@
 import type { BookProject } from "./types";
 import { buildNarrativeEventLedger, type CurrentEventLedgerEntry } from "./narrative-event-ledger";
+import { buildNarrativeAliasRegistry } from "./narrative-alias-decisions";
 
 /** Navigational suggestions only. None of these is a verified narrative contradiction. */
 export type NarrativeContinuityHintKind =
@@ -8,7 +9,7 @@ export type NarrativeContinuityHintKind =
 export interface NarrativeContinuityHint {
   kind: NarrativeContinuityHintKind;
   /** A human-selected alias preview is never a canonical identity claim. */
-  identityBasis: "literal_name" | "alias_preview";
+  identityBasis: "literal_name" | "alias_preview" | "saved_alias";
   actor: string;
   earlier: CurrentEventLedgerEntry;
   later: CurrentEventLedgerEntry;
@@ -21,6 +22,8 @@ export interface NarrativeContinuityHintIndex {
   inspectedAttestationCount: number;
   /** Only true for a valid, explicitly requested pair of attested names. */
   aliasPreviewActive: boolean;
+  /** Current, explicitly motivated and witnessed author links only. */
+  savedAliasPairCount: number;
 }
 
 export interface NarrativeAliasPreview {
@@ -124,6 +127,17 @@ export function buildNarrativeContinuityHints(
   }
   const literalHints: NarrativeContinuityHint[] = [];
   for (const group of groups.values()) collectGroupHints(literalHints, group, "literal_name");
+  const savedHints: NarrativeContinuityHint[] = [];
+  const savedAliases = buildNarrativeAliasRegistry(book).linked;
+  const savedKeys = new Set<string>();
+  for (const entry of savedAliases) {
+    const key = [nameKey(entry.decision.firstName), nameKey(entry.decision.secondName)]
+      .sort().join("\\u0000");
+    savedKeys.add(key);
+    const first = groups.get(nameKey(entry.decision.firstName));
+    const second = groups.get(nameKey(entry.decision.secondName));
+    if (first && second) collectGroupHints(savedHints, [...first, ...second], "saved_alias");
+  }
   const previewHints: NarrativeContinuityHint[] = [];
 
   const first = aliasPreview?.first?.trim() ?? "";
@@ -133,8 +147,10 @@ export function buildNarrativeContinuityHints(
     firstKey !== secondKey && groups.has(firstKey) && groups.has(secondKey);
   if (aliasPreviewActive) {
     // Exactly one explicit pair, no transitive or fuzzy expansion.
-    collectGroupHints(previewHints, [...groups.get(firstKey)!, ...groups.get(secondKey)!],
-      "alias_preview");
+    if (!savedKeys.has([firstKey, secondKey].sort().join("\\u0000"))) {
+      collectGroupHints(previewHints, [...groups.get(firstKey)!, ...groups.get(secondKey)!],
+        "alias_preview");
+    }
   }
 
   const priorities: Record<NarrativeContinuityHintKind, number> = {
@@ -146,12 +162,14 @@ export function buildNarrativeContinuityHints(
     sequenceOrder(a.earlier, b.earlier) || a.actor.localeCompare(b.actor, "it");
   // The original 40 literal slots are protected: alias hypotheses never evict
   // a pre-existing finding merely because the overlay adds more suggestions.
-  const all = [...literalHints.sort(sortHints), ...previewHints.sort(sortHints)];
+  const all = [...literalHints.sort(sortHints), ...savedHints.sort(sortHints),
+    ...previewHints.sort(sortHints)];
   return {
     method: "bounded_attested_literal_pairs_v1",
     hints: all.slice(0, MAX_NARRATIVE_CONTINUITY_HINTS),
     omittedHintCount: Math.max(0, all.length - MAX_NARRATIVE_CONTINUITY_HINTS),
     inspectedAttestationCount: attested.length,
     aliasPreviewActive,
+    savedAliasPairCount: savedAliases.length,
   };
 }
