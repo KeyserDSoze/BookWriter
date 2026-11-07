@@ -6,6 +6,8 @@ import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchem
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
+import {MAX_KNOWLEDGE_SHARE_DECISIONS,type NarrativeKnowledgeShareDecision}
+  from "../domain/narrative-knowledge-sharing";
 
 const VERSION = 1;
 const MAX_ZIP = 40 * 1024 * 1024;
@@ -108,6 +110,17 @@ const narrativeKnowledgeDecisionSchema = z.object({
   decidedAt:z.string().datetime(),
 }).strict();
 
+const narrativeKnowledgeShareSchema=z.object({
+  id:zId,knowledgeDecisionId:zId,
+  status:z.enum(["allowed","revoked"]),
+  recipients:z.array(z.enum([
+    "continuity","timeline","secrets","characterVoice","judge",
+  ])).max(5).refine(x=>new Set(x).size===x.length),
+  rationale:z.string().min(12).max(500),
+  decidedAt:z.string().datetime(),
+}).strict().refine(x=>
+  x.status==="allowed" ? x.recipients.length>0 : x.recipients.length===0);
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -124,6 +137,7 @@ const bookSchema = z.object({
   narrativeEventDecisions: z.array(narrativeEventDecisionSchema).max(400).optional(),
   narrativeAliasDecisions: z.array(narrativeAliasDecisionSchema).max(120).optional(),
   narrativeKnowledgeDecisions: z.array(narrativeKnowledgeDecisionSchema).max(160).optional(),
+  narrativeKnowledgeShareDecisions: z.array(narrativeKnowledgeShareSchema).max(240).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
@@ -365,11 +379,29 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     if (idMap.has(book.id)) throw new Error("ID libro duplicato nell'archivio.");
     idMap.set(book.id, crypto.randomUUID());
   }
+  // ZIP data never authenticates a permission. Preserve its historical audit
+  // when possible but append explicit revocations before imported copies can
+  // ever enter an AI call. If the archive is full, discard permissions entirely.
+  function importedSharingAudit(book:BookProject):NarrativeKnowledgeShareDecision[]{
+    const original=book.narrativeKnowledgeShareDecisions??[];
+    const latest=new Map<string,NarrativeKnowledgeShareDecision>();
+    for(const entry of original)latest.set(entry.knowledgeDecisionId,entry);
+    const grants=[...latest.values()].filter(entry=>entry.status==="allowed");
+    if(original.length+grants.length>MAX_KNOWLEDGE_SHARE_DECISIONS)return [];
+    const at=new Date().toISOString();
+    return [...original,...grants.map(entry=>({
+      id:crypto.randomUUID(),knowledgeDecisionId:entry.knowledgeDecisionId,
+      status:"revoked" as const,recipients:[] as [],
+      rationale:"Consenso importato revocato: serve nuova autorizzazione locale.",
+      decidedAt:at,
+    }))];
+  }
   const safeBooks: BookProject[] = data.books.map(book => ({
     ...book,
     id: idMap.get(book.id)!,
     title: book.title + " (importato)",
     authorConstraints: book.authorConstraints ?? [],
+    narrativeKnowledgeShareDecisions: importedSharingAudit(book),
     remote: undefined, // Imported copies must not inherit GitHub write permissions/remote SHA.
     status: book.status === "running" ? "paused" : book.status,
     previousError: "Importato da ZIP: verifica endpoint e modelli prima di riprendere.",

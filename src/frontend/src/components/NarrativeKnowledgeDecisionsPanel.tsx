@@ -6,6 +6,16 @@ import {buildNarrativeKnowledgeRegistry,MAX_KNOWLEDGE_DECISIONS,
 import {recordNarrativeKnowledgeDecision}
   from "../application/narrative-knowledge-decisions";
 import {Button} from "./ui/button";
+import {KNOWLEDGE_SHARE_RECIPIENTS,buildKnowledgeSharingRegistry,
+  MAX_KNOWLEDGE_SHARE_DECISIONS,type KnowledgeShareRecipient}
+  from "../domain/narrative-knowledge-sharing";
+import {recordNarrativeKnowledgeShareDecision}
+  from "../application/narrative-knowledge-sharing";
+
+const SHARE_LABELS:Record<KnowledgeShareRecipient,string>={
+  continuity:"Continuità",timeline:"Timeline",secrets:"Segreti",
+  characterVoice:"Voce dei personaggi",judge:"Giudice critico",
+};
 
 const VERDICT_LABELS:Record<NarrativeKnowledgeDecision["verdict"],string>={
   learned_directly:"Appresa direttamente",
@@ -22,12 +32,20 @@ export function NarrativeKnowledgeDecisionsPanel({book,onRefresh}:{
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
+  const [shareKnowledgeId,setShareKnowledgeId]=useState("");
+  const [shareRecipients,setShareRecipients]=useState<KnowledgeShareRecipient[]>([]);
+  const [shareReason,setShareReason]=useState("");
   const sources=buildNarrativeEventLedger(book).currentAffirmed
     .filter(entry=>entry.candidate.kind==="knowledge_mention");
   const source=sources.find(x=>x.decision.id===sourceId)??sources[0];
   const history=book.narrativeKnowledgeDecisions??[];
   const registry=buildNarrativeKnowledgeRegistry(book);
   const currentIds=new Set(registry.current.map(x=>x.decision.id));
+  const sharing=buildKnowledgeSharingRegistry(book);
+  const chosenKnowledge=registry.current.find(x=>x.decision.id===shareKnowledgeId)
+    ??registry.current[0];
+  const activeShare=sharing.current.find(x=>
+    x.knowledge.decision.id===chosenKnowledge?.decision.id);
   if(!sources.length && !history.length)return null;
 
   async function save(verdict:NarrativeKnowledgeDecision["verdict"]){
@@ -36,7 +54,8 @@ export function NarrativeKnowledgeDecisionsPanel({book,onRefresh}:{
     if(!window.confirm(
       "Registrare questa interpretazione motivata sul sapere del personaggio? " +
       "Non è una certificazione e NON aggiorna canone, segreti, timeline o prosa. " +
-      "Resta privata dai prompt AI in questa versione; sarà comunque inclusa nei backup " +
+      "Resta privata dai prompt AI SENZA autorizzazioni specifiche per ruolo; " +
+      "sarà comunque inclusa nei backup " +
       "e nelle eventuali sincronizzazioni MANUALI (anche verso repository pubblici). " +
       "L'autosync verrà disabilitato e la coda GitHub svuotata."))return;
     setBusy(true);setMessage("");setError("");
@@ -50,6 +69,39 @@ export function NarrativeKnowledgeDecisionsPanel({book,onRefresh}:{
       setError(cause instanceof Error?cause.message:"Conoscenza non registrata.");
     }finally{setBusy(false);}
   }
+  async function share(status:"allowed"|"revoked"){
+    if(busy || !chosenKnowledge)return;
+    const recipients=status==="allowed"?shareRecipients:[];
+    const note=status==="allowed"?shareReason.trim():
+      (shareReason.trim().length>=12?shareReason.trim():
+        "Revoca esplicita: interrompere la condivisione di questa conoscenza.");
+    const who=recipients.map(x=>SHARE_LABELS[x]).join(", ");
+    if(!window.confirm(status==="allowed"?
+      "AUTORIZZARE questo invio ai modelli AI esterni? Solo "+who+
+      " riceveranno la citazione letterale di un capitolo precedente e " +
+      "l'interpretazione scelta dall'autore. Nessuna motivazione privata sarà inviata " +
+      "tramite il nuovo pacchetto, ma possono esserci SPOILER. I cinque lettori " +
+      "ciechi non sono destinatari. I dati nei prompt vengono trasmessi ai provider " +
+      "AI configurati. Il consenso sarà revocabile e non cambia il canone. " +
+      "L'autosync GitHub verrà disabilitato.":
+      "REVOCARE la condivisione di questa conoscenza ai modelli? La revoca " +
+      "impedisce invii FUTURI, ma non cancella le richieste AI già effettuate."))return;
+    setBusy(true);setMessage("");setError("");
+    try{
+      await recordNarrativeKnowledgeShareDecision(book.id,book.updatedAt,
+        chosenKnowledge.decision.id,status,recipients,note);
+      setShareReason("");setShareRecipients([]);
+      await onRefresh();
+      setMessage(status==="allowed"?
+        "Destinatari autorizzati solo per questa interpretazione. Autosync disabilitato.":
+        "Consenso revocato per le richieste future. Autosync disabilitato.");
+    }catch(cause){
+      setError(cause instanceof Error?cause.message:"Consenso non registrato.");
+    }finally{setBusy(false);}
+  }
+  const shareBlocked=busy || book.status==="running" ||
+    (!!book.editorialCycle && book.editorialCycle.stage!=="blocked") ||
+    !chosenKnowledge || (book.narrativeKnowledgeShareDecisions?.length??0)>=MAX_KNOWLEDGE_SHARE_DECISIONS;
   const disabled=busy || book.status==="running" ||
     (!!book.editorialCycle && book.editorialCycle.stage!=="blocked") ||
     !source || history.length>=MAX_KNOWLEDGE_DECISIONS ||
@@ -64,7 +116,7 @@ export function NarrativeKnowledgeDecisionsPanel({book,onRefresh}:{
       ancorate a scene canoniche congelate. «Diretta», «riferita» e «segreta» sono
       interpretazioni editoriali, NON fatti verificati, identità certificate o un
       grafo completo di ciò che ogni personaggio sa. Nessuna informazione passa
-      automaticamente agli agenti AI; i segreti canonici non vengono modificati.
+      agli agenti AI senza un consenso separato e mirato; i segreti canonici non vengono modificati.
       {" "}Storico: {history.length}/{MAX_KNOWLEDGE_DECISIONS}.
     </p>
     {message && <p role="status" className="mt-2 text-emerald-700 dark:text-emerald-300">{message}</p>}
@@ -115,6 +167,73 @@ export function NarrativeKnowledgeDecisionsPanel({book,onRefresh}:{
         <p className="break-words">Motivazione dell'autore: {decision.rationale}</p>
       </li>)}
     </ul>}
+    {registry.current.length>0 && <fieldset aria-label="Consenso mirato alle conoscenze"
+      className="mt-3 min-w-0 rounded border border-slate-300 p-2 dark:border-slate-700">
+      <legend className="font-semibold text-xs">Autorizzazione esplicita per singola conoscenza</legend>
+      <p className="muted mt-1 text-xs">
+        Privato per impostazione predefinita. Solo i destinatari selezionati
+        potranno leggere la breve citazione precedente e la classificazione,
+        mai la motivazione dell'autore tramite questo pacchetto.
+        I cinque lettori ciechi e gli specialisti non elencati NON potranno
+        ricevere la condivisione. L'invio avviene ai provider AI configurati
+        quando una review futura richiede il contesto; la revoca non cancella
+        dati già inviati. Nessun effetto sul canone.
+      </p>
+      <label className="mt-2 block text-xs font-semibold">
+        Conoscenza da autorizzare
+        <select className="field mt-1" aria-label="Conoscenza da condividere"
+          value={chosenKnowledge?.decision.id??""} onChange={e=>{
+            setShareKnowledgeId(e.target.value);setShareRecipients([]);setShareReason("");
+          }}>
+          {registry.current.map(({decision,source:entry})=>
+            <option key={decision.id} value={decision.id}>
+              Cap. {entry.candidate.chapterNumber}: {entry.candidate.actor} — {
+                VERDICT_LABELS[decision.verdict]} — {entry.decision.quote}
+            </option>)}
+        </select>
+      </label>
+      <p className="mt-2 text-xs">
+        {activeShare ?
+          "Attualmente autorizzati: "+activeShare.permission.recipients
+            .map(x=>SHARE_LABELS[x]).join(", ") :
+          "Nessun destinatario attualmente autorizzato per questa interpretazione."}
+      </p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2"
+        aria-label="Destinatari autorizzabili">
+        {KNOWLEDGE_SHARE_RECIPIENTS.map(recipient=>
+          <label key={recipient} className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={shareRecipients.includes(recipient)}
+              disabled={shareBlocked} onChange={e=>
+                setShareRecipients(old=>e.target.checked?
+                  [...old,recipient]:old.filter(x=>x!==recipient))}/>
+            {SHARE_LABELS[recipient]}
+          </label>)}
+      </div>
+      <label className="mt-2 block text-xs font-semibold">
+        Motivazione del consenso (12–500 caratteri, mai inviata ai modelli)
+        <textarea className="field mt-1 min-h-20" maxLength={500}
+          aria-label="Motivazione consenso conoscenza" value={shareReason}
+          onChange={e=>setShareReason(e.target.value)}/>
+      </label>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button disabled={shareBlocked || shareRecipients.length===0 ||
+          shareReason.trim().length<12 || shareReason.trim().length>500}
+          onClick={()=>void share("allowed")}>
+          Autorizza destinatari selezionati
+        </Button>
+        <Button disabled={shareBlocked || !activeShare}
+          onClick={()=>void share("revoked")}>Revoca consenso</Button>
+      </div>
+      <p className="muted mt-2 text-xs">
+        Un cambio d'interpretazione o di freeze invalida il consenso precedente.
+        Ogni scelta è archiviata, inclusi i ruoli, in ZIP e può comparire in una
+        sincronizzazione GitHub MANUALE. Un import ZIP lo revoca e richiede una
+        nuova autorizzazione locale. Storico: {
+          (book.narrativeKnowledgeShareDecisions??[]).length
+        }/{MAX_KNOWLEDGE_SHARE_DECISIONS}; non correnti: {
+          sharing.nonCurrentCount}.
+      </p>
+    </fieldset>}
     {history.length>0 && <details aria-label="Storico interpretazioni conoscenze"
       className="mt-2 rounded border border-slate-200 p-2 dark:border-slate-700">
       <summary className="cursor-pointer font-semibold">

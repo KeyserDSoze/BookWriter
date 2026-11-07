@@ -1,5 +1,20 @@
 # Changelog — BookWriter
 
+## 0.11.15 — 2026-11-07 (PR #61)
+
+**Consenso esplicito per singola conoscenza e destinatario AI**
+
+- Nuovo `narrativeKnowledgeShareDecisions?` append-only (max240): permesso `allowed|revoked` sull'**ID esatto di una decisione knowledge ancora corrente**, destinatari `continuity|timeline|secrets|characterVoice|judge` esplicitamente selezionati, motivazione privata 12–500 e data. Niente concessioni generali, implicite, a lettori ciechi, agli altri specialisti o ai writer. Nessuna casella preselezionata.
+- Nuovo `buildSharedKnowledgePack` locale e fail-closed: max **4 citazioni** da capitoli strettamente precedenti congelati, nomi letterali presenti nel segmento e permessi validi per ruolo. Solo **quote, attore, posizione, offset e classificazione** dell'autore, mai le motivazioni private, le note o `memory.secrets`. Le classificazioni sono interpretazioni fallibili, non fonti di verità o istruzioni.
+- Le quattro chiamate di revisori autorizzabili ricevono il pack esclusivamente per il loro ruolo, il **giudice solo per finding di conoscenza letteralmente ancorati**. I 5 lettori ciechi, gli altri 3 specialisti e i modelli di scrittura restano senza il nuovo pacchetto. Nessuna chiamata AI extra, ma possibili token aggiuntivi nei prompt autorizzati.
+- Revoca, rettifica della conoscenza, riattestazione o riapertura della fonte invalidano i permessi futuri senza cancellare lo storico. La revoca NON elimina dati già trasmessi ai provider AI. UI con selezione ruolo, motivazione, conferma forte, audit e revoca.
+- Persistenza con Web Locks writer/outbox, CAS revisionale, transazione atomica libro+attività+outbox, autosync disabilitato e coda eliminata. Log attività **senza nomi, ruoli, citazioni o rationale**.
+- ZIP `content/full`: schema strict su destinatari, duplicati, stati, motivi e max240; importazione **revoca ogni permesso attivo prima di usare la copia**, conservando l'audit quando possibile (altrimenti elimina il registro di autorizzazioni importato in modo fail-closed). I push GitHub manuali possono ancora esportare note private: avviso esplicito.
+- Vitest su scoping 12 ruoli+giudice, privacy, default deny, fonte precedente, status/staleness, revoche, CAS e ZIP; Playwright desktop/mobile sul consenso e sua revoca senza chiamate AI/GitHub. [ADR 0048](../ADR/0048-per-knowledge-editorial-recipient-consent.md), [guida](knowledge-sharing-consent.md), issue #20.
+
+**Limiti:** nessuna identità/verità certificata, nessun grafo del sapere completo, nessun nuovo dato promosso a canone o modifica autonoma di memoria e segreti. Il nome e la citazione pubblica possono comunque rivelare spoiler all'AI **se** l'autore autorizza un destinatario. La revoca riguarda solo gli invii futuri.
+
+
 ## 0.11.14 — 2026-11-07 (PR #60)
 
 **Registro privato e motivato delle conoscenze dell'autore**

@@ -14,6 +14,7 @@ import type { ContinuityRecheck, ContinuityRecheckAudit } from "./cross-chapter-
 import type { NarrativeEventDecision } from "./narrative-event-decisions";
 import type { NarrativeAliasDecision } from "./narrative-alias-decisions";
 import type { NarrativeKnowledgeDecision } from "./narrative-knowledge-decisions";
+import type { NarrativeKnowledgeShareDecision } from "./narrative-knowledge-sharing";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -135,6 +136,8 @@ export interface BookProject {
   narrativeAliasDecisions?: NarrativeAliasDecision[];
   /** Author-only knowledge interpretations; NEVER automatically promoted to canonical secrets. */
   narrativeKnowledgeDecisions?: NarrativeKnowledgeDecision[];
+  /** Opt-in permissions per exact, current knowledge interpretation and recipient. */
+  narrativeKnowledgeShareDecisions?: NarrativeKnowledgeShareDecision[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
