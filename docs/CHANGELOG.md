@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.20 — 2026-11-08 (issue #20; PR in preparazione)
+
+**Giudizi privati dell'autore per singole citazioni di possibili comunicazioni**
+
+- `BookProject.narrativeTransferAssessments?` append-only max **120**: ID della coppia `same_information` corrente, due decisioni knowledge esatte in direzione mittente/destinatario, candidate ID dal campione della v0.11.19, `verdict=author_attested_report|possible_path|dismissed`, motivazione privata 20–650 e data. Un'attestazione è **lettura dell'autore**, non prova che qualcuno abbia ascoltato, creduto o acquisito una notizia.
+- `createNarrativeTransferAssessment` rilegge e verifica l'esatta pista corrente e il collegamento; `buildNarrativeTransferAssessmentRegistry` è last-wins per fonte/direzione/coppia e invalida le scelte quando capitoli, prosa, conoscenze, legami o campioni cambiano. Nessuna riattivazione tacita di decisioni precedenti.
+- Nel pannello **Piste comunicative della coppia** compaiono **Valuta questa pista**, tre verdetti non preselezionati, motivazione, conferma esplicita, giudizio corrente e storico. Senza un candidato letterale corrente non è possibile annotare; non esistono inferenze automatiche tra più personaggi.
+- Salvataggio con Web Locks writer/outbox, CAS, blocco autopilot/redazione, transazione books+activities+outbox, autosync OFF e outbox eliminata. Activity senza nomi, prosa, verdict o note private. Nessuna mutazione di canone, segreti, timeline o prompt/consensi AI.
+- ZIP content/full schema **strict**, max120, compatibilità legacy; archivi e push manuali possono contenere spoiler e le fonti importate non sono autenticate. Test dominio, application, privacy, ZIP cifrato e Playwright desktop/mobile. [ADR 0053](../ADR/0053-author-transfer-assessment-ledger.md), [guida](author-transfer-assessments.md).
+
+**Limite:** il giudizio si riferisce solo a una menzione letterale non probatoria, non decide l'identità semantica, l'effettiva trasmissione, la cronologia della storia o la conoscenza canonica.
+
 ## 0.11.19 — 2026-11-08 (PR #65, issue #20)
 
 **Anteprima locale dei possibili passaggi di notizie fra due knowledge confermate**
