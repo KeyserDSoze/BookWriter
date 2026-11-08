@@ -501,6 +501,13 @@ export function EditorialBoardPanel({
         <ManualEvidencePanel key={"excerpts-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
+          <div className="mt-3">
+            <EditorialVerificationPlanPanel book={book} chapter={ch}
+              cycle={{
+                chapterId:ch.id,round:1,stage:"blocked",reports:[],
+                repairCursor:0,priorRounds:ch.editorialRounds??[],
+              }}/>
+          </div>
           {ch.editorialRounds?.map((round, i) =>
             <div key={i} className="mt-3"><RoundDetails {...round} chapter={ch} sources={ch.historicalDossier?.sources}
                 manualSources={allManualEvidence(ch.historicalDossier)}
