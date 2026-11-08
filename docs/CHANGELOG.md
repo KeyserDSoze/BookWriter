@@ -1,5 +1,19 @@
 # Changelog — BookWriter
 
+## 0.11.17 — 2026-11-08 (PR #63)
+
+**Relazioni a coppie fra informazioni di personaggi distinti — solo su conferma autore**
+
+- Nuovo `BookProject.narrativeKnowledgeTopicDecisions?` (append-only max **120**): due ID **distinti e canonici** di `NarrativeKnowledgeDecision` correnti, riferiti a personaggi con nome letterale differente, `verdict=same_information|different_information`, motivazione privata 20–650 e timestamp. È una interpretazione **esplicita dell'autore**, non una prova automatica di identità, verità o passaggio della notizia.
+- `buildNarrativeKnowledgeTopicRegistry`: last-wins su coppia **non ordinata** di ID, audit delle rettifiche, invalidazione completa dopo modifica/riapertura/riattestazione/cambio conoscenza di una fonte, senza resurrezione di vecchie scelte. **No transitive closure**: A/B e B/C non implicano A/C. Nessun collegamento inferito da parole simili.
+- UI **Collegare informazioni fra personaggi**: selezione di due fonti `knowledge_mention affirmed` ancora congelate, due citazioni visibili, due scelte, motivazione e conferma. Vista delle coppie correnti con tempi privati eventualmente già annotati a fianco, ma **l'ordine dei capitoli non è cronologia della storia**. Storico consultabile anche con fonti stale.
+- Scrittura locale con Web Locks writer/outbox, CAS revisionale, blocco autopilot/redazione attiva, transazione atomica `books+activities+outbox`, autosync OFF e coda GitHub eliminata; log attività **senza attori, citazioni, temi, motivazioni private o segreti**.
+- ZIP `content/full` schema strict per ID, coppia canonica, verdict, data, motivazione e max120, legacy compatibile; fonti importate rivalidate, senza autenticazione dell'autore. Backup e push GitHub manuale possono divulgare spoiler.
+- Privacy: **nuovi collegamenti NON trasmessi ai 12 revisori, al giudice, writer o repair** nemmeno se esiste consenso v0.11.15 per quote e classificazione della singola conoscenza. Nessuna nuova chiamata AI/HTTP, canone, memoria, segreti o timeline modificati; nessuna deduzione sulla trasmissione. Test Vitest dominio/application/privacy, ZIP chiaro/cifrato/manomesso, Playwright desktop/mobile su due fonti, rettifica e invalidazione. [ADR 0050](../ADR/0050-author-pairwise-knowledge-subject-links.md), [guida](knowledge-topic-links.md), issue #20.
+
+**Limiti:** la somiglianza semantica non viene certificata, i legami sono solo a coppie di nomi letterali distinti; il confronto dei tempi rappresenta una vista delle interpretazioni dell'autore, non una timeline causale verificata.
+
+
 ## 0.11.16 — 2026-11-08 (PR #62)
 
 **Quando un personaggio sa: momento della conoscenza e ordine narrativo separati**

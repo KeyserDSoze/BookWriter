@@ -132,6 +132,16 @@ const narrativeKnowledgeTimingSchema=z.object({
   decidedAt:z.string().datetime(),
 }).strict();
 
+const narrativeKnowledgeTopicSchema=z.object({
+  id:zId,
+  firstKnowledgeDecisionId:zId,
+  secondKnowledgeDecisionId:zId,
+  verdict:z.enum(["same_information","different_information"]),
+  rationale:z.string().min(20).max(650),
+  decidedAt:z.string().datetime(),
+}).strict().refine(x=>
+  x.firstKnowledgeDecisionId<x.secondKnowledgeDecisionId);
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -150,6 +160,7 @@ const bookSchema = z.object({
   narrativeKnowledgeDecisions: z.array(narrativeKnowledgeDecisionSchema).max(160).optional(),
   narrativeKnowledgeShareDecisions: z.array(narrativeKnowledgeShareSchema).max(240).optional(),
   narrativeKnowledgeTimingDecisions: z.array(narrativeKnowledgeTimingSchema).max(200).optional(),
+  narrativeKnowledgeTopicDecisions: z.array(narrativeKnowledgeTopicSchema).max(120).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),

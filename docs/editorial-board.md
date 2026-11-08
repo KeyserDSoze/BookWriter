@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.16
+# Redazione multi-agente di BookWriter — v0.11.17
+
+## Una notizia è la stessa per due personaggi? (v0.11.17)
+
+La dashboard può ora mettere fianco a fianco le citazioni già confermate da due personaggi diversi. L'autore decide espressamente se si riferiscono alla **stessa informazione** oppure a **informazioni differenti**, con motivazione e storico delle rettifiche. Due fonti identiche nel tema non diventano automaticamente connesse, né due legami A/B e B/C autorizzano il software a dedurne uno A/C. Le decisioni scadono se le fonti o la classificazione knowledge non sono più valide.
+
+Il confronto mostra anche le eventuali due annotazioni temporali correnti delle rispettive scene, **senza costruire un grafo causale o una timeline fiction**. La relazione non prova trasferimento informativo, verità o identità canoniche e non modifica alcun segreto. Questi nuovi dati restano **privati a tutti i modelli AI**, anche se esistono autorizzazioni v0.11.15 a condividere le classificazioni individuali. [Guida](knowledge-topic-links.md), ADR 0050, issue #20.
+
+
 
 ## Quando il personaggio conosce la notizia? (v0.11.16)
 

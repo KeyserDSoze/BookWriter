@@ -27,3 +27,7 @@ Riferimenti: [ADR 0048](../ADR/0048-per-knowledge-editorial-recipient-consent.md
 ## Tempi narrativi dalla v0.11.16
 
 Il consenso selettivo di questa guida riguarda **solo** la citazione letterale e la classificazione `learned_directly|reported_by_other|still_secret`. Le nuove annotazioni su **quando** il personaggio apprende la notizia e sull'eventuale **flashback** rimangono private e non vengono incluse nei prompt AI, anche se il ruolo è già stato autorizzato. Per un eventuale uso futuro serviranno una nuova policy e un opt-in separato. [Guida sui tempi](knowledge-timing-registry.md).
+
+## Collegamenti fra conoscenze dalla v0.11.17
+
+I consensi v0.11.15 sono limitati alla **singola** citazione e classificazione della conoscenza. Le nuove relazioni `same_information|different_information` tra coppie di personaggi sono **escluse** dai prompt anche quando un revisore o il giudice è già autorizzato: servono una futura policy e un **consenso separato** prima di qualunque divulgazione all'AI. [Guida ai collegamenti](knowledge-topic-links.md).

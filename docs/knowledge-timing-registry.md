@@ -27,3 +27,7 @@ I nuovi dati temporali rimangono **esclusi dai prompt AI**, anche quando avevi g
 I backup ZIP conservano il registro e lo storico, con schema rigoroso per le nuove voci. Un backup importato non autentica l'autore. **Un export ZIP o un push GitHub manuale può comunque diffondere note private e spoiler**: controlla la destinazione.
 
 Riferimenti: [ADR 0049](../ADR/0049-author-knowledge-temporal-anchors.md), [registro conoscenze](author-knowledge-registry.md), [consensi per ruolo](knowledge-sharing-consent.md), [issue #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+
+## Confrontare due personaggi dalla v0.11.17
+
+Il pannello [Collegare informazioni fra personaggi](knowledge-topic-links.md) consente all'autore di associare esplicitamente due decisioni knowledge correnti di personaggi diversi come **stessa** oppure **diversa** informazione. Se presenti, le due etichette temporali vengono mostrate affiancate, ma l'ordine del manoscritto non dimostra l'ordine degli eventi e un collegamento non prova una trasmissione. I legami restano privati ai modelli AI.
