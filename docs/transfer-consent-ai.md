@@ -12,6 +12,10 @@ Il modello, solo nel ruolo autorizzato, vedrà **numero di capitolo/scena, offse
 
 Si usano le chiamate AI della redazione già previste; non vengono create chiamate aggiuntive. I prompt possono tuttavia contenere più token. La classificazione dell'autore non diventa automaticamente canone né giustifica una riscrittura.
 
+## Confronto indipendente obbligatorio del giudice (v0.11.22)
+
+Con un consenso specifico per il ruolo `judge` e un finding `knowledge` ancora ancorato, il direttore deve valutare **tutte** le piste che ha ricevuto, con ragione autonoma e possibile dissenso rispetto alla tua classificazione. Se l'accesso resta plausibile o ignoto non può accettare una correzione motivata dall'assenza di notizie; rimangono gli altri gate esistenti. Il report resta privato. [Guida al contraddittorio](critical-judge-transfer-challenge.md) e ADR 0055.
+
 ## Revoca e perdita della fonte
 
 Per una valutazione autorizzata, scrivi una motivazione e premi **Revoca autorizzazione**. La revoca vale **solo per i futuri invii AI**; il contenuto eventualmente già ricevuto da un provider esterno non può essere ritirato. La scelta più recente prevale nello storico.
