@@ -1,6 +1,6 @@
 # ADR 0051 — Avvisi consultivi per triangoli di interpretazioni informative
 
-- **Stato:** proposto per v0.11.18
+- **Stato:** accettato per v0.11.18 (PR #64)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0047–0050
