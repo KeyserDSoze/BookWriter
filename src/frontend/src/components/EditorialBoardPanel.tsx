@@ -504,7 +504,8 @@ export function EditorialBoardPanel({
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           <div className="mt-3">
             <EditorialVerificationPlanPanel book={book} chapter={ch}
-              defaultFilter="archived" cycle={{
+              defaultFilter="archived" archiveMode onRefresh={onRefresh}
+              cycle={{
                 chapterId:ch.id,round:1,stage:"blocked",reports:[],
                 repairCursor:0,priorRounds:ch.editorialRounds??[],
               }}/>
