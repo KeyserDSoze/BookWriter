@@ -1,6 +1,6 @@
 # ADR 0061 — Registro diacronico delle differenze editoriali per capitolo
 
-- **Stato:** accettato per v0.11.28 (PR in preparazione)
+- **Stato:** accettato per v0.11.28 (PR #74)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0056–0060
