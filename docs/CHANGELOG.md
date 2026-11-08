@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.17 — 2026-11-08 (PR in preparazione)
+## 0.11.17 — 2026-11-08 (PR #63)
 
 **Relazioni a coppie fra informazioni di personaggi distinti — solo su conferma autore**
 
