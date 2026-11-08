@@ -1,6 +1,6 @@
 # ADR 0049 — Collocazione temporale delle conoscenze interpretata dall'autore
 
-- **Stato:** proposto per v0.11.16
+- **Stato:** accettato per v0.11.16 (PR #62)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0011 e 0042–0048
