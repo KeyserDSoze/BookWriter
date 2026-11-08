@@ -1,6 +1,6 @@
 # ADR 0058 — Scelte private dell'autore sui controlli del giudice
 
-- **Stato:** accettato per v0.11.25 (PR in verifica)
+- **Stato:** accettato per v0.11.25 (PR #71)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0054–0057
