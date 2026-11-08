@@ -55,7 +55,7 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
-**Scelte autore sulle verifiche v0.11.25 (PR in preparazione):** l'autore può prendere in carico, respingere o azzerare una verifica **irrisolta e corrente** proposta dal giudice, con motivazione privata, storico e conferma. Le scelte non sono permessi AI né approvazioni di remediation; ZIP importati le azzerano. [Guida](docs/author-editorial-verification-choices.md), ADR 0058, issue #20.
+**Scelte autore sulle verifiche v0.11.25 (PR #71):** l'autore può prendere in carico, respingere o azzerare una verifica **irrisolta e corrente** proposta dal giudice, con motivazione privata, storico e conferma. Le scelte non sono permessi AI né approvazioni di remediation; ZIP importati le azzerano. [Guida](docs/author-editorial-verification-choices.md), ADR 0058, issue #20.
 
 **Piano verifiche editoriali v0.11.24 (PR #70):** dashboard locale e **senza nuove chiamate AI** per vedere quali divergenze attendono il giudice, quali richiedono prove aggiuntive, quali correzioni sono state approvate e quali giudizi sono stale o storici. Gli archivi non riabilitano correzioni; prove mancanti e prossimi controlli restano suggerimenti. [Guida](docs/editorial-verification-plan.md), ADR 0057, issue #20.
 
