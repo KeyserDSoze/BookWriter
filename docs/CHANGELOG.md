@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.22 — 2026-11-08 (PR #68, issue #20)
+
+**Contraddittorio strutturato del giudice su ogni pista autorizzata dall'autore**
+
+- Nuovo schema Zod strict `authorTransferCritique` nel **giudizio editoriale**: per ogni estratto `buildSharedTransferPack` realmente visibile e ancora corrente il giudice risponde con **capitolo/scena/offset/citazione/attori/verdetto esatti**, `judgeReading=possible_access|unreliable_or_unrelated|undetermined`, `relationToAuthor=agrees|challenges|uncertain`, ragione autonoma 30–850 e conclusione 30–1000. **Obbligatorio soltanto** se il ruolo `judge` è autorizzato e c'è un finding `knowledge` ancora ancorato.
+- `adjudicationPrompt` e `validateJudgment` usano lo **stesso filtro** di finding correnti e ripetono controllo dei consensi e delle scene: niente riferimenti inventati, omessi, riordinati arbitrariamente, falsificati o revocati. Le ripetizioni sono permesse solo se presenti nel campione consentito. Con pack vuoto il nuovo campo è proibito.
+- **Gate più prudente:** `accept` su un rilievo knowledge è bloccato se il giudice ritiene almeno una pista `possible_access` o `undetermined`. `unreliable_or_unrelated` NON basta ad accettare una correzione: rimangono invariati i gate narrative/knowledge/information-transfer, le prove letterali e il giudizio indipendente. `repairPrompt` rivalida anche la critica dopo resume/ZIP, impedendo nuovi repair con permessi revocati o fonti stale.
+- Riepilogo nel pannello editoriale con ogni citazione, parere autore, confronto del giudice e conclusione. Nessuna nuova chiamata AI, invio ai cinque lettori ciechi o modifica a prosa, canone, segreti o timeline. Backup ZIP content/full valida la nuova struttura (strict), archivi legacy restano importabili. Nuovi test Vitest su gate, dati falsi/revoca e ZIP cifrato, CI e Playwright desktop/mobile. [ADR 0055](../ADR/0055-critical-judge-transfer-challenge.md), [guida](critical-judge-transfer-challenge.md).
+
+**Limite:** la classificazione del giudice è fallibile; il testo letterale rimane un indizio bounded e non prova il passaggio effettivo o la conoscenza. I nuovi campi possono richiedere più token nelle chiamate esistenti.
+
 ## 0.11.21 — 2026-11-08 (PR #67, issue #20)
 
 **Consensi AI espliciti per singoli giudizi autore su possibili comunicazioni**
