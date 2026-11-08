@@ -145,7 +145,7 @@ export function reviewNarrativeKnowledgeTopicTriangles(
     const a=link.decision.firstKnowledgeDecisionId;
     const b=link.decision.secondKnowledgeDecisionId;
     sameByPair.set(key(a,b),link);
-    for(const [from,to] of [[a,b],[b,a]]){
+    for(const [from,to] of [[a,b],[b,a]] as Array<[string,string]>){
       const next=neighbors.get(from)??[];
       next.push({id:to,link});
       neighbors.set(from,next);
