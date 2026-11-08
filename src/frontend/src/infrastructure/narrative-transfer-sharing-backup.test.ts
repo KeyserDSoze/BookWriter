@@ -134,7 +134,7 @@ describe("ZIP transfer v0.11.21: consensi mai reimportati come permesso AI",()=>
     const parsed=await readBackup(zip as File);
     expect(parsed.books[0]?.narrativeTransferShareDecisions).toBeUndefined();
     await importBackup(parsed,false);
-    const imported=(await listBooks()).find(x=>x.title==="Legacy (importato)")!;
+    const imported=(await listBooks()).find(x=>x.title===book.title+" (importato)")!;
     expect(buildTransferSharingRegistry(imported).current).toEqual([]);
   });
   it("ZIP con 180 voci grant non riattiva consenso: cap revoca fail-closed",async()=>{
