@@ -96,6 +96,27 @@ test("anteprima locale esplicita fra due conoscenze; niente prova né AI desktop
   page.once("dialog",dialog=>dialog.accept());
   await assessment.getByRole("button",{name:"Registra giudizio sulla pista"}).click();
   await expect(preview.getByText(/Giudizio corrente:/)).toContainText("Pista possibile");
+  const shares=preview.locator('details[aria-label="Consenso AI pista comunicativa"]');
+  await expect(shares).toHaveCount(1);
+  await expect(shares.locator("> summary")).toContainText("nessun consenso attivo");
+  await shares.locator("> summary").click();
+  await expect(shares.getByRole("checkbox")).toHaveCount(5);
+  for(const checkbox of await shares.getByRole("checkbox").all())
+    expect(await checkbox.isChecked()).toBe(false);
+  await shares.getByRole("checkbox",{name:"Autorizza Continuità"}).check();
+  await shares.getByRole("checkbox",{name:"Autorizza Giudice critico"}).check();
+  await shares.getByRole("textbox",{name:"Motivazione consenso pista comunicativa"})
+    .fill("L'autore autorizza solo due destinatari a esaminare la citazione letterale.");
+  page.once("dialog",dialog=>dialog.accept());
+  await shares.getByRole("button",{name:"Autorizza ruoli selezionati"}).click();
+  await expect(shares.locator("> summary")).toContainText("attiva");
+  await expect(shares.getByText(/Destinatari già autorizzati/))
+    .toContainText("Continuità, Giudice critico");
+  await shares.getByRole("textbox",{name:"Motivazione consenso pista comunicativa"})
+    .fill("L'autore revoca il consenso prima delle prossime chiamate.");
+  page.once("dialog",dialog=>dialog.accept());
+  await shares.getByRole("button",{name:"Revoca autorizzazione"}).click();
+  await expect(shares.locator("> summary")).toContainText("nessun consenso attivo");
   await candidateButton.click();
   await assessment.getByRole("combobox",{name:"Valutazione della pista"})
     .selectOption("dismissed");
@@ -120,6 +141,27 @@ test("anteprima locale esplicita fra due conoscenze; niente prova né AI desktop
     };
   }));
   expect(decisions).toEqual(["possible_path","dismissed"]);
+  const permissionAudit=await page.evaluate(()=>new Promise<{
+    statuses:string[];recipients:string[][];
+  }>((resolve,reject)=>{
+    const request=indexedDB.open("bookwriter");
+    request.onerror=()=>reject(request.error);
+    request.onsuccess=()=>{
+      const all=request.result.transaction("books","readonly").objectStore("books").getAll();
+      all.onerror=()=>reject(all.error);
+      all.onsuccess=()=>{
+        const b=all.result[0] as {
+          narrativeTransferShareDecisions?:Array<{status:string;recipients:string[]}>;
+        };
+        resolve({statuses:(b.narrativeTransferShareDecisions??[]).map(x=>x.status),
+          recipients:(b.narrativeTransferShareDecisions??[]).map(x=>x.recipients)});
+      };
+    };
+  }));
+  expect(permissionAudit).toEqual({
+    statuses:["allowed","revoked"],recipients:[["continuity","judge"],[]],
+  });
+  await expect(shares.locator("> summary")).toContainText("nessun consenso attivo");
   await pairs.getByRole("button",{name:"Chiudi piste possibili"}).click();
   await expect(preview).toHaveCount(0);
   await comparison.getByRole("textbox",{name:"Motivazione relazione conoscenze"})
