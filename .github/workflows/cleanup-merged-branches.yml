@@ -38,7 +38,7 @@ jobs:
           removed=0
           while IFS=$'\t' read -r branch expected_sha; do
             # Only known topic branch families. Main and arbitrary references are untouchable.
-            if [[ ! "$branch" =~ ^(feat|fix|docs|test)/[a-zA-Z0-9._/-]+$ ]] ||
+            if [[ ! "$branch" =~ ^(feat|fix|docs|test|chore)/[a-zA-Z0-9._/-]+$ ]] ||
                [[ "$branch" == *".."* ]] || [[ "$branch" == *"//"* ]]; then
               continue
             fi
@@ -59,3 +59,21 @@ jobs:
             removed=$((removed + 1))
           done < "$tempdir/merged.tsv"
           echo "Branch di PR integrate eliminati: $removed"
+
+          # One-time clean-up for an orphan prototype superseded by merged
+          # PR #50.  This branch never had its own PR, so the generic cleanup
+          # intentionally did not touch it.  Require its EXACT known commit,
+          # the replacement PR merged, the canonical implementation on main,
+          # and no open PR referencing the orphan. Any mismatch => retain.
+          legacy_branch="feat/0.11.4-attested-event-ledger"
+          legacy_sha="55b2142c6c6674e9d309af2da7b8b8df35850207"
+          legacy_current="$(gh api "repos/$GH_REPO/git/ref/heads/$legacy_branch" --jq '.object.sha' 2>/dev/null || true)"
+          if [[ "$legacy_current" == "$legacy_sha" ]] &&
+             ! grep -Fxq -- "$legacy_branch" "$tempdir/open.txt" &&
+             [[ "$(gh api "repos/$GH_REPO/pulls/50" --jq '.merged_at // ""')" != "" ]] &&
+             gh api "repos/$GH_REPO/contents/src/frontend/src/domain/narrative-event-decisions.ts?ref=main" >/dev/null 2>&1; then
+            echo "Eliminazione prototipo sostituito dalla PR #50: $legacy_branch ($legacy_sha)"
+            gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$legacy_branch"
+          else
+            echo "Prototipo legacy conservato (assente, SHA diverso, PR aperta o sostituzione non verificata)."
+          fi
