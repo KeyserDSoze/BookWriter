@@ -19,6 +19,7 @@ import type { NarrativeKnowledgeTimingDecision } from "./narrative-knowledge-tim
 import type { NarrativeKnowledgeTopicDecision } from "./narrative-knowledge-topic-decisions";
 import type { NarrativeTransferAssessment } from "./narrative-transfer-assessments";
 import type { NarrativeTransferShareDecision } from "./narrative-transfer-sharing";
+import type { EditorialVerificationChoice } from "./editorial-verification-choices";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -150,6 +151,8 @@ export interface BookProject {
   narrativeTransferAssessments?: NarrativeTransferAssessment[];
   /** Revocable, per-exact-assessment AI permissions; never inherited from knowledge consents. */
   narrativeTransferShareDecisions?: NarrativeTransferShareDecision[];
+  /** Private author tracking of checks, never an AI opt-in or repair approval. */
+  editorialVerificationChoices?: EditorialVerificationChoice[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
