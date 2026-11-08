@@ -130,4 +130,37 @@ test("divergenze editoriale: proposte alternative e verifica mancante desktop/mo
   await staleEntry.locator("summary").click();
   await expect(staleEntry.getByText(/non usare questo estratto per avviare una riparazione/))
     .toBeVisible();
+  await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const tx=open.result.transaction("books","readwrite"),store=tx.objectStore("books");
+      const q=store.getAll();
+      q.onerror=()=>reject(q.error);
+      q.onsuccess=()=>{
+        const b=q.result[0] as {
+          id:string;editorialCycle?:{round:number;reports:unknown[];judgment:unknown};
+          chapters:Array<{frozenAt?:string;editorialRounds?:unknown[]}>;
+        };
+        const old=b.editorialCycle!;
+        b.chapters[0]!.frozenAt="2026-11-08T16:00:00.000Z";
+        b.chapters[0]!.editorialRounds=[{
+          round:old.round,reports:old.reports,judgment:old.judgment,
+        }];
+        delete b.editorialCycle;
+        store.put(b,b.id);
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  const archivedBoard=page.getByRole("region",{name:"Redazione multi-agente"});
+  await archivedBoard.locator("summary").filter({hasText:"Giudizi archiviati (1)"})
+    .click();
+  const archivePlan=archivedBoard.getByRole("region",{name:"Piano verifiche editoriali"});
+  await expect(archivePlan.getByText(/1 storici/)).toBeVisible();
+  const archiveEntry=archivePlan.locator("details").first();
+  await expect(archiveEntry.locator("summary")).toContainText("Storico:");
+  await archiveEntry.locator("summary").click();
+  await expect(archiveEntry.getByText(/Non è un permesso corrente/)).toBeVisible();
 });
