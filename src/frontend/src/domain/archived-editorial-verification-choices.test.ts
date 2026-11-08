@@ -85,7 +85,7 @@ function frozen(){
   expect(item.historicalCheckEligible).toBe(true);
   return {book,chapter,item,plan};
 }
-function add(book:ReturnType<typeof frozen>["book"],key:string,
+function addArchivedChoice(book:ReturnType<typeof frozen>["book"],key:string,
   status:"taken_on"|"dismissed"|"reset"){
   const c=createArchivedEditorialVerificationChoice(book,"c1",key,status,
     note,crypto.randomUUID(),"2026-11-08T19:00:00.000Z");
@@ -100,13 +100,13 @@ describe("Controlli storici congelati: annotazione autore NON esecutiva",()=>{
     expect(plan.counts.needs_evidence).toBe(0);
     expect(findFrozenEditorialVerificationCheck(book,"c1",item.key)).toEqual(item);
     expect(currentArchivedEditorialVerificationChoice(book,"c1",item)).toBeNull();
-    const taken=add(book,item.key,"taken_on");
+    const taken=addArchivedChoice(book,item.key,"taken_on");
     expect(currentArchivedEditorialVerificationChoice(book,"c1",item)).toEqual(taken);
-    const rejected=add(book,item.key,"dismissed");
+    const rejected=addArchivedChoice(book,item.key,"dismissed");
     expect(currentArchivedEditorialVerificationChoice(book,"c1",item)).toEqual(rejected);
-    add(book,item.key,"reset");
+    addArchivedChoice(book,item.key,"reset");
     expect(currentArchivedEditorialVerificationChoice(book,"c1",item)).toBeNull();
-    expect(()=>add(book,item.key,"reset")).toThrow(/Nessuna scelta storica corrente/);
+    expect(()=>addArchivedChoice(book,item.key,"reset")).toThrow(/Nessuna scelta storica corrente/);
     expect({chapters:book.chapters,memory:book.memory}).toEqual(before);
     expect(book.editorialCycle).toBeUndefined();
     const independent=createEditorialCycle("c1");
@@ -119,7 +119,7 @@ describe("Controlli storici congelati: annotazione autore NON esecutiva",()=>{
   });
   it("ritoccando un controllo, data freeze o source report nessuna scelta risorge",()=>{
     const {book,chapter,item}=frozen();
-    add(book,item.key,"taken_on");
+    addArchivedChoice(book,item.key,"taken_on");
     chapter.editorialRounds![0]!.judgment.recommendationReconciliations![0]!
       .nextCheck="Rileggere i dialoghi del capitolo, includendo la loro prospettiva narrativa.";
     const edited=buildFrozenEditorialVerificationPlan(book,chapter).items[0]!;
@@ -132,14 +132,14 @@ describe("Controlli storici congelati: annotazione autore NON esecutiva",()=>{
     const refrozen=buildFrozenEditorialVerificationPlan(book,chapter).items[0]!;
     expect(refrozen.key).not.toBe(item.key);
     expect(currentArchivedEditorialVerificationChoice(book,"c1",refrozen)).toBeNull();
-    expect(()=>add(book,item.key,"taken_on")).toThrow(/non trovato/);
+    expect(()=>addArchivedChoice(book,item.key,"taken_on")).toThrow(/non trovato/);
     chapter.frozenAt=undefined;
     expect(buildFrozenEditorialVerificationPlan(book,chapter).items).toEqual([]);
-    expect(()=>add(book,refrozen.key,"taken_on")).toThrow(/non trovato/);
+    expect(()=>addArchivedChoice(book,refrozen.key,"taken_on")).toThrow(/non trovato/);
   });
   it("round ripetuti dopo riapertura non riutilizzano la stessa scelta storica",()=>{
     const {book,chapter,item}=frozen();
-    add(book,item.key,"taken_on");
+    addArchivedChoice(book,item.key,"taken_on");
     chapter.editorialRounds!.push(structuredClone(chapter.editorialRounds![0]!));
     const plan=buildFrozenEditorialVerificationPlan(book,chapter);
     expect(plan.items).toHaveLength(2);
@@ -176,7 +176,7 @@ describe("Controlli storici congelati: annotazione autore NON esecutiva",()=>{
       chapter.editorialRounds![0]=changed;
       expect(buildFrozenEditorialVerificationPlan(book,chapter).items[0]!
         .historicalCheckEligible).toBe(false);
-      expect(()=>add(book,item.key,"taken_on")).toThrow(/non coerente/);
+      expect(()=>addArchivedChoice(book,item.key,"taken_on")).toThrow(/non coerente/);
     }
     chapter.editorialRounds![0]=saved;
   });
@@ -189,12 +189,12 @@ describe("Controlli storici congelati: annotazione autore NON esecutiva",()=>{
     expect(plan.totalItemCount).toBe(25);
     expect(plan.omittedItemCount).toBe(1);
     expect(plan.items).toHaveLength(24);
-    expect(()=>add(book,item.key,"taken_on")).toThrow(/fuori campione|non trovato/);
-    const allowed=add(book,plan.items[0]!.key,"taken_on");
+    expect(()=>addArchivedChoice(book,item.key,"taken_on")).toThrow(/fuori campione|non trovato/);
+    const allowed=addArchivedChoice(book,plan.items[0]!.key,"taken_on");
     expect(allowed.planKey).toBe(plan.items[0]!.key);
     book.editorialVerificationChoices=Array.from(
       {length:MAX_EDITORIAL_VERIFICATION_CHOICES},(_,i)=>({...allowed,id:"old-"+i}));
-    expect(()=>add(book,plan.items[0]!.key,"dismissed")).toThrow(/160/);
+    expect(()=>addArchivedChoice(book,plan.items[0]!.key,"dismissed")).toThrow(/160/);
   });
   it("l'archivio di un altro capitolo e l'assenza di freeze non sono annotabili",()=>{
     const {book,item,chapter}=frozen();
