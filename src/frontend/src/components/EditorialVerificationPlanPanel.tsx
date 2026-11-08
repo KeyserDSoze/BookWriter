@@ -2,7 +2,8 @@ import {useMemo,useState} from "react";
 import type {BookProject,Chapter} from "../domain/types";
 import type {ChapterEditorialCycle} from "../domain/editorial-board";
 import {
-  buildEditorialVerificationPlan,type VerificationPlanItem,
+  buildEditorialVerificationPlan,buildFrozenEditorialVerificationPlan,
+  type VerificationPlanItem,
   type VerificationPlanStatus,
 } from "../domain/editorial-verification-plan";
 import {EditorialVerificationChoiceControl}
@@ -31,14 +32,17 @@ function selected(item:VerificationPlanItem,filter:PlanFilter):boolean{
   return item.status==="archived";
 }
 export function EditorialVerificationPlanPanel({
-  book,cycle,chapter,defaultFilter="pending",onRefresh,
+  book,cycle,chapter,defaultFilter="pending",onRefresh,archiveMode=false,
 }:{
   book:BookProject;cycle:ChapterEditorialCycle;chapter:Chapter;
   defaultFilter?:PlanFilter;onRefresh?:()=>Promise<void>;
+  archiveMode?:boolean;
 }){
   const [filter,setFilter]=useState<PlanFilter>(defaultFilter);
-  const plan=useMemo(()=>buildEditorialVerificationPlan(book,cycle,chapter),
-    [book,cycle,chapter]);
+  const plan=useMemo(()=>archiveMode
+    ?buildFrozenEditorialVerificationPlan(book,chapter)
+    :buildEditorialVerificationPlan(book,cycle,chapter),
+    [book,cycle,chapter,archiveMode]);
   if(!plan.totalItemCount && !plan.unreviewableFindingCount)return null;
   const filtered=plan.items.filter(item=>selected(item,filter));
   const pending=plan.counts.awaiting_judge+plan.counts.needs_evidence+
@@ -96,9 +100,16 @@ export function EditorialVerificationPlanPanel({
             <b>Prova mancante o limite dichiarato:</b> {item.missingEvidence}</p>}
           {item.nextCheck&&<p className="whitespace-pre-wrap">
             <b>Controllo suggerito (non eseguito):</b> {item.nextCheck}</p>}
-          {item.status==="needs_evidence"&&onRefresh&&
-            <EditorialVerificationChoiceControl book={book}
-              chapterId={chapter.id} item={item} onRefresh={onRefresh}/>}
+          {((!archiveMode&&item.status==="needs_evidence")||
+            (archiveMode&&item.status==="archived"&&item.historicalCheckEligible))&&
+            onRefresh&&<EditorialVerificationChoiceControl book={book}
+              chapterId={chapter.id} item={item} onRefresh={onRefresh}
+              archived={archiveMode}/>}
+          {item.status==="archived"&&archiveMode&&
+            !item.historicalCheckEligible&&<p className="muted">
+              Annotazione non disponibile: solo un controllo storico con
+              prove dichiarate irrisolte e fonti archiviate coerenti può
+              ricevere una nota dell'autore.</p>}
           {item.status==="awaiting_judge"&&<p className="muted">
             Il giudice non ha ancora indicato prove mancanti o un controllo
             specifico per questo gruppo.

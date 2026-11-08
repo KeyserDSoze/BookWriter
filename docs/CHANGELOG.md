@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.26 — 2026-11-08 (PR #72, issue #20)
+
+**Annotazioni private su controlli irrisolti dei capitoli già congelati**
+
+- `buildFrozenEditorialVerificationPlan(book,chapter)` ricostruisce localmente un piano **solo storico** da `chapter.editorialRounds`, non dal ciclo attivo. Max24 voci con conteggio omesse. Ogni voce resta `archived`, anche se il passo esiste ancora. Chiave archivio esatta vincolata a `frozenAt`, indice tornata/reconciliation, numero round, timestamp giudice e ID; due freeze o round numericamente uguali non ereditano le scelte precedenti.
+- Solo le raccomandazioni archiviate **`unresolved + reject_all`**, con tutte le decisioni reject, ancore letterali archiviate coerenti e proposte realmente differenti di ruoli distinti, possono ricevere una nota privata. I record senza fonti, approvati, falsi, fuori campione o non ancora congelati restano read-only; il controllo sulle fonti è strutturale, NON certifica verità, autenticità o validità rispetto alla prosa corrente.
+- `createArchivedEditorialVerificationChoice` riusa lo storico strict append-only v0.11.25 (max160, `taken_on|dismissed|reset`, note 20–500, last-wins) e invalida scelte quando cambiano freeze/stamp/quote/suggerimento. `recordArchivedEditorialVerificationChoice` usa Web Locks writer/outbox, CAS, books+activities+outbox, autosync OFF, outbox delete, log generico. Con autopilot running o redazione attiva nessuna nuova scrittura.
+- UI **Giudizi archiviati → Piano verifiche editoriali → Annotazione storica dell'autore**: tre azioni motivate, conferma, stato e audit. Nessun nuovo DTO, schema ZIP, permesso AI, chiamata a modelli o rete, modifica a canon, scene, timeline, freeze o remediation. ZIP content/full cifrato e import reset precedenti invariati. Vitest su round duplicati, overflow, refreeze, input ostili, CAS/lock/privacy; backup cifrato/import e Playwright desktop/mobile. [ADR 0059](../ADR/0059-frozen-editorial-verification-annotations.md), [guida](frozen-editorial-verification-annotations.md).
+
+**Limiti:** una nota storica non dimostra che un rilievo sia vero, non completa il controllo e non autorizza a riscrivere. Nessuna nuova condivisione ai lettori ciechi o al giudice.
+
 ## 0.11.25 — 2026-11-08 (PR #71, issue #20)
 
 **Presa in carico, rifiuto e azzeramento privati dei controlli proposti dal giudice**

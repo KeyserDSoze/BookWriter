@@ -12,6 +12,10 @@ Con autopilot fermo e ciclo editoriale nello stato **Bloccato**, apri la singola
 
 Ogni operazione richiede una **conferma esplicita** e conserva la motivazione privata. Il piano continua a considerare il caso **Da approfondire**, anche se lo hai preso in carico o lo hai respinto. Nessuna di queste scelte autorizza automaticamente una correzione o una chiamata AI. Per riaprire il capitolo serve sempre il flusso **Rivaluta / Riparti** con le sue conferme.
 
+## Capitoli già congelati (v0.11.26)
+
+Puoi annotare anche una **verifica irrisolta di un capitolo già congelato**: apri **Giudizi archiviati** e scegli **Annotazione storica dell'autore**. Sono disponibili le stesse tre azioni motivate ma l'esito rimane SEMPRE storico, senza riapertura, AI o edit. [Guida dedicata](frozen-editorial-verification-annotations.md), ADR 0059.
+
 ## Validità, storico e privacy
 
 La scelta si riferisce a una voce **esatta e ancora corrente**: capitolo, tornata, citazione, prove mancanti, suggerimento e ragionamento del giudice devono coincidere con l'attuale piano. Se modifichi la prosa o il giudice rivede il controllo, una vecchia decisione **non** vale per il nuovo suggerimento. I gruppi chiusi, già approvati, ancora in attesa del giudice o archiviati non hanno questi pulsanti.

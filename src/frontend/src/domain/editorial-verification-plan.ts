@@ -22,6 +22,8 @@ export interface VerificationPlanItem {
   quote:string;
   findingIds:string[];
   acceptedFindingIds:string[];
+  /** Historical-only, structural inspection: NOT a live proof or repair permission. */
+  historicalCheckEligible?:boolean;
   missingEvidence?:string;
   nextCheck?:string;
   explanation?:string;
@@ -159,4 +161,110 @@ export function buildEditorialVerificationPlan(
     omittedGroupCount:report.omittedGroupCount,
     oversizedGroupCount:report.oversizedGroupCount,counts,
   };
+}
+
+/** The frozen chapter carries its OWN immutable-looking editorial archive.
+ * We never consult the current prose to make an old check "current".
+ * All entries are explicitly historical, even when their quote still occurs.
+ * Archive index and freeze stamp prevent repeated round/finding IDs from
+ * aliasing after re-freeze or another editorial review. */
+function frozenArchiveKey(chapter:Chapter,round:EditorialRound,
+  archiveIndex:number,reviewIndex:number,ids:string[]):string {
+  return "frozen:"+chapter.frozenAt+":"+archiveIndex+":"+reviewIndex+":"+
+    round.round+":"+round.judgment.createdAt+":"+keyFor(ids);
+}
+
+/** Check only that the frozen, recorded witness and judge recommendation
+ * structurally agree. This does NOT authenticate an archive, check prose
+ * freshness, approve remediation or establish that the criticism is true. */
+function archivedSuggestionIsCoherent(
+  round:EditorialRound,
+  review:NonNullable<EditorialJudgment["recommendationReconciliations"]>[number],
+):boolean {
+  if(review.evidenceAssessment!=="unresolved"||
+     review.resolution!=="reject_all"||
+     review.findingIds.length<2||review.findingIds.length>12||
+     new Set(review.findingIds).size!==review.findingIds.length)return false;
+  const all=round.reports.flatMap(report=>
+    report.findings.map(finding=>({role:report.role,finding,
+      reportSegmentIndex:report.segmentIndex})));
+  const selected=review.findingIds.map(id=>all.filter(x=>x.finding.id===id));
+  if(selected.some(matches=>matches.length!==1))return false;
+  const witnesses=selected.map(x=>x[0]!);
+  const first=witnesses[0]!;
+  const anchor=first.finding.evidenceAnchor;
+  if(!anchor||!anchor.quote||!first.finding.evidence ||
+    anchor.quote!==first.finding.evidence)return false;
+  const signature=JSON.stringify([
+    first.finding.sceneId,anchor.segmentIndex,anchor.offset,
+    anchor.quote.normalize("NFC"),
+    first.finding.category.trim().toLocaleLowerCase("it"),
+  ]);
+  if(witnesses.some(({finding,reportSegmentIndex})=>{
+    const a=finding.evidenceAnchor;
+    return !a||!a.quote||a.quote!==finding.evidence ||
+      reportSegmentIndex!==a.segmentIndex||
+      JSON.stringify([finding.sceneId,a.segmentIndex,a.offset,
+        a.quote.normalize("NFC"),finding.category.trim().toLocaleLowerCase("it")])
+        !==signature;
+  }))return false;
+  if(new Set(witnesses.map(x=>x.role)).size<2||
+    new Set(witnesses.map(x=>x.finding.remediation.trim()
+      .replace(/\s+/gu," ").toLocaleLowerCase("it"))).size<2)return false;
+  return review.findingIds.every(id=>{
+    const decisions=round.judgment.decisions.filter(x=>x.findingId===id);
+    return decisions.length===1&&decisions[0]!.action==="reject";
+  });
+}
+
+/** Bounded, display-only source for a chapter that is CURRENTLY frozen.
+ * Round numbers may repeat on reopen, so use archive ARRAY indexes too.
+ * Only unresolved, structurally coherent old checks get an author-note
+ * affordance; even those remain status=archived, never needs_evidence. */
+export function buildFrozenEditorialVerificationPlan(
+  book:BookProject,chapter:Chapter,
+):EditorialVerificationPlan {
+  const counts:Record<VerificationPlanStatus,number>={
+    awaiting_judge:0,needs_evidence:0,approved_edit:0,
+    closed_no_edit:0,requires_recheck:0,archived:0,
+  };
+  const empty:EditorialVerificationPlan={
+    method:"local_editorial_disagreement_plan_v1",items:[],
+    totalItemCount:0,omittedItemCount:0,unreviewableFindingCount:0,
+    omittedGroupCount:0,oversizedGroupCount:0,counts,
+  };
+  if(!chapter.frozenAt||!book.chapters.some(ch=>
+    ch.id===chapter.id&&ch.frozenAt===chapter.frozenAt))return empty;
+  const entries:VerificationPlanItem[]=[];
+  for(const [archiveIndex,round] of (chapter.editorialRounds??[]).entries()){
+    for(const [reviewIndex,review] of
+      (round.judgment.recommendationReconciliations??[]).entries()){
+      const item=pastEntry(round.round,round.reports,review,"archived");
+      item.key=frozenArchiveKey(chapter,round,archiveIndex,reviewIndex,
+        review.findingIds);
+      item.historicalCheckEligible=
+        archivedSuggestionIsCoherent(round,review)&&
+        item.quote.length>0&&item.quote.length<=250;
+      entries.push(item);
+    }
+  }
+  // Most recent archive first; within an archive, stable original order.
+  entries.reverse();
+  counts.archived=entries.length;
+  return {...empty,items:entries.slice(0,MAX_VERIFICATION_PLAN_ITEMS),
+    totalItemCount:entries.length,
+    omittedItemCount:Math.max(0,entries.length-MAX_VERIFICATION_PLAN_ITEMS)};
+}
+
+/** Resolve from current saved chapter data, never trust the supplied key
+ * or an old UI item. This does NOT grant a current editorial authorization. */
+export function findFrozenEditorialVerificationCheck(
+  book:BookProject,chapterId:string,planKey:string,
+):VerificationPlanItem|undefined {
+  const chapter=book.chapters.find(x=>x.id===chapterId);
+  if(!chapter?.frozenAt)return;
+  const plan=buildFrozenEditorialVerificationPlan(book,chapter);
+  return plan.items.find(item=>item.key===planKey&&
+    item.status==="archived"&&item.historicalCheckEligible===true&&
+    !!item.quote&&!!item.missingEvidence&&!!item.nextCheck&&!!item.explanation);
 }

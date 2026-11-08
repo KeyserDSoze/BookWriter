@@ -1,6 +1,8 @@
 import type {BookProject} from "./types";
-import {buildEditorialVerificationPlan,
-  type VerificationPlanItem} from "./editorial-verification-plan";
+import {
+  buildEditorialVerificationPlan,findFrozenEditorialVerificationCheck,
+  type VerificationPlanItem,
+} from "./editorial-verification-plan";
 
 export const MAX_EDITORIAL_VERIFICATION_CHOICES=160;
 export type EditorialVerificationChoiceStatus="taken_on"|"dismissed"|"reset";
@@ -77,4 +79,53 @@ export function createEditorialVerificationChoice(
     quote:item.quote,missingEvidence:item.missingEvidence,
     nextCheck:item.nextCheck,judgeExplanation:item.explanation,
     status,rationale:note,decidedAt};
+}
+
+/** Archived suggestions are NOT live findings. A note is allowed only on a
+ * frozen chapter's exact, structurally coherent, unresolved historical
+ * reconciliation. It never approves a repair or marks the check completed. */
+export function currentArchivedEditorialVerificationChoice(
+  book:BookProject,chapterId:string,item:VerificationPlanItem,
+):EditorialVerificationChoice|null {
+  if(item.status!=="archived"||!item.historicalCheckEligible)return null;
+  const exact=findFrozenEditorialVerificationCheck(book,chapterId,item.key);
+  if(!exact||!verificationSourceMatches({
+    id:"",chapterId,planKey:item.key,round:item.round,
+    quote:item.quote,missingEvidence:item.missingEvidence??"",
+    nextCheck:item.nextCheck??"",judgeExplanation:item.explanation??"",
+    status:"reset",rationale:"",decidedAt:"",
+  },chapterId,exact))return null;
+  const latest=[...(book.editorialVerificationChoices??[])].reverse().find(x=>
+    x.chapterId===chapterId&&x.planKey===item.key);
+  if(!latest||latest.status==="reset"||
+    !verificationSourceMatches(latest,chapterId,exact))return null;
+  return latest;
+}
+
+/** Separate validation path for archival notes, never reused for a current
+ * needs_evidence approval or a chapter editorial lifecycle transition. */
+export function createArchivedEditorialVerificationChoice(
+  book:BookProject,chapterId:string,planKey:string,
+  status:EditorialVerificationChoiceStatus,rationale:string,
+  id:string,decidedAt:string,
+):EditorialVerificationChoice {
+  if(!(["taken_on","dismissed","reset"] as string[]).includes(status))
+    throw new Error("Scelta storica sul controllo non valida.");
+  const note=rationale.trim();
+  if(note.length<20||note.length>500)
+    throw new Error("Motiva la scelta storica con 20–500 caratteri.");
+  if(!id||id.length>300||!Number.isFinite(Date.parse(decidedAt)))
+    throw new Error("Identificativo o data della scelta storica non validi.");
+  if((book.editorialVerificationChoices?.length??0)>=MAX_EDITORIAL_VERIFICATION_CHOICES)
+    throw new Error("Limite di 160 scelte raggiunto: esporta un backup.");
+  const item=findFrozenEditorialVerificationCheck(book,chapterId,planKey);
+  if(!item)throw new Error("Controllo storico non trovato, non coerente o fuori campione.");
+  if(status==="reset"&&!currentArchivedEditorialVerificationChoice(book,chapterId,item))
+    throw new Error("Nessuna scelta storica corrente da azzerare.");
+  return {
+    id,chapterId,planKey:item.key,round:item.round,
+    quote:item.quote,missingEvidence:item.missingEvidence!,
+    nextCheck:item.nextCheck!,judgeExplanation:item.explanation!,
+    status,rationale:note,decidedAt,
+  };
 }

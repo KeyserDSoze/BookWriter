@@ -1,0 +1,25 @@
+# ADR 0059 — Annotazioni private sui controlli dei capitoli congelati
+
+- **Stato:** accettato per v0.11.26 (PR #72)
+- **Data:** 2026-11-08
+- **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
+- **Precedenti:** ADR 0056–0058
+
+## Problema
+
+La v0.11.25 consente di prendere in carico, respingere o azzerare in modo privato un `needs_evidence` **corrente** ma non un suggerimento irrisolto quando il capitolo è già stato congelato. Gli archivi sono oggi soltanto consultabili. Tuttavia una nota storica non può essere confusa con un'approvazione del giudice, una nuova verifica sul testo attuale o un'autorizzazione a riaprire.
+
+## Decisione
+
+1. Riutilizzare **lo stesso** `BookProject.editorialVerificationChoices?` (max160, schema ZIP strict **immutato**): nessun nuovo campo, permesso, token o endpoint. Aggiungere `buildFrozenEditorialVerificationPlan(book,chapter)` che produce **solo** voci `status=archived` per un `chapter.frozenAt` presente e `chapter.editorialRounds`, con massimo **24 voci visibili**, `omittedItemCount` e ordine archivio recente prima. Non convertire nessun suggerimento storico in `needs_evidence` corrente.
+2. Evitare collisioni quando il medesimo capitolo è stato riaperto e nuovamente congelato: la **chiave archivio esatta** include `frozenAt`, indice dell'elemento in `editorialRounds`, indice del singolo `recommendationReconciliations`, numero di tornata, `judgment.createdAt` e multinsieme ordinato degli ID dei finding. L'identificativo dell'archivio **non** è una chiave del ciclo corrente; l'ordinamento delle tornate duplicate non deve causare riuso involontario.
+3. Mostrare pulsanti autore **esclusivamente** sui suggerimenti di un **capitolo tuttora congelato** per cui il giudice aveva salvato `evidenceAssessment=unresolved` e `resolution=reject_all`, con **tutte le decisioni reject** e almeno due rilievi da ruoli differenti, rimedi diversi e **stessa ancora letterale archiviata** (scena, segmento, offset, citazione e categoria). Richiedere tutti gli ID presenti univocamente nei report di quella tornata. I vecchi report senza anchor, falsi/duplicati, approvati, gruppi fuori campione o archive non coerenti **non** sono annotabili. La coerenza è soltanto **strutturale**: non certifica l'autenticità di uno ZIP né che la citazione esista ancora nella prosa corrente.
+4. `createArchivedEditorialVerificationChoice` risolve `chapterId+planKey` **dal libro corrente** e dai primi 24 controlli archiviati; riusa lo snapshot v0.11.25 `round,quote,missingEvidence,nextCheck,judgeExplanation`, `taken_on|dismissed|reset`, nota privata 20–500 e last-wins. Un cambio `frozenAt`, indice del round, giudizio, fonte o controllo **non** riabilita tacitamente il vecchio stato. Le note rimangono solo audit se obsolete. Non usare questo percorso per il ciclo editoriale attivo.
+5. Applicazione `recordArchivedEditorialVerificationChoice`: stessi Web Locks writer/outbox, CAS `updatedAt`, transazione books+activities+outbox, `remote.autoSync=false`, outbox svuotata e attività **generica** senza quote, nomi, ID, contenuti o status. Richiede autopilot **non running** e **nessun ciclo editoriale attivo** (assente o `stage=blocked`). A differenza della v0.11.25, non richiede un ciclo editoriale corrente per il capitolo congelato: il documento è già `editorialRounds`.
+6. UI in **Redazione multi-agente → Stato dei capitoli → Giudizi archiviati → Piano verifiche editoriali**: mostra lo stesso pannello di scelta privata per le sole voci storiche coerenti e irrisolte, etichettato **Annotazione storica dell'autore**. Conferma esplicita che non esegue verifica, AI, sync o modifiche; non crea un pulsante di riapertura né una coda esecutiva. Gli altri archivi non verificabili restano read-only con spiegazione. Le voci continuano ad apparire `Storico: non autorizza interventi` dopo ogni azione.
+7. ZIP content/full cifrato e legacy continuano a utilizzare lo schema strict v0.11.25 senza nuovi campi; l'import di ZIP storici esegue sempre il **reset delle ultime scelte attive importate** o elimina audit se oltre cap160. Note, spoiler e manoscritti possono essere divulgati tramite ZIP e push GitHub **manuale**, mai tramite il pannello agli agenti. Né specialisti né cinque lettori ciechi né giudice/writer/repair ricevono le scelte; nessuna nuova AI/HTTP.
+8. **Invarianti:** nessun `judgment`, `finding`, `repairPrompt`, `freeze`, `chapter.scenes`, `book.memory`, segreti o timeline viene alterato; un'annotazione non implica verifica completata, fatto canonico, cambio di consenso o autorizzazione a una remediation. La correttezza semantica dei rilievi archiviati non può essere determinata da questi controlli.
+
+## Test
+
+Vitest per round ripetuti, identificativi distinti, fonte modificata/refreeze, decisioni ambigue, report senza ancora, cap24/160 e last-wins reset; application per CAS/locks/outbox/autosync e prosa/canon intatti; ZIP content/full cifrato e import reset; Playwright desktop/mobile per tre scelte, ricaricamento, nuovo freeze e layout. CI deve superare npm ci/lock, TypeScript, Vitest, smoke, build, Playwright desktop/mobile prima del merge.
