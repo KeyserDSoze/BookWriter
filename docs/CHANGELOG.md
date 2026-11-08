@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## Unreleased — proposta 0.11.18 (issue #20)
+
+**Verifica consultiva dei collegamenti di conoscenza confermati dall'autore**
+
+- `reviewNarrativeKnowledgeTopicTriangles` usa solo le decisioni **last-wins correnti**: segnala **soltanto** quando sono presenti direttamente tutti i tre verdetti A/B «stessa informazione», B/C «stessa informazione», A/C «informazioni differenti». Nessuna transitività applicata su coppie mancanti e nessun legame/errore narrativo inferito.
+- Pannello con tre prove letterali, tre attori e tre verdetti già confermati; massimo **12** avvisi con conteggio totale e degli omessi. Rettifica e invalidazione delle fonti rimuovono immediatamente i pattern obsoleti.
+- Analisi puramente locale ed effimera: nessun nuovo dato persistito, nessuna chiamata AI/HTTP, nessun intervento su canone, segreti, memoria, freeze o activity, nessuna autorizzazione automatica per gli agenti. Citazioni private visibili solo nel pannello; le decisioni preesistenti possono essere incluse in backup/push manuali.
+- Test Vitest di triangoli completi, assenza di inferenze da due coppie, rettifica e stale; Playwright desktop/mobile per conferme, rendering e reload. [ADR 0051](../ADR/0051-knowledge-topic-triangle-advisories.md), [guida](knowledge-topic-triangle-advisories.md).
+
+**Limite:** una possibile incoerenza fra interpretazioni dell'autore non dimostra una contraddizione narrativa né la verità, la cronologia o il trasferimento della notizia.
+
 ## 0.11.17 — 2026-11-08 (PR #63)
 
 **Relazioni a coppie fra informazioni di personaggi distinti — solo su conferma autore**
