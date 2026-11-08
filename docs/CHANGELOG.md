@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.22 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.22 — 2026-11-08 (PR #68, issue #20)
 
 **Contraddittorio strutturato del giudice su ogni pista autorizzata dall'autore**
 
