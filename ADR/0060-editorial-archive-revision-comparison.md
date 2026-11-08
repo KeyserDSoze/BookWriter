@@ -1,6 +1,6 @@
 # ADR 0060 — Confronto locale fra verifiche archiviate annotate e nuova revisione
 
-- **Stato:** accettato per v0.11.27 (PR in preparazione)
+- **Stato:** accettato per v0.11.27 (PR #73)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0056–0059
