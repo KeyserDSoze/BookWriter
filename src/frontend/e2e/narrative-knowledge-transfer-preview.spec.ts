@@ -85,6 +85,41 @@ test("anteprima locale esplicita fra due conoscenze; niente prova né AI desktop
     .toBeVisible();
   await expect(preview.getByText(/Scene esaminate:/)).toHaveCount(2);
   await expect(preview.getByText(/Nina rivela/)).toHaveCount(0);
+  const candidateButton=preview.getByRole("button",{name:"Valuta questa pista"});
+  await expect(candidateButton).toHaveCount(1);
+  await candidateButton.click();
+  const assessment=preview.getByRole("group",{name:"Valutazione autore della pista"});
+  await assessment.getByRole("combobox",{name:"Valutazione della pista"})
+    .selectOption("possible_path");
+  await assessment.getByRole("textbox",{name:"Motivazione pista comunicativa"})
+    .fill("L'autore sospetta che il narratore stia riportando soltanto una voce.");
+  page.once("dialog",dialog=>dialog.accept());
+  await assessment.getByRole("button",{name:"Registra giudizio sulla pista"}).click();
+  await expect(preview.getByText(/Giudizio corrente:/)).toContainText("Pista possibile");
+  await candidateButton.click();
+  await assessment.getByRole("combobox",{name:"Valutazione della pista"})
+    .selectOption("dismissed");
+  await assessment.getByRole("textbox",{name:"Motivazione pista comunicativa"})
+    .fill("L'autore rilegge la scena e respinge la comunicazione come pista.");
+  page.once("dialog",dialog=>dialog.accept());
+  await assessment.getByRole("button",{name:"Registra giudizio sulla pista"}).click();
+  await expect(preview.getByText(/Giudizio corrente:/)).toContainText("Pista respinta");
+  await preview.locator('details[aria-label="Storico valutazioni comunicative"] > summary')
+    .click();
+  await expect(preview.getByText(/Non correnti o rettificate: 1/)).toBeVisible();
+  const decisions=await page.evaluate(()=>new Promise<string[]>((resolve,reject)=>{
+    const request=indexedDB.open("bookwriter");
+    request.onerror=()=>reject(request.error);
+    request.onsuccess=()=>{
+      const all=request.result.transaction("books","readonly").objectStore("books").getAll();
+      all.onerror=()=>reject(all.error);
+      all.onsuccess=()=>{
+        const b=all.result[0] as {narrativeTransferAssessments?:Array<{verdict:string}>};
+        resolve((b.narrativeTransferAssessments??[]).map(x=>x.verdict));
+      };
+    };
+  }));
+  expect(decisions).toEqual(["possible_path","dismissed"]);
   await pairs.getByRole("button",{name:"Chiudi piste possibili"}).click();
   await expect(preview).toHaveCount(0);
   await comparison.getByRole("textbox",{name:"Motivazione relazione conoscenze"})
