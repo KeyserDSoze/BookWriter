@@ -61,9 +61,10 @@ test("timeline privata: conoscenza, flashback, rettifica e fonte stale desktop/m
   await timing.getByRole("button",{name:"Registra momento della conoscenza"}).click();
   await expect(timing.locator("> summary")).toContainText("(1 posizioni correnti)");
   await expect(timing.getByText(/Mara · 1 annotazioni correnti/)).toBeVisible();
-  await expect(timing.getByText("Non ancora nota nella scena").first()).toBeVisible();
-  await expect(timing.getByText("Flashback o ordine narrativo riorganizzato").first())
-    .toBeVisible();
+  await expect(timing.locator('[aria-label="Timeline testuale per personaggio"]')
+    .getByText("Non ancora nota nella scena")).toBeVisible();
+  await expect(timing.locator('[aria-label="Timeline testuale per personaggio"]')
+    .getByText("Flashback o ordine narrativo riorganizzato")).toBeVisible();
 
   const dbState=await page.evaluate(()=>new Promise<{
     moment:string;order:string;autoSync:boolean;
