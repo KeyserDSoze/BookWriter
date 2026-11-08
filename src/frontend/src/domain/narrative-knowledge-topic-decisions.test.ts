@@ -7,7 +7,8 @@ import {createNarrativeKnowledgeTimingDecision} from "./narrative-knowledge-timi
 import {createNarrativeKnowledgeShareDecision,buildSharedKnowledgePack}
   from "./narrative-knowledge-sharing";
 import {buildNarrativeKnowledgeTopicRegistry,createNarrativeKnowledgeTopicDecision,
-  MAX_KNOWLEDGE_TOPIC_DECISIONS} from "./narrative-knowledge-topic-decisions";
+  MAX_KNOWLEDGE_TOPIC_DECISIONS,reviewNarrativeKnowledgeTopicTriangles}
+  from "./narrative-knowledge-topic-decisions";
 import {EDITORIAL_ROLES,createEditorialCycle,chapterSegments,reviewerPrompt,adjudicationPrompt}
   from "./editorial-board";
 
@@ -185,5 +186,50 @@ describe("Relazioni a coppie delle conoscenze: conferma esplicita dell'autore",(
       secondKnowledgeDecisionId:"z-inventato",
     }];
     expect(buildNarrativeKnowledgeTopicRegistry(book).current).toEqual([]);
+  });
+  it("segnala soltanto il triangolo di TRE scelte esplicite discordanti",()=>{
+    const book=bookWithThree();
+    const a=annotate(book,"Mara"),b=annotate(book,"Elio"),c=annotate(book,"Nina");
+    link(book,a.id,b.id);
+    link(book,b.id,c.id);
+    expect(reviewNarrativeKnowledgeTopicTriangles(
+      buildNarrativeKnowledgeTopicRegistry(book))).toMatchObject({
+        totalCount:0,warnings:[],omittedCount:0,
+      });
+    link(book,a.id,c.id,"different_information");
+    const registry=buildNarrativeKnowledgeTopicRegistry(book);
+    const review=reviewNarrativeKnowledgeTopicTriangles(registry);
+    expect(registry.current).toHaveLength(3);
+    expect(review.totalCount).toBe(1);
+    expect(review.omittedCount).toBe(0);
+    expect(review.warnings).toHaveLength(1);
+    const warning=review.warnings[0]!;
+    expect(warning.middle.source.candidate.actor).toBe("Elio");
+    expect([warning.first.source.candidate.actor,
+      warning.last.source.candidate.actor].sort()).toEqual(["Mara","Nina"]);
+    expect(warning.first.source.decision.quote).toContain("lettera");
+    expect(warning.middle.source.decision.quote).toContain("lettera");
+    expect(warning.last.source.decision.quote).toContain("lettera");
+    expect(registry.differentInformation).toHaveLength(1);
+    expect(book.memory.secrets.lettera).toBe("SEGRETO_PRIVATO_UNICO_NON_TRASMETTERE");
+    expect(Object.keys(registry)).not.toContain("inferredLinks");
+    link(book,c.id,a.id,"same_information");
+    expect(reviewNarrativeKnowledgeTopicTriangles(
+      buildNarrativeKnowledgeTopicRegistry(book)).totalCount).toBe(0);
+    expect(book.narrativeKnowledgeTopicDecisions).toHaveLength(4);
+  });
+  it("non segnala una scelta storica/stale né trasforma coppie mancanti in prove",()=>{
+    const book=bookWithThree();
+    const a=annotate(book,"Mara"),b=annotate(book,"Elio"),c=annotate(book,"Nina");
+    link(book,a.id,b.id);link(book,b.id,c.id);
+    link(book,a.id,c.id,"different_information");
+    book.chapters[1]!.frozenAt=undefined;
+    const stale=buildNarrativeKnowledgeTopicRegistry(book);
+    expect(stale.current).toHaveLength(1);
+    expect(reviewNarrativeKnowledgeTopicTriangles(stale).totalCount).toBe(0);
+    book.chapters[1]!.frozenAt="2026-11-08T09:00:00.000Z";
+    book.chapters[1]!.scenes[0]!.text+=" Una frase nuova.";
+    expect(reviewNarrativeKnowledgeTopicTriangles(
+      buildNarrativeKnowledgeTopicRegistry(book)).warnings).toEqual([]);
   });
 });
