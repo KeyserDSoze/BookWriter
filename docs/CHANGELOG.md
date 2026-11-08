@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.23 — 2026-11-08 (PR #69, issue #20)
+
+**Riconciliazione critica delle correzioni divergenti sullo stesso passaggio**
+
+- `buildEditorialRecommendationDisagreements` identifica **soltanto** proposte di modifica realmente differenti, di **ruoli distinti**, riferite alla stessa prova letterale corrente: scena, segmento, offset, quote e categoria esatti. Un report `pass` non è un voto contrario; due proposte diverse non dimostrano un conflitto semantico. Max **6 gruppi di 12 rilievi**, con contatori per gruppi omessi o sovradimensionati e `unreviewableFindingIds` bloccati per remediation.
+- Il giudice deve produrre `recommendationReconciliations` Zod **strict** per ogni gruppo corrente: ID tutti esatti, `resolution=choose_one|reject_all|compatible_changes`, `evidenceAssessment=adequate_for_selected_edits|unresolved`, `rationale` 30–850, `missingEvidence` e `nextCheck` 24–600. Scelte incrociate con gli `accept/reject` effettivi; nessun `accept` quando la prova è dichiarata irrisolta. `nextCheck` resta una **raccomandazione testuale**, non un lavoro automatico.
+- `adjudicationPrompt` usa i report già disponibili e le fonti letterali rivalidate, senza chiamate AI aggiuntive. `validateJudgment` blocca omissioni, falsi gruppi, duplicati, fonti stale e modifiche fuori campione; i gate narrativi, knowledge, storici e di provenienza rimangono invariati.
+- `repairPrompt` rivalida le riconciliazioni anche su finding **stile/voce** prima del riutilizzo dopo resume/ZIP. Il pannello redazione mostra proposte affiancate, scelta del giudice, prova mancante e verifica suggerita, con avviso di copertura parziale. ZIP content/full schema strict per lo storico, compatibilità legacy. Nuovi test Vitest del dominio/overflow/repair, backup ZIP cifrato e Playwright desktop/mobile. [ADR 0056](../ADR/0056-editorial-recommendation-disagreements.md), [guida](editorial-recommendation-disagreements.md).
+
+**Limiti:** un confronto fra proposte non prova che gli agenti siano logicamente in disaccordo sul fatto narrato, né che una modifica sia giusta; nessun nuovo canone, segreto, timeline, consenso AI o chiamata di rete.
+
 ## 0.11.22 — 2026-11-08 (PR #68, issue #20)
 
 **Contraddittorio strutturato del giudice su ogni pista autorizzata dall'autore**

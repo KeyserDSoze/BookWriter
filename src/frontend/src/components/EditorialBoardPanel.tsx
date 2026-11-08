@@ -2,7 +2,8 @@ import { useState } from "react";
 import { BookCheck, RotateCcw, ShieldAlert, Users } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import { NarrativeEventDecisionsPanel } from "./NarrativeEventDecisionsPanel";
-import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
+import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs,
+  buildEditorialRecommendationDisagreements, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
 import { reopenChapterReview } from "../application/editorial-control";
 import { Button } from "./ui/button";
@@ -30,6 +31,9 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
 }) {
   const judged = new Map((judgment?.decisions ?? []).map(d => [d.findingId,d]));
   const findings = reports.flatMap(r => r.findings);
+  const discrepancies=buildEditorialRecommendationDisagreements({reports},chapter);
+  const corrections=new Map((judgment?.recommendationReconciliations??[])
+    .map(x=>[JSON.stringify([...x.findingIds].sort()),x]));
   return <div className="space-y-3">
     <p className="text-sm font-semibold">Tornata {round} · {reports.length} verifiche · {findings.length} rilievi</p>
     <div className="space-y-2">
@@ -253,6 +257,59 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
         </details>;
       })}
     </div>
+    {(discrepancies.groups.length>0||discrepancies.unreviewableFindingIds.length>0)&&
+      <section aria-label="Divergenze tra raccomandazioni"
+        className="space-y-2 rounded-lg border border-slate-300 p-3 text-xs dark:border-slate-700">
+        <h3 className="font-semibold">Correzioni alternative sulla stessa citazione</h3>
+        <p className="muted">
+          Le proposte differenti non sono voti contrari né dimostrano una
+          contraddizione nel romanzo. Il giudice deve esaminarle separatamente:
+          una citazione valida prova soltanto che il testo esiste.
+        </p>
+        {discrepancies.groups.map(g=>{
+          const review=corrections.get(JSON.stringify([...g.findingIds].sort()));
+          return <details key={JSON.stringify(g.findingIds)}
+            className="rounded border border-slate-300 p-2 dark:border-slate-700">
+            <summary className="cursor-pointer font-semibold">
+              Scena {g.sceneId}, segmento {g.segmentIndex+1} · {g.category}
+              {" "}· {g.recommendations.length} proposte
+            </summary>
+            <p className="mt-2 break-words"><b>Fonte letterale:</b> «{g.quote}»</p>
+            <ul className="mt-2 space-y-2">
+              {g.recommendations.map(rec=><li key={rec.findingId}
+                className="rounded border border-slate-200 p-2 dark:border-slate-700">
+                <p><b>{ROLE_LABELS[rec.role]}</b> · {rec.severity}</p>
+                <p><b>Motivo:</b> {rec.reason}</p>
+                <p><b>Intervento suggerito:</b> {rec.proposedEdit}</p>
+                <p className="muted">Rilievo {rec.findingId}</p>
+              </li>)}
+            </ul>
+            {review?<div className="mt-2 space-y-1 border-t border-slate-300 pt-2
+              dark:border-slate-700">
+              <p className="font-semibold">Riconciliazione del giudice — {
+                review.resolution==="reject_all"?"nessuna modifica":
+                review.resolution==="choose_one"?"una proposta scelta":
+                "più modifiche ritenute compatibili"}</p>
+              <p><b>Valutazione delle prove:</b> {
+                review.evidenceAssessment==="unresolved"?"non risolta":
+                "ritenute sufficienti per gli interventi scelti"}</p>
+              <p><b>Motivazione:</b> {review.rationale}</p>
+              <p><b>Prova mancante o limite:</b> {review.missingEvidence}</p>
+              <p><b>Prossimo controllo suggerito:</b> {review.nextCheck}</p>
+              <p className="muted">Il controllo è un suggerimento: non viene
+                eseguito automaticamente e non modifica il canone.</p>
+            </div>:<p className="muted mt-2">
+              Il giudice non ha ancora riconciliato le proposte di questa tornata.
+            </p>}
+          </details>;
+        })}
+        {discrepancies.unreviewableFindingIds.length>0&&<p
+          className="text-amber-700 dark:text-amber-300">
+          Copertura parziale: {discrepancies.omittedGroupCount} gruppi omessi,
+          {" "}{discrepancies.oversizedGroupCount} gruppi troppo estesi.
+          Non autorizzare correzioni di questi rilievi senza esame manuale.
+        </p>}
+      </section>}
     {judgment && <div className="space-y-2 rounded-lg border border-slate-300 p-3 text-xs dark:border-slate-700">
       <p className="font-semibold">Decisione finale: {judgment.verdict === "freeze" ? "Nessun rilievo accettato: può congelare" : "Sono richieste correzioni"}</p>
       <p className="whitespace-pre-wrap">{judgment.reasoning}</p>
