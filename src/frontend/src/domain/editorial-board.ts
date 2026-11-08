@@ -225,7 +225,7 @@ function normalizeProposedEdit(text:string):string {
  * Identity by quote/offset is a textual grouping, NOT an assertion that
  * the specialists' concerns or preferred rewrites are semantically opposed. */
 export function buildEditorialRecommendationDisagreements(
-  cycle:ChapterEditorialCycle,chapter:Chapter,
+  cycle:Pick<ChapterEditorialCycle,"reports">,chapter:Chapter,
 ):EditorialDisagreementReport {
   type Entry={finding:EditorialFinding;role:EditorialRole;segmentIndex:number};
   const byAnchor=new Map<string,Entry[]>();
@@ -1141,10 +1141,14 @@ export function repairPrompt(book: BookProject, cycle: ChapterEditorialCycle,
   const fixes = acceptedRepairs(cycle).filter(x => x.sceneId === sceneId);
   if (!fixes.length) throw new Error("Nessuna correzione approvata.");
   // A restored/imported cycle was never authenticated by this runtime.
-  // Before a narrative-conflict repair, rerun the SAME decision gate against
-  // the current witnesses, current text and the saved structured ruling.
-  if (fixes.some(x=>allFindings(cycle).some(f=>
-    f.id===x.findingId && (!!f.narrativeConflict || !!f.priorSceneConflict)))) {
+  // Revalidate ALL saved reconciliations and any current recommendation
+  // disagreements before a repair, including ordinary style/voice findings.
+  // Otherwise an accepted edit could bypass the exact-source gate after resume.
+  const liveDisagreements=buildEditorialRecommendationDisagreements(cycle,ch!);
+  if (cycle.judgment?.recommendationReconciliations?.length ||
+    fixes.some(x=>liveDisagreements.groups.some(g=>g.findingIds.includes(x.findingId))) ||
+    fixes.some(x=>allFindings(cycle).some(f=>
+      f.id===x.findingId && (!!f.narrativeConflict || !!f.priorSceneConflict)))) {
     if (!cycle.judgment)
       throw new Error("Decisione editoriale non disponibile.");
     validateJudgment(cycle,JSON.stringify({
