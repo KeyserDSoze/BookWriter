@@ -30,6 +30,12 @@ export interface InformationTransferCandidate {
   matchedTopicTerms:string[];
   evidenceStatus:"unverified_literal_report";
 }
+/** Optional exact actor names for an author-triggered pair preview.
+ * Reviewers use the original unrestricted path. */
+export interface InformationTransferConstraint {
+  sender:string;
+  recipient:string;
+}
 export interface InformationTransferTrace {
   method:"bounded_frozen_dialogue_mentions_v1";
   candidates:InformationTransferCandidate[];
@@ -44,6 +50,9 @@ function tokens(text:string):string[]{
     .matchAll(/[\p{L}]{4,}/gu)].map(m=>m[0])
     .filter(w=>!STOP.has(w)))].slice(0,80);
 }
+function normalizedActor(name:string):string {
+  return name.trim().normalize("NFC").toLocaleLowerCase("it");
+}
 function mentions(text:string,name:string):boolean {
   return new RegExp("(^|[^\\p{L}])"+name+"(?=$|[^\\p{L}])","iu").test(text);
 }
@@ -54,6 +63,7 @@ const transferPattern=/([\p{Lu}][\p{L}]{1,29})\s+(?:racconta|raccontò|rivela|ri
  * or automatic promotion to knowledge/canon. */
 export function buildInformationTransferTrace(
   book:BookProject,chapter:Chapter,currentText:string,
+  constraint?:InformationTransferConstraint,
 ):InformationTransferTrace {
   const all=book.chapters.filter(ch=>ch.id!==chapter.id &&
     ch.number<chapter.number && !!ch.frozenAt && ch.scenes.length>0 &&
@@ -74,8 +84,10 @@ export function buildInformationTransferTrace(
       for(const match of text.matchAll(transferPattern)){
         if(seen++>=12)break;
         const sender=match[1]!,recipient=match[2]!,clause=match[3]!;
-        if(sender.toLocaleLowerCase("it")===recipient.toLocaleLowerCase("it") ||
-          !mentions(query,recipient))continue;
+        if(normalizedActor(sender)===normalizedActor(recipient) ||
+          !mentions(query,recipient) ||
+          (constraint && (normalizedActor(sender)!==normalizedActor(constraint.sender) ||
+            normalizedActor(recipient)!==normalizedActor(constraint.recipient))))continue;
         const topic=tokens(clause).filter(t=>
           t!==sender.toLocaleLowerCase("it")&&t!==recipient.toLocaleLowerCase("it"));
         const common=topic.filter(t=>queryTerms.has(t));
