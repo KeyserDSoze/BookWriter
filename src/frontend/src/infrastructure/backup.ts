@@ -2,7 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { z } from "zod";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import type { SceneMergeDraft } from "../domain/scene-merge";
-import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema, knowledgeReviewSchema, informationTransferReviewSchema, authorTransferCritiqueSchema } from "../domain/editorial-board";
+import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema, knowledgeReviewSchema, informationTransferReviewSchema, authorTransferCritiqueSchema, recommendationReconciliationSchema } from "../domain/editorial-board";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
@@ -51,6 +51,7 @@ const archivedReportSchema = z.object({
 }).passthrough();
 const archivedJudgmentSchema = z.object({
   authorTransferCritique:authorTransferCritiqueSchema.optional(),
+  recommendationReconciliations:z.array(recommendationReconciliationSchema).max(6).optional(),
   decisions: z.array(z.object({
     narrativeReview: narrativeReviewSchema.optional(),
     knowledgeReview: knowledgeReviewSchema.optional(),
