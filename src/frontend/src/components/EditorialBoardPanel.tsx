@@ -256,6 +256,38 @@ function RoundDetails({ round, reports, judgment, chapter, sources = [], manualS
     {judgment && <div className="space-y-2 rounded-lg border border-slate-300 p-3 text-xs dark:border-slate-700">
       <p className="font-semibold">Decisione finale: {judgment.verdict === "freeze" ? "Nessun rilievo accettato: può congelare" : "Sono richieste correzioni"}</p>
       <p className="whitespace-pre-wrap">{judgment.reasoning}</p>
+      {judgment.authorTransferCritique&&<section
+        aria-label="Confronto critico con le piste dell'autore"
+        className="mt-2 space-y-2 rounded border border-slate-300 p-2 dark:border-slate-700">
+        <p className="font-semibold">Confronto indipendente con le piste autorizzate</p>
+        <p className="muted">
+          Sono interpretazioni fallibili: nessuna citazione prova ricezione,
+          conoscenza, cronologia o verità. Il giudice può dissentire dall'autore
+          senza modificare automaticamente il canone.
+        </p>
+        {judgment.authorTransferCritique.witnessAssessments.map((item,index)=>
+          <div key={index} className="min-w-0 break-words border-t border-slate-300 pt-2
+            dark:border-slate-700">
+            <p>Capitolo {item.chapterNumber}, scena {item.sceneNumber},
+              {" "}offset {item.offset} · {item.sender} → {item.recipient}</p>
+            <p className="mt-1 break-words">«{item.quote}»</p>
+            <p><b>Interpretazione dell'autore:</b> {
+              item.authorVerdict==="author_attested_report"
+                ?"Comunicazione descritta secondo l'autore" :
+              item.authorVerdict==="possible_path"?"Pista possibile":
+                "Pista respinta"}</p>
+            <p><b>Lettura indipendente del giudice:</b> {
+              item.judgeReading==="possible_access"?"Accesso possibile":
+              item.judgeReading==="unreliable_or_unrelated"
+                ?"Fonte inattendibile o non pertinente":"Accesso indeterminato"}</p>
+            <p><b>Confronto:</b> {
+              item.relationToAuthor==="agrees"?"Concorda":
+              item.relationToAuthor==="challenges"?"Contesta":"Non decide"}
+              {" — "}{item.rationale}</p>
+          </div>)}
+        <p><b>Conclusione del giudice:</b> {
+          judgment.authorTransferCritique.conclusion}</p>
+      </section>}
     </div>}
   </div>;
 }
