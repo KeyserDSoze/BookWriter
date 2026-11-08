@@ -20,7 +20,12 @@ test("La pulizia protegge main, PR aperte e HEAD modificate dopo il merge", asyn
   assert.match(workflow, /select\(\.merged_at != null\)/);
   assert.match(workflow, /\bstate=open\b/);
   assert.match(workflow, /current_sha.*expected_sha/);
-  assert.match(workflow, /\(feat\|fix\|docs\|test\)/);
+  assert.ok(workflow.includes("(feat|fix|docs|test|chore)"));
+  assert.ok(workflow.includes('legacy_sha="55b2142c6c6674e9d309af2da7b8b8df35850207"'));
+  assert.ok(workflow.includes('"$legacy_current" == "$legacy_sha"'));
+  assert.ok(workflow.includes("pulls/50"));
+  assert.ok(workflow.includes("narrative-event-decisions.ts?ref=main"));
+  assert.ok(workflow.includes('grep -Fxq -- "$legacy_branch"'));
 });
 
 test("Plugin Tailwind e framework restano allineati a versioni esatte", async () => {
