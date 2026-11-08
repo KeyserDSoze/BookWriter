@@ -6,6 +6,8 @@ import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchem
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
+import {MAX_TRANSFER_SHARE_DECISIONS,type NarrativeTransferShareDecision}
+  from "../domain/narrative-transfer-sharing";
 import {MAX_KNOWLEDGE_SHARE_DECISIONS,type NarrativeKnowledgeShareDecision}
   from "../domain/narrative-knowledge-sharing";
 
@@ -153,6 +155,18 @@ const narrativeTransferAssessmentSchema=z.object({
   decidedAt:z.string().datetime(),
 }).strict().refine(x=>x.senderKnowledgeDecisionId!==x.recipientKnowledgeDecisionId);
 
+const narrativeTransferShareSchema=z.object({
+  id:zId,
+  transferAssessmentId:zId,
+  status:z.enum(["allowed","revoked"]),
+  recipients:z.array(z.enum([
+    "continuity","timeline","secrets","characterVoice","judge",
+  ])).max(5).refine(x=>new Set(x).size===x.length),
+  rationale:z.string().min(12).max(500),
+  decidedAt:z.string().datetime(),
+}).strict().refine(x=>x.status==="allowed" ? x.recipients.length>0 :
+  x.recipients.length===0);
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -173,6 +187,7 @@ const bookSchema = z.object({
   narrativeKnowledgeTimingDecisions: z.array(narrativeKnowledgeTimingSchema).max(200).optional(),
   narrativeKnowledgeTopicDecisions: z.array(narrativeKnowledgeTopicSchema).max(120).optional(),
   narrativeTransferAssessments: z.array(narrativeTransferAssessmentSchema).max(120).optional(),
+  narrativeTransferShareDecisions: z.array(narrativeTransferShareSchema).max(180).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
@@ -431,12 +446,27 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
       decidedAt:at,
     }))];
   }
+  function importedTransferShareAudit(book:BookProject):NarrativeTransferShareDecision[]{
+    const original=book.narrativeTransferShareDecisions??[];
+    const latest=new Map<string,NarrativeTransferShareDecision>();
+    for(const entry of original)latest.set(entry.transferAssessmentId,entry);
+    const grants=[...latest.values()].filter(x=>x.status==="allowed");
+    if(original.length+grants.length>MAX_TRANSFER_SHARE_DECISIONS)return [];
+    const at=new Date().toISOString();
+    return [...original,...grants.map(entry=>({
+      id:crypto.randomUUID(),transferAssessmentId:entry.transferAssessmentId,
+      status:"revoked" as const,recipients:[] as [],
+      rationale:"Consenso importato revocato: serve un nuovo consenso locale.",
+      decidedAt:at,
+    }))];
+  }
   const safeBooks: BookProject[] = data.books.map(book => ({
     ...book,
     id: idMap.get(book.id)!,
     title: book.title + " (importato)",
     authorConstraints: book.authorConstraints ?? [],
     narrativeKnowledgeShareDecisions: importedSharingAudit(book),
+    narrativeTransferShareDecisions: importedTransferShareAudit(book),
     remote: undefined, // Imported copies must not inherit GitHub write permissions/remote SHA.
     status: book.status === "running" ? "paused" : book.status,
     previousError: "Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
