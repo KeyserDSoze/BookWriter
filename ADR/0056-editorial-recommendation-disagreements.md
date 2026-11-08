@@ -1,6 +1,6 @@
 # ADR 0056 — Divergenze tra raccomandazioni editoriali: riconciliazione critica
 
-- **Stato:** accettato per v0.11.23 (PR in preparazione)
+- **Stato:** accettato per v0.11.23 (PR #69)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0045–0046, 0052–0055
