@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BookCheck, RotateCcw, ShieldAlert, Users } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import { NarrativeEventDecisionsPanel } from "./NarrativeEventDecisionsPanel";
+import { EditorialVerificationPlanPanel } from "./EditorialVerificationPlanPanel";
 import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs,
   buildEditorialRecommendationDisagreements, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
@@ -426,6 +427,7 @@ export function EditorialBoardPanel({
           <RotateCcw size={16}/> Riparti con i nuovi vincoli
         </Button>
       </div>}
+      <EditorialVerificationPlanPanel book={book} cycle={cycle} chapter={chapter}/>
       <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
         chapter={chapter} sources={chapter.historicalDossier?.sources}
         manualSources={allManualEvidence(chapter.historicalDossier)}
@@ -499,6 +501,13 @@ export function EditorialBoardPanel({
         <ManualEvidencePanel key={"excerpts-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
+          <div className="mt-3">
+            <EditorialVerificationPlanPanel book={book} chapter={ch}
+              defaultFilter="archived" cycle={{
+                chapterId:ch.id,round:1,stage:"blocked",reports:[],
+                repairCursor:0,priorRounds:ch.editorialRounds??[],
+              }}/>
+          </div>
           {ch.editorialRounds?.map((round, i) =>
             <div key={i} className="mt-3"><RoundDetails {...round} chapter={ch} sources={ch.historicalDossier?.sources}
                 manualSources={allManualEvidence(ch.historicalDossier)}

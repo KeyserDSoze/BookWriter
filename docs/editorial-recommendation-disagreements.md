@@ -21,6 +21,10 @@ Il software confronta nuovamente il testo del capitolo e gli ID esatti dei findi
 
 Gli altri controlli sulla continuità, sulla conoscenza dei personaggi, sulle prove storiche e sui segreti **rimangono necessari** anche quando il giudice riconcilia un disaccordo. Il sistema rivalida il giudizio anche prima di una successiva riparazione, dopo resume o importazione di un backup.
 
+## Piano riassuntivo delle verifiche (v0.11.24)
+
+Apri [Piano verifiche editoriali](editorial-verification-plan.md) nella redazione: separa automaticamente i gruppi in attesa, con prova irrisolta, approvati, senza modifica e da rivalidare; conserva le tornate congelate **solo come storico**. La classificazione deriva dai giudizi esistenti: nessuna nuova richiesta AI o esecuzione automatica del controllo suggerito.
+
 ## Privacy e compatibilità
 
 I cinque lettori ciechi continuano a lavorare in modo indipendente e non ricevono proposte degli altri revisori. Il contraddittorio compare solo **dopo** le loro verifiche, nel ruolo giudice. Non ci sono nuovi consensi AI, chiamate HTTP o nuove mutazioni automatiche del canone. I backup ZIP content/full contengono lo storico e validano rigorosamente la struttura; i vecchi ZIP senza questo campo restano leggibili. Le conclusioni del giudice non autenticano la verità della storia.
