@@ -69,6 +69,24 @@ test("divergenze editoriale: proposte alternative e verifica mancante desktop/mo
   }));
   await page.reload();
   const board=page.getByRole("region",{name:"Redazione multi-agente"});
+  const plan=board.getByRole("region",{name:"Piano verifiche editoriali"});
+  await expect(plan.getByText(/Piano verifiche editoriali · capitolo 1/)).toBeVisible();
+  await expect(plan.getByText(/1 da verificare/)).toBeVisible();
+  const planEntry=plan.locator("details").first();
+  await expect(planEntry.locator("summary")).toContainText(
+    "Da approfondire: prove insufficienti");
+  await planEntry.locator("summary").click();
+  await expect(planEntry.getByText(/Non sappiamo se l'effetto desiderato/))
+    .toBeVisible();
+  await expect(planEntry.getByText(/Chiedere all'autore quale ritmo narrativo/))
+    .toBeVisible();
+  await expect(planEntry.getByText(/non eseguito/)).toBeVisible();
+  await plan.getByRole("combobox",{name:"Filtra piano verifiche editoriali"})
+    .selectOption("approved");
+  await expect(plan.getByText("Nessuna voce in questa sezione del piano."))
+    .toBeVisible();
+  await plan.getByRole("combobox",{name:"Filtra piano verifiche editoriali"})
+    .selectOption("pending");
   const discussions=board.getByRole("region",{name:"Divergenze tra raccomandazioni"});
   await expect(discussions.getByText("Correzioni alternative sulla stessa citazione"))
     .toBeVisible();
@@ -85,4 +103,31 @@ test("divergenze editoriale: proposte alternative e verifica mancante desktop/mo
     full:document.documentElement.scrollWidth,viewport:window.innerWidth,
   }));
   expect(width.full).toBeLessThanOrEqual(width.viewport+1);
+  // An edited source must remain visible as historical context, NOT as a
+  // current approval or a newly generated verification instruction.
+  await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const tx=open.result.transaction("books","readwrite"),store=tx.objectStore("books");
+      const q=store.getAll();
+      q.onerror=()=>reject(q.error);
+      q.onsuccess=()=>{
+        const b=q.result[0] as {
+          id:string;chapters:Array<{scenes:Array<{text:string}>}>;
+        };
+        b.chapters[0]!.scenes[0]!.text="Mara nasconde la lettera nel cassetto.";
+        store.put(b,b.id);
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  const stale=page.getByRole("region",{name:"Piano verifiche editoriali"});
+  await expect(stale.getByText(/1 da verificare/)).toBeVisible();
+  const staleEntry=stale.locator("details").first();
+  await expect(staleEntry.locator("summary")).toContainText("Da rivalidare");
+  await staleEntry.locator("summary").click();
+  await expect(staleEntry.getByText(/non usare questo estratto per avviare una riparazione/))
+    .toBeVisible();
 });
