@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.24 — 2026-11-08 (issue #20; PR in preparazione)
+
+**Piano consultivo delle verifiche mancanti dopo il giudizio editoriale**
+
+- Nuova funzione di dominio **pura e read-only** `buildEditorialVerificationPlan(book,cycle,chapter)`: ricava dagli stessi report e `recommendationReconciliations` le voci `awaiting_judge`, `needs_evidence`, `approved_edit`, `closed_no_edit`, `requires_recheck` e `archived`. Non introduce nuove inferenze su verità, causalità o incompatibilità delle correzioni.
+- Una correzione appare approvata **solo dopo nuova esecuzione completa di `validateJudgment` sul libro corrente**, incluse tutte le prove narrative, i gate epistemici e i consensi. Fonte modificata, giudizio importato non valido o vecchio gruppo ⇒ **da rivalidare**, mai repair autorizzato. Le tornate precedenti sono **sempre storiche** anche se la citazione esiste.
+- La vista privata mostra `missingEvidence` e `nextCheck` **letteralmente come già scritti dal giudice**; in attesa di giudizio non inventa motivazioni. Niente chiamate AI, HTTP, autosync, prompt, nuove decisioni persistite o controlli automatici. Massimo **24 voci**, con contatore di omissione; rimangono visibili anche i conteggi di finding fuori campione del gate v0.11.23.
+- Pannello in **Redazione multi-agente** con filtro per questioni aperte, correzioni, chiusure, storico e tutti; lo stesso piano è disponibile negli **archivi dei capitoli congelati**, ma marcato sempre storico. Test Vitest: stati, zero mutazioni, invalidazione per edit/manomissione, overflow e archivio; Playwright desktop/mobile: filtri, prove, suggerimenti e fonte stale. [ADR 0057](../ADR/0057-local-editorial-verification-plan.md), [guida](editorial-verification-plan.md).
+
+**Limiti:** il piano non prova la fondatezza dei consigli degli agenti, non deduce che una correzione sia già stata applicata e non autorizza automaticamente nuove ricerche o edit. Non cambia DTO, backup ZIP, consensi, writer, repair o rete.
+
 ## 0.11.23 — 2026-11-08 (PR #69, issue #20)
 
 **Riconciliazione critica delle correzioni divergenti sullo stesso passaggio**
