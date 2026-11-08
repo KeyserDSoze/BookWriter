@@ -16,6 +16,7 @@ import type { NarrativeAliasDecision } from "./narrative-alias-decisions";
 import type { NarrativeKnowledgeDecision } from "./narrative-knowledge-decisions";
 import type { NarrativeKnowledgeShareDecision } from "./narrative-knowledge-sharing";
 import type { NarrativeKnowledgeTimingDecision } from "./narrative-knowledge-timing";
+import type { NarrativeKnowledgeTopicDecision } from "./narrative-knowledge-topic-decisions";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -141,6 +142,8 @@ export interface BookProject {
   narrativeKnowledgeShareDecisions?: NarrativeKnowledgeShareDecision[];
   /** Author-only manuscript-vs-story timing; no implicit AI sharing or canon edits. */
   narrativeKnowledgeTimingDecisions?: NarrativeKnowledgeTimingDecision[];
+  /** Private pairwise subject interpretation; never a transfer or AI authorization. */
+  narrativeKnowledgeTopicDecisions?: NarrativeKnowledgeTopicDecision[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
