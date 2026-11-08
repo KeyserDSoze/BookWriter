@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.25 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.25 — 2026-11-08 (PR #71, issue #20)
 
 **Presa in carico, rifiuto e azzeramento privati dei controlli proposti dal giudice**
 
