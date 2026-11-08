@@ -18,6 +18,9 @@ export type EditorialLedgerProvenance=
   "archived_structural"|"archived_unverifiable"|
   "current_validated"|"current_unvalidated"|"current_awaiting_judge";
 export type EditorialLedgerSource="archive"|"prior_round"|"current";
+/** Consultative filters over bounded observations, never editorial verdicts. */
+export type EditorialLedgerFocus=
+  "all"|"ambiguous"|"moved"|"reworded"|"unobserved"|"unverifiable";
 export type EditorialLedgerTextChange=
   "first_literal_witness"|"same_literal_position"|"moved_literal_position"|
   "source_not_comparable"|"ambiguous_literal_witness";
@@ -61,8 +64,12 @@ export interface EditorialLedgerThread {
 export interface EditorialDiffLedger {
   method:"local_editorial_diff_ledger_v1";
   chapterId:string;
+  /** Filters apply before the 12 visible threads, after the 240-witness cap. */
+  focus:EditorialLedgerFocus;
   threads:EditorialLedgerThread[];
   totalThreads:number;
+  matchingThreads:number;
+  filteredOutThreads:number;
   omittedThreads:number;
   /** Counters include all raw old unresolved reconciliations, even invalid. */
   totalHistoricalUnresolved:number;
@@ -160,13 +167,14 @@ function currentCandidates(
  * automatic link. A missing current candidate is never marked "resolved".
  * No entries from author notes are consulted or passed to any AI. */
 export function buildEditorialDiffLedger(
-  book:BookProject,chapter:Chapter,
+  book:BookProject,chapter:Chapter,focus:EditorialLedgerFocus="all",
 ):EditorialDiffLedger {
   const current=book.editorialCycle?.chapterId===chapter.id&&
     !chapter.frozenAt?book.editorialCycle:undefined;
   const empty:EditorialDiffLedger={
-    method:"local_editorial_diff_ledger_v1",chapterId:chapter.id,
-    threads:[],totalThreads:0,omittedThreads:0,
+    method:"local_editorial_diff_ledger_v1",chapterId:chapter.id,focus,
+    threads:[],totalThreads:0,matchingThreads:0,filteredOutThreads:0,
+    omittedThreads:0,
     totalHistoricalUnresolved:0,omittedCandidateObservations:0,
     currentReportCount:current?.reports.length??0,
     currentGroupsCompared:0,currentUnreviewableFindingCount:0,
@@ -245,15 +253,36 @@ export function buildEditorialDiffLedger(
       omittedObservations:Math.max(0,expanded.length-
         MAX_EDITORIAL_LEDGER_OBSERVATIONS),
       observations:expanded.slice(-MAX_EDITORIAL_LEDGER_OBSERVATIONS),
+      // Compute focus flags BEFORE trimming the 8 visible observations.
+      hasMoved:expanded.some(x=>x.textChange==="moved_literal_position"),
+      hasReworded:expanded.some(x=>x.checkChange==="different_suggestion_words"),
+      hasUnverifiable:expanded.some(x=>
+        x.provenance==="archived_unverifiable"||
+        x.provenance==="current_unvalidated"),
       latestOrder:latest.order,
     };
   }).sort((a,b)=>b.latestOrder-a.latestOrder||a.key.localeCompare(b.key));
+  // Focus cannot resurrect witnesses outside the 240-candidate window, but it
+  // can reveal older matching threads hidden by the default 12-thread display.
+  const matching=threads.filter(thread=>{
+    switch(focus){
+      case "all":return true;
+      case "ambiguous":return thread.ambiguousOccurrences;
+      case "moved":return thread.hasMoved;
+      case "reworded":return thread.hasReworded;
+      case "unobserved":return !!current&&!thread.observedInCurrentSample;
+      case "unverifiable":return thread.hasUnverifiable;
+    }
+  });
   return {
     ...empty,
-    threads:threads.slice(0,MAX_EDITORIAL_LEDGER_THREADS).map(
-      ({latestOrder:_latestOrder,...thread})=>thread),
+    threads:matching.slice(0,MAX_EDITORIAL_LEDGER_THREADS).map(
+      ({latestOrder:_latestOrder,hasMoved:_moved,hasReworded:_reworded,
+        hasUnverifiable:_unverifiable,...thread})=>thread),
     totalThreads:threads.length,
-    omittedThreads:Math.max(0,threads.length-MAX_EDITORIAL_LEDGER_THREADS),
+    matchingThreads:matching.length,
+    filteredOutThreads:threads.length-matching.length,
+    omittedThreads:Math.max(0,matching.length-MAX_EDITORIAL_LEDGER_THREADS),
     totalHistoricalUnresolved,
     omittedCandidateObservations:Math.max(0,totalCandidates-selected.length),
     currentGroupsCompared:report?.groups.length??0,

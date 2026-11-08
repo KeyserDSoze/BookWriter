@@ -116,6 +116,11 @@ test("confronta dubbi storici annotati e nuova revisione senza ereditare scelte 
     .toBeVisible();
   await expect(frozenLedger.getByText(/Solo archivio; nessuna revisione corrente/))
     .toBeVisible();
+  await frozenLedger.getByRole("combobox",{
+    name:"Filtra registro delle differenze editoriali",
+  }).selectOption("unobserved");
+  await expect(frozenLedger.getByText(/Nessuna serie corrisponde al filtro/))
+    .toBeVisible();
   // Real reopen clears frozenAt but preserves chapter.editorialRounds. The
   // fixture performs this transition directly, without making any AI call.
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
@@ -219,6 +224,17 @@ test("confronta dubbi storici annotati e nuova revisione senza ereditare scelte 
   await changedThread.locator(":scope > summary").click();
   await expect(changedThread.getByText(/Prova mancante o controllo riformulati/))
     .toBeVisible();
+  const focus=changedLedger.getByRole("combobox",{
+    name:"Filtra registro delle differenze editoriali",
+  });
+  await focus.selectOption("reworded");
+  await expect(changedLedger.getByText(/1 serie nel filtro/)).toBeVisible();
+  await expect(changedLedger.locator("details")).toHaveCount(1);
+  await focus.selectOption("ambiguous");
+  await expect(changedLedger.locator("details")).toHaveCount(0);
+  await expect(changedLedger.getByText(/Non dimostra che un problema sia stato risolto/))
+    .toBeVisible();
+  await focus.selectOption("all");
   // If the current literal witness disappears, no automatic "resolved".
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");
@@ -246,6 +262,12 @@ test("confronta dubbi storici annotati e nuova revisione senza ereditare scelte 
   await expect(absentLedger.locator("details").first()
     .locator(":scope > summary"))
     .toContainText("non risolta");
+  await absentLedger.getByRole("combobox",{
+    name:"Filtra registro delle differenze editoriali",
+  }).selectOption("unobserved");
+  await expect(absentLedger.locator("details")).toHaveCount(1);
+  await expect(absentLedger.locator("details").first()
+    .locator(":scope > summary")).toContainText("non risolta");
   const width=await page.evaluate(()=>({
     full:document.documentElement.scrollWidth,viewport:window.innerWidth,
   }));

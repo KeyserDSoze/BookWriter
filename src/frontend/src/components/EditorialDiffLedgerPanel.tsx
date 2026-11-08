@@ -1,9 +1,10 @@
-import {useMemo} from "react";
+import {useMemo,useState} from "react";
 import type {BookProject,Chapter} from "../domain/types";
 import {
   buildEditorialDiffLedger,
   type EditorialLedgerTextChange,type EditorialLedgerCheckChange,
   type EditorialLedgerProvenance,type EditorialLedgerObservation,
+  type EditorialLedgerFocus,
 } from "../domain/editorial-diff-ledger";
 
 const POSITION:Record<EditorialLedgerTextChange,string>={
@@ -37,7 +38,9 @@ function sourceLabel(obs:EditorialLedgerObservation):string{
 export function EditorialDiffLedgerPanel({book,chapter}:{
   book:BookProject;chapter:Chapter;
 }){
-  const ledger=useMemo(()=>buildEditorialDiffLedger(book,chapter),[book,chapter]);
+  const [focus,setFocus]=useState<EditorialLedgerFocus>("all");
+  const ledger=useMemo(()=>buildEditorialDiffLedger(book,chapter,focus),
+    [book,chapter,focus]);
   if(!ledger.totalHistoricalUnresolved&&!ledger.currentGroupsCompared)return null;
   return <section aria-label={"Registro differenze editoriali capitolo "+chapter.number}
     className="min-w-0 space-y-3 rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
@@ -51,9 +54,33 @@ export function EditorialDiffLedgerPanel({book,chapter}:{
     <p className="text-xs">{ledger.totalHistoricalUnresolved} verifiche
       storiche con prove insufficienti · {ledger.currentGroupsCompared}
       gruppi nella revisione corrente · {ledger.totalThreads}
-      serie di corrispondenze letterali.</p>
+      serie di corrispondenze letterali nel campione.</p>
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <label htmlFor={"editorial-ledger-focus-"+chapter.id}
+        className="font-semibold">Filtra registro delle differenze editoriali</label>
+      <select id={"editorial-ledger-focus-"+chapter.id} value={focus}
+        onChange={event=>setFocus(event.target.value as EditorialLedgerFocus)}
+        className="max-w-full rounded border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+        <option value="all">Tutte le serie</option>
+        <option value="ambiguous">Corrispondenze ambigue</option>
+        <option value="moved">Citazioni spostate</option>
+        <option value="reworded">Controlli riformulati</option>
+        <option value="unobserved">Non osservate nella revisione corrente</option>
+        <option value="unverifiable">Fonti o giudizi non convalidati</option>
+      </select>
+    </div>
+    {focus!=="all"&&<p role="status" className="text-xs">
+      {ledger.matchingThreads} serie nel filtro sulle {ledger.totalThreads}
+      del campione; {ledger.filteredOutThreads} escluse dal filtro, non
+      risolte. La selezione è consultiva, senza nuove verifiche.
+    </p>}
+    {ledger.matchingThreads===0&&<p className="muted text-xs">
+      Nessuna serie corrisponde al filtro nel campione disponibile.
+      Non dimostra che un problema sia stato risolto.
+    </p>}
     {(ledger.omittedThreads>0||ledger.omittedCandidateObservations>0||
       ledger.currentUnreviewableFindingCount>0||
+      ledger.currentOmittedGroupCount>0||ledger.currentOversizedGroupCount>0||
       ledger.threads.some(x=>x.omittedObservations>0))&&
       <p role="status" className="text-xs text-amber-700 dark:text-amber-300">
         Campionamento parziale: {ledger.omittedThreads} serie non mostrate

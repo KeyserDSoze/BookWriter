@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.29 — 2026-11-08 (main, issue #20)
+
+**Filtri consultivi del registro editoriale tra più revisioni**
+
+- Filtro locale e non esecutivo per serie ambigue, citazioni spostate, controlli riformulati, verifiche non osservate nel ciclo corrente e fonti/giudizi non convalidati. La selezione avviene prima del limite UI di 12 serie, così una citazione meno recente ma rilevante non scompare dalla ricerca; **resta** il limite di 240 occorrenze e di 8 dettagli per serie.
+- `buildEditorialDiffLedger(book,chapter,focus)` espone `matchingThreads` e `filteredOutThreads` distinguendoli dalle omissioni del campione e dall'overflow delle serie selezionate. Gli indicatori di cambio sono calcolati prima del taglio degli 8 dettagli. Nessun criterio equivale a `resolved` o certifica un problema narrativo.
+- Selezione accessibile nella redazione, messaggi per filtri senza corrispondenze e copertura incompleta. Su capitoli congelati il filtro «non osservate» non deduce assenze in revisioni inesistenti.
+- Vitest per correzioni solo suggerite, ambiguità oltre la prima pagina, spostamenti, giudizi senza prova e limiti; scenario Playwright desktop/mobile esteso a filtro archiviato, riformulazione e citazione non osservata. Documentazione aggiornata in ADR 0062 e guida. Nessuna chiamata AI, HTTP, mutazione di canone, segreti, prompt, attività, note private o sincronizzazione.
+
+**Limite:** i filtri operano sul campione finito, non sulla storia integrale del romanzo, e non valutano semanticamente la fondatezza o risoluzione di un problema.
+
+
 ## 0.11.28 — 2026-11-08 (PR #74, issue #20)
 
 **Registro cronologico dei controlli letterali di revisione per capitolo**

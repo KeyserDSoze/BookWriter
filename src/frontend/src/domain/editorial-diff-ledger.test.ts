@@ -268,6 +268,71 @@ describe("Registro locale delle differenze editoriali fra più tornate",()=>{
     expect(many.threads).toHaveLength(MAX_EDITORIAL_LEDGER_THREADS);
     expect(many.omittedThreads).toBe(2);
   });
+  it("filtra i controlli riformulati senza attribuire stati o permessi",()=>{
+    const {book,chapter,cycle}=withArchive();
+    const {a,b}=addCurrent(book,cycle);
+    decide(cycle,chapter,book,a,b,"needs_evidence");
+    cycle.judgment!.recommendationReconciliations![0]!.nextCheck=
+      "Rileggere il dialogo con un controllo redazionale diverso.";
+    const before=JSON.stringify(book);
+    const filtered=buildEditorialDiffLedger(book,chapter,"reworded");
+    expect(filtered).toMatchObject({
+      focus:"reworded",totalThreads:1,matchingThreads:1,
+      filteredOutThreads:0,omittedThreads:0,
+    });
+    expect(filtered.threads[0]!.observations[1]!.checkChange)
+      .toBe("different_suggestion_words");
+    expect(buildEditorialDiffLedger(book,chapter,"ambiguous")).toMatchObject({
+      totalThreads:1,matchingThreads:0,filteredOutThreads:1,threads:[],
+    });
+    expect(JSON.stringify(book)).toBe(before);
+  });
+  it("distingue citazione spostata, non osservata e prova inattendibile",()=>{
+    const {book,chapter,cycle}=withArchive();
+    chapter.scenes[0]!.text="Un rumore improvviso. "+text;
+    addCurrent(book,cycle);
+    expect(buildEditorialDiffLedger(book,chapter,"moved").matchingThreads)
+      .toBe(1);
+    expect(buildEditorialDiffLedger(book,chapter,"unobserved").threads)
+      .toHaveLength(0);
+    cycle.reports=[];
+    expect(buildEditorialDiffLedger(book,chapter,"unobserved")).toMatchObject({
+      matchingThreads:1,totalThreads:1,
+    });
+    chapter.frozenAt="2026-11-08T20:00:00.000Z";
+    expect(buildEditorialDiffLedger(book,chapter,"unobserved").threads)
+      .toHaveLength(0);
+    chapter.editorialRounds![0]!.reports[0]!.findings[0]!
+      .evidenceAnchor=undefined;
+    const unverified=buildEditorialDiffLedger(book,chapter,"unverifiable");
+    expect(unverified.matchingThreads).toBe(1);
+    expect(unverified.threads[0]!.observations[0]!.nextCheck)
+      .toBeUndefined();
+  });
+  it("filtra prima delle 12 serie mostrate, mai prima del cap di 240",()=>{
+    const {book,chapter}=withArchive();
+    const first=structuredClone(chapter.editorialRounds![0]!);
+    chapter.editorialRounds=Array.from({length:MAX_EDITORIAL_LEDGER_THREADS+2},
+      (_,i)=>{
+        const round=structuredClone(first);
+        for(const report of round.reports)
+          for(const finding of report.findings)finding.category="tema-"+i;
+        if(i===0)round.judgment.recommendationReconciliations!.push({
+          ...structuredClone(round.judgment.recommendationReconciliations![0]!),
+          rationale:"Secondo rilievo sull'identica frase nella prima tornata.",
+        });
+        return round;
+      });
+    const all=buildEditorialDiffLedger(book,chapter);
+    expect(all.totalThreads).toBe(14);
+    expect(all.threads.some(x=>x.category==="tema-0")).toBe(false);
+    const ambiguous=buildEditorialDiffLedger(book,chapter,"ambiguous");
+    expect(ambiguous).toMatchObject({
+      totalThreads:14,matchingThreads:1,filteredOutThreads:13,
+      omittedThreads:0,omittedCandidateObservations:0,
+    });
+    expect(ambiguous.threads.map(x=>x.category)).toEqual(["tema-0"]);
+  });
   it("altro capitolo non può ricevere evidenze da questo libro",()=>{
     const {book,chapter}=withArchive();
     const fake={...chapter,id:"c2"};
