@@ -65,8 +65,8 @@ export function createNarrativeKnowledgeTopicDecision(
   if(normalizedName(first.source.candidate.actor)===
      normalizedName(second.source.candidate.actor))
     throw new Error("Seleziona personaggi diversi; non dedurre alias o identità.");
-  const [firstKnowledgeDecisionId,secondKnowledgeDecisionId]=
-    [firstId,secondId].sort();
+  const firstKnowledgeDecisionId=firstId<secondId?firstId:secondId;
+  const secondKnowledgeDecisionId=firstId<secondId?secondId:firstId;
   return {id,firstKnowledgeDecisionId,secondKnowledgeDecisionId,
     verdict,rationale:note,decidedAt};
 }
