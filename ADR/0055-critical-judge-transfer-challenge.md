@@ -1,6 +1,6 @@
 # ADR 0055 — Contraddittorio strutturato del giudice sulle piste consentite
 
-- **Stato:** accettato per v0.11.22 (PR da integrare)
+- **Stato:** accettato per v0.11.22 (PR #68)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0046, 0048, 0052–0054
