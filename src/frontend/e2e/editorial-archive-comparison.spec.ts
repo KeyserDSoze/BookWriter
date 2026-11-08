@@ -109,6 +109,13 @@ test("confronta dubbi storici annotati e nuova revisione senza ereditare scelte 
   page.once("dialog",dialog=>dialog.accept());
   await author.getByRole("button",{name:"Prendi in carico"}).click();
   await expect(author.locator(":scope > summary")).toContainText("presa in carico");
+  const frozenLedger=board.getByRole("region",{
+    name:"Registro differenze editoriali capitolo 1",
+  });
+  await expect(frozenLedger.getByText(/Registro delle differenze editoriali/))
+    .toBeVisible();
+  await expect(frozenLedger.getByText(/Solo archivio; nessuna revisione corrente/))
+    .toBeVisible();
   // Real reopen clears frozenAt but preserves chapter.editorialRounds. The
   // fixture performs this transition directly, without making any AI call.
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
@@ -143,6 +150,21 @@ test("confronta dubbi storici annotati e nuova revisione senza ereditare scelte 
   }));
   await page.reload();
   const newBoard=page.getByRole("region",{name:"Redazione multi-agente"});
+  const ledger=newBoard.getByRole("region",{
+    name:"Registro differenze editoriali capitolo 1",
+  });
+  await expect(ledger.getByText(/1 verifiche storiche con prove insufficienti/))
+    .toBeVisible();
+  const thread=ledger.locator("details").first();
+  await expect(thread.locator(":scope > summary")).toContainText(
+    "2 occorrenze");
+  await thread.locator(":scope > summary").click();
+  await expect(thread.getByText(/Citazione e posizione letterale coincidono/))
+    .toBeVisible();
+  await expect(thread.getByText(/Prova mancante e controllo con le stesse parole/))
+    .toBeVisible();
+  // L'autore annotato nello storico NON è stato copiato nella timeline corrente.
+  await expect(ledger.getByText("NOTA_STORICA_PRIVATA")).toHaveCount(0);
   const comparison=newBoard.getByRole("region",{name:"Confronto verifiche con archivio"});
   await expect(comparison.getByText("Confronto verifiche storiche e nuova revisione"))
     .toBeVisible();
@@ -190,6 +212,13 @@ test("confronta dubbi storici annotati e nuova revisione senza ereditare scelte 
   await editedMatch.locator(":scope > summary").click();
   await expect(editedMatch.getByText(/formulati diversamente/)).toBeVisible();
   await expect(editedMatch.getByText(/NOTA_STORICA_PRIVATA/)).toBeVisible();
+  const changedLedger=page.getByRole("region",{
+    name:"Registro differenze editoriali capitolo 1",
+  });
+  const changedThread=changedLedger.locator("details").first();
+  await changedThread.locator(":scope > summary").click();
+  await expect(changedThread.getByText(/Prova mancante o controllo riformulati/))
+    .toBeVisible();
   // If the current literal witness disappears, no automatic "resolved".
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");
@@ -211,6 +240,12 @@ test("confronta dubbi storici annotati e nuova revisione senza ereditare scelte 
   const absent=page.getByRole("region",{name:"Confronto verifiche con archivio"});
   await expect(absent.locator("details").first().locator(":scope > summary"))
     .toContainText("non significa risolto");
+  const absentLedger=page.getByRole("region",{
+    name:"Registro differenze editoriali capitolo 1",
+  });
+  await expect(absentLedger.locator("details").first()
+    .locator(":scope > summary"))
+    .toContainText("non risolta");
   const width=await page.evaluate(()=>({
     full:document.documentElement.scrollWidth,viewport:window.innerWidth,
   }));
