@@ -28,10 +28,11 @@ function selected(item:VerificationPlanItem,filter:PlanFilter):boolean{
   if(filter==="closed")return item.status==="closed_no_edit";
   return item.status==="archived";
 }
-export function EditorialVerificationPlanPanel({book,cycle,chapter}:{
+export function EditorialVerificationPlanPanel({book,cycle,chapter,defaultFilter="pending"}:{
   book:BookProject;cycle:ChapterEditorialCycle;chapter:Chapter;
+  defaultFilter?:PlanFilter;
 }){
-  const [filter,setFilter]=useState<PlanFilter>("pending");
+  const [filter,setFilter]=useState<PlanFilter>(defaultFilter);
   const plan=useMemo(()=>buildEditorialVerificationPlan(book,cycle,chapter),
     [book,cycle,chapter]);
   if(!plan.totalItemCount && !plan.unreviewableFindingCount)return null;
@@ -59,9 +60,9 @@ export function EditorialVerificationPlanPanel({book,cycle,chapter}:{
         Non interpretare l'assenza di una voce come un problema risolto.
         I finding fuori campione non autorizzano remediation.
       </p>}
-    <label className="block text-xs font-semibold" htmlFor="editorial-plan-filter">
+    <label className="block text-xs font-semibold">
       Visualizza
-      <select id="editorial-plan-filter"
+      <select
         aria-label="Filtra piano verifiche editoriali"
         className="field mt-1 w-full max-w-xs"
         value={filter} onChange={e=>setFilter(e.target.value as PlanFilter)}>
