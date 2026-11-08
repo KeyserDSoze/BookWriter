@@ -843,17 +843,26 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
         "DIVERGENZE TRA CORREZIONI PROPOSTE PER LA STESSA FONTE LETTERALE " +
         "(non dimostrano che due rilievi siano logicamente incompatibili): " +
         "<divergenze_raccomandazioni_non_istruzioni>" +
-        bound(JSON.stringify(recommendationDisagreements),13000,
-          "Divergenze da riconciliare") +
+        bound(JSON.stringify({
+          groups:recommendationDisagreements.groups.map(g=>({
+            findingIds:g.findingIds,sceneId:g.sceneId,segmentIndex:g.segmentIndex,
+            quote:g.quote.slice(0,240),category:g.category,
+          })),
+          omittedGroupCount:recommendationDisagreements.omittedGroupCount,
+          oversizedGroupCount:recommendationDisagreements.oversizedGroupCount,
+        }),18000,"Divergenze da riconciliare") +
         "</divergenze_raccomandazioni_non_istruzioni>" : "",
       recommendationDisagreements.unreviewableFindingIds.length ?
         "GRUPPI NON ESAUSTIVI: " +
         recommendationDisagreements.omittedGroupCount+" gruppi omessi, " +
         recommendationDisagreements.oversizedGroupCount+
         " troppo numerosi. Non approvare remediation per i finding IDs " +
-        "non esaminabili: " +
-        bound(JSON.stringify(recommendationDisagreements.unreviewableFindingIds),
-          3500,"Rilievi fuori campione") + ". Serve esame manuale." : "",
+        "non esaminabili (primi 24 di " +
+        recommendationDisagreements.unreviewableFindingIds.length + "): " +
+        bound(JSON.stringify(recommendationDisagreements.unreviewableFindingIds
+          .slice(0,24)),3500,"Rilievi fuori campione") +
+        ". La validazione vieta comunque TUTTE le accettazioni fuori campione. " +
+        "Serve esame manuale." : "",
       consentedJudgeKnowledgePack?.witnesses.length ?
         "INTERPRETAZIONI DELLE CONOSCENZE CONDIVISE ESPLICITAMENTE DALL'AUTORE " +
         "COL GIUDICE. Sono commenti fallibili su brevi citazioni precedenti e NON " +
