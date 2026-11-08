@@ -2,7 +2,7 @@ import {describe,expect,it} from "vitest";
 import {newBook} from "./types";
 import {
   chapterSegments,createEditorialCycle,validateReport,validateJudgment,
-  reviewerPrompt,adjudicationPrompt,EDITORIAL_ROLES,
+  reviewerPrompt,EDITORIAL_ROLES,
   type EditorialRole,type ChapterEditorialCycle,
 } from "./editorial-board";
 import {
@@ -153,21 +153,32 @@ describe("Controlli storici congelati: annotazione autore NON esecutiva",()=>{
   });
   it("non annota passaggi approvati, falsi o con fonti non verificabili",()=>{
     const {book,chapter,item}=frozen();
-    const first=chapter.editorialRounds![0]!;
-    const review=first.judgment.recommendationReconciliations![0]!;
+    const saved=structuredClone(chapter.editorialRounds![0]!);
     for(const change of [
-      ()=>{review.evidenceAssessment="adequate_for_selected_edits";},
-      ()=>{review.resolution="choose_one";},
-      ()=>{review.findingIds=["fake","made-up"];},
-      ()=>{first.reports[0]!.findings[0]!.evidenceAnchor=undefined;},
+      (round:typeof saved)=>{
+        round.judgment.recommendationReconciliations![0]!
+          .evidenceAssessment="adequate_for_selected_edits";
+      },
+      (round:typeof saved)=>{
+        round.judgment.recommendationReconciliations![0]!
+          .resolution="choose_one";
+      },
+      (round:typeof saved)=>{
+        round.judgment.recommendationReconciliations![0]!
+          .findingIds=["fake","made-up"];
+      },
+      (round:typeof saved)=>{
+        round.reports[0]!.findings[0]!.evidenceAnchor=undefined;
+      },
     ]){
-      const original=structuredClone(first);
-      change();
+      const changed=structuredClone(saved);
+      change(changed);
+      chapter.editorialRounds![0]=changed;
       expect(buildFrozenEditorialVerificationPlan(book,chapter).items[0]!
         .historicalCheckEligible).toBe(false);
       expect(()=>add(book,item.key,"taken_on")).toThrow(/non coerente/);
-      chapter.editorialRounds![0]=original;
     }
+    chapter.editorialRounds![0]=saved;
   });
   it("solo le prime 24 voci del frozen archive; dati omessi mai autorizzati",()=>{
     const {book,chapter,item}=frozen();
