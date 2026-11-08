@@ -20,6 +20,10 @@ Ogni giudizio è ancorato all'ID del collegamento `same_information`, ai due ID 
 
 Il vecchio scanner legge soltanto capitoli **congelati precedenti nel manoscritto**, massimo 240 scene e 4 citazioni per direzione. Le date dei capitoli e il loro ordine non provano la cronologia della storia; l'assenza di risultati non prova che la notizia non sia stata comunicata.
 
+## Condivisione esplicita e revocabile (v0.11.21)
+
+Un giudizio corrente può, **solo su nuovo consenso**, essere condiviso con alcuni specialisti e/o il giudice critico per le future revisioni. Il nuovo consenso è separato da quello delle conoscenze e non divulga la motivazione della pista. Nessun permesso arriva ai cinque lettori ciechi o ai modelli di scrittura. La revoca riguarda solo futuri invii. [Guida consensi piste](transfer-consent-ai.md), ADR 0054.
+
 ## Privacy e backup
 
 Il giudizio e la motivazione si salvano **localmente**, non sono inviati ai modelli AI e **non** autorizzano automaticamente revisori o giudice a modificare la prosa. Il salvataggio richiede Web Locks, controllo delle modifiche concorrenti e autopilot fermo; disabilita autosync GitHub e svuota l'outbox. L'attività registrata non contiene nomi, prosa o note private.
