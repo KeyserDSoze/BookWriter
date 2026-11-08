@@ -16,6 +16,10 @@ Con autopilot fermo e nessun ciclo editoriale attivo, inserisci una motivazione 
 - Le vecchie decisioni sono legate alla **specifica congelazione**, non solo al numero della tornata: dopo riapertura e nuovo freeze o modifica del suggerimento, l'annotazione precedente **non** torna attiva per errore.
 - Il piano mostra massimo 24 voci e indica eventuali omissioni: l'assenza di un controllo visualizzato non dimostra che il capitolo sia privo di problemi.
 
+## Confronto dopo riapertura (v0.11.27)
+
+Se riapri un capitolo e ricominci la redazione, nella nuova tornata trovi [Confronto verifiche storiche e nuova revisione](editorial-archive-revision-comparison.md): il sistema osserva solo corrispondenze testuali fra i dubbi di ieri e quelli di oggi, senza dedurre che siano lo stesso problema, né riattivare la tua annotazione. Le note storiche compatibili restano etichettate come tali e non entrano nei nuovi agenti.
+
 ## Privacy e backup
 
 Si riusa il registro privato `editorialVerificationChoices` (massimo 160 voci). Il salvataggio usa Web Locks e verifica che il libro non sia cambiato, disattiva l'autosync GitHub, cancella la coda e registra soltanto un'attività generica senza contenuti del romanzo o scelte. Non invia note ai dodici agenti revisori, al giudice, al writer o alla riparazione.

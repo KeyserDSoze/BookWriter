@@ -231,3 +231,8 @@ Soltanto sui gruppi `needs_evidence` correnti, con autopilot fermo e redazione `
 ## Annotazioni sui capitoli congelati (v0.11.26, ADR 0059)
 
 Il piano in **Giudizi archiviati** offre ora note private solo per `unresolved + reject_all` con fonte del report archiviato strutturalmente coerente. Le annotazioni `taken_on|dismissed|reset` **non** trasformano lo storico in remediation e non riaprono il capitolo. Le chiavi legano l'identità alla specifica `frozenAt`, indice della tornata e singolo controllo per evitare riuso dopo refreeze. Restano il registro ZIP strict max160, reset all'import, CAS/locks/outbox e privacy v0.11.25; nessun nuovo invio AI. [Guida](frozen-editorial-verification-annotations.md).
+
+
+## Confronto fra vecchia e nuova redazione (v0.11.27, ADR 0060)
+
+Quando un capitolo riaperto conserva `editorialRounds` con rilievi `unresolved`, il pannello **Confronto verifiche storiche e nuova revisione** allinea **solo** citazioni letterali per scena, categoria e quote NFC, distinguendo stesso offset, citazione spostata, ambiguità o nessuna corrispondenza *nel campione*. Valuta separatamente le parole di `missingEvidence/nextCheck` prima e dopo il giudice corrente rivalidato. Le vecchie note dell'autore restano private e storiche (snapshot compatibile, mai consenso nuovo), con avvisi sull'identità incompleta del vecchio freeze. Max24 controlli storici e campionamento corrente limitato; nessun nuovo prompt, AI, rete, canone, fonte semantica o autorizzazione di repair. [Guida](editorial-archive-revision-comparison.md).

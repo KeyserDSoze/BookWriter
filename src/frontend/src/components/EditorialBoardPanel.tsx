@@ -3,6 +3,7 @@ import { BookCheck, RotateCcw, ShieldAlert, Users } from "lucide-react";
 import type { BookProject, Chapter } from "../domain/types";
 import { NarrativeEventDecisionsPanel } from "./NarrativeEventDecisionsPanel";
 import { EditorialVerificationPlanPanel } from "./EditorialVerificationPlanPanel";
+import { EditorialArchiveComparisonPanel } from "./EditorialArchiveComparisonPanel";
 import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs,
   buildEditorialRecommendationDisagreements, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
@@ -429,6 +430,7 @@ export function EditorialBoardPanel({
       </div>}
       <EditorialVerificationPlanPanel book={book} cycle={cycle}
         chapter={chapter} onRefresh={onRefresh}/>
+      <EditorialArchiveComparisonPanel book={book} cycle={cycle} chapter={chapter}/>
       <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
         chapter={chapter} sources={chapter.historicalDossier?.sources}
         manualSources={allManualEvidence(chapter.historicalDossier)}

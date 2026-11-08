@@ -177,7 +177,7 @@ function frozenArchiveKey(chapter:Chapter,round:EditorialRound,
 /** Check only that the frozen, recorded witness and judge recommendation
  * structurally agree. This does NOT authenticate an archive, check prose
  * freshness, approve remediation or establish that the criticism is true. */
-function archivedSuggestionIsCoherent(
+export function archivedSuggestionIsCoherent(
   round:EditorialRound,
   review:NonNullable<EditorialJudgment["recommendationReconciliations"]>[number],
 ):boolean {
