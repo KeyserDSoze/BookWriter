@@ -1,6 +1,6 @@
 # ADR 0057 — Piano locale e consultivo delle verifiche editoriali
 
-- **Stato:** accettato per v0.11.24 (PR in preparazione)
+- **Stato:** accettato per v0.11.24 (PR #70)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0046, 0055–0056
