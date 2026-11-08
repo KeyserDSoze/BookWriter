@@ -5,7 +5,7 @@ import {
   reviewerPrompt,adjudicationPrompt,EDITORIAL_ROLES,
   type EditorialRole,type ChapterEditorialCycle,
 } from "./editorial-board";
-import {buildFrozenEditorialVerificationPlan}
+import {buildFrozenEditorialVerificationPlan,buildEditorialVerificationPlan}
   from "./editorial-verification-plan";
 import {createArchivedEditorialVerificationChoice,
   currentEditorialVerificationChoice} from "./editorial-verification-choices";
@@ -108,11 +108,9 @@ describe("Confronto locale tra controlli storici e nuova redazione",()=>{
       current:{round:1,status:"needs_evidence",nextCheck:check},
     });
     expect(plan.items[0]!.key).not.toBe(choice.planKey);
-    expect(currentEditorialVerificationChoice(book,"c1",{
-      ...plan.items[0]!.current!,key:"current:1:"+JSON.stringify([
-        "1:narrative:0:0","1:style:0:0",
-      ]),findingIds:[],segmentIndex:0,category:"ritmo",acceptedFindingIds:[],
-    })).toBeNull();
+    const activeItem=buildEditorialVerificationPlan(book,current,chapter).items[0]!;
+    expect(activeItem.status).toBe("needs_evidence");
+    expect(currentEditorialVerificationChoice(book,"c1",activeItem)).toBeNull();
     expect(JSON.stringify(book)).toBe(snapshot);
     const segment=chapterSegments(chapter)[0]!;
     for(const role of EDITORIAL_ROLES)
