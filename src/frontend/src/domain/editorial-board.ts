@@ -844,7 +844,7 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
   const knowledgeSegments=chapter ?currentJudgeKnowledgeSegments(cycle,chapter):[];
   const shared=book&&chapter&&knowledgeSegments.length
     ?buildSharedTransferPack(book,chapter,"judge",
-        knowledgeSegments.join("\\n").slice(0,10000))
+        knowledgeSegments.join("\n").slice(0,10000))
     :undefined;
   const witnesses=shared?.witnesses??[];
   const critique=parsed.authorTransferCritique;
