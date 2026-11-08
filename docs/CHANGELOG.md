@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.19 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.19 — 2026-11-08 (PR #65, issue #20)
 
 **Anteprima locale dei possibili passaggi di notizie fra due knowledge confermate**
 
