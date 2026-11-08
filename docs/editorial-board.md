@@ -214,3 +214,10 @@ I modelli possono sbagliare e un giudice può respingere una critica valida; il 
 Se revisori **differenti** suggeriscono modifiche testuali diverse a partire dalla **stessa prova letterale corrente, scena, segmento, offset e categoria**, il giudice confronta il gruppo prima di decidere. Un report `pass` non viene considerato come un parere negativo su un'altra specialità, e due rimedi diversi non sono prova di incompatibilità semantica. La redazione espone un massimo di sei gruppi da dodici finding; quelli non esaminati non possono autorizzare correzioni.
 
 Per ogni gruppo il giudice deve indicare `choose_one`, `reject_all` o `compatible_changes`, motivazione, `missingEvidence` e un `nextCheck` **solo consultivo**. La dichiarazione `unresolved` vieta correzioni del gruppo. `validateJudgment` e `repairPrompt` rivalidano i riferimenti prima delle chiamate AI esistenti, anche in caso di rilievi su stile e voce. Nessun nuovo invio ai lettori ciechi, nuova AI call, decisione canonica o cambiamento a segreti/timeline. [Guida](editorial-recommendation-disagreements.md).
+
+
+## Piano locale delle verifiche mancanti (v0.11.24, ADR 0057)
+
+Dentro la redazione del capitolo corrente si trova un **Piano verifiche editoriali** che aggrega soltanto gli esiti di `recommendationReconciliations` già prodotti dal giudice sulle proposte di modifica alternative. Distingue attesa, prova insufficiente, correzione approvata, mancata modifica, necessità di rivalidazione e storico. I testi `missingEvidence` e `nextCheck` sono presentati **solo come suggerimenti**, non nuovi task o chiamate AI.
+
+Un intervento è marcato approvato solo se l'intero giudizio passa di nuovo `validateJudgment` sulle fonti e consensi correnti; un vecchio giudizio o una citazione modificata è soltanto storico/da rivalidare. Anche nei **Giudizi archiviati** di un capitolo congelato il piano è consultabile, ma non certifica nessuna autorizzazione corrente. Massimo 24 voci visualizzate e conteggi di omissione/overflow; nessun nuovo campo su libro, ZIP, rete, segreti o canone. [Guida](editorial-verification-plan.md).
