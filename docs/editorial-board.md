@@ -226,3 +226,8 @@ Un intervento è marcato approvato solo se l'intero giudizio passa di nuovo `val
 ## Scelte dell'autore sui controlli (v0.11.25, ADR 0058)
 
 Soltanto sui gruppi `needs_evidence` correnti, con autopilot fermo e redazione `blocked`, l'autore può annotare `taken_on|dismissed|reset` nel registro separato `editorialVerificationChoices?` append-only (max160), con motivo privato e fonte esatta. Non cambia giudizio, proof gate, repair, freeze o canone; nessuna nuova chiamata AI. Il log non registra quote, stati o ragioni, autosync viene fermata, ZIP importati azzerano le scelte attive. [Guida](author-editorial-verification-choices.md).
+
+
+## Annotazioni sui capitoli congelati (v0.11.26, ADR 0059)
+
+Il piano in **Giudizi archiviati** offre ora note private solo per `unresolved + reject_all` con fonte del report archiviato strutturalmente coerente. Le annotazioni `taken_on|dismissed|reset` **non** trasformano lo storico in remediation e non riaprono il capitolo. Le chiavi legano l'identità alla specifica `frozenAt`, indice della tornata e singolo controllo per evitare riuso dopo refreeze. Restano il registro ZIP strict max160, reset all'import, CAS/locks/outbox e privacy v0.11.25; nessun nuovo invio AI. [Guida](frozen-editorial-verification-annotations.md).
