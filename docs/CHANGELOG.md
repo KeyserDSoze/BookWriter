@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.26 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.26 — 2026-11-08 (PR #72, issue #20)
 
 **Annotazioni private su controlli irrisolti dei capitoli già congelati**
 
