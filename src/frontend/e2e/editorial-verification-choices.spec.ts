@@ -74,7 +74,7 @@ test("scelta autore sul controllo: grant privato, rifiuto, reset e fonte stale d
   const item=plan.locator("details").first();
   await expect(item.locator("> summary")).toContainText("Da approfondire");
   await item.locator("> summary").click();
-  const choice=item.getByRole("group",{name:"Scelta autore sul controllo editoriale"});
+  const choice=item.locator('details[aria-label="Scelta autore sul controllo editoriale"]');
   await expect(choice).toHaveCount(1);
   await choice.locator("> summary").click();
   const note=choice.getByRole("textbox",{name:"Motivazione scelta controllo editoriale"});
@@ -124,7 +124,7 @@ test("scelta autore sul controllo: grant privato, rifiuto, reset e fonte stale d
   const resumed=page.getByRole("region",{name:"Piano verifiche editoriali"})
     .locator("details").first();
   await resumed.locator("> summary").click();
-  const again=resumed.getByRole("group",{name:"Scelta autore sul controllo editoriale"});
+  const again=resumed.locator('details[aria-label="Scelta autore sul controllo editoriale"]');
   await expect(again.locator("> summary")).toContainText("nessuna scelta attiva");
   await again.locator("> summary").click();
   await again.getByRole("textbox",{name:"Motivazione scelta controllo editoriale"})
@@ -157,7 +157,7 @@ test("scelta autore sul controllo: grant privato, rifiuto, reset e fonte stale d
   const stale=page.getByRole("region",{name:"Piano verifiche editoriali"})
     .locator("details").first();
   await stale.locator("> summary").click();
-  const staleChoice=stale.getByRole("group",{name:"Scelta autore sul controllo editoriale"});
+  const staleChoice=stale.locator('details[aria-label="Scelta autore sul controllo editoriale"]');
   await expect(staleChoice.locator("> summary")).toContainText("nessuna scelta attiva");
   const width=await page.evaluate(()=>({
     full:document.documentElement.scrollWidth,viewport:window.innerWidth,
