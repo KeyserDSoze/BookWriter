@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.25 — 2026-11-08 (issue #20; PR in preparazione)
+
+**Presa in carico, rifiuto e azzeramento privati dei controlli proposti dal giudice**
+
+- Nuovo registro `BookProject.editorialVerificationChoices?` **append-only max160** su `chapterId+planKey` esatti e snapshot di `round,quote,missingEvidence,nextCheck,judgeExplanation`: `status=taken_on|dismissed|reset`, motivo privato 20–500, timestamp e last-wins. Consentito solo su voci **`needs_evidence` del piano v0.11.24 corrente** e rivalidato. Nessuna decisione su approved, closed, awaiting, stale, archived, overflow o gruppi omessi; il cambio di una prova/suggerimento **invalida** la scelta precedente.
+- UI dentro la singola voce irrisolta: **Prendi in carico / Respingi suggerimento / Azzera scelta**, campo motivo, conferma esplicita, stato attivo e storico. Autopilot non running e ciclo editoriale **blocked** obbligatori. Nessuna scelta approva nuove correzioni o modifica il giudizio: il controllo continua a risultare `needs_evidence`; nessuna ricerca, nuova AI call o decisione canonica.
+- Application con Web Locks writer/outbox, CAS `updatedAt`, transazione `books+activities+outbox`, autosync OFF, outbox svuotata. Activity e prompt senza nome, citazione, stato, quote, ragione, segreti o note private. ZIP content/full schema **strict**, legacy compatibile e import fail-closed: append `reset` per ogni scelta attiva importata, oppure **scarta tutto il registro importato** se cap160 pieno. Backup cifrato supportato, push/ZIP manuali rimangono a rischio spoiler.
+- Test Vitest su domain/last-wins/stale e assenza leak prompt, application lock/CAS/outbox, ZIP legacy/ostili/cifrati/import reset e Playwright desktop/mobile su tre scelte, reload, modifica del suggerimento, layout. ADR 0058, AGENTS, guida e README.
+
+**Limiti:** è un'annotazione privata di un suggerimento AI, non un piano esecutivo né un voto sul canone o un'autorizzazione di repair. L'autore deve usare separatamente il flusso di riapertura dei capitoli.
+
 ## 0.11.24 — 2026-11-08 (PR #70, issue #20)
 
 **Piano consultivo delle verifiche mancanti dopo il giudizio editoriale**
