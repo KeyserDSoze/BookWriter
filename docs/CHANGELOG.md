@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.21 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.21 — 2026-11-08 (PR #67, issue #20)
 
 **Consensi AI espliciti per singoli giudizi autore su possibili comunicazioni**
 
