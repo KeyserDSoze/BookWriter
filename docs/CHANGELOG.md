@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.27 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.27 — 2026-11-08 (PR #73, issue #20)
 
 **Confronto letterale e non esecutivo fra suggerimenti archiviati e nuova revisione**
 
