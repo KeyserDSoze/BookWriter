@@ -26,3 +26,11 @@ Il validatore v0.10.9 richiede ancora al revisore una citazione letterale **del 
 La selezione avviene **sul dispositivo**, senza inviare nuove richieste pubbliche o AI. Gli estratti sono comunque inclusi nei prompt degli agenti già configurati e possono consumare token aggiuntivi.
 
 Riferimenti: [ADR 0035](../ADR/0035-targeted-local-continuity-retrieval.md), [catena di rivalidazione](cross-chapter-continuity.md), [issue #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+
+## v0.11.30 — nomi espliciti nella prosa senza metadati
+
+Durante una rivalidazione di capitoli successivi il recupero confronta ora anche i **nomi di personaggi, luoghi, oggetti o fazioni già dichiarati nei metadati della scena corrente** con le menzioni *letterali a parola intera* nelle scene precedenti congelate, anche quando quelle scene non riportano alcun tag. Ad esempio, se la scena corrente indica `Ivo` fra i personaggi, una scena precedente con «Ivo nasconde il plico» può essere scelta anche senza `characters: ["Ivo"]`. La sottostringa di «vivo» non vale come menzione di «Ivo»; nomi composti devono corrispondere integralmente.
+
+Il nuovo segnale `matchSignals.literalEntities` è distinto da `matchSignals.entities` (entità dichiarate in entrambi i metadati) e contribuisce con un peso inferiore al ranking. Per ogni interrogazione vengono cercati massimo **16 nomi** espliciti (lunghezza 3–80) e riportati fino a **8 segnali** per scena; l'algoritmo esamina solo inizio, centro e fine entro il limite di 16.000 caratteri della prosa, senza inventare match fra porzioni disgiunte. Le finestre di prova continuano a essere frammenti letterali con offset originali.
+
+**Non è riconoscimento di sinonimi, pseudonimi o identità semantiche.** Il registro degli alias motivati dall'autore non è usato per espandere automaticamente la query, né viene trasmesso agli agenti con questa funzione. Un nome citato può riferirsi a omonimia, falso indizio, dialogo, flashback o errore; il giudice rimane critico. Nessuna correzione o modifica del canone è prodotta dal ranking. Restano invariati gli ancoraggi origine/ultimo predecessore, massimo 4 scene complessive, 2 per capitolo, 1.600 candidati e isolamento dei 5 lettori ciechi; non si aggiungono chiamate di rete o nuovi costi AI. [ADR 0063](../ADR/0063-literal-untagged-prior-entity-retrieval.md), issue #20.

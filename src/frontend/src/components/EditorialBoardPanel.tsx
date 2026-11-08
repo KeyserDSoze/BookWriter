@@ -470,8 +470,10 @@ export function EditorialBoardPanel({
           {ch.continuityRecheck.originChapterNumber}. Verificare segreti, timeline,
           personaggi e causa-effetto con i dodici agenti prima del nuovo congelamento.
           I capitoli precedenti vanno approvati in ordine.
-          Il confronto recupera scene pertinenti anche nei capitoli intermedi, con
-          campioni testuali limitati: la pertinenza non prova una contraddizione.
+          Il confronto recupera scene pertinenti anche nei capitoli intermedi:
+          cerca anche nomi dichiarati nella scena corrente che compaiono
+          letteralmente nella prosa precedente senza tag. Campioni limitati:
+          la pertinenza non prova una contraddizione né un'identità narrativa.
         </p>}
         {ch.frozenAt && ch.lastContinuityReview && <p className="mt-2 text-xs muted"
           aria-label={"Storico rivalidazione capitolo " + ch.number}>

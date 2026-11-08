@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.30 — 2026-11-08 (main, issue #20)
+
+**Rivalidazione cross-chapter: recupero di nomi espliciti nella prosa precedente non etichettata**
+
+- Il ranking locale `retrievePriorContinuityScenes` controlla se personaggi, oggetti, luoghi e fazioni **dichiarati nella scena corrente** compaiono letteralmente, a **parola intera**, nel testo delle scene precedenti congelate anche senza metadati di entità nella scena storica. Il nuovo `matchSignals.literalEntities` non si confonde con `entities` e ha peso inferiore a un match strutturato. Nessuna inferenza di alias, identità, possesso o contraddizione.
+- Limiti: max16 nomi espliciti (3–80 caratteri) e max8 match per scena; verifica distinta delle porzioni inizio/centro/fine max16.000 caratteri, non unione fittizia di pezzi. Finestre estratte dalla prosa originale, cap precedenti (1.600 scene analizzate, 4 scelte e 2/capitolo) invariati. I nomi non vengono recuperati dal canone segreto o dal registro alias.
+- Prompt dei soli specialisti autorizzati e del direttore precisano che il match letterale non è una prova; cinque lettori ciechi esclusi. UI di rivalidazione con avviso esplicito; nessuna modifica di schemi persistiti, import, ZIP, sync, canone, freeze o chiamate AI/HTTP aggiuntive.
+- Test Vitest su scena non etichettata, nomi composti, falsi match di sottostringa, campioni di lunghezza superiore al cap e privacy dei prompt; Playwright desktop/mobile su avviso, nessuna rete e layout. ADR 0063, guida, README, AGENTS.
+
+**Limite:** il recupero è lessicale e parziale. Un nome citato non dimostra chi abbia agito o cosa sapesse un personaggio, né certifica che un problema sia stato risolto.
+
+
 ## 0.11.29 — 2026-11-08 (main, issue #20)
 
 **Filtri consultivi del registro editoriale tra più revisioni**

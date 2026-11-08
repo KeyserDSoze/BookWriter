@@ -52,6 +52,10 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
     .toContainText("modifica a monte nel capitolo 1");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("scene pertinenti anche nei capitoli intermedi");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("letteralmente nella prosa precedente senza tag");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("non prova una contraddizione né un'identità narrativa");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("modifica a monte nel capitolo 1");
   await expect(board.getByText(/Capitolo riaperto. Premi Riprendi/)).toBeVisible();

@@ -6,6 +6,8 @@ const MAX_CANDIDATES = 1600;
 const MAX_SELECTED = 4;
 const MAX_PER_CHAPTER = 2;
 const MAX_TERMS = 48;
+const MAX_LITERAL_NAME_QUERIES = 16;
+const MAX_LITERAL_NAME_MATCHES = 8;
 const MAX_SCAN_CHARS = 16_000;
 const WINDOW_CHARS = 1250;
 const STOP_WORDS = new Set([
@@ -22,6 +24,9 @@ const STOP_WORDS = new Set([
 export interface RetrievalMatch {
   /** Transparent lexical/structured signals, not evidence of a contradiction. */
   entities: string[];
+  /** Whole-name mentions in PRIOR prose even when that scene has no entity tags.
+   * Never an alias, identity claim or attested narrative fact. */
+  literalEntities?: string[];
   terms: string[];
   sameDate: boolean;
   score: number;
@@ -47,11 +52,30 @@ function words(s:string):string[] {
 
 /** One bounded, reproducible sample from beginning/middle/end for ranking.
  * The eventual displayed windows are always cut from the *original* full text. */
-function scanText(s:string):string {
-  if(s.length<=MAX_SCAN_CHARS)return s;
+function scanParts(s:string):string[] {
+  if(s.length<=MAX_SCAN_CHARS)return [s];
   const width=Math.floor(MAX_SCAN_CHARS/3);
   const mid=Math.floor((s.length-width)/2);
-  return s.slice(0,width)+" "+s.slice(mid,mid+width)+" "+s.slice(-width);
+  return [s.slice(0,width),s.slice(mid,mid+width),s.slice(-width)];
+}
+function scanText(s:string):string {
+  return scanParts(s).join(" ");
+}
+
+/** Match a complete literal name, including multi-word names, on each original
+ * scan slice separately. Never create a false mention across sampled gaps or
+ * within a longer word ("Ivo" is not part of "vivo"). */
+function containsWholeLiteral(lowerText:string,rawName:string):boolean {
+  const name=rawName.normalize("NFC").toLocaleLowerCase("it");
+  let at=lowerText.indexOf(name);
+  const word=(ch:string)=>/[\p{L}\p{N}_]/u.test(ch);
+  while(at!==-1){
+    const before=at?lowerText[at-1]??"":"";
+    const after=lowerText[at+name.length]??"";
+    if(!word(before)&&!word(after))return true;
+    at=lowerText.indexOf(name,at+1);
+  }
+  return false;
 }
 
 function referenced(scene:Scene):string[] {
@@ -73,6 +97,11 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   const all=prior.flatMap(ch=>ch.scenes.map(scene=>({chapter:ch,scene})));
   const selectedQuery=queryScenes(chapter,currentScene);
   const entityQuery=new Set(selectedQuery.flatMap(referenced));
+  // Conservative: only explicit current-scene entity labels. No guesses from
+  // secret memory, character descriptions, past author alias decisions, or AI.
+  const literalQuery=[...entityQuery]
+    .filter(name=>name.length>=3&&name.length<=80)
+    .slice(0,MAX_LITERAL_NAME_QUERIES);
   const dateQuery=new Set(selectedQuery.map(s=>s.date?.trim())
     .filter((x):x is string=>!!x&&x.length<=80));
   // Balance the query over scene windows; don't let one enormous scene fill it.
@@ -91,13 +120,24 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   const changed=new Set(originSceneIds);
   const rated=scanned.map(({chapter:ch,scene})=>{
     const entityOverlap=referenced(scene).filter(e=>entityQuery.has(e)).slice(0,10);
+    // Check original bounded prose windows separately, never stitched snippets.
+    // A literal mention is weaker than a matching structured reference.
+    const literalSlices=scanParts(scene.text).map(part=>
+      part.normalize("NFC").toLocaleLowerCase("it"));
+    const literalEntities=literalQuery.filter(name=>
+      !entityOverlap.includes(name)&&
+      literalSlices.some(part=>containsWholeLiteral(part,name)))
+      .slice(0,MAX_LITERAL_NAME_MATCHES);
     const tokens=new Set(words(scanText(scene.text+" "+scene.title+" "+scene.objective)));
     const termOverlap=[...termSet].filter(w=>tokens.has(w)).slice(0,16);
     const sameDate=!!scene.date&&dateQuery.has(scene.date.trim());
-    const score=entityOverlap.length*35+termOverlap.length*6+
-      (sameDate?45:0)+(changed.has(scene.id)&&ch.id===origin.id?120:0);
+    const score=entityOverlap.length*35+literalEntities.length*25+
+      termOverlap.length*6+(sameDate?45:0)+
+      (changed.has(scene.id)&&ch.id===origin.id?120:0);
     return {chapter:ch,scene,match:{
-      entities:entityOverlap,terms:termOverlap,sameDate,score,
+      entities:entityOverlap,
+      ...(literalEntities.length?{literalEntities}:{}),
+      terms:termOverlap,sameDate,score,
     }};
   });
   const byRelevance=(a:typeof rated[number],b:typeof rated[number])=>
