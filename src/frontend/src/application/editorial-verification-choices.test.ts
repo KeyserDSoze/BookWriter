@@ -83,6 +83,12 @@ async function prepared(){
   book.remote={owner:"writer",repository:"romanzo",branch:"main",
     autoSync:true,lastSyncedCommit:"a".repeat(40)};
   await saveBook(book);
+  // A blocked editorial cycle is deliberately not eligible for automatic
+  // checkpoints. Seed a pending outbox item explicitly to test its deletion.
+  await (await getDb()).put("outbox",{
+    bookId:book.id,operationId:crypto.randomUUID(),
+    revision:1,requestedAt:new Date().toISOString(),state:"pending",attempts:0,
+  },book.id);
   const stored=(await getBook(book.id))!;
   const item=buildEditorialVerificationPlan(stored,stored.editorialCycle!,
     stored.chapters[0]!).items[0]!;
