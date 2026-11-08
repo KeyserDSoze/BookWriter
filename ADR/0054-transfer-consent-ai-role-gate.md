@@ -1,6 +1,6 @@
 # ADR 0054 — Consenso specifico e revocabile per le valutazioni di piste informative
 
-- **Stato:** accettato per v0.11.21 (PR da verificare)
+- **Stato:** accettato per v0.11.21 (PR #67)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0048, 0050–0053
