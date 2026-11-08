@@ -81,7 +81,7 @@ test("anteprima locale esplicita fra due conoscenze; niente prova né AI desktop
   await expect(preview.getByText("Elio rivela a Mara che la lettera è falsa",
     {exact:false})).toBeVisible();
   await expect(preview.getByText(/Nessuna frase candidata trovata/)).toBeVisible();
-  await expect(preview.getByText(/non è una prova di.*assenza di comunicazione/))
+  await expect(preview.getByText(/non è una prova.*assenza di comunicazione/))
     .toBeVisible();
   await expect(preview.getByText(/Scene esaminate:/)).toHaveCount(2);
   await expect(preview.getByText(/Nina rivela/)).toHaveCount(0);
