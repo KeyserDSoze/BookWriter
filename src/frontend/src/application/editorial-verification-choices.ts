@@ -1,5 +1,6 @@
 import type {Activity} from "../domain/types";
 import {createEditorialVerificationChoice,
+  createArchivedEditorialVerificationChoice,
   type EditorialVerificationChoiceStatus}
   from "../domain/editorial-verification-choices";
 import {getBook,getDb} from "../infrastructure/db";
@@ -10,6 +11,24 @@ import {getBook,getDb} from "../infrastructure/db";
 export async function recordEditorialVerificationChoice(
   bookId:string,expectedUpdatedAt:string,chapterId:string,planKey:string,
   status:EditorialVerificationChoiceStatus,rationale:string,
+):Promise<void>{
+  return persistEditorialVerificationChoice(bookId,expectedUpdatedAt,chapterId,
+    planKey,status,rationale,"current");
+}
+
+/** Historical choice ONLY; cannot unblock a live chapter or editorial finding. */
+export async function recordArchivedEditorialVerificationChoice(
+  bookId:string,expectedUpdatedAt:string,chapterId:string,planKey:string,
+  status:EditorialVerificationChoiceStatus,rationale:string,
+):Promise<void>{
+  return persistEditorialVerificationChoice(bookId,expectedUpdatedAt,chapterId,
+    planKey,status,rationale,"frozen");
+}
+
+async function persistEditorialVerificationChoice(
+  bookId:string,expectedUpdatedAt:string,chapterId:string,planKey:string,
+  status:EditorialVerificationChoiceStatus,rationale:string,
+  mode:"current"|"frozen",
 ):Promise<void>{
   const locks=typeof navigator==="undefined"?undefined:navigator.locks;
   if(!locks?.request)throw new Error("Web Locks necessari per annotare la verifica.");
@@ -22,11 +41,18 @@ export async function recordEditorialVerificationChoice(
         throw new Error("Libro modificato: aggiorna prima di annotare il controllo.");
       if(book.status==="running")
         throw new Error("Metti in pausa l'autopilot prima di annotare la verifica.");
-      if(!book.editorialCycle||book.editorialCycle.stage!=="blocked")
+      if(mode==="current"&&
+        (!book.editorialCycle||book.editorialCycle.stage!=="blocked"))
         throw new Error("Attendi il blocco/conclusione del ciclo editoriale.");
+      if(mode==="frozen"&&book.editorialCycle&&
+        book.editorialCycle.stage!=="blocked")
+        throw new Error("La redazione è attiva: blocca prima il ciclo editoriale.");
       const now=new Date().toISOString();
-      const decision=createEditorialVerificationChoice(
-        book,chapterId,planKey,status,rationale,crypto.randomUUID(),now);
+      const decision=mode==="frozen"
+        ?createArchivedEditorialVerificationChoice(
+          book,chapterId,planKey,status,rationale,crypto.randomUUID(),now)
+        :createEditorialVerificationChoice(
+          book,chapterId,planKey,status,rationale,crypto.randomUUID(),now);
       const db=await getDb();
       const tx=db.transaction(["books","activities","outbox"],"readwrite");
       const current=await tx.objectStore("books").get(bookId) as typeof book|undefined;
