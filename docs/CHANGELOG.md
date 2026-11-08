@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## Unreleased — proposta 0.11.18 (issue #20)
+## 0.11.18 — 2026-11-08 (PR #64, issue #20)
 
 **Verifica consultiva dei collegamenti di conoscenza confermati dall'autore**
 
