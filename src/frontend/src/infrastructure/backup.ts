@@ -8,6 +8,8 @@ import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
 import {MAX_TRANSFER_SHARE_DECISIONS,type NarrativeTransferShareDecision}
   from "../domain/narrative-transfer-sharing";
+import {MAX_EDITORIAL_VERIFICATION_CHOICES,type EditorialVerificationChoice}
+  from "../domain/editorial-verification-choices";
 import {MAX_KNOWLEDGE_SHARE_DECISIONS,type NarrativeKnowledgeShareDecision}
   from "../domain/narrative-knowledge-sharing";
 
@@ -169,6 +171,19 @@ const narrativeTransferShareSchema=z.object({
 }).strict().refine(x=>x.status==="allowed" ? x.recipients.length>0 :
   x.recipients.length===0);
 
+const editorialVerificationChoiceSchema=z.object({
+  id:zId,chapterId:zId,
+  planKey:z.string().min(1).max(2500),
+  round:z.number().int().min(1).max(3),
+  quote:z.string().min(1).max(250),
+  missingEvidence:z.string().min(24).max(600),
+  nextCheck:z.string().min(24).max(600),
+  judgeExplanation:z.string().min(30).max(850),
+  status:z.enum(["taken_on","dismissed","reset"]),
+  rationale:z.string().min(20).max(500),
+  decidedAt:z.string().datetime(),
+}).strict();
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -190,6 +205,7 @@ const bookSchema = z.object({
   narrativeKnowledgeTopicDecisions: z.array(narrativeKnowledgeTopicSchema).max(120).optional(),
   narrativeTransferAssessments: z.array(narrativeTransferAssessmentSchema).max(120).optional(),
   narrativeTransferShareDecisions: z.array(narrativeTransferShareSchema).max(180).optional(),
+  editorialVerificationChoices: z.array(editorialVerificationChoiceSchema).max(160).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
@@ -462,6 +478,22 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
       decidedAt:at,
     }))];
   }
+  function importedVerificationAudit(book:BookProject):EditorialVerificationChoice[]{
+    const original=book.editorialVerificationChoices??[];
+    const latest=new Map<string,EditorialVerificationChoice>();
+    for(const entry of original)
+      latest.set(JSON.stringify([entry.chapterId,entry.planKey]),entry);
+    const active=[...latest.values()].filter(entry=>entry.status!=="reset");
+    // Imported authorship is NOT authenticated. Revoke active labels without
+    // pretending that a check was accepted, rejected or completed locally.
+    if(original.length+active.length>MAX_EDITORIAL_VERIFICATION_CHOICES)return [];
+    const at=new Date().toISOString();
+    return [...original,...active.map(entry=>({
+      ...entry,id:crypto.randomUUID(),status:"reset" as const,
+      rationale:"Scelta importata azzerata: richiede una nuova decisione locale.",
+      decidedAt:at,
+    }))];
+  }
   const safeBooks: BookProject[] = data.books.map(book => ({
     ...book,
     id: idMap.get(book.id)!,
@@ -469,6 +501,7 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     authorConstraints: book.authorConstraints ?? [],
     narrativeKnowledgeShareDecisions: importedSharingAudit(book),
     narrativeTransferShareDecisions: importedTransferShareAudit(book),
+    editorialVerificationChoices: importedVerificationAudit(book),
     remote: undefined, // Imported copies must not inherit GitHub write permissions/remote SHA.
     status: book.status === "running" ? "paused" : book.status,
     previousError: "Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
