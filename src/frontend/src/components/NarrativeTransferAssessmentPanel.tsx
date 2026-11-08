@@ -5,6 +5,8 @@ import {buildNarrativeTransferAssessmentRegistry,
   type NarrativeTransferVerdict} from "../domain/narrative-transfer-assessments";
 import {recordNarrativeTransferAssessment}
   from "../application/narrative-transfer-assessments";
+import {buildTransferSharingRegistry} from "../domain/narrative-transfer-sharing";
+import {NarrativeTransferShareControl} from "./NarrativeTransferShareControl";
 import {Button} from "./ui/button";
 
 const LABELS:Record<NarrativeTransferVerdict,string>={
@@ -23,6 +25,7 @@ export function NarrativeTransferAssessmentPanel({book,preview,onRefresh}:{
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const registry=buildNarrativeTransferAssessmentRegistry(book,preview.topic.decision.id);
+  const sharing=buildTransferSharingRegistry(book);
   const history=(book.narrativeTransferAssessments??[])
     .filter(x=>x.topicDecisionId===preview.topic.decision.id);
   const selected=preview.directions.flatMap(direction=>
@@ -64,7 +67,7 @@ export function NarrativeTransferAssessmentPanel({book,preview,onRefresh}:{
       trasferimento. Ogni ricerca legge solo capitoli congelati <b>precedenti
       nel manoscritto</b> rispetto alla menzione del destinatario; flashback,
       dialoghi nella stessa scena, pronomi e notizie implicite possono sfuggire.
-      Nessun nuovo invio ai modelli AI.
+      La condivisione dei tuoi giudizi richiede consenso separato per ogni pista.
     </p>
     {message&&<p role="status" className="mt-2 text-emerald-700">{message}</p>}
     {error&&<p role="alert" className="mt-2 text-red-700">{error}</p>}
@@ -108,6 +111,12 @@ export function NarrativeTransferAssessmentPanel({book,preview,onRefresh}:{
             {current&&<p className="mt-1">
               Giudizio corrente: <b>{LABELS[current.decision.verdict]}</b>
             </p>}
+            {current&&<NarrativeTransferShareControl
+              key={current.decision.id} book={book}
+              assessmentId={current.decision.id}
+              permission={sharing.current.find(x=>
+                x.assessment.decision.id===current.decision.id)?.permission??null}
+              onRefresh={onRefresh}/>}
             <Button size="sm" variant="outline"
               disabled={busy} onClick={()=>{
                 setSelectedId(candidate.id);setVerdict("");setRationale("");

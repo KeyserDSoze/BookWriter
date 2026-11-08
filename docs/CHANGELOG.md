@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.21 — 2026-11-08 (PR #67, issue #20)
+
+**Consensi AI espliciti per singoli giudizi autore su possibili comunicazioni**
+
+- Nuovo `BookProject.narrativeTransferShareDecisions?`, storico append-only max **180** su ID **esatto** della valutazione corrente: `status=allowed|revoked`, uno o più ruoli opt-in `continuity,timeline,secrets,characterVoice,judge`, motivazione privata 12–500 e timestamp. Nessuna autorizzazione tramite vecchi consensi sulle knowledge. Ultimo permesso per ID prevale e ogni rettifica/source stale elimina la divulgabilità.
+- `buildSharedTransferPack` fail-closed: **max 12** concessioni approfondite e **3** citazioni per richiesta, per nomi esatti e capitoli precedenti congelati. Condivide solo **citazione, mittente, destinatario, verdetto fallibile, capitolo/scena e offset**; MAI rationale, segreti, dati topic, tempi, archivio o appunti privati.
+- Prompt solo ai quattro specialisti nominati; al giudice esclusivamente dopo finding **knowledge** con prova del segmento corrente ancora ancorata, e solo se autorizzato `judge`. I cinque lettori ciechi, storico/stile/narrativa, writer e repair non ricevono questi nuovi pack. Il giudice deve riesaminare e può RESPINGERE: niente canone, accettazione o remediation automatica.
+- UI delle singole piste correnti: **Condivisione AI specifica**, checkbox tutte vuote per default, motivazione obbligatoria, conferma forte sull'invio a provider esterno, grant/revoca e stato corrente. Web Locks writer+outbox, CAS, transazione atomica, autosync OFF e outbox eliminata; activity privo di spoiler e contenuti dei consensi. La revoca vale solo per invii futuri.
+- ZIP content/full strict e compatibilità legacy, import fail-closed: ultimo grant importato revocato localmente o intero audit scartato se si supera cap180. Test dominio, application, backup cifrato/import con permessi revocati e Playwright desktop/mobile. [ADR 0054](../ADR/0054-transfer-consent-ai-role-gate.md), [guida](transfer-consent-ai.md).
+
+**Limiti:** ordine del manoscritto ≠ cronologia degli eventi; una pista/citazione con verdetto autore non prova consegna, apprendimento o verità. Le richieste AI esistenti possono consumare più token senza generare nuove chiamate.
+
 ## 0.11.20 — 2026-11-08 (PR #66, issue #20)
 
 **Giudizi privati dell'autore per singole citazioni di possibili comunicazioni**
