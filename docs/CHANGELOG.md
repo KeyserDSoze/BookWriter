@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.27 — 2026-11-08 (issue #20; PR in preparazione)
+
+**Confronto letterale e non esecutivo fra suggerimenti archiviati e nuova revisione**
+
+- Nuovo `compareEditorialArchiveToCurrentRevision(book,chapter,cycle)` **puro/read-only**: solo dopo riapertura del medesimo capitolo, analizza gli `unresolved` in `chapter.editorialRounds` e li confronta con i gruppi correnti **già validati e bounded** da `buildEditorialRecommendationDisagreements`. Stessa scena, categoria literal casefold e quote NFC, con segment/offset per `same_literal_anchor` o `relocated_literal_quote`; più candidati ⇒ `ambiguous_literal_candidates`, nessun match ⇒ `not_observed_in_current_sample`, vecchia fonte incoerente ⇒ `archive_source_unverifiable`. NESSUNO stato implica che un problema sia stato risolto o che una modifica sia dovuta.
+- `buildEditorialVerificationPlan` revalida il giudizio corrente prima di mostrarne lo status. Per il vecchio e il nuovo `missingEvidence/nextCheck` segnala se le **parole** sono uguali, differenti, ancora in attesa o non confrontabili; non decide la semantica. Max **24 controlli storici**, contatore delle omissioni e segnalazione dei finding/gruppi nuovi fuori campione; solo prove correnti già esaminate, senza dedurre copertura completa.
+- Note private dell'autore `editorialVerificationChoices?` **solo storiche**, mai trasferite al nuovo `needs_evidence`: visualizzazione con snapshot esatto e suffisso chiave archivio/giudizio/finding ID compatibile dopo reopen (che azzera `frozenAt`); più congelazioni compatibili ⇒ ambiguità e nessuna motivazione mostrata come associata, reset import ZIP last-wins rispettato. Il match di snapshot non autentica la congelazione originaria. Nessun nuovo campo, permesso AI, rete, prompt, sync, intervento su prosa, memory, segreti, timeline, canon, repair o freeze.
+- UI **Confronto verifiche storiche e nuova revisione** dentro Redazione multi-agente con prove vecchie/nuove, suggerimenti e note storiche etichettate; Vitest exact match, cambio check, moved quote, no-match, stale archive, reset/ambiguità, cap24, prompt privacy; Playwright desktop/mobile su annotazione, reopen, nuovo check, citazione sparita e layout. ADR 0060, guida, README, AGENTS e docs.
+
+**Limite:** identità letterale non significa identità del problema, né l'assenza nel campione indica soluzione; l'autore deve valutare criticamente.
+
 ## 0.11.26 — 2026-11-08 (PR #72, issue #20)
 
 **Annotazioni private su controlli irrisolti dei capitoli già congelati**
