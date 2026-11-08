@@ -83,3 +83,5 @@
 - [x] v0.11.14: registro autore append-only di `knowledge_mention` correnti con `learned_directly|reported_by_other|still_secret`, CAS+Web Locks, autosync disabilitato, audit/staleness e ZIP strict; nessun invio automatico ai modelli o aggiornamento del canone (ADR 0047, issue #20).
 
 - [x] v0.11.15: opt-in e revoca append-only per interpretazione knowledge e cinque soli destinatari editoriali, pacchetto minimo e fail-closed, nessun nuovo dato ai lettori ciechi; ZIP revoca permessi importati, CAS/locks e UI (ADR 0048, issue #20).
+
+- [x] v0.11.16: collocazione del sapere di un personaggio rispetto alla scena e distinzione fra ordine di manoscritto e storia, rettifiche append-only, invalidazione delle fonti, privacy AI anche dopo consenso knowledge, ZIP strict e UI per personaggio (ADR 0049, issue #20).
