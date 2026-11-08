@@ -14,6 +14,10 @@ Il riepilogo mostra entrambe le citazioni e, quando ci sono, i relativi momenti 
 
 Le relazioni sono **solo a coppie**: se Mara ed Elio parlano della stessa cosa, ed Elio e Nina parlano della stessa cosa, il sistema **non presume** automaticamente che Mara e Nina si riferiscano allo stesso contenuto. Per un'ulteriore coppia serve un'altra decisione esplicita dell'autore. Il software non deduce alias, catene di trasmissione, confronti semantici o fatti canonici.
 
+## Anteprima di comunicazioni fra le due conoscenze (v0.11.19)
+
+Per una coppia **corrente** confermata come «stessa informazione», il pulsante **Esamina piste possibili** cerca localmente in due direzioni frasi precedenti con **mittente e destinatario esatti** e temi in comune. Una frase non prova che un messaggio sia stato ricevuto o creduto, e l'assenza di risultati non esclude comunicazioni. Nessuna nuova chiamata AI o modifica del libro; [guida completa](knowledge-transfer-preview.md), ADR 0052.
+
 ## Avvisi su tre scelte già confermate (v0.11.18)
 
 Quando esistono **tutti e tre** i confronti A/B e B/C «stessa informazione» ma A/C «informazioni differenti», il pannello segnala una possibile incoerenza nelle **decisioni dell'autore** con le tre citazioni correnti. Le prime due coppie da sole **non** generano la terza. La segnalazione è soltanto locale, consultiva e scompare dopo una rettifica o l'invalidazione delle fonti. Vedi la [guida agli avvisi](knowledge-topic-triangle-advisories.md) e ADR 0051.

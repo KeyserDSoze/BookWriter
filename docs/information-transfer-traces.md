@@ -16,6 +16,10 @@ Quando il giudice valuta un finding `knowledge` ancorato alla scena attuale e ci
 
 Se rimane una pista classificata come possibile o indeterminata, **il software blocca l'accettazione della correzione fondata su accesso impossibile**; il giudice può respingere la critica con motivazione. Se giudica tutte le piste non pertinenti o inattendibili, potrà valutare un intervento solo rispettando gli altri controlli sulla conoscenza della v0.11.12. Non significa che il software abbia provato l'assenza di comunicazioni; sono interpretazioni fallibili del modello.
 
+## Anteprima privata fra due personaggi (v0.11.19)
+
+Se l'autore ha già confermato direttamente che due menzioni knowledge riguardano la **stessa informazione**, può avviare a mano un'anteprima locale A→B e B→A con un filtro **esatto** su mittente e destinatario. La vista non cambia il filtro ordinario dei revisori, non introduce una rete di conoscenze e non convalida l'effettivo passaggio di una notizia. Consulta [la guida alle anteprime](knowledge-transfer-preview.md) e ADR 0052.
+
 ## Privacy, backup e limiti
 
 I nuovi dati sono **effimeri e locali**, senza nuovo registro delle conoscenze da sincronizzare. I giudizi motivati vengono conservati nel normale storico editoriale e validati nell'import ZIP. Le fonti vengono rivalidate prima di qualunque nuova riscrittura, anche dopo un import. I capitoli futuri e le note private non sono inclusi nel nuovo pacchetto; non si effettuano chiamate AI aggiuntive, anche se i prompt possono diventare più lunghi.

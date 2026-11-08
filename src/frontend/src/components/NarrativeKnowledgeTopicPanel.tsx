@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useMemo,useState} from "react";
 import type {BookProject} from "../domain/types";
 import {buildNarrativeKnowledgeRegistry,type CurrentKnowledgeDecision}
   from "../domain/narrative-knowledge-decisions";
@@ -8,6 +8,8 @@ import {buildNarrativeKnowledgeTopicRegistry,reviewNarrativeKnowledgeTopicTriang
   from "../domain/narrative-knowledge-topic-decisions";
 import {recordNarrativeKnowledgeTopicDecision}
   from "../application/narrative-knowledge-topic-decisions";
+import {previewKnowledgeTransferForPair}
+  from "../domain/knowledge-transfer-preview";
 import {Button} from "./ui/button";
 
 const VERDICTS:Record<NarrativeKnowledgeTopicDecision["verdict"],string>={
@@ -32,6 +34,10 @@ export function NarrativeKnowledgeTopicPanel({book,onRefresh}:{
   const registry=buildNarrativeKnowledgeTopicRegistry(book);
   const triangleReview=reviewNarrativeKnowledgeTopicTriangles(registry);
   const history=book.narrativeKnowledgeTopicDecisions??[];
+  const [selectedPreviewId,setSelectedPreviewId]=useState("");
+  const preview=useMemo(()=>selectedPreviewId
+    ?previewKnowledgeTransferForPair(book,selectedPreviewId):null,
+    [book,selectedPreviewId]);
   const [firstId,setFirstId]=useState("");
   const [secondId,setSecondId]=useState("");
   const [rationale,setRationale]=useState("");
@@ -194,8 +200,64 @@ export function NarrativeKnowledgeTopicPanel({book,onRefresh}:{
           temporale tra le due notizie né di un passaggio di informazione.
         </p>
         <p className="mt-1 break-words">Motivazione autore: {link.decision.rationale}</p>
+        {link.decision.verdict==="same_information"&&
+          <Button size="sm" variant="outline"
+            onClick={()=>setSelectedPreviewId(current=>
+              current===link.decision.id?"":link.decision.id)}>
+            {selectedPreviewId===link.decision.id?
+              "Chiudi piste possibili":"Esamina piste possibili"}
+          </Button>}
       </div>)}
     </div>}
+    {preview&&<section aria-label="Piste comunicative della coppia"
+      className="mt-3 min-w-0 rounded border border-slate-300 p-2 text-xs dark:border-slate-700">
+      <h3 className="font-semibold">Piste di comunicazione: ricerca locale su richiesta</h3>
+      <p className="muted mt-1">
+        Queste sono solo <b>frasi che descrivono un possibile racconto</b>, non
+        conferme che qualcuno abbia parlato, ascoltato, creduto o appreso.
+        «Stessa informazione» è un collegamento dell'autore, non una prova di
+        trasferimento. Ogni ricerca legge solo capitoli congelati <b>precedenti
+        nel manoscritto</b> rispetto alla menzione del destinatario; flashback,
+        dialoghi nella stessa scena, pronomi e notizie implicite possono sfuggire.
+        Nessun dato viene salvato o inviato ai modelli AI.
+      </p>
+      {preview.directions.map(direction=><div
+        key={direction.sender.decision.id+"-"+direction.recipient.decision.id}
+        className="mt-2 min-w-0 rounded border border-slate-200 p-2 dark:border-slate-700">
+        <p className="font-semibold">
+          {direction.sender.source.candidate.actor} → {
+            direction.recipient.source.candidate.actor}
+        </p>
+        <p className="mt-1 break-words">
+          Menzione destinatario: «{direction.recipient.source.decision.quote}»
+        </p>
+        <p className="muted mt-1">
+          Scene esaminate: {direction.trace.scannedSceneCount}/{
+            direction.trace.candidateSceneCount}.
+          {" "}Non esaminate: {direction.trace.unscannedSceneCount}.
+          {" "}Piste lessicali: {direction.trace.matchedCandidateCount},
+          non mostrate: {direction.trace.omittedCandidateCount}.
+          Limiti per scena: 6.000 caratteri e prime 12 menzioni rilevate.
+        </p>
+        {direction.trace.candidates.length===0&&<p className="mt-1">
+          Nessuna frase candidata trovata nel campione: <b>non è una prova
+          dell'assenza di comunicazione</b>.
+        </p>}
+        <ul className="mt-2 space-y-2">
+          {direction.trace.candidates.map(candidate=><li key={candidate.id}
+            className="min-w-0 rounded border border-slate-200 p-2 dark:border-slate-700">
+            <p>Cap. {candidate.chapterNumber}, scena {candidate.sceneNumber},
+              {" "}offset {candidate.offset} · parole in comune: {
+                candidate.matchedTopicTerms.join(", ")}</p>
+            <p className="mt-1 break-words">«{candidate.quote}»</p>
+            <p className="muted mt-1">
+              Citazione letterale non verificata come evento; non stabilisce
+              il tempo effettivo né la ricezione della notizia.
+            </p>
+          </li>)}
+        </ul>
+      </div>)}
+    </section>}
     {history.length>0&&<details aria-label="Storico relazioni conoscenze"
       className="mt-3 rounded border border-slate-200 p-2 dark:border-slate-700">
       <summary className="cursor-pointer text-xs font-semibold">

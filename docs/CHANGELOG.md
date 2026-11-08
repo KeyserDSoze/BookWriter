@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.19 — 2026-11-08 (PR #65, issue #20)
+
+**Anteprima locale dei possibili passaggi di notizie fra due knowledge confermate**
+
+- Nuovo `previewKnowledgeTransferForPair` consultivo e on-demand: solo coppie `same_information` dirette e correnti già attestate, mai via confronto automatico delle parole o chiusura transitiva. Ricerca due direzioni mittente→destinatario utilizzando la **sola citazione del destinatario**.
+- Filtro opzionale con nomi mittente/destinatario **letteralmente esatti** su `buildInformationTransferTrace`, senza cambiare l'esito dello scanner preesistente dei revisori. Campionamento invariato: massimo 240 scene precedenti congelate, 6.000 caratteri/scena, 12 formule/scena, 4 risultati per verso. Citazioni e offset letterali, contatori di esclusioni e limiti visibili.
+- Pulsante **Esamina piste possibili** per ogni link `same_information` nel registro privato; anteprima effimera con entrambi i versi, messaggi potenziali, copertura e avviso esplicito che l'assenza di frasi non prova mancanza di comunicazione. Dopo rettifica o invalidazione del link la vista non è disponibile.
+- Nessun aggiornamento a prosa/canone, memoria, segreti, timeline, freeze, outbox, registro o consent AI; nessun nuovo HTTP/AI, promozione a verità o passaggio certo. Test Vitest e Playwright desktop/mobile. [ADR 0052](../ADR/0052-knowledge-transfer-preview.md), [guida](knowledge-transfer-preview.md).
+
+**Limite:** formule esplicite e ordine del manoscritto non sono cronologia narrativa, verità della voce, ricezione o conoscenza. La ricerca è bounded e può omettere dialoghi rilevanti.
+
 ## 0.11.18 — 2026-11-08 (PR #64, issue #20)
 
 **Verifica consultiva dei collegamenti di conoscenza confermati dall'autore**
