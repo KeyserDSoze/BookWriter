@@ -2,26 +2,35 @@ import {useState} from "react";
 import type {BookProject} from "../domain/types";
 import type {VerificationPlanItem} from "../domain/editorial-verification-plan";
 import {
-  currentEditorialVerificationChoice,type EditorialVerificationChoiceStatus,
+  currentEditorialVerificationChoice,currentArchivedEditorialVerificationChoice,
+  type EditorialVerificationChoiceStatus,
 } from "../domain/editorial-verification-choices";
-import {recordEditorialVerificationChoice}
+import {recordEditorialVerificationChoice,recordArchivedEditorialVerificationChoice}
   from "../application/editorial-verification-choices";
 import {Button} from "./ui/button";
 
-/** Does not appear in archived plans, and does not expose any control that
- * could execute an automatic check or approve an editorial remediation. */
-export function EditorialVerificationChoiceControl({book,chapterId,item,onRefresh}:{
+/** Both current and frozen-chapter choices are private notes, never
+ * executable tasks, AI permissions or editorial approvals. */
+export function EditorialVerificationChoiceControl({
+  book,chapterId,item,onRefresh,archived=false,
+}:{
   book:BookProject;chapterId:string;item:VerificationPlanItem;
-  onRefresh:()=>Promise<void>;
+  onRefresh:()=>Promise<void>;archived?:boolean;
 }){
   const [note,setNote]=useState("");
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
-  const choice=currentEditorialVerificationChoice(book,chapterId,item);
-  const canWrite=!busy&&book.status!=="running" &&
-    book.editorialCycle?.chapterId===chapterId &&
-    book.editorialCycle?.stage==="blocked";
+  const choice=archived
+    ?currentArchivedEditorialVerificationChoice(book,chapterId,item)
+    :currentEditorialVerificationChoice(book,chapterId,item);
+  const frozen=book.chapters.find(ch=>ch.id===chapterId)?.frozenAt;
+  const canWrite=!busy&&book.status!=="running" &&(
+    archived
+      ?!!frozen&&item.status==="archived"&&item.historicalCheckEligible===true&&
+        (!book.editorialCycle||book.editorialCycle.stage==="blocked")
+      :book.editorialCycle?.chapterId===chapterId&&
+        book.editorialCycle.stage==="blocked");
   const valid=note.trim().length>=20&&note.trim().length<=500;
   async function save(status:EditorialVerificationChoiceStatus){
     if(!canWrite||!valid||(status==="reset"&&!choice))return;
@@ -31,6 +40,7 @@ export function EditorialVerificationChoiceControl({book,chapterId,item,onRefres
       reset:"Azzerare la tua scelta precedente",
     };
     const ok=window.confirm(descriptions[status]+
+      (archived?" (archivio storico, capitolo congelato)": "")+
       "? Questa è soltanto una nota privata dell'autore: NON viene eseguita " +
       "alcuna ricerca o chiamata AI, non si modifica la prosa, non si approva " +
       "una remediation e non si cambia la decisione del giudice. " +
@@ -39,7 +49,10 @@ export function EditorialVerificationChoiceControl({book,chapterId,item,onRefres
     if(!ok)return;
     setBusy(true);setError("");setMessage("");
     try{
-      await recordEditorialVerificationChoice(book.id,book.updatedAt,
+      const persist=archived
+        ?recordArchivedEditorialVerificationChoice
+        :recordEditorialVerificationChoice;
+      await persist(book.id,book.updatedAt,
         chapterId,item.key,status,note.trim());
       setNote("");
       await onRefresh();
@@ -52,12 +65,17 @@ export function EditorialVerificationChoiceControl({book,chapterId,item,onRefres
     .filter(x=>x.chapterId===chapterId&&x.planKey===item.key);
   return <details aria-label="Scelta autore sul controllo editoriale"
     className="mt-3 min-w-0 rounded border border-slate-300 p-2 dark:border-slate-700">
-    <summary className="cursor-pointer font-semibold">Scelta privata dell'autore — {
+    <summary className="cursor-pointer font-semibold">{
+      archived?"Annotazione storica dell'autore":"Scelta privata dell'autore"
+    } — {
       choice?.status==="taken_on"?"presa in carico":
       choice?.status==="dismissed"?"respinta":"nessuna scelta attiva"}</summary>
     <p className="muted mt-1">Questa annotazione non esegue verifiche, non invia
-      dati AI e non autorizza modifiche. Il giudizio rimane
-      «prove insufficienti» anche se prendi in carico la verifica.</p>
+      dati AI e non autorizza modifiche. {archived
+        ?"Il capitolo resta congelato; il controllo è un documento storico, "+
+          "non un rilievo corrente. Nessuna azione riapre il capitolo."
+        :"Il giudizio rimane «prove insufficienti» anche se prendi in carico "+
+          "la verifica."}</p>
     {choice&&<p className="mt-1"><b>Motivazione della scelta corrente:</b>
       {" "}{choice.rationale}</p>}
     {history.length>0&&<details className="mt-2">
@@ -81,7 +99,8 @@ export function EditorialVerificationChoiceControl({book,chapterId,item,onRefres
     {message&&<p role="status" className="mt-1">{message}</p>}
     {!canWrite&&<p className="muted mt-1">
       Per annotare questa verifica metti in pausa l'autopilot e attendi
-      che il ciclo editoriale sia bloccato.</p>}
+      che il ciclo editoriale sia bloccato. Le note storiche richiedono
+      un capitolo tuttora congelato.</p>}
     <div className="mt-2 flex flex-wrap gap-2">
       <Button size="sm" disabled={!canWrite||!valid}
         onClick={()=>void save("taken_on")}>Prendi in carico</Button>
