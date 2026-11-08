@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.16 — 2026-11-08 (PR in preparazione)
+## 0.11.16 — 2026-11-08 (PR #62)
 
 **Quando un personaggio sa: momento della conoscenza e ordine narrativo separati**
 
