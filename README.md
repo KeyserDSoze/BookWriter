@@ -55,7 +55,7 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
-**Anteprima comunicazioni v0.11.19 (PR in preparazione):** per una coppia di conoscenze già confermata come «stessa informazione», l'autore può cercare esplicitamente menzioni letterali di possibili dialoghi fra i due nomi, in entrambe le direzioni e solo nei capitoli congelati precedenti. Nessuna trasmissione dedotta, nessuna chiamata AI o salvataggio della ricerca. [Guida](docs/knowledge-transfer-preview.md), ADR 0052, issue #20.
+**Anteprima comunicazioni v0.11.19 (PR #65):** per una coppia di conoscenze già confermata come «stessa informazione», l'autore può cercare esplicitamente menzioni letterali di possibili dialoghi fra i due nomi, in entrambe le direzioni e solo nei capitoli congelati precedenti. Nessuna trasmissione dedotta, nessuna chiamata AI o salvataggio della ricerca. [Guida](docs/knowledge-transfer-preview.md), ADR 0052, issue #20.
 
 **Avvisi sulle conoscenze v0.11.18 (PR #64):** se l'autore ha confermato direttamente tre coppie con due relazioni «stessa informazione» e una «informazioni differenti», la UI mostra un possibile disallineamento con le tre citazioni. Nessun terzo link dedotto, nessun intervento automatico o invio AI. [Guida](docs/knowledge-topic-triangle-advisories.md), ADR 0051, issue #20.
 
