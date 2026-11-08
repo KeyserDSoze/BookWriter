@@ -1,4 +1,4 @@
-# Avvisi sulle interpretazioni di tre conoscenze — v0.11.18 (in sviluppo)
+# Avvisi sulle interpretazioni di tre conoscenze — v0.11.18
 
 Nella sezione **Indice eventi candidati → Conoscenze interpretate dall'autore → Collegare informazioni fra personaggi**, dopo aver dichiarato almeno tre collegamenti, può apparire **«possibili incoerenze fra tre relazioni esplicite»**.
 
