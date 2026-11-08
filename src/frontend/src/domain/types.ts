@@ -18,6 +18,7 @@ import type { NarrativeKnowledgeShareDecision } from "./narrative-knowledge-shar
 import type { NarrativeKnowledgeTimingDecision } from "./narrative-knowledge-timing";
 import type { NarrativeKnowledgeTopicDecision } from "./narrative-knowledge-topic-decisions";
 import type { NarrativeTransferAssessment } from "./narrative-transfer-assessments";
+import type { NarrativeTransferShareDecision } from "./narrative-transfer-sharing";
 
 export interface EncryptedSecret { iv: string; data: string; }
 export interface EndpointProfile {
@@ -147,6 +148,8 @@ export interface BookProject {
   narrativeKnowledgeTopicDecisions?: NarrativeKnowledgeTopicDecision[];
   /** Author judgement of a literal communication candidate; never canon or AI authorization. */
   narrativeTransferAssessments?: NarrativeTransferAssessment[];
+  /** Revocable, per-exact-assessment AI permissions; never inherited from knowledge consents. */
+  narrativeTransferShareDecisions?: NarrativeTransferShareDecision[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
