@@ -147,8 +147,11 @@ export function compareEditorialArchiveToCurrentRevision(
     const reviews=round.judgment.recommendationReconciliations??[];
     for(let checkIndex=reviews.length-1;checkIndex>=0;checkIndex--){
       const review=reviews[checkIndex]!;
-      // Every archived reconciliation is presented, even if it cannot be
-      // authenticated structurally. This prevents a false "all resolved" view.
+      // Only historical doubts are in scope. Previously approved edits
+      // remain in the complete archival review and are not re-evaluated here.
+      if(review.evidenceAssessment!=="unresolved")continue;
+      // Every unresolved record is represented, even if the archived anchor
+      // cannot be authenticated. Never silently treat it as resolved.
       total++;
       if(entries.length>=MAX_EDITORIAL_ARCHIVE_COMPARISONS)continue;
       const witness=sourceOf(review.findingIds[0]??"",round.reports);
