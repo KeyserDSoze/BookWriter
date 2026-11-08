@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.24 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.24 — 2026-11-08 (PR #70, issue #20)
 
 **Piano consultivo delle verifiche mancanti dopo il giudizio editoriale**
 
