@@ -427,7 +427,8 @@ export function EditorialBoardPanel({
           <RotateCcw size={16}/> Riparti con i nuovi vincoli
         </Button>
       </div>}
-      <EditorialVerificationPlanPanel book={book} cycle={cycle} chapter={chapter}/>
+      <EditorialVerificationPlanPanel book={book} cycle={cycle}
+        chapter={chapter} onRefresh={onRefresh}/>
       <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment}
         chapter={chapter} sources={chapter.historicalDossier?.sources}
         manualSources={allManualEvidence(chapter.historicalDossier)}
