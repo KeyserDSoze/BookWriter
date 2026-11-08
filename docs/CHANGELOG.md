@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.28 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.28 — 2026-11-08 (PR #74, issue #20)
 
 **Registro cronologico dei controlli letterali di revisione per capitolo**
 
