@@ -2,7 +2,8 @@ import {useState} from "react";
 import type {BookProject} from "../domain/types";
 import {buildNarrativeKnowledgeRegistry,type CurrentKnowledgeDecision}
   from "../domain/narrative-knowledge-decisions";
-import {buildNarrativeKnowledgeTopicRegistry,MAX_KNOWLEDGE_TOPIC_DECISIONS,
+import {buildNarrativeKnowledgeTopicRegistry,reviewNarrativeKnowledgeTopicTriangles,
+  MAX_KNOWLEDGE_TOPIC_DECISIONS,
   type NarrativeKnowledgeTopicDecision}
   from "../domain/narrative-knowledge-topic-decisions";
 import {recordNarrativeKnowledgeTopicDecision}
@@ -29,6 +30,7 @@ export function NarrativeKnowledgeTopicPanel({book,onRefresh}:{
 }){
   const knowledge=buildNarrativeKnowledgeRegistry(book).current;
   const registry=buildNarrativeKnowledgeTopicRegistry(book);
+  const triangleReview=reviewNarrativeKnowledgeTopicTriangles(registry);
   const history=book.narrativeKnowledgeTopicDecisions??[];
   const [firstId,setFirstId]=useState("");
   const [secondId,setSecondId]=useState("");
@@ -132,6 +134,46 @@ export function NarrativeKnowledgeTopicPanel({book,onRefresh}:{
     {first&&eligible.length===0&&<p className="muted mt-2 text-xs">
       Serve una seconda conoscenza confermata di un altro personaggio.
     </p>}
+    {triangleReview.totalCount>0&&<details aria-label="Avvisi triangoli conoscenze"
+      className="mt-3 rounded border border-amber-400 p-2 dark:border-amber-700">
+      <summary className="cursor-pointer text-xs font-semibold">
+        {triangleReview.totalCount} possibili incoerenze fra tre relazioni esplicite
+      </summary>
+      <p className="muted mt-2 text-xs">
+        L'autore ha scelto «stessa informazione» per A/B e B/C ma
+        «informazioni differenti» per A/C. Sono <b>tre scelte già registrate</b>,
+        non un collegamento aggiunto o una contraddizione narrativa certificata.
+        Controlla le citazioni e, se necessario, rettifica manualmente una coppia.
+        Nessun intervento sul canone o invio ai modelli AI.
+      </p>
+      <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+        {triangleReview.warnings.map(w=><li
+          key={w.different.decision.id+"-"+w.middle.decision.id}
+          className="rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
+          <p className="font-semibold">
+            {w.first.source.candidate.actor} / {w.middle.source.candidate.actor}:
+            {" "}stessa informazione · {w.middle.source.candidate.actor} / {
+              w.last.source.candidate.actor}: stessa informazione · {
+              w.first.source.candidate.actor} / {w.last.source.candidate.actor}:
+            {" "}informazioni differenti
+          </p>
+          <p className="mt-1 break-words"><b>{w.first.source.candidate.actor}:</b>
+            {" "}«{w.first.source.decision.quote}»</p>
+          <p className="mt-1 break-words"><b>{w.middle.source.candidate.actor}:</b>
+            {" "}«{w.middle.source.decision.quote}»</p>
+          <p className="mt-1 break-words"><b>{w.last.source.candidate.actor}:</b>
+            {" "}«{w.last.source.decision.quote}»</p>
+          <p className="muted mt-1">
+            Riesamina le tre decisioni dirette: non si deducono transitività,
+            comunicazione fra personaggi o ordine temporale degli eventi.
+          </p>
+        </li>)}
+      </ul>
+      {triangleReview.omittedCount>0&&<p className="muted mt-2 text-xs">
+        Altre {triangleReview.omittedCount} segnalazioni non visualizzate
+        (limite di {triangleReview.warnings.length} per la consultazione mobile).
+      </p>}
+    </details>}
     {registry.current.length>0&&<div aria-label="Confronti correnti fra personaggi"
       className="mt-3 max-h-80 space-y-2 overflow-y-auto">
       {registry.current.map(link=><div key={link.decision.id}
