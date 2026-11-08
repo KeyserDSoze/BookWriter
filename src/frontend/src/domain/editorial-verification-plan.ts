@@ -1,7 +1,7 @@
 import type {BookProject,Chapter} from "./types";
 import {
   buildEditorialRecommendationDisagreements,
-  isNarrativeEvidenceAnchorCurrent,validateJudgment,
+  validateJudgment,
   type ChapterEditorialCycle,type EditorialFinding,type EditorialJudgment,
   type EditorialReport,type EditorialRound,type EditorialRecommendationDisagreement,
 } from "./editorial-board";
