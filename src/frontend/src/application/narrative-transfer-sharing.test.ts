@@ -78,6 +78,7 @@ async function prepared(){
     crypto.randomUUID(),"2026-11-08T15:00:00.000Z");
   book.narrativeTransferAssessments=[assessment];
   book.chapters.push({id:"c5",number:5,title:"Esito",purpose:"Capire",
+    frozenAt:"2026-11-08T14:00:00.000Z",
     scenes:[{id:"s5",number:1,title:"Ritorno",objective:"Capire",
       text:"Mara cerca la lettera ancora chiusa.",status:"canon"}]});
   await saveBook(book);
