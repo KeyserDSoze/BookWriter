@@ -4,9 +4,13 @@ import {strFromU8,strToU8,unzipSync,zipSync} from "fflate";
 import {newBook} from "../domain/types";
 import {chapterSegments,createEditorialCycle,validateReport,validateJudgment,
   type EditorialRole,type ChapterEditorialCycle} from "../domain/editorial-board";
-import {buildEditorialVerificationPlan} from "../domain/editorial-verification-plan";
-import {createEditorialVerificationChoice,currentEditorialVerificationChoice,
-  MAX_EDITORIAL_VERIFICATION_CHOICES} from "../domain/editorial-verification-choices";
+import {buildEditorialVerificationPlan,buildFrozenEditorialVerificationPlan}
+  from "../domain/editorial-verification-plan";
+import {
+  createEditorialVerificationChoice,currentEditorialVerificationChoice,
+  createArchivedEditorialVerificationChoice,currentArchivedEditorialVerificationChoice,
+  MAX_EDITORIAL_VERIFICATION_CHOICES,
+} from "../domain/editorial-verification-choices";
 import {getDb,saveBook,listBooks} from "./db";
 import {createBackup,readBackup,importBackup} from "./backup";
 
@@ -102,6 +106,44 @@ describe("ZIP v0.11.25: scelte autore su verifiche",()=>{
     const current=buildEditorialVerificationPlan(imported,imported.editorialCycle!,
       imported.chapters[0]!).items[0]!;
     expect(currentEditorialVerificationChoice(imported,"c1",current)).toBeNull();
+  });
+  it("freeze: round-trip ZIP storico e import reset senza riaprire il capitolo",async()=>{
+    const {book}=await prepared();
+    const chapter=book.chapters[0]!;
+    const cycle=book.editorialCycle!;
+    chapter.frozenAt="2026-11-08T16:00:00.000Z";
+    chapter.editorialRounds=[{round:cycle.round,
+      reports:structuredClone(cycle.reports),
+      judgment:structuredClone(cycle.judgment!)}];
+    book.editorialCycle=undefined;
+    book.editorialVerificationChoices=undefined;
+    const item=buildFrozenEditorialVerificationPlan(book,chapter).items[0]!;
+    expect(item.historicalCheckEligible).toBe(true);
+    const archived=createArchivedEditorialVerificationChoice(
+      book,chapter.id,item.key,"taken_on",
+      "Nota privata sull'archivio: non riapro il capitolo o il giudizio.",
+      crypto.randomUUID(),"2026-11-08T19:10:00.000Z");
+    book.editorialVerificationChoices=[archived];
+    await saveBook(book,false);
+    const zip=await createBackup("content");
+    const data=await readBackup(zip as File);
+    expect(data.books.find(b=>b.title===book.title)!
+      .editorialVerificationChoices).toEqual([archived]);
+    const encrypted=await createBackup("full","passphrase-archivio-privato-2026");
+    expect((await readBackup(encrypted as File,"passphrase-archivio-privato-2026"))
+      .books.find(b=>b.title===book.title)?.editorialVerificationChoices)
+      .toEqual([archived]);
+    await importBackup(data,false);
+    const copy=(await listBooks()).find(b=>b.title===book.title+" (importato)")!;
+    expect(copy.editorialVerificationChoices?.map(x=>x.status))
+      .toEqual(["taken_on","reset"]);
+    const copiedPlan=buildFrozenEditorialVerificationPlan(copy,copy.chapters[0]!);
+    expect(copiedPlan.items[0]?.status).toBe("archived");
+    expect(copiedPlan.items[0]?.historicalCheckEligible).toBe(true);
+    expect(currentArchivedEditorialVerificationChoice(copy,"c1",copiedPlan.items[0]!))
+      .toBeNull();
+    expect(copy.chapters[0]!.frozenAt).toBe(chapter.frozenAt);
+    expect(copy.editorialCycle).toBeUndefined();
   });
   it("ZIP ostili rifiutati: enum, campi extra, quote, testo e schema bounded",async()=>{
     const {book}=await prepared();
