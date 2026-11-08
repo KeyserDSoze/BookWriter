@@ -21,6 +21,10 @@ Lo stesso piano resta consultabile anche **dopo il congelamento**: apri **Giudiz
 
 Il piano mostra **al massimo 24 voci**, con conteggio di eventuali altre voci. Espone anche i gruppi fuori campione del giudizio (massimo sei gruppi da dodici rilievi), che rimangono **bloccati per la remediation**; non significa che non esistano altre criticità.
 
+## Scelte private dell'autore (v0.11.25)
+
+Per una voce `Da approfondire: prove insufficienti` corrente, con autopilot in pausa e ciclo editoriale bloccato, puoi **prendere in carico**, **respingere** o **azzerare** il controllo suggerito, con motivo privato e storico. Questa scelta **non** completa la verifica né modifica il giudizio: la voce resta `needs_evidence`. Le fonti obsolete, le tornate storiche e i check modificati non riusano autorizzazioni precedenti. [Guida dettagliata](author-editorial-verification-choices.md), ADR 0058.
+
 ## Privacy e sicurezza
 
 Non sono salvate nuove decisioni nel libro, né cambiano ZIP, IndexedDB, sync GitHub, permessi o canone. Il piano non viene inviato a nessun agente AI, nemmeno al giudice, e i cinque lettori ciechi continuano a lavorare indipendentemente. Una citazione letterale verifica soltanto che il testo compare nella fonte, non la correttezza della critica. **Il controllo suggerito non viene eseguito** senza un intervento separato dell'autore.
