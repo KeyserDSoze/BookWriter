@@ -7,6 +7,7 @@ import {recordNarrativeKnowledgeDecision}
   from "../application/narrative-knowledge-decisions";
 import {Button} from "./ui/button";
 import {NarrativeKnowledgeTimingPanel} from "./NarrativeKnowledgeTimingPanel";
+import {NarrativeKnowledgeTopicPanel} from "./NarrativeKnowledgeTopicPanel";
 import {KNOWLEDGE_SHARE_RECIPIENTS,buildKnowledgeSharingRegistry,
   MAX_KNOWLEDGE_SHARE_DECISIONS,type KnowledgeShareRecipient}
   from "../domain/narrative-knowledge-sharing";
@@ -236,6 +237,7 @@ export function NarrativeKnowledgeDecisionsPanel({book,onRefresh}:{
       </p>
     </fieldset>}
     <NarrativeKnowledgeTimingPanel book={book} onRefresh={onRefresh}/>
+    <NarrativeKnowledgeTopicPanel book={book} onRefresh={onRefresh}/>
     {history.length>0 && <details aria-label="Storico interpretazioni conoscenze"
       className="mt-2 rounded border border-slate-200 p-2 dark:border-slate-700">
       <summary className="cursor-pointer font-semibold">
