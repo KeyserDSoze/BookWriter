@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Consensi mirati sulle piste v0.11.21 (PR in preparazione):** l'autore può condividere una singola interpretazione comunicativa solo con i quattro specialisti selezionati e/o il giudice critico, con grant e revoca espliciti; nessun invio ai lettori ciechi, zero canone implicito, ZIP importati con autorizzazioni revocate. [Guida](docs/transfer-consent-ai.md), ADR 0054, issue #20.
+
 **Registro delle piste comunicative v0.11.20 (PR #66):** dopo un'anteprima volontaria, l'autore può valutare una singola citazione come comunicazione descritta, indizio possibile o pista respinta, con motivo e storico delle rettifiche. Solo fonti correnti, nessuna promozione a canone né nuovo invio ai modelli AI. [Guida](docs/author-transfer-assessments.md), ADR 0053, issue #20.
 
 **Anteprima comunicazioni v0.11.19 (PR #65):** per una coppia di conoscenze già confermata come «stessa informazione», l'autore può cercare esplicitamente menzioni letterali di possibili dialoghi fra i due nomi, in entrambe le direzioni e solo nei capitoli congelati precedenti. Nessuna trasmissione dedotta, nessuna chiamata AI o salvataggio della ricerca. [Guida](docs/knowledge-transfer-preview.md), ADR 0052, issue #20.
