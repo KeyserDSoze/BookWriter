@@ -210,7 +210,7 @@ function archivedSuggestionIsCoherent(
   }))return false;
   if(new Set(witnesses.map(x=>x.role)).size<2||
     new Set(witnesses.map(x=>x.finding.remediation.trim()
-      .replace(/\\s+/gu," ").toLocaleLowerCase("it"))).size<2)return false;
+      .replace(/\s+/gu," ").toLocaleLowerCase("it"))).size<2)return false;
   return review.findingIds.every(id=>{
     const decisions=round.judgment.decisions.filter(x=>x.findingId===id);
     return decisions.length===1&&decisions[0]!.action==="reject";
