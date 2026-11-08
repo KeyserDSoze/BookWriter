@@ -207,3 +207,10 @@ Il revisore storico ora può leggere gli estratti cercati e approvati dall'autor
 I modelli possono sbagliare e un giudice può respingere una critica valida; il rapporto resta disponibile per la tua verifica. Il sistema non esegue merge semantico automatico a livello di frammenti senza approvazione, non funziona da browser chiuso, non garantisce un hard cap economico, non certifica fatti storici e non ha ancora un motore completo di retrieval semantico per migliaia di entità. La capacità di blocco multi-dispositivo rimane best effort (ADR 0007).
 
 **Riferimenti:** [ADR 0011](../ADR/0011-independent-editorial-board-and-chapter-freeze.md), [Issue #20](https://github.com/KeyserDSoze/BookWriter/issues/20), [Issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17).
+
+
+## Correzioni alternative sulla stessa citazione (v0.11.23, ADR 0056)
+
+Se revisori **differenti** suggeriscono modifiche testuali diverse a partire dalla **stessa prova letterale corrente, scena, segmento, offset e categoria**, il giudice confronta il gruppo prima di decidere. Un report `pass` non viene considerato come un parere negativo su un'altra specialità, e due rimedi diversi non sono prova di incompatibilità semantica. La redazione espone un massimo di sei gruppi da dodici finding; quelli non esaminati non possono autorizzare correzioni.
+
+Per ogni gruppo il giudice deve indicare `choose_one`, `reject_all` o `compatible_changes`, motivazione, `missingEvidence` e un `nextCheck` **solo consultivo**. La dichiarazione `unresolved` vieta correzioni del gruppo. `validateJudgment` e `repairPrompt` rivalidano i riferimenti prima delle chiamate AI esistenti, anche in caso di rilievi su stile e voce. Nessun nuovo invio ai lettori ciechi, nuova AI call, decisione canonica o cambiamento a segreti/timeline. [Guida](editorial-recommendation-disagreements.md).
