@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.28 — 2026-11-08 (issue #20; PR in preparazione)
+
+**Registro cronologico dei controlli letterali di revisione per capitolo**
+
+- Nuovo `buildEditorialDiffLedger(book,chapter)` **puro/read-only**: raggruppa solo osservazioni testuali con la stessa scena, categoria e citazione NFC da `chapter.editorialRounds` storici irrisolti, `editorialCycle.priorRounds` del capitolo e gruppi correnti già ancorati alla prosa, nello stesso ordine in cui sono stati registrati. Le ripetizioni di round non identificano un unico problema. Archivi con prove non coerenti restano **separati e non confrontabili**.
+- Segnala `first_literal_witness|same_literal_position|moved_literal_position|source_not_comparable|ambiguous_literal_witness` e `first_suggestion|same_suggestion_words|different_suggestion_words|new_judge_not_available|not_comparable`, ma **nessun resolved/fixed/completed**. Due controlli sulla stessa frase nello stesso archivio sono ambigui e non creano un'autorizzazione o un nesso causale. Frase assente nel nuovo campione ⇒ **non osservata (non risolta)**.
+- Lo stato del giudice corrente è mostrato solo se `buildEditorialVerificationPlan` rivalida integralmente `validateJudgment`; giudizio vecchio/manomesso ⇒ `current_unvalidated` e nessun check/approval esposto. Senza nuovo giudice ⇒ `current_awaiting_judge`. Limiti **240 osservazioni recenti**, **12 serie** e **8 osservazioni per serie**, con contatori per tutto ciò che viene omesso e per i gruppi nuovi fuori campione.
+- UI per capitolo in **Redazione multi-agente → Stato dei capitoli → Registro delle differenze editoriali** sia sui congelati sia sui riaperti, con evidenze, provenienza cronologica e avvisi. Non legge `editorialVerificationChoices`: le note dell'autore restano nelle relative viste private, mai trasferite alla revisione. Nessun nuovo DTO, ZIP, IndexedDB, sync, prompt, consenso, rete, AI call, attività o modifica a prosa/canon/repair/freeze.
+- Test Vitest su tornate multiple, giudizi stale, ambiguità, citazioni spostate/omesse, limiti, capitolo estraneo e privacy. Playwright desktop/mobile su freeze → nuova revisione → controllo riformulato → quote assente e nessun consenso copiato. ADR 0061, guida, README, AGENTS, changelog.
+
+**Limite:** identità letterale non dimostra identità del problema; lo storico dei dubbi non certifica la correttezza di una modifica. Serve la valutazione critica dell'autore.
+
 ## 0.11.27 — 2026-11-08 (PR #73, issue #20)
 
 **Confronto letterale e non esecutivo fra suggerimenti archiviati e nuova revisione**
