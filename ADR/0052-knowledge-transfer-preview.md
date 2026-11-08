@@ -1,6 +1,6 @@
 # ADR 0052 — Anteprima privata delle possibili comunicazioni per coppia knowledge
 
-- **Stato:** accettato per v0.11.19 (PR da integrare)
+- **Stato:** accettato per v0.11.19 (PR #65)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0046–0051
