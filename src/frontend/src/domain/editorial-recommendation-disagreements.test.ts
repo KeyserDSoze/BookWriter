@@ -1,7 +1,7 @@
 import {describe,expect,it} from "vitest";
 import {newBook} from "./types";
 import {
-  MAX_RECOMMENDATION_GROUPS,MAX_RECOMMENDATIONS_PER_GROUP,
+  MAX_RECOMMENDATION_GROUPS,
   buildEditorialRecommendationDisagreements,createEditorialCycle,
   chapterSegments,validateReport,validateJudgment,repairPrompt,
   adjudicationPrompt,acceptedRepairs,type EditorialRole,
@@ -114,7 +114,7 @@ describe("Contraddittorio su correzioni diverse riferite alla STESSA citazione",
     expect(judgment.verdict).toBe("repair");
     cycle.judgment=judgment;
     expect(acceptedRepairs(cycle)).toHaveLength(1);
-    expect(repairPrompt(book,cycle,"sc1").prompt).toContain("Accorciare il periodo");
+    expect(repairPrompt(book,cycle,"sc1").prompt).toContain("Modificare soltanto la frase contestata");
     // A resumed repair must not trust an old adjudication after source edit.
     chapter.scenes[0]!.text="Mara nasconde la lettera nel cassetto.";
     expect(()=>repairPrompt(book,cycle,"sc1")).toThrow(/non presenti|non correnti/);
