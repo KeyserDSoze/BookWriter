@@ -221,3 +221,8 @@ Per ogni gruppo il giudice deve indicare `choose_one`, `reject_all` o `compatibl
 Dentro la redazione del capitolo corrente si trova un **Piano verifiche editoriali** che aggrega soltanto gli esiti di `recommendationReconciliations` già prodotti dal giudice sulle proposte di modifica alternative. Distingue attesa, prova insufficiente, correzione approvata, mancata modifica, necessità di rivalidazione e storico. I testi `missingEvidence` e `nextCheck` sono presentati **solo come suggerimenti**, non nuovi task o chiamate AI.
 
 Un intervento è marcato approvato solo se l'intero giudizio passa di nuovo `validateJudgment` sulle fonti e consensi correnti; un vecchio giudizio o una citazione modificata è soltanto storico/da rivalidare. Anche nei **Giudizi archiviati** di un capitolo congelato il piano è consultabile, ma non certifica nessuna autorizzazione corrente. Massimo 24 voci visualizzate e conteggi di omissione/overflow; nessun nuovo campo su libro, ZIP, rete, segreti o canone. [Guida](editorial-verification-plan.md).
+
+
+## Scelte dell'autore sui controlli (v0.11.25, ADR 0058)
+
+Soltanto sui gruppi `needs_evidence` correnti, con autopilot fermo e redazione `blocked`, l'autore può annotare `taken_on|dismissed|reset` nel registro separato `editorialVerificationChoices?` append-only (max160), con motivo privato e fonte esatta. Non cambia giudizio, proof gate, repair, freeze o canone; nessuna nuova chiamata AI. Il log non registra quote, stati o ragioni, autosync viene fermata, ZIP importati azzerano le scelte attive. [Guida](author-editorial-verification-choices.md).
