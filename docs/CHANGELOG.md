@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.31 — 2026-11-08 (main, issue #20)
+
+**Finestre di continuità allineate alle menzioni letterali realmente recuperate**
+
+- `targetedLiteralWindows` cerca il **nome completo a parola intera nella prosa originale**, non la prima sottostringa corrispondente in un testo trasformato: `Ivo` non si ferma su `vivo`, e una frase Unicode che allunga il casefold non altera l'offset originale. Escape dei metacaratteri regex, confini Unicode inclusi segni combinanti e ricerca bounded su max48 termini lunghi 3–100 caratteri.
+- Per i frammenti cross-chapter si tentano prima le `literalEntities` della v0.11.30, poi `entities` strutturate e infine `terms` lessicali; non si ordina più per lunghezza ignorando il valore del segnale. Se nessun termine compare come parola intera, fallback ai contesti iniziale/finale senza affermare che vi sia una prova.
+- Nessuna nuova API, rete, chiamata AI, trasferimento di note autore o decisioni alias, persistenza, schema ZIP, canone, freeze o permesso di correzione. Restano 2 finestre da max1.250 caratteri e gli stessi limiti di 1.600 candidati/4 scene.
+- Test Vitest su falso positivo `vivo/Ivo`, nomi composti, priorità dei segnali, offset UTF-16 originali con Unicode e finestra centrata su scena non taggata; Playwright desktop/mobile su avviso dei limiti. Documenti aggiornati: ADR 0064, guida, README, AGENTS.
+
+**Limite:** una citazione letterale centrata non è una prova di identità, possesso o continuità narrativa; il campione resta parziale e il giudice deve valutare criticamente.
+
+
 ## 0.11.30 — 2026-11-08 (main, issue #20)
 
 **Rivalidazione cross-chapter: recupero di nomi espliciti nella prosa precedente non etichettata**

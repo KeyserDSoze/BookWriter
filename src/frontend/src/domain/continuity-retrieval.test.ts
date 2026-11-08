@@ -78,6 +78,64 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(pack.scenes.find(s=>s.sceneId==="key")?.coverage).toBe("partial");
   });
 
+
+  it("finestre a parola intera: Ivo non deve puntare su vivo; offset del testo invariati",()=>{
+    const source="Un uomo vivo cerca la chiave. ".repeat(130)+
+      "Nel corridoio Ivo apre il plico sigillato. "+
+      "Il rumore si attenua. ".repeat(80);
+    const windows=targetedLiteralWindows(source,["Ivo"]);
+    expect(windows).toHaveLength(2);
+    expect(windows.some(w=>w.text.includes("Ivo apre il plico"))).toBe(true);
+    expect(windows.every(w=>source.slice(w.offset,w.offset+w.text.length)===w.text))
+      .toBe(true);
+  });
+
+  it("priorità ai nomi attestati e non alla parola generica più lunga",()=>{
+    const source="La chiave resta nella torre. ".repeat(160)+
+      "Donna Alba racconta la storia a Ivo. "+
+      "La chiave è nascosta. ".repeat(90);
+    const windows=targetedLiteralWindows(source,["Donna Alba","chiave"]);
+    expect(windows.some(w=>w.text.includes("Donna Alba racconta"))).toBe(true);
+    const onlySubstring="La donna Albareda saluta. ".repeat(140)+
+      "Donna Alba saluta Ivo. "+
+      "Il cortile è deserto. ".repeat(100);
+    expect(targetedLiteralWindows(onlySubstring,["donna alba"]).some(w=>
+      w.text.includes("Donna Alba saluta Ivo"))).toBe(true);
+  });
+
+  it("offset UTF-16 dal testo originale, non da una copia casefold più lunga",()=>{
+    const source="İ".repeat(1900)+" Ivo guarda il manoscritto. "+
+      "L'archivio è vuoto. ".repeat(100);
+    const windows=targetedLiteralWindows(source,["Ivo"]);
+    expect(windows.some(w=>w.text.includes("Ivo guarda il manoscritto"))).toBe(true);
+    for(const window of windows)
+      expect(source.slice(window.offset,window.offset+window.text.length)).toBe(window.text);
+  });
+
+  it("pacchetto di continuità: nomi nella prosa senza tag ricevono una finestra pertinente",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    const prior=b.chapters[1]!.scenes[0]!;
+    prior.characters=[];prior.locations=[];prior.items=[];
+    prior.title="";prior.objective="";
+    prior.text="Un uomo vivo cammina in silenzio. ".repeat(130)+
+      "Ivo nasconde la pergamena dietro un pannello. "+
+      "Il corridoio resta buio. ".repeat(100);
+    const now=current.scenes[0]!;
+    now.characters=["Ivo"];now.items=[];now.locations=[];
+    now.title="";now.objective="";now.text="Il temporale oscura la città.";
+    markDownstreamContinuity(b,origin,"author_reopen",["origin"]);
+    const before=JSON.stringify(b);
+    const pack=buildContinuityEvidence(b,current,now)!;
+    expect(pack.scenes.find(x=>x.sceneId==="key")?.matchSignals.literalEntities)
+      .toEqual(["ivo"]);
+    const windows=pack.scenes.find(x=>x.sceneId==="key")!.windows;
+    expect(windows.some(w=>w.text.includes("Ivo nasconde la pergamena"))).toBe(true);
+    expect(windows.every(w=>prior.text.slice(w.offset,w.offset+w.text.length)===w.text))
+      .toBe(true);
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+    expect(JSON.stringify(b)).toBe(before);
+  });
+
   it("separa gli indizi lessicali dal merito dei rilievi e protegge i cinque lettori ciechi",()=>{
     const b=fixture(),chapter=b.chapters[5]!;
     markDownstreamContinuity(b,b.chapters[0]!,"historical_evidence");

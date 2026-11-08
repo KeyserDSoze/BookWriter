@@ -472,8 +472,10 @@ export function EditorialBoardPanel({
           I capitoli precedenti vanno approvati in ordine.
           Il confronto recupera scene pertinenti anche nei capitoli intermedi:
           cerca anche nomi dichiarati nella scena corrente che compaiono
-          letteralmente nella prosa precedente senza tag. Campioni limitati:
-          la pertinenza non prova una contraddizione né un'identità narrativa.
+          letteralmente nella prosa precedente senza tag. Gli estratti danno
+          priorità a nomi e parole intere, con offset della prosa originale.
+          Campioni limitati: la pertinenza non prova una contraddizione
+          né un'identità narrativa.
         </p>}
         {ch.frozenAt && ch.lastContinuityReview && <p className="mt-2 text-xs muted"
           aria-label={"Storico rivalidazione capitolo " + ch.number}>

@@ -174,17 +174,38 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   };
 }
 
-/** Exact original-text windows focused on matching words, never stitched
- * quotes or normalized text pretending to be a literal excerpt. */
+/** Locate whole literal words in the ORIGINAL UTF-16 string. Never search a
+ * lowercased/normalized copy for offsets: Unicode case folding can change its
+ * length. The escaped regex cannot interpret manuscript text as code. */
+function originalWholeWordOffset(text:string,term:string):number {
+  const query=term.trim();
+  if(query.length<3||query.length>100)return -1;
+  const escaped=query.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  const pattern=new RegExp(escaped,"giu");
+  const isWord=(ch:string)=>/[\p{L}\p{N}\p{M}_]/u.test(ch);
+  for(const hit of text.matchAll(pattern)){
+    const offset=hit.index;
+    if(offset===undefined)continue;
+    const before=offset>0?text[offset-1]??"":"";";
+    const after=text[offset+hit[0].length]??"";
+    if(!isWord(before)&&!isWord(after))return offset;
+  }
+  return -1;
+}
+
+/** Exact original-text windows, preferring the caller's ranked signal order.
+ * No substring ("Ivo" in "vivo"), normalized-offset drift or stitched quotes.
+ * On no whole-word match, deliberately fall back to first/last context. */
 export function targetedLiteralWindows(text:string,matchedTerms:readonly string[]):
   Array<{offset:number;text:string}> {
   if(text.length<=2800)return [{offset:0,text}];
-  const lower=text.toLocaleLowerCase("it");
-  const hits=matchedTerms.slice().sort((a,b)=>b.length-a.length)
-    .map(term=>lower.indexOf(term.toLocaleLowerCase("it")))
-    .filter(at=>at>=0);
+  let hit=-1;
+  for(const term of matchedTerms.slice(0,48)){
+    hit=originalWholeWordOffset(text,term);
+    if(hit>=0)break;
+  }
   const maxStart=text.length-WINDOW_CHARS;
-  const focused=hits.length?Math.min(maxStart,Math.max(0,hits[0]!-Math.floor(WINDOW_CHARS/2))):0;
+  const focused=hit>=0?Math.min(maxStart,Math.max(0,hit-Math.floor(WINDOW_CHARS/2))):0;
   const distant=focused>=maxStart/2?0:maxStart;
   const offsets=[...new Set([focused,distant])].sort((a,b)=>a-b);
   if(offsets.length===1)offsets.push(focused===0?maxStart:0);

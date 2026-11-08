@@ -125,8 +125,10 @@ export function buildContinuityEvidence(book: BookProject, chapter: Chapter,
     recheck.originSceneIds,currentScene);
   const sampledScenes: ContinuityEvidenceScene[] = selected.sampled.map(entry=>{
     const {chapter:sourceChapter,scene,match,selectionReason}=entry;
+    // Prefer the strongest literal witnesses before generic words:
+    // the window must show the actual name, not an earlier substring.
     const windows=targetedLiteralWindows(scene.text,[
-      ...match.terms,...match.entities,...(match.literalEntities??[]),
+      ...(match.literalEntities??[]),...match.entities,...match.terms,
     ]);
     return {
       chapterId:sourceChapter.id,chapterNumber:sourceChapter.number,
