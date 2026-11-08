@@ -186,7 +186,7 @@ function originalWholeWordOffset(text:string,term:string):number {
   for(const hit of text.matchAll(pattern)){
     const offset=hit.index;
     if(offset===undefined)continue;
-    const before=offset>0?text[offset-1]??"":"";";
+    const before=offset>0 ? (text[offset-1] ?? "") : "";
     const after=text[offset+hit[0].length]??"";
     if(!isWord(before)&&!isWord(after))return offset;
   }
