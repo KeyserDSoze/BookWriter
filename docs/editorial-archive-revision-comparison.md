@@ -20,6 +20,10 @@ Se il nuovo giudice si è espresso e il suo giudizio passa le validazioni corren
 
 Una scelta storica di presa in carico, rifiuto o reset può comparire accanto al vecchio suggerimento, **ma rimane storica**: non diventa mai una decisione sulla nuova tornata. Le note sono associate solo tramite identificativi e snapshot letterali compatibili; poiché la riapertura cancella `frozenAt`, non è sempre possibile confermare con certezza da quale congelazione provenga una nota. Se ci sono ambiguità, il sistema non mostra la motivazione come associata a quel controllo. Uno ZIP importato continua ad azzerare le scelte che erano attive.
 
+## Cronologia di più revisioni (v0.11.28)
+
+Per vedere l'evoluzione di un capitolo **oltre il confronto fra archivio e tornata corrente**, consulta il [Registro delle differenze editoriali](editorial-diff-ledger.md) in **Stato dei capitoli**. Raggruppa solo citazioni letterali, segnala le ambiguità e non chiude mai un problema automaticamente. Le tue note private restano fuori dal registro.
+
 ## Limiti e privacy
 
 Il confronto è completamente **locale e read-only**, senza salvataggi, chiamate AI, ricerche, task, editing, freeze o sincronizzazione automatica. Esamina massimo 24 controlli storici e soltanto i gruppi di prova correnti già compresi nei limiti della redazione; segnala espressamente i gruppi non esaminati. Non invia vecchie note ai revisori, al giudice, ai lettori ciechi o al writer. La lettura rimane **responsabilità dell'autore** e non sostituisce i gate di continuità, segreti, timeline o storico.
