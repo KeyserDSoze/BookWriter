@@ -16,6 +16,10 @@ Per esempio, «Elio rivela a Mara che la lettera è falsa» può essere mostrata
 - Ogni verso esamina al massimo **240 scene**, i primi **6.000 caratteri** di ciascuna scena e le prime **12 formule** incontrate per scena. Mostra fino a **4 citazioni**, con numero di scene non scansionate e piste omesse; non è un indice completo.
 - «Nessuna frase candidata trovata» **non dimostra** che la comunicazione non sia avvenuta. I dialoghi nello stesso capitolo, passaggi impliciti, flashback e sinonimi possono sfuggire.
 
+## Registrare la tua interpretazione (v0.11.20)
+
+Per una citazione individuata nell'anteprima, premi **Valuta questa pista** e seleziona esplicitamente se, secondo te, la frase descrive una comunicazione, è soltanto un indizio o non è pertinente. Il giudizio motivato viene conservato con la fonte esatta, la direzione e lo storico delle rettifiche, ma **non prova che il personaggio sappia davvero la notizia** e non viene inviato ai modelli AI. Vedi [guida alle valutazioni](author-transfer-assessments.md) e ADR 0053.
+
 ## Privacy e modifiche
 
 L'anteprima è solo locale e temporanea, non viene salvata né spedita ad agenti, giudice, servizi AI o GitHub. Non aggiorna la memoria, i segreti, i personaggi, i capitoli congelati, le autorizzazioni ai revisori, il registro delle relazioni o il canone. Se il collegamento viene rettificato in «informazioni differenti» o una fonte diventa obsoleta, l'anteprima non è più disponibile.

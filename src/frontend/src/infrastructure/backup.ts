@@ -142,6 +142,17 @@ const narrativeKnowledgeTopicSchema=z.object({
 }).strict().refine(x=>
   x.firstKnowledgeDecisionId<x.secondKnowledgeDecisionId);
 
+const narrativeTransferAssessmentSchema=z.object({
+  id:zId,
+  topicDecisionId:zId,
+  senderKnowledgeDecisionId:zId,
+  recipientKnowledgeDecisionId:zId,
+  candidateId:z.string().min(1).max(500),
+  verdict:z.enum(["author_attested_report","possible_path","dismissed"]),
+  rationale:z.string().min(20).max(650),
+  decidedAt:z.string().datetime(),
+}).strict().refine(x=>x.senderKnowledgeDecisionId!==x.recipientKnowledgeDecisionId);
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -161,6 +172,7 @@ const bookSchema = z.object({
   narrativeKnowledgeShareDecisions: z.array(narrativeKnowledgeShareSchema).max(240).optional(),
   narrativeKnowledgeTimingDecisions: z.array(narrativeKnowledgeTimingSchema).max(200).optional(),
   narrativeKnowledgeTopicDecisions: z.array(narrativeKnowledgeTopicSchema).max(120).optional(),
+  narrativeTransferAssessments: z.array(narrativeTransferAssessmentSchema).max(120).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
