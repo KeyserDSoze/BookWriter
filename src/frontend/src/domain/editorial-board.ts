@@ -860,9 +860,11 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
       w.sender,w.recipient,w.authorVerdict]);
     const expectedAnchors=witnesses.map(anchor);
     const judged=critique.witnessAssessments.map(anchor);
+    const remaining=new Map<string,number>();
+    for(const key of expectedAnchors)remaining.set(key,(remaining.get(key)??0)+1);
+    for(const key of judged)remaining.set(key,(remaining.get(key)??0)-1);
     if(judged.length!==expectedAnchors.length ||
-      new Set(judged).size!==expectedAnchors.length ||
-      judged.some(x=>!expectedAnchors.includes(x)))
+      [...remaining.values()].some(count=>count!==0))
       throw new Error("Piste autore duplicate, inventate, omesse o obsolete nel giudizio.");
   }
   const expected = new Set(findingsById.keys());
