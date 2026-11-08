@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.23 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.23 — 2026-11-08 (PR #69, issue #20)
 
 **Riconciliazione critica delle correzioni divergenti sullo stesso passaggio**
 
