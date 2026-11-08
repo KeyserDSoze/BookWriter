@@ -121,6 +121,17 @@ const narrativeKnowledgeShareSchema=z.object({
 }).strict().refine(x=>
   x.status==="allowed" ? x.recipients.length>0 : x.recipients.length===0);
 
+const narrativeKnowledgeTimingSchema=z.object({
+  id:zId,
+  knowledgeDecisionId:zId,
+  accessMoment:z.enum([
+    "acquired_in_scene","known_before_scene","not_yet_known","uncertain",
+  ]),
+  narrativeOrder:z.enum(["chronological","flashback_or_reordered","undetermined"]),
+  rationale:z.string().min(20).max(650),
+  decidedAt:z.string().datetime(),
+}).strict();
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
@@ -138,6 +149,7 @@ const bookSchema = z.object({
   narrativeAliasDecisions: z.array(narrativeAliasDecisionSchema).max(120).optional(),
   narrativeKnowledgeDecisions: z.array(narrativeKnowledgeDecisionSchema).max(160).optional(),
   narrativeKnowledgeShareDecisions: z.array(narrativeKnowledgeShareSchema).max(240).optional(),
+  narrativeKnowledgeTimingDecisions: z.array(narrativeKnowledgeTimingSchema).max(200).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),

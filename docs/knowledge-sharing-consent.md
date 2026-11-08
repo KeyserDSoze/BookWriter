@@ -23,3 +23,7 @@ Il backup ZIP conserva l'audit delle autorizzazioni e delle revoche. **Quando im
 Questa non è un'autenticazione crittografica e l'app non può garantire ciò che un provider esterno farà con i dati già inviati. La revoca protegge gli **invii successivi**, non quelli passati.
 
 Riferimenti: [ADR 0048](../ADR/0048-per-knowledge-editorial-recipient-consent.md), [registro delle conoscenze](author-knowledge-registry.md), [issue #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+
+## Tempi narrativi dalla v0.11.16
+
+Il consenso selettivo di questa guida riguarda **solo** la citazione letterale e la classificazione `learned_directly|reported_by_other|still_secret`. Le nuove annotazioni su **quando** il personaggio apprende la notizia e sull'eventuale **flashback** rimangono private e non vengono incluse nei prompt AI, anche se il ruolo è già stato autorizzato. Per un eventuale uso futuro serviranno una nuova policy e un opt-in separato. [Guida sui tempi](knowledge-timing-registry.md).

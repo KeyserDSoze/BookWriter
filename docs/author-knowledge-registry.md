@@ -30,3 +30,7 @@ Riferimenti: [ADR 0047](../ADR/0047-author-attested-knowledge-interpretations.md
 ## Consensi facoltativi dalla v0.11.15
 
 La condivisione rimane disabilitata per impostazione predefinita; nella nuova sezione puoi autorizzare singoli specialisti o il giudice, **mai i lettori ciechi**, e revocare per le richieste AI future. Nei prompt autorizzati appaiono solo classificazione e breve citazione precedente, non le motivazioni private. Il backup conserva lo storico ma **l'importazione revoca i permessi attivi**. Vedi [guida al consenso](knowledge-sharing-consent.md) e ADR 0048.
+
+## Momento della conoscenza dalla v0.11.16
+
+Un'interpretazione corrente può essere ulteriormente qualificata con il **momento d'apprendimento** e con l'**ordine narrativo** nell'area [Quando i personaggi sanno?](knowledge-timing-registry.md). Questi dati restano **privati ai modelli AI**, anche se la precedente classificazione knowledge ha un consenso di condivisione valido. Lo storico distingue le modifiche di fonte e le rettifiche del giudizio temporale.

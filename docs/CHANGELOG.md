@@ -1,5 +1,19 @@
 # Changelog — BookWriter
 
+## 0.11.16 — 2026-11-08 (PR #62)
+
+**Quando un personaggio sa: momento della conoscenza e ordine narrativo separati**
+
+- Nuovo registro opzionale `narrativeKnowledgeTimingDecisions?` append-only (max **200**) per l'**ID esatto di una interpretazione `knowledge` già corrente** su menzione confermata e scena congelata. `accessMoment=acquired_in_scene|known_before_scene|not_yet_known|uncertain`, `narrativeOrder=chronological|flashback_or_reordered|undetermined`, motivo privato 20–650, data. `still_secret` non può dichiarare acquisizione nella/prima della scena; gli altri verdetti non possono dichiarare `not_yet_known`.
+- `buildNarrativeKnowledgeTimingRegistry`: ultime decisioni per ID, rettifiche archiviate, fonti cambiate/riaperte/riattestate invalidate. Vista per personaggio **ordinata per capitolo/scena/offset del manoscritto**, NON per tempo della storia e NON per equivalenza semantica fra notizie o personaggi.
+- UI **Quando i personaggi sanno?** con fonte verificata, doppia selezione momento/ordine, motivazione, conferma esplicita, registro per personaggio, storico e indicazione dei dati obsoleti. Nessuna conclusione causale o modifica al canone.
+- Salvataggio locale protetto: Web Locks writer/outbox, CAS `updatedAt`, niente aggiornamenti durante autopilot/ciclo attivo, transazione atomica books+activities+outbox, autosync OFF e coda eliminata. Log attività senza motivazioni, spoiler, nomi o contenuto riservato.
+- Backup ZIP `content/full` con schema **strict** e compatibile con archivi precedenti; i riferimenti temporali importati vengono rivalidati rispetto alle fonti e **non autenticano l'autore**.
+- Privacy: **tutti i nuovi campi temporali sono esclusi dai prompt AI**, anche dove esiste un opt-in knowledge v0.11.15. Il consenso a una classificazione non vale automaticamente per la cronologia. Nessuna nuova chiamata AI, nessuna annotazione convertita in fatto, inventario, timeline o segreto canonico. Test Vitest di dominio, application, privacy e ZIP; Playwright desktop/mobile su scelta/reload e fonte invalidata. ADR 0049, [guida](knowledge-timing-registry.md), issue #20.
+
+**Limiti:** il sistema non interpreta automaticamente flashback o informazione trasmessa fra personaggi; `chronological` è una classificazione dell'autore, non un fatto verificato. Il registro visualizza **ordine di esposizione del testo**, non ordine degli avvenimenti. Backup e push GitHub manuali possono contenere note private.
+
+
 ## 0.11.15 — 2026-11-07 (PR #61)
 
 **Consenso esplicito per singola conoscenza e destinatario AI**

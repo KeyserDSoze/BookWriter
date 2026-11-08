@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.15
+# Redazione multi-agente di BookWriter — v0.11.16
+
+## Quando il personaggio conosce la notizia? (v0.11.16)
+
+L'autore può annotare separatamente **quando un personaggio apprende una notizia** rispetto a una scena attestata e se il capitolo è raccontato in **ordine cronologico, come flashback o in ordine incerto**. La dashboard mostra le posizioni ordinate nel manoscritto per nome letterale del personaggio, ma non confonde mai capitolo 2 con `dopo` nella cronologia della storia. Le dichiarazioni sono interpretazioni dell'autore, non dimostrazioni semantiche.
+
+Questa timeline resta **privata rispetto a tutti i prompt AI**; il consenso selettivo v0.11.15 per condividere la citazione e la classificazione di una conoscenza NON include automaticamente le nuove etichette temporali. Il giudice può ancora respingere i rilievi e nessuna decisione entra nel canone o nei segreti. Ancoraggio a fonte congelata, last-wins, storici e ZIP strict preservano audit e invalidazione delle fonti. [Guida](knowledge-timing-registry.md), ADR 0049, issue #20.
+
+
 
 ## Consenso mirato dell'autore per trasmettere conoscenze AI (v0.11.15)
 
