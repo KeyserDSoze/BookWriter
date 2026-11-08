@@ -1,0 +1,27 @@
+# ADR 0049 — Collocazione temporale delle conoscenze interpretata dall'autore
+
+- **Stato:** proposto per v0.11.16
+- **Data:** 2026-11-08
+- **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
+- **Precedenti:** ADR 0011 e 0042–0048
+
+## Problema
+
+La v0.11.14 permette all'autore di chiarire se una menzione narrativa significhi che un personaggio ha appreso direttamente, per sentito dire oppure ancora non conosca una notizia. La v0.11.15 consente di condividere **solo quelle classificazioni** con destinatari scelti. Rimane un'altra distinzione essenziale: **la posizione di una scena nel manoscritto non garantisce l'ordine temporale degli eventi**, soprattutto in un flashback, in un sogno o in un racconto non lineare. Un personaggio può conoscere qualcosa prima della scena in cui il lettore viene informato, mentre un altro no. Senza un'annotazione esplicita, il programma rischierebbe di inventare una timeline epistemica.
+
+## Decisione
+
+1. Introdurre `BookProject.narrativeKnowledgeTimingDecisions?: NarrativeKnowledgeTimingDecision[]` (append-only, **max 200**) con `id,knowledgeDecisionId,accessMoment,narrativeOrder,rationale,decidedAt`. L'ID di fonte deve corrispondere a una `NarrativeKnowledgeDecision` **corrente**, ancorata ad una menzione `knowledge_mention` `affirmed` ancora valida e congelata. Una decisione creata su un'ipotesi lessicale o su una scena riaperta non è valida.
+2. `accessMoment` può essere `acquired_in_scene`, `known_before_scene`, `not_yet_known`, `uncertain`. `narrativeOrder` può essere `chronological`, `flashback_or_reordered`, `undetermined`. Si tratta di **interpretazioni motivate dell'autore**, non deduzioni o verifiche dell'AI: motivo 20–650 caratteri. `not_yet_known` è permesso solo quando la decisione knowledge corrente è `still_secret`; in quest'ultimo caso non si possono dichiarare `acquired_in_scene` o `known_before_scene`. Un valore `uncertain` resta disponibile per tutte le categorie.
+3. `buildNarrativeKnowledgeTimingRegistry(book)` presenta le annotazioni **correnti** ordinate esclusivamente per *capitolo/scena/offset nel manoscritto*, le raggruppa per nome letterale del personaggio (normalizzazione di maiuscole, non equivalenza semantica) e separa una collezione `nonCurrentCount`. **Non costruisce un grafo delle conoscenze, non deduce trasmissioni fra personaggi e non promuove l'ordine narrativo a cronologia della storia.** Non equipara due menzioni su argomenti simili a una notizia identica.
+4. Vale la regola **last-wins** per l'ID esatto della decisione knowledge: le rettifiche rimangono auditabili e non risorgono dopo re-freeze, riscritture, nuova attestazione o cambio d'interpretazione della fonte. Uno ZIP importato non autentica l'autore. Le vecchie decisioni senza la nuova colonna rimangono leggibili e non acquisiscono automaticamente un significato temporale.
+5. La UI richiede scelta esplicita della fonte corrente, due classificazioni distinte, una motivazione e una conferma che l'ordine dei capitoli non costituisce prova della cronologia degli eventi. La vista **Quando i personaggi sanno?** confronta le annotazioni dei personaggi e mantiene lo storico. L'azione `recordNarrativeKnowledgeTimingDecision` richiede Web Locks writer/outbox, CAS `updatedAt`, autopilot in pausa e ciclo editoriale non attivo; salva atomicamente libro/attività/outbox, disabilita autosync e cancella outbox. Le attività non includono motivo, attore o contenuto privato. ZIP content/full e import validano lo schema **strict** con limite 200.
+6. **Privato per impostazione predefinita, anche dopo un consenso v0.11.15**: i nuovi campi `accessMoment`, `narrativeOrder` e `rationale` **non** entrano nel `buildSharedKnowledgePack`, nei prompt di nessuno dei 12 revisori, nel giudice, nello scrittore o nella remediation. I permessi v0.11.15 valgono **solo** per quote e verdetto originale; non si estendono automaticamente alle nuove annotazioni temporali. Un futuro uso AI richiederà un ADR e un consenso espliciti e separati. Nessuna nuova chiamata AI/HTTP, stato di canone o segreto modificato.
+
+## Rischi, limiti e scelte non fatte
+
+`chronological` è un'etichetta scelta dall'autore: il software **non può verificarla semanticamente**. `known_before_scene` non dice quale altra scena abbia trasmesso la notizia e non prova che sia vera. La visualizzazione ordinata per capitolo è **solo** un indice leggibile; paragoni di personaggi diversi e trasferimenti multi-hop richiederanno nuovi legami semantici con prove e autorizzazione esplicite. Le espressioni di conoscenza attualmente rilevate sono limitate a pattern italiani diretti. Un campo importato può essere falso, ma non diviene automaticamente un canone. Backup ZIP e sincronizzazione GitHub manuale possono contenere spoiler e note riservate; l'UI lo segnala.
+
+## Verifiche
+
+Vitest di dominio su attestazioni valide, contraddizioni `still_secret`, rettifiche last-wins, riapertura/riattestazione, più personaggi, ordine manoscritto contro storia, valori ostili e cap. Test application per lock/CAS/autosync/outbox/log privati. Test ZIP `content/full` e payload ostili/legacy. Test privacy: nessuno dei 12 revisori e il giudice vede il nuovo contenuto, **anche con consenso knowledge già accordato**. Playwright desktop/mobile: decisione autore, flashback, salvataggio/reload, invalidazione della fonte e nessuna richiesta AI/GitHub durante le azioni.
