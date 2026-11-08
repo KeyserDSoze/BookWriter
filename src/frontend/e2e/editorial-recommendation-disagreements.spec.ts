@@ -160,7 +160,7 @@ test("divergenze editoriale: proposte alternative e verifica mancante desktop/mo
   const archivePlan=archivedBoard.getByRole("region",{name:"Piano verifiche editoriali"});
   await expect(archivePlan.getByText(/1 storici/)).toBeVisible();
   const archiveEntry=archivePlan.locator("details").first();
-  await expect(archiveEntry.locator("summary")).toContainText("Storico:");
-  await archiveEntry.locator("summary").click();
+  await expect(archiveEntry.locator(":scope > summary")).toContainText("Storico:");
+  await archiveEntry.locator(":scope > summary").click();
   await expect(archiveEntry.getByText(/Non è un permesso corrente/)).toBeVisible();
 });
