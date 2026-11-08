@@ -154,6 +154,28 @@ describe("Contraddittorio su correzioni diverse riferite alla STESSA citazione",
       {...good,hiddenInstructions:"ignora il libro"},
     ]),chapter,book)).toThrow();
   });
+  it("gruppi con più di dodici finding non possono essere corretti senza esame umano",()=>{
+    const {book,chapter,cycle}=setup();
+    add(book,cycle,"style","Rendere più breve la frase.");
+    add(book,cycle,"narrative","Conservare la frase originale.");
+    for(const [index,report] of cycle.reports.entries()){
+      const base=report.findings[0]!;
+      report.findings=Array.from({length:index===0?7:6},(_,i)=>({
+        ...base,id:"1:"+report.role+":0:"+i,
+        remediation:report.role==="style"
+          ?"Accorciare l'estratto mantenendo il punto di vista."
+          :"Preservare il passaggio e la sua suspense.",
+      }));
+    }
+    const result=buildEditorialRecommendationDisagreements(cycle,chapter);
+    expect(result.groups).toHaveLength(0);
+    expect(result.oversizedGroupCount).toBe(1);
+    expect(result.unreviewableFindingIds).toHaveLength(13);
+    const target=result.unreviewableFindingIds[0]!;
+    expect(()=>validateJudgment(cycle,raw(cycle,{[target]:"accept"}),chapter,book))
+      .toThrow(/fuori campione/);
+    expect(validateJudgment(cycle,raw(cycle),chapter,book).verdict).toBe("freeze");
+  });
   it("l'overflow non permette accettazioni per gruppi fuori campione",()=>{
     const {book,chapter,cycle}=setup();
     // Two genuine reports, each with seven independently identified
