@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## 0.11.20 — 2026-11-08 (issue #20; PR in preparazione)
+## 0.11.20 — 2026-11-08 (PR #66, issue #20)
 
 **Giudizi privati dell'autore per singole citazioni di possibili comunicazioni**
 
