@@ -5,6 +5,8 @@ import {
   buildEditorialVerificationPlan,type VerificationPlanItem,
   type VerificationPlanStatus,
 } from "../domain/editorial-verification-plan";
+import {EditorialVerificationChoiceControl}
+  from "./EditorialVerificationChoiceControl";
 
 const STATUS_LABELS:Record<VerificationPlanStatus,string>={
   awaiting_judge:"In attesa del giudice",
@@ -28,9 +30,11 @@ function selected(item:VerificationPlanItem,filter:PlanFilter):boolean{
   if(filter==="closed")return item.status==="closed_no_edit";
   return item.status==="archived";
 }
-export function EditorialVerificationPlanPanel({book,cycle,chapter,defaultFilter="pending"}:{
+export function EditorialVerificationPlanPanel({
+  book,cycle,chapter,defaultFilter="pending",onRefresh,
+}:{
   book:BookProject;cycle:ChapterEditorialCycle;chapter:Chapter;
-  defaultFilter?:PlanFilter;
+  defaultFilter?:PlanFilter;onRefresh?:()=>Promise<void>;
 }){
   const [filter,setFilter]=useState<PlanFilter>(defaultFilter);
   const plan=useMemo(()=>buildEditorialVerificationPlan(book,cycle,chapter),
@@ -92,6 +96,9 @@ export function EditorialVerificationPlanPanel({book,cycle,chapter,defaultFilter
             <b>Prova mancante o limite dichiarato:</b> {item.missingEvidence}</p>}
           {item.nextCheck&&<p className="whitespace-pre-wrap">
             <b>Controllo suggerito (non eseguito):</b> {item.nextCheck}</p>}
+          {item.status==="needs_evidence"&&onRefresh&&
+            <EditorialVerificationChoiceControl book={book}
+              chapterId={chapter.id} item={item} onRefresh={onRefresh}/>}
           {item.status==="awaiting_judge"&&<p className="muted">
             Il giudice non ha ancora indicato prove mancanti o un controllo
             specifico per questo gruppo.

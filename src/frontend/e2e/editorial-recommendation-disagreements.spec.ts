@@ -73,9 +73,9 @@ test("divergenze editoriale: proposte alternative e verifica mancante desktop/mo
   await expect(plan.getByText(/Piano verifiche editoriali · capitolo 1/)).toBeVisible();
   await expect(plan.getByText(/1 da verificare/)).toBeVisible();
   const planEntry=plan.locator("details").first();
-  await expect(planEntry.locator("summary")).toContainText(
+  await expect(planEntry.locator(":scope > summary")).toContainText(
     "Da approfondire: prove insufficienti");
-  await planEntry.locator("summary").click();
+  await planEntry.locator(":scope > summary").click();
   await expect(planEntry.getByText(/Non sappiamo se l'effetto desiderato/))
     .toBeVisible();
   await expect(planEntry.getByText(/Chiedere all'autore quale ritmo narrativo/))
@@ -126,8 +126,8 @@ test("divergenze editoriale: proposte alternative e verifica mancante desktop/mo
   const stale=page.getByRole("region",{name:"Piano verifiche editoriali"});
   await expect(stale.getByText(/1 da verificare/)).toBeVisible();
   const staleEntry=stale.locator("details").first();
-  await expect(staleEntry.locator("summary")).toContainText("Da rivalidare");
-  await staleEntry.locator("summary").click();
+  await expect(staleEntry.locator(":scope > summary")).toContainText("Da rivalidare");
+  await staleEntry.locator(":scope > summary").click();
   await expect(staleEntry.getByText(/non usare questo estratto per avviare una riparazione/))
     .toBeVisible();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
