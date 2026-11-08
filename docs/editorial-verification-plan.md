@@ -29,6 +29,10 @@ Per una voce `Da approfondire: prove insufficienti` corrente, con autopilot in p
 
 Nei **Giudizi archiviati** dei capitoli ancora congelati, un suggerimento `unresolved` con fonte archiviata coerente può essere **preso in carico, respinto o azzerato** con motivo privato, senza cambiare lo stato `archived`. Una scelta rimane legata all'esatta congelazione e non si riattiva se il capitolo è riaperto o giudicato di nuovo. Nessuna chiamata AI o riscrittura. [Guida](frozen-editorial-verification-annotations.md).
 
+## Confronto con una nuova tornata (v0.11.27)
+
+Quando il capitolo viene riaperto, puoi consultare il [confronto con i dubbi storici](editorial-archive-revision-comparison.md), limitato a corrispondenze letterali fra scena, categoria, citazione e posizione. Non indica che un vecchio controllo sia risolto, non esegue un nuovo check e non trasferisce le tue scelte precedenti.
+
 ## Privacy e sicurezza
 
 Non sono salvate nuove decisioni nel libro, né cambiano ZIP, IndexedDB, sync GitHub, permessi o canone. Il piano non viene inviato a nessun agente AI, nemmeno al giudice, e i cinque lettori ciechi continuano a lavorare indipendentemente. Una citazione letterale verifica soltanto che il testo compare nella fonte, non la correttezza della critica. **Il controllo suggerito non viene eseguito** senza un intervento separato dell'autore.
