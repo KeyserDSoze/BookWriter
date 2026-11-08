@@ -1,6 +1,6 @@
 # ADR 0059 — Annotazioni private sui controlli dei capitoli congelati
 
-- **Stato:** accettato per v0.11.26 (PR in preparazione)
+- **Stato:** accettato per v0.11.26 (PR #72)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0056–0058
