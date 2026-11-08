@@ -968,7 +968,7 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
     ?buildEditorialRecommendationDisagreements(cycle,chapter)
     :{groups:[],unreviewableFindingIds:[] as string[]};
   const reconciliations=parsed.recommendationReconciliations;
-  if(!disagreements.groups.length && reconciliations?.length)
+  if(!disagreements.groups.length && reconciliations!==undefined)
     throw new Error("Divergenze non presenti o fonti non correnti: riconciliazione non autorizzata.");
   if(disagreements.groups.length){
     if(!reconciliations || reconciliations.length!==disagreements.groups.length)
@@ -1146,6 +1146,7 @@ export function repairPrompt(book: BookProject, cycle: ChapterEditorialCycle,
   // Otherwise an accepted edit could bypass the exact-source gate after resume.
   const liveDisagreements=buildEditorialRecommendationDisagreements(cycle,ch!);
   if (cycle.judgment?.recommendationReconciliations?.length ||
+    fixes.some(x=>liveDisagreements.unreviewableFindingIds.includes(x.findingId)) ||
     fixes.some(x=>liveDisagreements.groups.some(g=>g.findingIds.includes(x.findingId))) ||
     fixes.some(x=>allFindings(cycle).some(f=>
       f.id===x.findingId && (!!f.narrativeConflict || !!f.priorSceneConflict)))) {
