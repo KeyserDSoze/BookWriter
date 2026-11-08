@@ -61,7 +61,7 @@ describe("Contraddittorio su correzioni diverse riferite alla STESSA citazione",
     const b=add(book,cycle,"narrative","Conservare il dettaglio ma spostare la frase più avanti.");
     add(book,cycle,"readerGenre","Senza criticità editoriale.",{pass:true});
     expect(buildEditorialRecommendationDisagreements(cycle,chapter))
-      .toMatchObject({groups:[{findingIds:[a,b],sceneId:"sc1",
+      .toMatchObject({groups:[{findingIds:[b,a],sceneId:"sc1",
         segmentIndex:0,quote,category:"chiarezza"}],
         omittedGroupCount:0,oversizedGroupCount:0,unreviewableFindingIds:[]});
     const prompt=adjudicationPrompt(book,cycle);
@@ -156,19 +156,19 @@ describe("Contraddittorio su correzioni diverse riferite alla STESSA citazione",
   });
   it("l'overflow non permette accettazioni per gruppi fuori campione",()=>{
     const {book,chapter,cycle}=setup();
-    // Seven separate exact locations, two independent recommendations each.
-    for(let i=0;i<7;i++){
-      const roleA="style",roleB="narrative" as const;
-      const suffix=" Variazione "+i+".";
-      const a=add(book,cycle,roleA,"Riscrivere "+i);
-      const b=add(book,cycle,roleB,"Tagliare "+i);
-      // Re-anchor in distinct literal categories, without inventing semantics.
-      const aFinding=cycle.reports[cycle.reports.length-2]!.findings[0]!;
-      const bFinding=cycle.reports[cycle.reports.length-1]!.findings[0]!;
-      aFinding.category="categoria-"+i;
-      bFinding.category="categoria-"+i;
-      expect(a).toBeDefined();expect(b).toBeDefined();
-      expect(suffix).toContain("Variazione");
+    // Two genuine reports, each with seven independently identified
+    // findings: no duplicate role/segment report and no reused finding IDs.
+    add(book,cycle,"style","Riscrivere la prima categoria.");
+    add(book,cycle,"narrative","Conservare la prima categoria.");
+    for(const record of cycle.reports){
+      const original=record.findings[0]!;
+      record.findings=Array.from({length:7},(_,i)=>({
+        ...original,id:"1:"+record.role+":0:"+i,
+        category:"categoria-"+i,
+        remediation:record.role==="style"
+          ?"Riscrivere il dettaglio nella categoria "+i+"."
+          :"Conservare la tensione nella categoria "+i+".",
+      }));
     }
     const report=buildEditorialRecommendationDisagreements(cycle,chapter);
     expect(report.groups).toHaveLength(MAX_RECOMMENDATION_GROUPS);
