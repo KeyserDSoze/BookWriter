@@ -114,3 +114,60 @@ export function buildNarrativeKnowledgeTopicRegistry(
     pairwiseOnly:true,
   };
 }
+
+/** A review-only pattern built from THREE independent, CURRENT author verdicts.
+ * It does not add a missing edge, infer topic identity or authorize repairs. */
+export interface KnowledgeTopicTriangleWarning {
+  first:CurrentKnowledgeDecision;
+  middle:CurrentKnowledgeDecision;
+  last:CurrentKnowledgeDecision;
+  firstSame:CurrentKnowledgeTopicLink;
+  secondSame:CurrentKnowledgeTopicLink;
+  different:CurrentKnowledgeTopicLink;
+}
+export interface KnowledgeTopicTriangleReview {
+  warnings:KnowledgeTopicTriangleWarning[];
+  totalCount:number;
+  omittedCount:number;
+}
+export const MAX_KNOWLEDGE_TOPIC_TRIANGLE_WARNINGS=12;
+
+/** Only show potentially inconsistent CLOSED triangles: A~B, B~C, A!=C.
+ * Two links alone never imply the third; no semantic or temporal inference.
+ * Bounded output avoids overwhelming the mobile panel with combinatorial
+ * evidence. The inputs are the already-validated, last-wins CURRENT links. */
+export function reviewNarrativeKnowledgeTopicTriangles(
+  registry:NarrativeKnowledgeTopicRegistry,
+):KnowledgeTopicTriangleReview {
+  const sameByPair=new Map<string,CurrentKnowledgeTopicLink>();
+  const neighbors=new Map<string,Array<{id:string;link:CurrentKnowledgeTopicLink}>>();
+  for(const link of registry.sameInformation){
+    const a=link.decision.firstKnowledgeDecisionId;
+    const b=link.decision.secondKnowledgeDecisionId;
+    sameByPair.set(key(a,b),link);
+    for(const [from,to] of [[a,b],[b,a]]){
+      const next=neighbors.get(from)??[];
+      next.push({id:to,link});
+      neighbors.set(from,next);
+    }
+  }
+  const warnings:KnowledgeTopicTriangleWarning[]=[];
+  let totalCount=0;
+  for(const different of registry.differentInformation){
+    const a=different.decision.firstKnowledgeDecisionId;
+    const c=different.decision.secondKnowledgeDecisionId;
+    for(const nearby of neighbors.get(a)??[]){
+      const secondSame=sameByPair.get(key(nearby.id,c));
+      if(!secondSame)continue;
+      totalCount++;
+      if(warnings.length>=MAX_KNOWLEDGE_TOPIC_TRIANGLE_WARNINGS)continue;
+      const middle=nearby.link.first.decision.id===nearby.id
+        ?nearby.link.first:nearby.link.second;
+      warnings.push({
+        first:different.first,middle,last:different.second,
+        firstSame:nearby.link,secondSame,different,
+      });
+    }
+  }
+  return {warnings,totalCount,omittedCount:totalCount-warnings.length};
+}
