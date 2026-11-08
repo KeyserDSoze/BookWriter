@@ -1,6 +1,6 @@
 # ADR 0053 — Registro privato delle valutazioni autore sulle piste comunicative
 
-- **Stato:** accettato per v0.11.20 (PR in verifica)
+- **Stato:** accettato per v0.11.20 (PR #66)
 - **Data:** 2026-11-08
 - **Issue:** [#20](https://github.com/KeyserDSoze/BookWriter/issues/20)
 - **Precedenti:** ADR 0046, 0047–0052
