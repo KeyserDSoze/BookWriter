@@ -236,3 +236,8 @@ Il piano in **Giudizi archiviati** offre ora note private solo per `unresolved +
 ## Confronto fra vecchia e nuova redazione (v0.11.27, ADR 0060)
 
 Quando un capitolo riaperto conserva `editorialRounds` con rilievi `unresolved`, il pannello **Confronto verifiche storiche e nuova revisione** allinea **solo** citazioni letterali per scena, categoria e quote NFC, distinguendo stesso offset, citazione spostata, ambiguità o nessuna corrispondenza *nel campione*. Valuta separatamente le parole di `missingEvidence/nextCheck` prima e dopo il giudice corrente rivalidato. Le vecchie note dell'autore restano private e storiche (snapshot compatibile, mai consenso nuovo), con avvisi sull'identità incompleta del vecchio freeze. Max24 controlli storici e campionamento corrente limitato; nessun nuovo prompt, AI, rete, canone, fonte semantica o autorizzazione di repair. [Guida](editorial-archive-revision-comparison.md).
+
+
+## Registro delle differenze per capitolo (v0.11.28, ADR 0061)
+
+Il pannello **Stato dei capitoli → Registro delle differenze editoriali** mostra una cronologia read-only fra `chapter.editorialRounds`, `editorialCycle.priorRounds` e gruppi correnti ancorati, se pertinenti allo **stesso capitolo**. Raggruppa solo scena, categoria e quote NFC, segnala identità di posizione, citazione spostata, formulazione diversa del check e più occorrenze letterali ambigue. Max240 candidati più recenti, 12 serie e 8 passi per serie con omissioni conteggiate. Non osservato nel campione ≠ risolto; un giudizio corrente non rivalidato non diventa un approval. Il registro non legge le note private né muta ZIP, rete, AI, canone, segreti, timeline, memory, repair o freeze. [Guida](editorial-diff-ledger.md).

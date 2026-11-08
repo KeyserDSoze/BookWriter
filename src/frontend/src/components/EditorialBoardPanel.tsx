@@ -4,6 +4,7 @@ import type { BookProject, Chapter } from "../domain/types";
 import { NarrativeEventDecisionsPanel } from "./NarrativeEventDecisionsPanel";
 import { EditorialVerificationPlanPanel } from "./EditorialVerificationPlanPanel";
 import { EditorialArchiveComparisonPanel } from "./EditorialArchiveComparisonPanel";
+import { EditorialDiffLedgerPanel } from "./EditorialDiffLedgerPanel";
 import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs,
   buildEditorialRecommendationDisagreements, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
@@ -502,6 +503,7 @@ export function EditorialBoardPanel({
         <LocIiifPanel key={"iiif-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <WikisourcePanel key={"wikisource-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
         <ManualEvidencePanel key={"excerpts-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+        <EditorialDiffLedgerPanel book={book} chapter={ch}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>
           <div className="mt-3">
