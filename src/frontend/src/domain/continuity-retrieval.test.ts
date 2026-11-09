@@ -553,7 +553,7 @@ describe("Recupero mirato locale della continuità",()=>{
     prior.title="";prior.objective="";
     prior.text="x".repeat(mid-1)+"Vivo "+"x".repeat(total-mid-4);
     const now=current.scenes[0]!;
-    now.text="Piove.";now.title="";now.objective="";
+    now.text="Piove.";now.title="";now.objective="";now.date=undefined;
     now.characters=["Ivo"];now.locations=[];now.items=[];
     markDownstreamContinuity(b,origin,"author_reopen");
     const snapshot=JSON.stringify(b);
