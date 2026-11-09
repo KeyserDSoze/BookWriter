@@ -101,7 +101,9 @@ test("usage noto e testo editoriale rifiutato: ledger conservato senza canone (d
   // rebuilds its estimate from disk rather than matching JSX punctuation.
   await page.reload();
   const ledger = page.getByRole("region",{name:"Budget AI"});
-  await expect(ledger.getByText(/Spesa stimata da usage noto:/))
+  // getByText otherwise resolves to the nested <b> label, not the
+  // containing <p> with the monetary value.
+  await expect(ledger.getByText(/Spesa stimata da usage noto:/).locator(".."))
     .toContainText("0,0014"); // (243*3 + 72*9) / 1_000_000 €, rounded to 4 decimals
   await expect(ledger.getByText(/Consumi incerti/)).toHaveCount(0);
 });
