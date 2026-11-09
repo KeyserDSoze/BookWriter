@@ -97,7 +97,11 @@ test("usage noto e testo editoriale rifiutato: ledger conservato senza canone (d
   expect(saved.activities).toHaveLength(1);
   expect(saved.activities[0]).toMatchObject({status:"failed",aiRequested:true,
     modelId:"mock-usage-review",inputTokens:243,outputTokens:72});
-  await expect(panel.getByText(/1 richieste · 0 senza usage completo · 0 senza tariffa/))
-    .toBeVisible();
-  await expect(panel.getByText(/Consumi incerti/)).toHaveCount(0);
+  // The stored Activity is definitive; reload to also verify the dashboard
+  // rebuilds its estimate from disk rather than matching JSX punctuation.
+  await page.reload();
+  const ledger = page.getByRole("region",{name:"Budget AI"});
+  await expect(ledger.getByText(/Spesa stimata da usage noto:/))
+    .toContainText("0,0014"); // (243*3 + 72*9) / 1_000_000 €, rounded to 4 decimals
+  await expect(ledger.getByText(/Consumi incerti/)).toHaveCount(0);
 });
