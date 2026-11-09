@@ -11,6 +11,7 @@
 - Persistenza IndexedDB e chiavi API cifrate con Web Crypto.
 - Import/export ZIP content-only o completo (password AES-GCM opzionale, chiaro solo dopo avviso).
 - Generazione EPUB, DOCX e PDF dalla prosa canonica.
+- **EPUB 3 validato strutturalmente v0.11.57:** package ZIP con `mimetype` STORED, OPF/nav/spine coerenti, escaping XML anche per caratteri AI malformati, esclusione di bozze e memoria non canonica; test unitari e download Playwright desktop/mobile. [Guida export](docs/book-export.md), [ADR 0089](ADR/0089-epub3-canonical-export-validation.md), [issue #93](https://github.com/KeyserDSoze/BookWriter/issues/93).
 - Setup GitHub Pages su **https://ghostwriting.ws** (asset base root).
 
 **Sincronizzazione GitHub**: la PR #8 introduce collegamento a repository per libro, PAT fine-grained cifrato localmente, proiezione Markdown/frontmatter, commit multi-file con controllo SHA, import non distruttivo e blocco dei conflitti. Vedi `docs/github-sync.md` e ADR 0005.

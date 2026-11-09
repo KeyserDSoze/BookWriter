@@ -1,8 +1,16 @@
 import { zipSync, strToU8 } from "fflate";
 import type { BookProject, Chapter, Scene } from "../domain/types";
 
+/** XHTML/OPF are XML 1.0 documents: an LLM or imported draft may contain
+ * invisible control bytes or lone UTF-16 surrogates. Keep valid Unicode and
+ * normal line breaks, but never emit forbidden XML code points. */
+function safeXmlText(text: string): string {
+  return text
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
+}
 function html(text: string): string {
-  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+  return safeXmlText(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 function cleanName(text: string): string {
@@ -31,7 +39,9 @@ function paragraphs(text: string): string[] {
   return text.replaceAll("\r\n", "\n").split(/\n\s*\n/g).map(x => x.trim()).filter(Boolean);
 }
 
-export function exportEpub(book: BookProject): void {
+/** Pure EPUB 3 generator: ZIP bytes are independently inspectable and testable.
+ * The packaging contains ONLY canonical scenes, never draft prose or keys. */
+export function buildEpub(book: BookProject, modifiedAt = new Date()): Uint8Array {
   const chapters = ensureChapters(book);
   const uid = "urn:uuid:" + book.id;
   const entries: Record<string, Uint8Array | [Uint8Array, { level: 0 }]> = {
@@ -82,11 +92,16 @@ export function exportEpub(book: BookProject): void {
     '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">' +
     '<dc:identifier id="uid">' + html(uid) + "</dc:identifier>" +
     "<dc:title>" + html(book.title) + "</dc:title><dc:language>it</dc:language>" +
-    '<meta property="dcterms:modified">' + new Date().toISOString().slice(0, 19) + "Z</meta>" +
+    '<meta property="dcterms:modified">' + modifiedAt.toISOString().slice(0, 19) + "Z</meta>" +
     "</metadata><manifest>" + manifest.join("") + "</manifest><spine>" + spine.join("") + "</spine></package>",
   );
-  const bytes = zipSync(entries, { level: 6 });
-  download(new Blob([new Uint8Array(bytes)], { type: "application/epub+zip" }), cleanName(book.title) + ".epub");
+  return zipSync(entries, { level: 6 });
+}
+
+export function exportEpub(book: BookProject): void {
+  const bytes = buildEpub(book);
+  download(new Blob([new Uint8Array(bytes)], { type: "application/epub+zip" }),
+    cleanName(book.title) + ".epub");
 }
 
 export async function exportDocx(book: BookProject): Promise<void> {

@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.57 — 2026-11-09 (main, issue #93, epic #4)
+
+**EPUB 3 con struttura ZIP verificabile, XHTML sicuro e controllo della sola prosa canonica**
+
+- `infrastructure/export-book.ts` separa il builder puro `buildEpub(book, modifiedAt?)` dal download `exportEpub`. Il pacchetto EPUB è ora ispezionabile/testabile senza eseguire DOM o simulare clic, mentre l'API dell'interfaccia e l'esportazione DOCX/PDF rimangono compatibili.
+- Il test del pacchetto verifica primo entry ZIP `mimetype` **STORED (method 0)** senza extra, byte MIME esatti, `META-INF/container.xml`, OPF con identificatore/metadata/manifest/spine, indice nav XHTML e file XHTML dei soli capitoli con scene `canon`. L'ordine dei capitoli pubblicati segue il libro; il loro **numero originale** rimane nei titoli.
+- La funzione di escaping XML esclude controlli illegali XML 1.0 e sostituisce surrogati UTF-16 isolati, preservando accenti, emoji, newline e tipografia valida. Tutti i contenuti narrativi continuano a ricevere escaping di `&<>"'`; un provider AI non può generare caratteri XML invisibili che invalidino il file.
+- Test Vitest con `fflate.unzipSync`, verifica header ZIP locale, manifest/spine, esclusione scene `draft/planned`, brief/memory non canonici, Unicode e errore su libro privo di scene canoniche. Test Playwright desktop/mobile esporta un file reale dall'interfaccia, apre il ZIP scaricato e sottopone OPF/container/nav/XHTML al `DOMParser(application/xml)` del browser.
+- Nuova [guida export](book-export.md), [ADR 0089](../ADR/0089-epub3-canonical-export-validation.md), AGENTS, README e documentazione aggiornati; nessuna dipendenza aggiuntiva, nessun dato inviato fuori dal browser.
+- Questa tranche **non** certifica EPUBCheck né risolve ancora font Unicode PDF, cover/illustrazioni, layout e accessibilità DOCX/EPUB/PDF o import/export ZIP completo: la [epic #4](https://github.com/KeyserDSoze/BookWriter/issues/4) rimane aperta.
+
+
 ## 0.11.56 — 2026-11-09 (main, issue #92, #10, #3, #6)
 
 **Intenti GitHub manuali sospesi riconciliabili attraverso merge binari verificati**
