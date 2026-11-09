@@ -648,3 +648,9 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Applicare `assertPlausibleClock` anche al `404` atteso di `getRef` con `allow404` **prima** di ritornare `null`. Con header assente/invalido o skew macroscopico, interrompere pure il primo acquisto senza alcun POST/PATCH; non cambiare i codici HTTP per gli altri errori.
 - L'Archivio non deve dire «Nessun lock» mentre `inspectWriterLease` è ancora pendente o ha fallito. Stati UI distinti `checking/checked/error`, svuotamento del lease dopo errore e risposta asincrona più recente vincente, senza rendere cliccabile un recupero obsoleto. Non inferire mai assenza da rete, CORS o tempo non verificato.
 - Testare Vitest sul 404 e acquisizione iniziale, Playwright desktop/mobile sulla lettura con header mancante e su quella successiva valida. Restano aperti fencing e orologio preciso della #10; nessuna nuova API, branch, formato o credenziale.
+
+## Rinnovo writer lease con conferma del commit v0.11.44 — ADR 0076 / issue #80
+
+- `renewWriterLease` deve richiedere `confirmed.headSha === commit` dopo `PATCH force:false` e successiva lettura del lease: un `sessionId` uguale, una scadenza ancora futura o una HEAD vecchia **non bastano** per segnalare un rinnovo riuscito.
+- Se il PATCH fallisce con `RemoteWriterLost` (conflitto 409/422 oppure errore di rete), è ammessa soltanto la verifica read-only della **HEAD esatta**: il successo con ACK perso dopo applicazione è recuperabile, ma errore prima dell'applicazione/HEAD diversa è fail-closed. Non ritentare il commit e non usare `force:true`. Non introdurre GET aggiuntivi oltre a quelli precedenti.
+- La guardia applicativa abortisce l'attività AI se il rinnovo non è confermato. Conservare test sul simulatore di ref per 409, perdita ACK prima e dopo l'applicazione, normale happy path, isolamento delle credenziali e CI browser desktop/mobile. Non rivendicare fencing distribuito perfetto; #10 rimane aperta.

@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.44 — 2026-11-09 (main, issue #80, #10, #6, #3)
+
+**Rinnovo del writer lease: conferma della HEAD esatta anche dopo errore di rete**
+
+- `renewWriterLease` non considera più riuscito un `PATCH force:false` soltanto perché la sessione originaria risulta ancora attiva sulla vecchia HEAD: dopo il PATCH (anche se l'ACK è mancato) rilegge il lock e verifica **SHA esatto del commit appena creato**, identità di sessione, attività e scadenza.
+- Un rifiuto CAS 409/422 o una richiesta smarrita prima dell'applicazione fallisce chiuso (`RemoteWriterLost`) invece di simulare un rinnovo; il writer guard interrompe il modello AI quando può. Se il PATCH era effettivamente riuscito e **solo la risposta era persa**, la lettura dell'HEAD identica riconosce il successo senza un secondo commit/retry.
+- Aggiunti test Vitest per rifiuto HTTP 409, ACK mancante prima/dopo applicazione, regressione rinnovo regolare e `force:false`; la pipeline CI verifica nuovamente TypeScript, test, build e Playwright desktop/mobile.
+- Invariati lease v1, Web Locks, TTL 120s, heartbeat 25s, grace 60s, controllo clock, numero di GET, endpoint e credenziali. Nessuna modifica al canone o al ZIP; **rimangono aperti** fencing transazionale cross-device, clock skew moderato e modifiche manuali (epic #10).
+- Guida GitHub e autopilot aggiornate, ADR 0076, AGENTS e README. Nessun branch/PR, rilascio diretto su `main`.
+
+
 ## 0.11.43 — 2026-11-09 (main, issue #79, #10, #6)
 
 **Lease GitHub: un 404 non verificato non significa «nessun lock»**

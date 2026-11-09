@@ -299,11 +299,20 @@ export async function renewWriterLease(current: WriterLeaseHandle): Promise<Writ
   try {
     await api(secret, patchPath(current.remote, current.bookId), "PATCH", { sha: commit, force: false });
   } catch (error) {
-    // An ambiguous network failure may mean the PATCH succeeded. Accept only
-    // an exact owner verification, never an unrelated commit.
+    // A lost PATCH acknowledgment could mean the commit was applied, but a
+    // 409/422 or a lost request must NOT silently renew the old active lease.
+    // Read back the exact Git ref below; never retry or force-update it.
     if (!(error instanceof RemoteWriterLost)) throw error;
   }
-  return assertWriterLease(current);
+  // The previous owner/session alone is insufficient evidence of renewal:
+  // GitHub may still point to the old, unextended lease or to another commit.
+  // Reuse the same two GETs already performed by assertWriterLease, with a
+  // stricter check of the committed ref before allowing more AI work.
+  const confirmed = await inspectWriterLease(current.remote, current.bookId);
+  if (!confirmed || confirmed.headSha !== commit ||
+      confirmed.sessionId !== current.sessionId || !active(confirmed))
+    throw new RemoteWriterLost("Rinnovo del lease GitHub non confermato: scrittura sospesa.");
+  return handle(current.remote, confirmed);
 }
 
 /** Release is best-effort; never force a lock branch backwards. */

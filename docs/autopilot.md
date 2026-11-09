@@ -78,3 +78,7 @@ Per un libro collegato, il writer guard verifica che il clock del dispositivo si
 ## v0.11.43 — 404 di lock remoto verificato e UI fail-closed
 
 Nel libro collegato a GitHub, un `404` sulla branch di lock non è considerato prova di assenza se manca il `X-RateLimit-Reset` CORS-esposto o l'orologio è palesemente incoerente. Anche la prima acquisizione si ferma prima di chiamate AI o scritture Git. In Archivio lo stato è «verifica in corso», «verificato» oppure «non verificabile»; un errore invalida l'ultimo risultato mostrato, e risposte tardive non prevalgono su controlli recenti. Nessuna chiamata o dato nuovo. Vedi ADR 0075, issue #79/#10 e `docs/github-sync.md`.
+
+## v0.11.44 — rinnovo remoto attestato dal commit esatto
+
+Il semplice fatto che la sessione AI abbia ancora un lease non scaduto **non** conferma che l'ultimo heartbeat GitHub abbia esteso la scadenza. Ora il rinnovo richiede la conferma della HEAD sullo SHA esatto del commit creato, oltre a proprietario e stato attivo. Se GitHub rifiuta il CAS o il PATCH non è stato applicato, il guard si arresta con `RemoteWriterLost` e abortisce l'AI se possibile. Una risposta di rete persa **dopo** il PATCH applicato non fa ripetere la scrittura: la HEAD verificata consente di proseguire. Non viene alterato il numero di GET, il provider AI o il formato lease. Non è risolto il fencing delle modifiche manuali cross-device (issue #10). Vedi ADR 0076, issue #80 e `docs/github-sync.md`.

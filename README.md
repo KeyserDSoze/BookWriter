@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Rinnovo lease verificato v0.11.44 (main):** dopo un tentativo di rinnovo, BookWriter richiede che GitHub punti esattamente al nuovo commit; un 409 o una richiesta non applicata non è più considerata successo solo perché la sessione precedente è ancora attiva. Un ACK smarrito dopo l'applicazione è invece riconosciuto senza ripetere il commit. [Guida](docs/github-sync.md), ADR 0076, issue #80/#10.
+
 **Lease 404 verificato v0.11.43 (main):** anche quando la branch di lock non esiste, GitHub deve fornire un `X-RateLimit-Reset` valido e compatibile con l'orologio locale prima che BookWriter possa dire «nessun lock». L'Archivio distingue verifica in corso, assenza verificata e errore, senza riutilizzare uno stato obsoleto. [Guida](docs/github-sync.md), ADR 0075, issue #79/#10.
 
 **Controllo clock lease v0.11.42 (main):** i libri GitHub collegati bloccano l'autopilot e il takeover quando l'orologio del browser è palesemente incoerente con la finestra `X-RateLimit-Reset` esposta da GitHub o manca l'header. È una verifica **approssimativa**, non sincronizzazione orari o fencing completo. [Guida](docs/github-sync.md), ADR 0075, issue #78/#10.

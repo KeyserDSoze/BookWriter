@@ -29,6 +29,7 @@ function githubServer(resetHeader:()=>string|null=()=>
     [[MAIN, { parent: null, tree: TREE }]],
   );
   const calls: Array<{ method: string; path: string; body: unknown; token: string }> = [];
+  let patchFailure: "none" | "http409" | "network_before" | "network_after" = "none";
   let counter = 1;
   const sha = () => (counter++).toString(16).padStart(40, "0");
   const filename = "/contents/.bookwriter/lease.json";
@@ -77,7 +78,12 @@ function githubServer(resetHeader:()=>string|null=()=>
       const head = lockRefs.get(key);
       if (commits.get(payload.sha)?.parent !== head)
         return reply({ message: "non fast forward" }, 409);
+      const failure = patchFailure;
+      patchFailure = "none";
+      if (failure === "http409") return reply({ message: "non fast forward" }, 409);
+      if (failure === "network_before") throw new TypeError("simulated lost request");
       lockRefs.set(key, payload.sha);
+      if (failure === "network_after") throw new TypeError("simulated lost response");
       return reply({ object: { sha: payload.sha } });
     }
     if (method === "GET" && path === filename) {
@@ -91,6 +97,9 @@ function githubServer(resetHeader:()=>string|null=()=>
   }));
   return {
     calls,
+    failNextPatch(mode: "http409" | "network_before" | "network_after") {
+      patchFailure = mode;
+    },
     expireLock(bookId: string) {
       const id = lockRefs.get("bookwriter-lock/" + bookId)!;
       const commit = commits.get(id)!;
@@ -126,6 +135,40 @@ describe("Lease distribuito GitHub (branch fast-forward only)", () => {
     const bodies = JSON.stringify(server.calls.filter(c => c.method === "POST").map(c => c.body));
     expect(bodies).not.toContain(TOKEN);
     expect(bodies).not.toContain("headSha");
+  });
+
+  it.each(["http409", "network_before"] as const)(
+    "non confonde un rinnovo %s con un lease precedente ancora attivo",
+    async failure => {
+      const server = githubServer();
+      const bookId = crypto.randomUUID();
+      const first = await acquireWriterLease(remote, bookId, crypto.randomUUID());
+      const initialHead = first.headSha;
+      server.failNextPatch(failure);
+
+      await expect(renewWriterLease(first))
+        .rejects.toThrow(/Rinnovo del lease GitHub non confermato/);
+      expect((await inspectWriterLease(remote, bookId))?.headSha).toBe(initialHead);
+      expect(server.calls.filter(call => call.method === "PATCH")).toHaveLength(1);
+      expect(server.calls.filter(call => call.method === "PATCH").every(call =>
+        (call.body as Record<string, unknown>)?.force === false)).toBe(true);
+      expect(JSON.stringify(server.calls)).not.toContain(TOKEN);
+    },
+  );
+
+  it("riconosce il commit esatto se l'ACK del PATCH si perde dopo l'applicazione", async () => {
+    const server = githubServer();
+    const bookId = crypto.randomUUID();
+    const first = await acquireWriterLease(remote, bookId, crypto.randomUUID());
+    server.failNextPatch("network_after");
+
+    const renewed = await renewWriterLease(first);
+    expect(renewed.headSha).not.toBe(first.headSha);
+    expect(renewed.sessionId).toBe(first.sessionId);
+    expect((await inspectWriterLease(remote, bookId))?.headSha).toBe(renewed.headSha);
+    expect(server.calls.filter(call => call.method === "PATCH")).toHaveLength(1);
+    expect(server.calls.filter(call => call.method === "PATCH").every(call =>
+      (call.body as Record<string, unknown>)?.force === false)).toBe(true);
   });
 
   it("conserva il lease scaduto finché l'autore non richiede takeover esplicito", async () => {
