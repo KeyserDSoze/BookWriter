@@ -532,6 +532,14 @@ export class AutopilotRunner {
           await saveActivity(started);
           const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,
             preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : undefined);
+          // A provider reply may carry usage even when the editorial schema,
+          // freshness gate or writer lease rejects its text. Capture the
+          // observed counts before validation so the failed/cancelled Activity
+          // still accounts for a potentially billed request.
+          started.endpointId = result.endpointId;
+          started.modelId = result.modelId;
+          started.inputTokens = result.inputTokens;
+          started.outputTokens = result.outputTokens;
           await guard.assertActive(); // Discard result if the lease was lost during the AI call.
           const latest = await getBook(bookId);
           if (!latest || latest.status !== "running" || latest.phase !== work.phase ||
@@ -539,8 +547,6 @@ export class AutopilotRunner {
             throw new DOMException("Il libro è cambiato durante la chiamata AI: risultato non applicato.", "AbortError");
           work.apply(latest, result.text);
           started.status = "succeeded"; started.endedAt = new Date().toISOString();
-          started.endpointId = result.endpointId; started.modelId = result.modelId;
-          started.inputTokens = result.inputTokens; started.outputTokens = result.outputTokens;
           started.summary = shortSummary(result.text); started.output = result.text;
           // One more fencing check before canonizing output in IndexedDB.
           await guard.assertActive();

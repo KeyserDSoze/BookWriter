@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.74 — 2026-11-10 (main, issue #111, epic #17/#6)
+
+**Contabilizzare lo usage provider osservato anche quando la prosa o il rapporto AI sono rifiutati**
+
+- `AutopilotRunner` acquisisce immediatamente `endpointId/modelId/inputTokens/outputTokens` dal `ModelAnswer` restituito, prima di rivitalizzare lease, checkpoint e parser editoriale. Un report malformato resta `failed` e non diventa canone, ma il ledger conserva i token confermati dal provider.
+- `generateSceneMergeDraft` fa altrettanto prima di validare/storicizzare la bozza: una scena eccessiva o un confronto scaduto non producono draft, mentre l'audit `failed/cancelled` conserva i conteggi osservati.
+- Usage mancante/parziale, rete fallita e fetch interrotta restano incerte come da ADR 0012; nessuna promessa di fattura precisa, nessuna chiamata AI supplementare o approvazione implicita di testo.
+- Vitest per report invalido, usage parziale, checkpoint modificato durante fetch, fusioni respinte; E2E desktop/mobile con risposta mock rifiutata e Activity contenente usage completo. ADR 0106, guida budget, README/AGENTS e bump versioni package/lock.
+
+
 ## 0.11.73 — 2026-11-10 (main, issue #110, epic #6/#20)
 
 **E2E Unicode: eliminata la corsa tra cifratura/salvataggio delle impostazioni e reload**

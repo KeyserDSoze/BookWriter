@@ -103,6 +103,12 @@ export async function generateSceneMergeDraft(
       const response = await callModel("merge", prompt.system, prompt.prompt,
         settings, current, controller.signal,
         preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : undefined);
+      // A valid provider usage report belongs to the request Activity even if
+      // the proposed scene cannot become a draft or the lease is lost.
+      attempted.endpointId = response.endpointId;
+      attempted.modelId = response.modelId;
+      attempted.inputTokens = response.inputTokens;
+      attempted.outputTokens = response.outputTokens;
       await guard.assertActive();
       const text = validateSceneProposal(response.text);
       const original = review.local.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);

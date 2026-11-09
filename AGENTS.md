@@ -865,3 +865,10 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 
 - In Playwright, `click("Salva impostazioni")` **non attende** la `Promise` di `App.saveEndpointSettings`, che cifra la chiave con WebCrypto prima di salvare la route modello in IndexedDB. Non invocare `page.reload()` dopo il solo click: attendere l'esatta conferma UI `Impostazioni salvate in IndexedDB.` e la presenza persistita del modello e di una chiave cifrata (solo booleano, mai bytes/contenuto), anche dopo il reload.
 - Per l'E2E grafemico conservare il limite di 10.000 UTF-16, i primi due prompt, la ricomposizione identica `first+second===sceneText`, niente surrogati isolati né joiner separati. Non coprire un errore del runner con timeout extra/soft asserts; la diagnostica dei failure deve restare priva di API key, segreti e prosa autore. Verificare CI desktop/mobile ripetuta; #110 si chiude solo con il gate senza regressioni. Questo è un fix di sincronizzazione del test, non un nuovo comportamento del provider.
+
+
+## Ledger usage su output AI scartato v0.11.74 — ADR 0106 / issue #111
+
+- Un `callModel` che ritorna un `ModelAnswer` con `inputTokens/outputTokens` osservati deve popolare la medesima `Activity` di tentativo `aiRequested=true` **prima** di `work.apply`, dei controlli di lease/freschezza e di qualunque salvataggio del canone. In caso di validazione fallita, `failed/cancelled` rimangono tali ma conservano i contatori del provider, mai un verdetto o un testo AI inventato.
+- Vale anche per `application/scene-merge.ts#generateSceneMergeDraft`: un output respinto, lease perso o confronto stale non crea bozza, non cambia canone e non cancella usage già noto. `callModel` che lancia senza un `ModelAnswer` valido **non** conferma alcun usage; conteggi parziali restano incerti e budget #17 resta fail-closed.
+- Vitest su output malformato, corsa di revisioni, fusioni troppo lunghe e usage mancante; E2E desktop/mobile su report invalido, Activity failed con token misurati, 0 rapporti applicati e 0 ulteriore AI automatica. Documentare che la contabilità è solo stima a tariffe autore e non fattura.

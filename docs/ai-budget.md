@@ -45,3 +45,7 @@ Questa funzione è una **soglia preventiva stimata**, non un tetto rigido alla f
 Le tariffe sono quelle che inserisci tu, non prezzi verificati automaticamente. Il budget attuale non è globale fra libri, utenti o browser, e non sostituisce limiti ufficiali eventualmente offerti dal provider.
 
 **Riferimenti:** [ADR 0012](../ADR/0012-book-ai-budget-guardrails.md), [issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17), [guida ai token](ai-usage.md).
+
+## v0.11.74 — usage conosciuto ma testo rifiutato
+
+Se il provider restituisce conteggi `usage` validi ma la revisione editoriale o la bozza AI di fusione è rifiutata, BookWriter **non canonizza** il testo e lascia l'Activity `failed/cancelled`, ma conserva i token già riportati dal provider ai fini della stima. Solo i conteggi effettivamente presenti sono registrati: in caso di usage mancante o incompleto il blocco conservativo rimane. [Guida](ai-usage-rejected-responses.md) · [ADR 0106](../ADR/0106-provider-usage-before-editorial-validation.md).

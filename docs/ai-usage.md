@@ -45,3 +45,7 @@ L'[issue #17](https://github.com/KeyserDSoze/BookWriter/issues/17) prevede un **
 Anche in quella fase bisognerà distinguere il tetto di spesa **stimato** dalla fatturazione reale del provider: una richiesta in volo può essere fatturata e superare il limite prima che il browser la interrompa.
 
 Decisione tecnica: [ADR 0010](../ADR/0010-ai-usage-observability.md).
+
+## v0.11.74 — risultati AI scartati con usage valido
+
+Un errore nel JSON editoriale, nella freschezza del checkpoint o nella validazione della bozza può impedire di applicare il testo **dopo** una risposta valida di trasporto. I token input/output già dichiarati dal provider vengono ora conservati nella Activity `failed/cancelled`, quindi nella stima del budget, senza creare canone fittizio. Le chiamate prive di usage continuano a essere incerte. [Guida](ai-usage-rejected-responses.md) · [ADR 0106](../ADR/0106-provider-usage-before-editorial-validation.md).

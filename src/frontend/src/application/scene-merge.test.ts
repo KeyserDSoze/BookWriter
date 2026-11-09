@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newBook, DEFAULT_SETTINGS, type BookProject } from "../domain/types";
 import { compareBookVersions } from "../domain/conflicts";
 import { buildSceneMergePrompt } from "../domain/scene-merge";
+import { accountBookAiBudget, preflightBookAiBudget } from "../domain/ai-budget";
 import type { ConflictReview } from "../infrastructure/conflict-recovery";
 import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infrastructure/db";
 import { getOutbox } from "../infrastructure/outbox";
@@ -157,6 +158,47 @@ describe("Laboratorio di fusione senza canonizzazione automatica", () => {
     )).rejects.toThrow("429");
     expect(await listSceneMergeDrafts(review, "chapter-1", "scene-1")).toHaveLength(0);
     expect((await getBook(review.bookId))?.chapters[0]?.scenes[0]?.status).toBe("canon");
+  });
+
+  it("conserva usage completo nella Activity failed quando il testo AI è rifiutato", async () => {
+    const review = await fixture();
+    const book = (await getBook(review.bookId))!;
+    book.aiBudget = {enabled:true,enabledAt:new Date(Date.now()-5000).toISOString(),
+      limitEur:5,maxOutputTokens:8192};
+    await saveBook(book,false);
+    review.localUpdatedAt=book.updatedAt;
+    review.local=structuredClone(book);
+    const settings=structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId="merge-model";
+    settings.aiPriceRates=[{endpointId:"openai",modelId:"merge-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}];
+    await saveSettings(settings);
+    callMock.mockResolvedValue({text:"Z".repeat(180001),
+      endpointId:"openai",modelId:"merge-model",inputTokens:450,outputTokens:70});
+    await expect(generateSceneMergeDraft(review,"chapter-1","scene-1","",
+      new AbortController())).rejects.toThrow(/troppo lunga/);
+    expect(await listSceneMergeDrafts(review,"chapter-1","scene-1")).toHaveLength(0);
+    const history=await listActivities(book.id);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({status:"failed",aiRequested:true,
+      endpointId:"openai",modelId:"merge-model",inputTokens:450,outputTokens:70});
+    const account=accountBookAiBudget(history,settings,book.aiBudget!);
+    expect(account.incompleteCount).toBe(0);
+    expect(account.estimatedSpentEur).toBeCloseTo((450*3+70*9)/1_000_000);
+    expect(preflightBookAiBudget(book,settings,history,"merge","System","Altro tentativo"))
+      .toBeDefined();
+    expect((await getBook(book.id))!.chapters).toEqual(book.chapters);
+  });
+  it("non inventa usage mancante per una risposta AI di fusione non valida", async () => {
+    const review=await fixture();
+    callMock.mockResolvedValue({text:"Z".repeat(180001),
+      endpointId:"openai",modelId:"non-prezzato"});
+    await expect(generateSceneMergeDraft(review,"chapter-1","scene-1","",
+      new AbortController())).rejects.toThrow(/troppo lunga/);
+    const history=await listActivities(review.bookId);
+    expect(history[0]).toMatchObject({status:"failed",aiRequested:true});
+    expect(history[0]?.inputTokens).toBeUndefined();
+    expect(history[0]?.outputTokens).toBeUndefined();
   });
 
   it("può salvare e rifiutare una bozza manuale senza spendere token AI", async () => {
