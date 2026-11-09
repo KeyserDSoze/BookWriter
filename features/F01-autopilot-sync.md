@@ -2,6 +2,7 @@
 
 ## Progresso versionato
 
+- [x] v0.11.66 (issue #103): segmentazione grapheme-safe per tutti i 12 revisori; limite vero 10.000 unità UTF-16, Unicode non spezzato, errore conservativo su runtime/input malformato e citazioni verificabili (ADR 0098).
 - [x] v0.11.65 (issue #102): PDF Unicode offline per Latin Extended e cirillico con font PT Serif Regular/Bold sotto OFL e preflight TrueType cmap; WinAnsi Times invariato, emoji/CJK fail-closed (ADR 0097).
 - [x] v0.11.64 (issue #101): EPUBCheck W3C 5.4.0 obbligatorio su matrice di 4 manoscritti sintetici (canon/draft, primo capitolo tardivo, XML/Unicode, testo lungo), file non vuoti e privacy verificati (ADR 0096).
 - [x] v0.11.63 (issue #100): job CI EPUBCheck 5.4.0 ufficiale con release/digest fissati e fixture `buildEpub` sintetica, privacy e Unicode/escaping testati (ADR 0095); non certifica tutte le esportazioni.

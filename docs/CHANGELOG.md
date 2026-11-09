@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.66 — 2026-11-09 (main, issue #103, epic #20)
+
+**Segmentazione della prosa Unicode senza perdita per la redazione multi-agente**
+
+- `chapterSegments` usa `Intl.Segmenter` con granularità `grapheme` per selezionare confini sicuri **dopo** la divisione preferenziale su frase o a capo, mantenendo ogni emoji, sequenza ZWJ, accento combinato e `CRLF` intero all'interno di un singolo segmento destinato ai 7 specialisti e ai 5 lettori.
+- Corretto il limite di 10.000 unità UTF-16 per segmento: `lastIndexOf` non può includere una newline oltre il confine; gli input vengono **ricomposti esattamente senza alterare un carattere**, e rimane il blocco oltre 40 segmenti. Unicode UTF-16 malformato, un singolo grafema sopra limite o browser senza `Intl.Segmenter` su scene lunghe fermano la review con errore esplicito anziché produrre prompt ambigui/corrotti.
+- Vitest verifica surrogate pair, accento combinante, sequenza emoji ZWJ, CRLF, newline/punto al confine, ricostruzione, limiti, prova narrativa Unicode ancorata al segmento corretto, browser senza API e input malformato. Playwright desktop/mobile intercetta i primi due prompt reviewer generati dal vero runner con testo Unicode al confine, confrontando la prosa ricostruita e i codepoint.
+- ADR 0098, guida `docs/editorial-unicode-segmentation.md`, `docs/editorial-board.md`, AGENTS, README, feature e package/lock 0.11.66 aggiornati. Nessun cambiamento a contratti dei provider, dati persistiti, sincronizzazione o numero di chiamate AI; nessun pacchetto aggiunto.
+- **Limiti:** il rispetto dei grafemi non certifica che un finding sia valido, non abilita nuove lingue nel modello e può modificare il confine di segmenti di review ancora aperte. Citazioni e prove stale non possono autorizzare accettazioni; rieseguire la review quando necessario, con consenso autore. Epic #20 ancora aperta.
+
 ## 0.11.65 — 2026-11-09 (main, issue #102, epic #4)
 
 **PDF Unicode offline per latino esteso e cirillico con PT Serif incorporato e preflight cmap**

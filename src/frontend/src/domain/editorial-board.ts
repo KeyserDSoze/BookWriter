@@ -327,18 +327,55 @@ function bound(text: string, limit: number, label: string): string {
   return text;
 }
 export interface ChapterSegment { sceneId: string; sceneTitle: string; text: string; index: number }
+
+const MAX_EDITORIAL_SEGMENT_UNITS = 10_000;
+type GraphemeSegmenter = {
+  segment(text: string): { containing(index: number): { index: number } | undefined };
+};
+type GraphemeSegmenterConstructor = new (
+  locale: string, options: { granularity: "grapheme" },
+) => GraphemeSegmenter;
+
+/** Split only at complete graphemes: UTF-16 slices may otherwise turn one
+ * emoji, a combining accent or a ZWJ sequence into separate invalid prompts.
+ * Do not silently downgrade to code-unit splitting on older browsers. */
+function safeEditorialBoundary(text: string, proposed: number): number {
+  const Segmenter = (Intl as unknown as { Segmenter?: GraphemeSegmenterConstructor }).Segmenter;
+  if (!Segmenter) throw new Error(
+    "La revisione di una scena lunga richiede la segmentazione Unicode del browser. " +
+    "Aggiorna il browser prima di riprendere, per non spezzare il testo.");
+  const boundary = new Segmenter("it", { granularity: "grapheme" })
+    .segment(text).containing(proposed);
+  if (!boundary || boundary.index < 1) throw new Error(
+    "Un grafema supera il limite di 10.000 caratteri del revisore. " +
+    "Correggi o dividi la scena: il testo non verrà troncato.");
+  return boundary.index;
+}
+
 export function chapterSegments(chapter: Chapter): ChapterSegment[] {
   const segments: ChapterSegment[] = [];
   for (const scene of chapter.scenes) {
     if (!scene.text.trim()) throw new Error("Scena non ancora scritta: " + scene.id);
+    // Ill-formed UTF-16 can be replaced by U+FFFD during provider transport;
+    // stop before a reviewer sees a different version of the canonical text.
+    for (const symbol of scene.text) {
+      const cp = symbol.codePointAt(0)!;
+      if (cp >= 0xd800 && cp <= 0xdfff) throw new Error(
+        "Scena con Unicode malformato: correggi i caratteri prima della revisione.");
+    }
     let rest = scene.text;
     while (rest.length) {
-      let end = Math.min(rest.length, 10000);
+      let end = Math.min(rest.length, MAX_EDITORIAL_SEGMENT_UNITS);
       if (end < rest.length) {
-        const split = Math.max(rest.lastIndexOf("\n", end), rest.lastIndexOf(". ", end));
+        // String.lastIndexOf includes its starting position. Checking at
+        // end used to consume a newline *past* the 10k hard limit.
+        const split = Math.max(rest.lastIndexOf("\n", end - 1),
+          rest.lastIndexOf(". ", end - 2));
         if (split > end / 2) end = split + 1;
+        end = safeEditorialBoundary(rest, end);
       }
-      segments.push({ sceneId: scene.id, sceneTitle: scene.title, text: rest.slice(0, end), index: segments.length });
+      segments.push({ sceneId: scene.id, sceneTitle: scene.title,
+        text: rest.slice(0, end), index: segments.length });
       rest = rest.slice(end);
       if (segments.length > 40)
         throw new Error("Capitolo troppo lungo: oltre 40 segmenti. Dividilo prima di continuare.");

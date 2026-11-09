@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.17
+# Redazione multi-agente di BookWriter — v0.11.66
+
+## Unicode integro nei segmenti inviati ai revisori (v0.11.66)
+
+Per capitoli lunghi, i 12 agenti lavorano su segmenti numerati della prosa. Ora i confini di ciascun segmento sono **confini di grafemi Unicode**, non soltanto posizioni UTF-16: una singola emoji `👩‍💻`, un accento composto `é` o una coppia `CRLF` non può essere divisa fra due prompt. La ricomposizione dei segmenti mantiene **esattamente il testo canonico**, senza modificarlo o normalizzarlo, e ogni segmento rispetta il limite massimo di 10.000 unità UTF-16.
+
+Questa protezione mantiene verificabili le citazioni narrative dei revisori, che restano ancorate al **segmento esatto** da cui provengono. Il browser deve supportare `Intl.Segmenter` per le scene che richiedono suddivisione: senza tale API, con UTF-16 malformato o con un singolo grafema eccessivamente lungo, BookWriter interrompe la revisione in modo conservativo invece di spedire metà carattere a un modello. Il limite di 40 segmenti per capitolo è invariato. Il cambiamento può spostare i confini di report incompleti preesistenti: le prove obsolete non devono essere approvate e può servire riavviare la review.
+
+Non si aggiungono agenti, chiamate o informazioni private ai cinque lettori ciechi, non si modificano canone né dati persistenti e non si afferma che un controllo tipografico dimostri la verità delle critiche. [Guida](editorial-unicode-segmentation.md), [ADR 0098](../ADR/0098-grapheme-safe-editorial-segmentation.md), [issue #103](https://github.com/KeyserDSoze/BookWriter/issues/103).
 
 ## Una notizia è la stessa per due personaggi? (v0.11.17)
 

@@ -66,6 +66,92 @@ describe("Redazione indipendente dei capitoli",()=>{
     expect(restored).toBe(b.chapters[0]!.scenes[0]!.text);
     expect(segments.every(x=>x.text.length<=10000)).toBe(true);
   });
+  it.each([
+    ["coppia surrogata", "a".repeat(9_999) + "🪶" + " seguito", "🪶"],
+    ["accento combinante", "a".repeat(9_999) + "e\u0301" + " seguito", "e\u0301"],
+    ["sequenza emoji con ZWJ", "a".repeat(9_999) + "👩‍💻" + " seguito", "👩‍💻"],
+    ["sequenza CRLF", "a".repeat(9_999) + "\r\n" + " seguito", "\r\n"],
+  ])("non spezza %s vicino al limite Unicode del segmento", (_label, text, prefix) => {
+    const book = sample();
+    book.chapters[0]!.scenes[0]!.text = text;
+    const segments = chapterSegments(book.chapters[0]!);
+    const relevant = segments.filter(segment => segment.sceneId === "s-1");
+    expect(relevant).toHaveLength(2);
+    expect(relevant[0]!.text).toHaveLength(9_999);
+    expect(relevant[1]!.text.startsWith(prefix)).toBe(true);
+    expect(relevant.map(segment => segment.text).join("")).toBe(text);
+    expect(segments.every(segment => segment.text.length <= 10_000)).toBe(true);
+    expect(segments.flatMap(segment => Array.from(segment.text)).every(char => {
+      const cp = char.codePointAt(0)!;
+      return cp < 0xd800 || cp > 0xdfff;
+    })).toBe(true);
+  });
+  it("non supera mai il limite 10.000 quando il newline è esattamente sul confine", () => {
+    const book = sample();
+    const first = "x".repeat(10_000) + "\nresto";
+    const second = "x".repeat(9_999) + "\nresto";
+    for (const text of [first, second, "x".repeat(9_999) + ". seguito"]) {
+      book.chapters[0]!.scenes[0]!.text = text;
+      const segments = chapterSegments(book.chapters[0]!)
+        .filter(segment => segment.sceneId === "s-1");
+      expect(segments.map(segment => segment.text).join("")).toBe(text);
+      expect(segments.every(segment => segment.text.length > 0 && segment.text.length <= 10_000))
+        .toBe(true);
+    }
+  });
+  it("usa un grafema intero come testimone nei prompt e nel controllo delle prove", () => {
+    const book = sample(), cycle = createEditorialCycle("ch-1");
+    book.chapters[0]!.scenes[0]!.text =
+      "a".repeat(9_999) + "🪶Mara incontra il guardiano davanti alla porta.";
+    const parts = chapterSegments(book.chapters[0]!);
+    const second = parts.filter(segment => segment.sceneId === "s-1")[1]!;
+    const prompt = reviewerPrompt(book, cycle, "readerMystery", second, parts.length);
+    expect(prompt.prompt).toContain("🪶Mara incontra il guardiano");
+    expect(prompt.prompt).not.toContain("NON rivelarlo");
+    const finding = {
+      verdict: "issues", summary: "Un dettaglio merita una lettura critica.",
+      findings: [{
+        sceneId: "s-1", category: "coerenza", severity: "minor",
+        evidence: "🪶Mara incontra il guardiano",
+        reason: "La dinamica andrebbe confermata nel passaggio.",
+        remediation: "Verificare la motivazione prima di ritoccare la frase.",
+      }],
+    };
+    const approved = validateReport(cycle, "readerMystery", second, parts.length,
+      JSON.stringify(finding), book.chapters[0]!);
+    expect(approved.findings[0]?.evidenceAnchor).toMatchObject({
+      segmentIndex: second.index, offset: 0, quote: finding.findings[0]!.evidence,
+    });
+    const stale = { ...second, text: second.text.replace("Mara", "Lara") };
+    expect(() => validateReport(cycle, "readerMystery", stale, parts.length,
+      JSON.stringify(finding), book.chapters[0]!)).toThrow(/Segmento editoriale cambiato/);
+  });
+  it("si ferma senza perdere testo se mancano i grafemi o il browser non supporta il segmentatore", () => {
+    const book = sample();
+    book.chapters[0]!.scenes[0]!.text = "a".repeat(9_999) + "\u0301".repeat(12_000);
+    expect(() => chapterSegments(book.chapters[0]!)).toThrow(/Un grafema supera il limite/);
+    book.chapters[0]!.scenes[0]!.text = "Mara ha incontrato un carattere \uD800 isolato.";
+    expect(() => chapterSegments(book.chapters[0]!)).toThrow(/Unicode malformato/);
+    book.chapters[0]!.scenes[0]!.text = "a".repeat(10_001);
+    const original = Object.getOwnPropertyDescriptor(Intl, "Segmenter");
+    try {
+      Object.defineProperty(Intl, "Segmenter", {
+        configurable: true, writable: true, value: undefined,
+      });
+      expect(() => chapterSegments(book.chapters[0]!)).toThrow(/Aggiorna il browser/);
+    } finally {
+      if (original) Object.defineProperty(Intl, "Segmenter", original);
+      else Reflect.deleteProperty(Intl, "Segmenter");
+    }
+    expect(book.chapters[0]!.scenes[0]!.text).toHaveLength(10_001);
+  });
+  it("conserva il tetto esistente di 40 segmenti e rifiuta il 41esimo", () => {
+    const book = sample();
+    book.chapters[0]!.scenes[0]!.text = "x".repeat(400_001);
+    expect(() => chapterSegments(book.chapters[0]!)).toThrow(/oltre 40 segmenti/);
+    expect(book.chapters[0]!.scenes[0]!.text).toHaveLength(400_001);
+  });
+
   it("esige coerenza fra esito, scene e remediation, e genera ID univoci",()=>{
     const b=sample(),c=createEditorialCycle("ch-1"),seg=chapterSegments(b.chapters[0]!)[0]!;
     expect(()=>validateReport(c,"style",seg,2,report("s-2",true),b.chapters[0]!)).toThrow(/scena/i);
