@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.54 — 2026-11-09 (main, issue #90, #10, #3, #6)
+
+**Riconciliazione esplicita dei push GitHub sospesi quando cambiano repository o baseline**
+
+- Il push manuale conserva dalla v0.11.53 l'identificatore del tentativo in IndexedDB, ma se la repository/branch o `lastSyncedCommit` cambiano il retry viene bloccato per non attribuire il vecchio push alla nuova destinazione. Ora il pannello mostra **Tentativo manuale GitHub sospeso**, indicando la destinazione originale, e offre l'azione volontaria **Verifica e archivia tentativo precedente** con conferma autore. Nessuna cancellazione automatica all'apertura della pagina.
+- `verifyPublishedManualPush` effettua soltanto **GET** sulla repository originaria: HEAD SHA valida e diversa dal vecchio parent, commit con messaggio esatto `bookwriter: sync <operationId>`, **parent unico** uguale alla `baseSha` attesa e marker `.bookwriter/sync.json` allo SHA della HEAD con `bookId`, `operationId` e `sourceRevision` esatti. Senza tutte le prove l'intento non viene archiviato, nemmeno se la HEAD è semplicemente diversa.
+- `reconcileSuspendedManualPush` prende Web Locks writer del libro → outbox `ifAvailable:true`, verifica che libro non sia in `running` e che la destinazione/baseline sia davvero divergente, attesta il vecchio commit in sola lettura e **rilegge libro+intento nella stessa transazione IndexedDB** prima di cancellare solo `meta["manual-github-push:<bookId>"]`. Se un'altra scheda cambia revisioni, remote o UUID durante le GET, la cancellazione viene rifiutata.
+- Non viene eseguito nessun POST/PATCH GitHub; non si modificano canone, libro, `updatedAt`, baseline della nuova repository, PAT, permessi né outbox. Il precedente commit è considerato verificato sulla vecchia destinazione, **non** sincronizzato sulla nuova.
+- Vitest per HEAD, messaggio, parent, marker errati e rete persa, prova valida, lock occupati e transazione stale. Playwright desktop/mobile con due tab, modifica concorrente, marker falso fail-closed e riconciliazione successiva verificata. ADR 0086, AGENTS, README e guida GitHub/autopilot aggiornati.
+- **Rimangono aperti** recovery di commit non più sulla HEAD, cronologia di divergenze, fencing fra dispositivi, ZIP snapshot e sincronizzazione GitHub/IndexedDB non distribuita (#10/#3/#6).
+
+
 ## 0.11.53 — 2026-11-09 (main, issue #89, #10, #3, #6)
 
 **Push manuale GitHub recuperabile anche dopo reload e arresto improvviso della scheda**

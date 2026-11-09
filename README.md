@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Intenti GitHub sospesi riconciliabili v0.11.54 (main):** se la destinazione o la baseline locale cambia dopo un push manuale incerto, l'autore può verificare e archiviare il tentativo precedente **solo** se HEAD, commit, parent e marker sulla vecchia repository lo attestano. Nessun nuovo push o reset arbitrario, libro e outbox preservati. Test unitari e browser desktop/mobile a due schede. [Guida](docs/github-sync.md), ADR 0086, issue #90/#10.
+
 **Push GitHub manuale recuperabile dopo reload v0.11.53 (main):** l'operationId viene salvato prima della rete nello store IndexedDB meta e riutilizzato dopo un'interruzione. Lock writer+outbox impediscono push concorrenti; ACK libro/outbox e rimozione dell'intento sono atomici. Il recovery via HEAD e marker non duplica commit. Test desktop/mobile a due schede. [Guida](docs/github-sync.md), ADR 0085, issue #89/#10.
 
 **Push GitHub con recovery di ACK perso v0.11.52 (main):** una risposta PATCH persa dopo il commit può ora essere verificata **in sola lettura** tramite HEAD, messaggio Git e marker di operazione, anche nel push manuale. Senza prove esatte, nessun ACK o doppio PATCH. Test Vitest e browser desktop/mobile. [Guida](docs/github-sync.md), ADR 0084, issue #88/#10.

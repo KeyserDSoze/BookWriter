@@ -3,6 +3,7 @@ import type { Activity, BookProject, GitHubRemote, SyncOutboxItem } from "../dom
 import { projectBook } from "../domain/narrarium";
 import { decryptLocal } from "./crypto";
 import { getDb, getBook, listActivities, loadSettings } from "./db";
+import type { ManualPushIntent } from "./manual-push-intent";
 
 const BASE = "https://api.github.com";
 const MAX_BYTES = 12 * 1024 * 1024;
@@ -347,11 +348,14 @@ export async function persistRemoteAcknowledgment(
  */
 async function matchingPublishedMarker(
   token: string, remote: GitHubRemote, sha: string, bookId: string, operationId: string,
+  expectedParentSha?: string,
 ): Promise<string | null> {
-  const latestCommit = await request<{ message?: string }>(
+  const latestCommit = await request<{ message?: string; parents?: Array<{ sha?: string }> }>(
     token, apiPath(remote, "/git/commits/" + sha),
   );
   if (latestCommit?.message !== "bookwriter: sync " + operationId) return null;
+  if (expectedParentSha && (latestCommit.parents?.length !== 1 ||
+      latestCommit.parents[0]?.sha !== expectedParentSha)) return null;
   const metadataRaw = await readFile(token, remote, ".bookwriter/sync.json", sha);
   const metadata = metadataRaw ? z.object({
     operationId: z.string(), sourceRevision: z.string(), bookId: z.string(),
@@ -359,6 +363,31 @@ async function matchingPublishedMarker(
   return metadata?.success &&
       metadata.data.operationId === operationId && metadata.data.bookId === bookId
     ? metadata.data.sourceRevision : null;
+}
+
+/**
+ * Read-only evidence for a suspended MANUAL operation when the current local
+ * repository/baseline has since changed. Only an exact HEAD, operation marker
+ * and (when known) parent can justify archiving the old intent.
+ *
+ * This does NOT acknowledge or mutate the current book or its outbox.
+ */
+export async function verifyPublishedManualPush(intent: ManualPushIntent): Promise<string> {
+  if (!/^[0-9a-f-]{36}$/i.test(intent.operationId) ||
+      !intent.bookId || !intent.sourceRevision ||
+      (intent.baseSha !== undefined && !shaPattern.test(intent.baseSha)))
+    throw new RemoteConflict("Intento GitHub precedente non valido: riconciliazione bloccata.");
+  const remote = validateRemote(intent);
+  const token = await tokenFromVault();
+  const sha = await headSha(token, remote);
+  if (sha === intent.baseSha)
+    throw new RemoteConflict("La HEAD GitHub non dimostra la pubblicazione del tentativo precedente.");
+  const publishedRevision = await matchingPublishedMarker(
+    token, remote, sha, intent.bookId, intent.operationId, intent.baseSha,
+  );
+  if (publishedRevision !== intent.sourceRevision)
+    throw new RemoteConflict("Il commit o il marker GitHub non attestano il tentativo precedente: archiviazione bloccata.");
+  return sha;
 }
 
 export async function pushGitHubBook(

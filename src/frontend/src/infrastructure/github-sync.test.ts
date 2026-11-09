@@ -4,7 +4,7 @@ import { encryptLocal } from "./crypto";
 import { getBook, saveBook, saveSettings } from "./db";
 import { getOutbox } from "./outbox";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
-import { importGitHubBook, pushGitHubBook, RemoteConflict, validateRemote } from "./github-sync";
+import { importGitHubBook, pushGitHubBook, RemoteConflict, validateRemote, verifyPublishedManualPush } from "./github-sync";
 
 const BEFORE = "a".repeat(40);
 const TREE = "b".repeat(40);
@@ -406,6 +406,78 @@ describe("GitHub sync conservativa", () => {
     await expect(pushGitHubBook(book.id, false, { automatic: true, operationId }))
       .rejects.toBeInstanceOf(RemoteConflict);
     expect(calls.some(call => call.startsWith("POST") || call.startsWith("PATCH"))).toBe(false);
+  });
+
+  it("riconcilia un intento precedente solo con HEAD, messaggio, parent e marker esatti", async () => {
+    const book = await sampleBook();
+    const intent = {
+      bookId: book.id, operationId: crypto.randomUUID(),
+      owner: "test-owner", repository: "book-repo", branch: "main",
+      baseSha: BEFORE, sourceRevision: book.updatedAt,
+      preparedAt: new Date().toISOString(),
+    };
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const path = new URL(String(url)).pathname;
+      const method = init?.method ?? "GET";
+      calls.push(method + " " + path);
+      if (path.endsWith("/git/ref/heads/main"))
+        return reply({ object: { sha: NEXT } });
+      if (path.endsWith("/git/commits/" + NEXT))
+        return reply({ message: "bookwriter: sync " + intent.operationId,
+          parents: [{ sha: BEFORE }] });
+      if (path.endsWith("/contents/.bookwriter/sync.json"))
+        return reply({ type: "file", encoding: "base64",
+          content: btoa(JSON.stringify({
+            bookId: intent.bookId, operationId: intent.operationId,
+            sourceRevision: intent.sourceRevision,
+          })),
+        });
+      return reply({ message: "Unexpected" }, 500);
+    }));
+    expect(await verifyPublishedManualPush(intent)).toBe(NEXT);
+    expect(calls).toHaveLength(3);
+    expect(calls.every(x => x.startsWith("GET "))).toBe(true);
+  });
+
+  it.each([
+    "head-not-moved", "alien-commit", "wrong-parent", "wrong-operation",
+    "wrong-book", "wrong-revision", "missing-marker", "network-lost",
+  ] as const)("non archivia un intento non dimostrabile: %s", async scenario => {
+    const book = await sampleBook();
+    const intent = {
+      bookId: book.id, operationId: crypto.randomUUID(),
+      owner: "test-owner", repository: "book-repo", branch: "main",
+      baseSha: BEFORE, sourceRevision: book.updatedAt,
+      preparedAt: new Date().toISOString(),
+    };
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const path = new URL(String(url)).pathname;
+      const method = init?.method ?? "GET";
+      calls.push(method);
+      if (scenario === "network-lost") throw new TypeError("Network lost");
+      if (path.endsWith("/git/ref/heads/main"))
+        return reply({ object: { sha: scenario === "head-not-moved" ? BEFORE : NEXT } });
+      if (path.endsWith("/git/commits/" + NEXT))
+        return reply({ message: scenario === "alien-commit"
+          ? "a commit from another editor" : "bookwriter: sync " + intent.operationId,
+          parents: [{ sha: scenario === "wrong-parent" ? "f".repeat(40) : BEFORE }],
+        });
+      if (path.endsWith("/contents/.bookwriter/sync.json")) {
+        if (scenario === "missing-marker") return reply({ message: "Not Found" }, 404);
+        return reply({ type: "file", encoding: "base64",
+          content: btoa(JSON.stringify({
+            bookId: scenario === "wrong-book" ? crypto.randomUUID() : intent.bookId,
+            operationId: scenario === "wrong-operation" ? crypto.randomUUID() : intent.operationId,
+            sourceRevision: scenario === "wrong-revision" ? "stale" : intent.sourceRevision,
+          })),
+        });
+      }
+      return reply({ message: "Unexpected" }, 500);
+    }));
+    await expect(verifyPublishedManualPush(intent)).rejects.toThrow();
+    expect(calls.every(x => x === "GET")).toBe(true);
   });
 
   it("rifiuta path GitHub costruiti con branch o nome ostile", () => {

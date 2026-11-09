@@ -5,6 +5,8 @@ import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../
 import { encryptLocal } from "../infrastructure/crypto";
 import { connectBookRemote, setBookAutoSync } from "../application/github-book-settings";
 import { pushManualGitHubBook } from "../application/manual-github-push";
+import { reconcileSuspendedManualPush } from "../application/manual-push-reconciliation";
+import { getManualPushIntent, type ManualPushIntent } from "../infrastructure/manual-push-intent";
 import { getOutbox, retryBlockedSync } from "../infrastructure/outbox";
 import { drainGitHubOutbox } from "../application/auto-sync";
 import {
@@ -46,6 +48,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [outbox, setOutbox] = useState<SyncOutboxItem | undefined>();
+  const [manualIntent, setManualIntent] = useState<ManualPushIntent | undefined>();
   const [writerLease, setWriterLease] = useState<WriterLeaseStatus | null>(null);
   const [leaseCheckError, setLeaseCheckError] = useState("");
   const [leaseCheckState, setLeaseCheckState] = useState<"checking" | "checked" | "error">("checking");
@@ -61,8 +64,15 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   useEffect(() => {
     let active = true;
     const refresh = () => {
-      if (!book) { setOutbox(undefined); return; }
+      if (!book) {
+        setOutbox(undefined);
+        setManualIntent(undefined);
+        return;
+      }
       void getOutbox(book.id).then(item => { if (active) setOutbox(item); });
+      void getManualPushIntent(book.id).then(item => {
+        if (active) setManualIntent(item);
+      });
     };
     refresh();
     const timer = setInterval(refresh, 4000);
@@ -199,6 +209,30 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     });
   }
 
+  async function reconcileManual(): Promise<void> {
+    return doWork(async () => {
+      if (!book || !manualIntent)
+        throw new Error("Nessun tentativo GitHub sospeso da verificare.");
+      if (!window.confirm(
+        "Verificare sulla vecchia repository che il commit sia stato pubblicato? " +
+        "Solo con HEAD, messaggio e marker corrispondenti verrà archiviato il promemoria locale. " +
+        "Il manoscritto, la coda e la nuova destinazione non saranno modificati. Procedere?",
+      )) return "Verifica annullata.";
+      try {
+        const verified = await reconcileSuspendedManualPush(book.id);
+        setManualIntent(await getManualPushIntent(book.id));
+        await onRefresh();
+        return "Tentativo GitHub precedente verificato e archiviato su " +
+          verified.repository + " · commit " + verified.commit.slice(0, 12) +
+          ". Libro, outbox e nuova destinazione invariati.";
+      } catch (error) {
+        setManualIntent(await getManualPushIntent(book.id));
+        await onRefresh();
+        throw error;
+      }
+    });
+  }
+
   async function importRemote(): Promise<void> {
     return doWork(async () => {
       if (book?.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
@@ -259,6 +293,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
 
   const connected = book?.remote;
   const dirty = !!connected && connected.lastSyncedLocalUpdatedAt !== book.updatedAt;
+  const manualIntentDrifted = !!manualIntent && (!connected ||
+    manualIntent.owner !== connected.owner ||
+    manualIntent.repository !== connected.repository ||
+    manualIntent.branch !== connected.branch ||
+    manualIntent.baseSha !== connected.lastSyncedCommit);
 
   return <section className="panel min-w-0 p-4 sm:p-5">
     <h2 className="flex items-center gap-2 text-lg font-semibold"><Github size={20}/> GitHub — sincronizzazione del libro</h2>
@@ -306,6 +345,17 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         <p><b>Repository:</b> {connected.owner}/{connected.repository} · {connected.branch}</p>
         <p className="muted">Ultimo commit: {connected.lastSyncedCommit?.slice(0, 12) ?? "Mai sincronizzato"}</p>
         <p className="muted">Stato: {dirty ? "Modifiche locali da sincronizzare" : "Checkpoint locale sincronizzato"}</p>
+      </div>}
+      {manualIntent && <div className="rounded-lg border border-amber-400/50 p-3 text-sm">
+        <p className="font-semibold">Tentativo manuale GitHub sospeso</p>
+        <p className="muted mt-1">Destinazione originaria: {manualIntent.owner}/{manualIntent.repository} · {manualIntent.branch}</p>
+        <p className="muted mt-1">Operazione: {manualIntent.operationId.slice(0, 8)} · baseline: {manualIntent.baseSha?.slice(0, 12) ?? "Primo push"}</p>
+        {manualIntentDrifted ? <>
+          <p className="mt-2">La destinazione o la baseline locale è cambiata. Non è sicuro riutilizzare o eliminare automaticamente il tentativo precedente.</p>
+          <Button variant="outline" size="sm" disabled={busy || !settings.githubToken || book?.status === "running"}
+            onClick={() => void reconcileManual()}>Verifica e archivia tentativo precedente</Button>
+          <p className="muted mt-2 text-xs">Solo verifica della vecchia HEAD GitHub: nessun push, merge o modifica del libro. Se il commit non è dimostrabile, il tentativo resta bloccato.</p>
+        </> : <p className="muted mt-2">Puoi riprovare Sincronizza: verrà riutilizzato lo stesso identificatore.</p>}
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <p className="font-semibold">Scrittura protetta tra dispositivi</p>
