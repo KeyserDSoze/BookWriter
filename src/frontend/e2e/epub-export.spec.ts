@@ -35,6 +35,9 @@ test("EPUB scaricato: XML valido, ZIP EPUB 3 e solo scene canoniche desktop/mobi
               { id: crypto.randomUUID(), number: 2, title: "Appunti",
                 objective: "Non pubblicare", status: "draft",
                 text: "SEGRETO-DRAFT-NON-ESPORTARE" },
+              { id: crypto.randomUUID(), number: 3, title: 'Ultima & "voce"',
+                objective: "Ultima scena", status: "canon",
+                text: "Una seconda scena confermata." },
             ],
           },
           {
@@ -78,6 +81,7 @@ test("EPUB scaricato: XML valido, ZIP EPUB 3 e solo scene canoniche desktop/mobi
   expect(contents).toContain("Nel cielo brillò una stella. 🌟");
   expect(contents).toContain("Il viaggio &amp; la 🌙");
   expect(contents).toContain("Scena &lt;prima&gt;");
+  expect(contents).toContain("Una seconda scena confermata.");
   expect(contents).toContain("L&#39;ombra &amp; il mare.");
   expect(contents).not.toContain("\u0001");
   for (const forbidden of [
@@ -94,5 +98,32 @@ test("EPUB scaricato: XML valido, ZIP EPUB 3 e solo scene canoniche desktop/mobi
       return result.querySelector("parsererror")?.textContent ?? null;
     }), xml);
   expect(parserErrors).toEqual([null, null, null, null, null]);
+  const tocTargets = await page.evaluate(({ nav, documents }: {
+    nav: string; documents: Record<string, string>;
+  }) => {
+    const parser = new DOMParser();
+    const index = parser.parseFromString(nav, "application/xml");
+    return Array.from(index.getElementsByTagNameNS("http://www.w3.org/1999/xhtml", "a"))
+      .filter(link => link.getAttribute("href")?.includes("#"))
+      .map(link => {
+        const href = link.getAttribute("href") ?? "";
+        const [path, fragment] = href.split("#");
+        const page = path && documents[path] ? parser.parseFromString(documents[path], "application/xml") : null;
+        const section = fragment && page ? page.querySelector('[id="' + fragment + '"]') : null;
+        const heading = section && page ? page.querySelector('[id="' + section.getAttribute("aria-labelledby") + '"]') : null;
+        return { href, title: link.textContent, heading: heading?.textContent ?? null };
+      });
+  }, {
+    nav: strFromU8(files["OEBPS/nav.xhtml"]),
+    documents: {
+      "chapter-1.xhtml": strFromU8(files["OEBPS/chapter-1.xhtml"]),
+      "chapter-2.xhtml": strFromU8(files["OEBPS/chapter-2.xhtml"]),
+    },
+  });
+  expect(tocTargets).toEqual([
+    { href: "chapter-1.xhtml#scene-1", title: "Scena <prima>", heading: "Scena <prima>" },
+    { href: "chapter-1.xhtml#scene-2", title: 'Ultima & "voce"', heading: 'Ultima & "voce"' },
+    { href: "chapter-2.xhtml#scene-1", title: "Conclusione", heading: "Conclusione" },
+  ]);
   await expect(page.getByText(/Esportazione EPUB completata/)).toBeVisible();
 });

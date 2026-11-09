@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.58 — 2026-11-09 (main, issue #94, epic #4)
+
+**Indice EPUB 3 navigabile per singole scene canoniche, con ancore XHTML semantiche**
+
+- `buildEpub` mantiene il sommario EPUB per capitoli e aggiunge una sottolista di link relativi `chapter-N.xhtml#scene-M` per **ogni scena canonica effettivamente esportata**, nell'ordine della prosa. Le scene `draft`, `planned` e canoniche con testo vuoto non creano ancore o voci, neppure se compaiono tra due scene valide.
+- Ogni pagina XHTML riceve `section id="scene-M" aria-labelledby="scene-M-title"` e `h2 id="scene-M-title"`, con numerazione locale deterministica, senza esporre UUID e senza usare titoli/slug come ID. I link e i titoli dell'indice continuano ad avere escaping XML; il nome del capitolo nell'indice include il numero originale per evitare ambiguità.
+- Vitest verifica link, ancore, ordinalità, testo malformato/escaping e contenuti esclusi; Playwright desktop/mobile scarica l'EPUB vero, analizza tutto l'XML e risolve i link dell'indice fino ai titoli delle scene con `DOMParser`.
+- ADR 0090, AGENTS, README e guida aggiornati, package e lock 0.11.58. Nessun nuovo pacchetto, API, modifica dei libri locali o trasferimento di testo in rete.
+- Le validazioni strutturali non costituiscono certificazione EPUBCheck o accessibilità completa: font PDF, layout/illustrazioni, verifica e-reader e backup avanzati restano aperti nell'epic #4.
+
 ## 0.11.57 — 2026-11-09 (main, issue #93, epic #4)
 
 **EPUB 3 con struttura ZIP verificabile, XHTML sicuro e controllo della sola prosa canonica**

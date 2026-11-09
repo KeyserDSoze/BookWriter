@@ -64,11 +64,18 @@ export function buildEpub(book: BookProject, modifiedAt = new Date()): Uint8Arra
   chapters.forEach(({ chapter, scenes }, i) => {
     const id = "chapter-" + (i + 1);
     const path = id + ".xhtml";
-    nav.push('<li><a href="' + path + '">' + html(chapter.title) + "</a></li>");
+    nav.push(
+      '<li><a href="' + path + '">Capitolo ' + chapter.number + " — " +
+      html(chapter.title) + "</a><ol>" +
+      scenes.map((scene, j) =>
+        '<li><a href="' + path + '#scene-' + (j + 1) + '">' + html(scene.title) + "</a></li>",
+      ).join("") + "</ol></li>",
+    );
     manifest.push('<item id="' + id + '" href="' + path + '" media-type="application/xhtml+xml"/>');
     spine.push('<itemref idref="' + id + '"/>');
-    const body = scenes.map(scene =>
-      "<section><h2>" + html(scene.title) + "</h2>" +
+    const body = scenes.map((scene, j) =>
+      '<section id="scene-' + (j + 1) + '" aria-labelledby="scene-' + (j + 1) + '-title">' +
+      '<h2 id="scene-' + (j + 1) + '-title">' + html(scene.title) + "</h2>" +
       paragraphs(scene.text).map(p => "<p>" + html(p).replaceAll("\n", "<br/>") + "</p>").join("") +
       "</section>",
     ).join("\n");

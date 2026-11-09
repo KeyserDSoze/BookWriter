@@ -64,8 +64,10 @@ describe("EPUB 3 portable canon export", () => {
 
     const nav = decode(files, "OEBPS/nav.xhtml");
     expect(nav).toContain('<nav epub:type="toc"');
-    expect(nav).toContain('<a href="chapter-1.xhtml">L&#39;inizio &amp; &quot;il patto&quot;</a>');
-    expect(nav).toContain('<a href="chapter-2.xhtml">Il finale</a>');
+    expect(nav).toContain('<a href="chapter-1.xhtml">Capitolo 1 — L&#39;inizio &amp; &quot;il patto&quot;</a>');
+    expect(nav).toContain('<a href="chapter-2.xhtml">Capitolo 3 — Il finale</a>');
+    expect(nav).toContain('<a href="chapter-1.xhtml#scene-1">Prima &quot;luce&quot;</a>');
+    expect(nav).toContain('<a href="chapter-2.xhtml#scene-1">Conclusione</a>');
     expect(nav).not.toContain("Capitolo solo draft");
   });
 
@@ -73,7 +75,8 @@ describe("EPUB 3 portable canon export", () => {
     const files = unzipSync(buildEpub(manuscript(), modified));
     const first = decode(files, "OEBPS/chapter-1.xhtml");
     const last = decode(files, "OEBPS/chapter-2.xhtml");
-    expect(first).toContain("<h2>Prima &quot;luce&quot;</h2>");
+    expect(first).toContain('<section id="scene-1" aria-labelledby="scene-1-title">');
+    expect(first).toContain('<h2 id="scene-1-title">Prima &quot;luce&quot;</h2>');
     expect(first).toContain("La città è viva. 🎭 &amp; &lt;ombra&gt;<br/>Riga seconda");
     expect(first).toContain("<p>Un nuovo paragrafo.</p>");
     expect(last).toContain("<h1>Capitolo 3 — Il finale</h1>");
@@ -83,6 +86,33 @@ describe("EPUB 3 portable canon export", () => {
       "PROSA-DRAFT-MAI-ESPORTARE", "PROSA-PLANNED-MAI-ESPORTARE",
       "SEGRETO-NON-ESPORTARE", "BRIEF-SUPER-PRIVATO", "NON-CANON",
     ]) expect(whole).not.toContain(forbidden);
+  });
+
+  it("indice per scena canonica con frammenti univoci, ordine e titoli XML-safe", () => {
+    const book = manuscript();
+    book.chapters[0]!.scenes.push(
+      scene(4, "canon", "Dopo una bozza esclusa.", 'Ultima & <voce> "udibile"'),
+      scene(5, "canon", "   "),
+    );
+    const files = unzipSync(buildEpub(book, modified));
+    const nav = decode(files, "OEBPS/nav.xhtml");
+    const first = decode(files, "OEBPS/chapter-1.xhtml");
+    expect(nav).toContain('<a href="chapter-1.xhtml#scene-2">Ultima &amp; &lt;voce&gt; &quot;udibile&quot;</a>');
+    expect(nav.match(/href="chapter-1.xhtml#scene-\d+"/g)).toEqual([
+      'href="chapter-1.xhtml#scene-1"',
+      'href="chapter-1.xhtml#scene-2"',
+    ]);
+    expect(first.match(/<section id="scene-\d+"/g)).toEqual([
+      '<section id="scene-1"',
+      '<section id="scene-2"',
+    ]);
+    expect(first).toContain('<section id="scene-2" aria-labelledby="scene-2-title">');
+    expect(first).toContain('<h2 id="scene-2-title">Ultima &amp; &lt;voce&gt; &quot;udibile&quot;</h2>');
+    expect(nav).not.toContain("Appunti");
+    expect(nav).not.toContain("Capitolo solo draft");
+    expect(nav).not.toContain("PROSA-DRAFT-MAI-ESPORTARE");
+    expect(nav).not.toContain("scene-3");
+    expect(first).not.toContain("scene-3");
   });
 
   it("non inserisce code point proibiti in XHTML e OPF, senza distruggere emoji", () => {
