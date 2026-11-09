@@ -51,6 +51,13 @@ describe("Recupero supervisionato di checkpoint editoriali obsoleti", () => {
     const chapters = structuredClone(book.chapters);
     const memory = structuredClone(book.memory);
     expect(editorialRecoveryProblem(book)).toMatch(/incompleta/);
+    // Active editorial cycles deliberately do not auto-queue sync.
+    // Seed an already pending item to prove recovery removes stale outbox data.
+    await (await getDb()).put("outbox", {
+      bookId: book.id, operationId: crypto.randomUUID(),
+      revision: 1, requestedAt: new Date().toISOString(),
+      state: "pending", attempts: 0,
+    }, book.id);
     expect(await getOutbox(book.id)).toBeDefined();
     await recoverEditorialCheckpoint(book.id, true);
     const saved = (await getBook(book.id))!;
