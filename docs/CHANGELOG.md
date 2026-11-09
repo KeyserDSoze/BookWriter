@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.67 — 2026-11-09 (main, issue #104, epic #20)
+
+**Gate strutturale completo dei report prima del giudizio e del freeze**
+
+- `EditorialReport.segmentTextStamp` registra per ciascun report nuovo una **impronta locale deterministica** (lunghezza UTF-16 e checksum FNV-1a) del segmento effettivamente letto, anche per `verdict=pass`. È un rilevatore di modifiche accidentali, **non una firma crittografica**, e non duplica il testo canonico. I vecchi archivi senza impronta restano leggibili; i checkpoint attivi legacy non sono automaticamente ritenuti aggiornati.
+- `assertEditorialReviewCoverage` confronta il checkpoint con la matrice attesa di **12 ruoli × N segmenti**: ordine e identità dei ruoli, indici e conteggio dei segmenti, impronte, esito/pass/findings, ID univoci e citazioni letterali ancorate ai segmenti correnti. Report fuori ordine, duplicati, parziali, oltre la matrice o non più freschi bloccano la progressione invece di usare soltanto `reports.length`.
+- `nextReviewSlot` verifica ogni prefisso prima di programmare il revisore seguente; il runner richiede matrice **completa** prima di chiamare il giudice, prima di applicare il suo verdetto e prima di ciascun passo di sintesi/freeze. Il controllo è ripetuto sul libro corrente al momento dell'applicazione, evitando approvazioni basate su un checkpoint cambiato. Nessuna nuova chiamata AI e nessuna riscrittura automatica.
+- Vitest su 12×2 report, duplicazioni, ordine, stamp, legacy, pass stale, findings, quote e limite. Playwright desktop/mobile controlla un checkpoint incompleto in stato `adjudicate`: non deve inviare alcuna richiesta al provider, né congelare il capitolo. AGENTS, ADR 0099, guida, feature, changelog e package/lock 0.11.67.
+- **Limiti:** verifica strutturale e freschezza **non** certificano indipendenza dei giudizi, correttezza delle critiche né verità storica. Un report legacy attivo senza stamp richiede una nuova revisione guidata dall'autore, non viene elevato automaticamente a «pass». Epic #20 resta aperta.
+
 ## 0.11.66 — 2026-11-09 (main, issue #103, epic #20)
 
 **Segmentazione della prosa Unicode senza perdita per la redazione multi-agente**

@@ -1,4 +1,12 @@
-# Redazione multi-agente di BookWriter — v0.11.66
+# Redazione multi-agente di BookWriter — v0.11.67
+
+## Copertura completa prima del giudice critico (v0.11.67)
+
+Il runner non può più usare il solo numero di rapporti come dimostrazione che tutti i revisori abbiano letto tutti i segmenti. A ogni passaggio controlla il **ruolo e il segmento effettivi** del report; prima del giudizio e del freeze esige una matrice completa di sette specialisti e cinque lettori per ciascun segmento. Checkpoint incompleti, duplicati, fuori ordine, con prove narrative obsolete o con il testo del segmento cambiato vengono fermati senza inviare ulteriori chiamate AI.
+
+Ogni nuovo report ha un'impronta locale breve del testo letto, inclusi i report `pass` senza rilievi: una scena successivamente modificata non può quindi riutilizzare un vecchio «tutto bene». L'impronta non è crittografia e non prova che un modello abbia ragionato correttamente; l'analisi critica dei rilievi resta competenza del direttore e dell'autore. I vecchi rapporti sono consultabili negli archivi, ma un checkpoint legacy ancora aperto senza impronta richiede una **nuova review** prima di avanzare. Nessun rapporto viene cancellato automaticamente dal gate.
+
+[Guida di recupero e limiti](editorial-report-coverage.md), [ADR 0099](../ADR/0099-complete-editorial-review-checkpoint-gate.md), [issue #104](https://github.com/KeyserDSoze/BookWriter/issues/104), [epic #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
 
 ## Unicode integro nei segmenti inviati ai revisori (v0.11.66)
 

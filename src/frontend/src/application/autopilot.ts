@@ -4,7 +4,7 @@ import { callModel } from "../infrastructure/ai";
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, assertEditorialReviewCoverage, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
@@ -226,6 +226,9 @@ function nextWork(book: BookProject): Work | null {
         };
       }
       if (cycle.stage === "adjudicate") {
+        // Never consult the judge based solely on reports.length: all roles,
+        // segments, quote anchors and source stamps must still be current.
+        assertEditorialReviewCoverage(book, cycle, true);
         const prompt = adjudicationPrompt(book, cycle);
         return {
           phase: "chapterReview", kind: "chapterJudge", system: prompt.system,
@@ -238,6 +241,7 @@ function nextWork(book: BookProject): Work | null {
             if (!current) throw new Error("Ciclo editoriale non disponibile.");
             const chapter = b.chapters.find(c => c.id === current.chapterId);
             if (!chapter) throw new Error("Capitolo del giudice non disponibile.");
+            assertEditorialReviewCoverage(b, current, true);
             current.judgment = validateJudgment(current, text, chapter, b);
             current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
             current.repairCursor = 0;
@@ -317,6 +321,7 @@ function nextWork(book: BookProject): Work | null {
         };
       }
       if (cycle.stage === "summary") {
+        assertEditorialReviewCoverage(book, cycle, true);
         if (!cycle.judgment || cycle.judgment.verdict !== "freeze")
           throw new Error("Non è consentito congelare un capitolo senza giudizio favorevole.");
         const segments = chapterSegments(chapter);
@@ -341,6 +346,7 @@ function nextWork(book: BookProject): Work | null {
             const current = b.editorialCycle;
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             if (!current || !ch) throw new Error("Sessione di sintesi non valida.");
+            assertEditorialReviewCoverage(b, current, true);
             current.runningChapterSummary = data.chapterSummary;
             current.runningBookSummary = data.bookSummary;
             current.summaryCursor = (current.summaryCursor ?? 0) + 1;

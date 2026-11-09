@@ -185,6 +185,9 @@ export interface EditorialReport {
   role: EditorialRole; segmentIndex: number; segmentCount: number;
   verdict: "pass" | "issues"; summary: string; findings: EditorialFinding[];
   memoryNote: string; createdAt: string;
+  /** Optional only for legacy archives; required for an ACTIVE review checkpoint.
+   * Local non-cryptographic freshness check, never proof of authentication. */
+  segmentTextStamp?: string;
 }
 /** Reconciliation is a decision about DIFFERENT proposed edits attached to
  * the SAME current literal anchor, not a vote on semantic truth or a pass. */
@@ -394,15 +397,70 @@ function relevant(entries: Record<string,string>, text: string, scene: Scene): R
 export function createEditorialCycle(chapterId: string): ChapterEditorialCycle {
   return { chapterId, round: 1, stage: "review", reports: [], repairCursor: 0, priorRounds: [] };
 }
+/** Compact accidental-staleness detector for exactly the text a reviewer read.
+ * This is NOT a signature or a trusted-proof hash. */
+export function editorialSegmentTextStamp(text: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
+  }
+  return text.length + ":" + (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/** Check the ENTIRE ordered report prefix before using its length to plan
+ * the next reviewer. The judge and freeze require the complete 12×N matrix.
+ * Legacy reports remain readable, but cannot silently resume a fresh review. */
+export function assertEditorialReviewCoverage(
+  book: BookProject, cycle: ChapterEditorialCycle, requireComplete = false,
+): { reportCount: number; expectedCount: number; segmentCount: number } {
+  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
+  if (!chapter || !Number.isSafeInteger(cycle.round) || cycle.round < 1 ||
+      cycle.round > MAX_EDITORIAL_ROUNDS || !Array.isArray(cycle.reports))
+    throw new Error("Checkpoint redazionale non valido: verifica capitolo e tornata.");
+  const segments = chapterSegments(chapter);
+  // Reuse each source stamp for all 12 independent reviewers: otherwise a
+  // long chapter would hash the same 10k characters hundreds of times.
+  const segmentStamps = segments.map(segment => editorialSegmentTextStamp(segment.text));
+  const expectedCount = segments.length * EDITORIAL_ROLES.length;
+  if (cycle.reports.length > expectedCount ||
+      (requireComplete && cycle.reports.length !== expectedCount))
+    throw new Error("Redazione incompleta o con rapporti extra: servono tutti i 12 revisori per segmento.");
+  const ids = new Set<string>();
+  for (const [slot, report] of cycle.reports.entries()) {
+    const segment = segments[slot % segments.length]!;
+    const role = EDITORIAL_ROLES[Math.floor(slot / segments.length)]!;
+    const parsed = report && reportSchema.safeParse({
+      verdict: report.verdict, summary: report.summary,
+      findings: report.findings, memoryNote: report.memoryNote,
+    });
+    if (!parsed || !parsed.success || report.role !== role ||
+        report.segmentIndex !== segment.index || report.segmentCount !== segments.length ||
+        !Number.isFinite(Date.parse(report.createdAt)) ||
+        report.segmentTextStamp !== segmentStamps[slot % segments.length])
+      throw new Error("Checkpoint redazionale obsoleto o fuori ordine: ripeti la revisione dei segmenti.");
+    for (const [index, finding] of report.findings.entries()) {
+      const expectedId = cycle.round + ":" + role + ":" + segment.index + ":" + index;
+      if (finding.id !== expectedId || ids.has(finding.id) ||
+          finding.sceneId !== segment.sceneId)
+        throw new Error("Report editoriale con finding duplicati, inventati o riferiti a un'altra scena.");
+      ids.add(finding.id);
+      const located = locateNarrativeEvidence(segment.text, finding.evidence);
+      if (!located || JSON.stringify({...located, segmentIndex: segment.index}) !==
+          JSON.stringify(finding.evidenceAnchor))
+        throw new Error("Rapporto editoriale con prova narrativa assente, manomessa o non più corrente.");
+    }
+  }
+  return { reportCount: cycle.reports.length, expectedCount, segmentCount: segments.length };
+}
+
 export function nextReviewSlot(book: BookProject, cycle: ChapterEditorialCycle):
   { role: EditorialRole; segment: ChapterSegment; segmentCount: number } | undefined {
-  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
-  if (!chapter) throw new Error("Capitolo non trovato.");
+  const { reportCount, expectedCount } = assertEditorialReviewCoverage(book, cycle);
+  if (reportCount >= expectedCount) return;
+  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId)!;
   const segments = chapterSegments(chapter);
-  const slot = cycle.reports.length;
-  if (slot >= segments.length * EDITORIAL_ROLES.length) return;
-  return { role: EDITORIAL_ROLES[Math.floor(slot / segments.length)]!,
-    segment: segments[slot % segments.length]!, segmentCount: segments.length };
+  return { role: EDITORIAL_ROLES[Math.floor(reportCount / segments.length)]!,
+    segment: segments[reportCount % segments.length]!, segmentCount: segments.length };
 }
 export function reviewerTask(role: EditorialRole): TaskKind {
   return EDITORIAL_ROLES.indexOf(role) < 7 ? "chapterAudit" : "chapterReaders";
@@ -711,6 +769,7 @@ export function validateReport(cycle: ChapterEditorialCycle, role: EditorialRole
   }
   return {
     ...result, role, segmentIndex: segment.index, segmentCount,
+    segmentTextStamp: editorialSegmentTextStamp(segment.text),
     findings: result.findings.map((x,i) => ({ ...x,
       id: String(cycle.round) + ":" + role + ":" + segment.index + ":" + i,
       evidenceAnchor: anchors[i] })),
