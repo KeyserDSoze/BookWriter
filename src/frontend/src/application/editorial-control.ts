@@ -1,5 +1,5 @@
 import type { Activity, BookProject } from "../domain/types";
-import { createEditorialCycle } from "../domain/editorial-board";
+import { assertEditorialReviewCoverage, createEditorialCycle } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { getBook, getDb } from "../infrastructure/db";
@@ -87,3 +87,84 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
     });
   });
 }
+
+export const MAX_EDITORIAL_RECOVERY_ARCHIVES = 8;
+
+/** The same local gate used by the autopilot. Only a genuinely invalid,
+ * unfinished active checkpoint can be rescued; a healthy review must resume.
+ */
+export function editorialRecoveryProblem(book: BookProject): string | undefined {
+  const cycle = book.editorialCycle;
+  if (book.phase !== "chapterReview" || !cycle ||
+      !["review", "adjudicate", "summary"].includes(cycle.stage)) return;
+  try {
+    assertEditorialReviewCoverage(book, cycle, cycle.stage !== "review");
+    return;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Checkpoint editoriale non valido.";
+  }
+}
+
+/** Explicit author-confirmed local restart for an invalid checkpoint.
+ * Keep the exact old cycle as an audit snapshot; no fake judge or freeze.
+ * Writer and outbox locks + optimistic timestamp prevent cross-tab races.
+ */
+export async function recoverEditorialCheckpoint(bookId: string, confirmed: boolean): Promise<void> {
+  if (!confirmed) throw new Error("Conferma esplicita dell'autore necessaria per recuperare la redazione.");
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks?.request) throw new Error("Web Locks necessario per il recupero del checkpoint.");
+  await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async writer => {
+    if (!writer) throw new Error("Il libro è già in lavorazione in un'altra scheda.");
+    await locks.request("bookwriter:github-outbox", { ifAvailable: true }, async outbox => {
+      if (!outbox) throw new Error("La sincronizzazione GitHub è in corso.");
+      const book = await getBook(bookId);
+      if (!book) throw new Error("Libro non trovato.");
+      if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
+      if (book.editorialReviewSceneIds?.length)
+        throw new Error("Conferma prima le scene fuse nel Lettore.");
+      const reason = editorialRecoveryProblem(book);
+      const previous = book.editorialCycle;
+      if (!reason || !previous)
+        throw new Error("Checkpoint attivo valido o fase non recuperabile: riprendi la review esistente.");
+      if ((book.editorialRecoveryArchives?.length ?? 0) >= MAX_EDITORIAL_RECOVERY_ARCHIVES)
+        throw new Error("Archivio dei recuperi pieno: conserva il backup ZIP e chiedi un intervento manuale.");
+      const oldTimestamp = book.updatedAt;
+      const now = new Date().toISOString();
+      book.editorialRecoveryArchives = [...(book.editorialRecoveryArchives ?? []), {
+        chapterId: previous.chapterId, archivedAt: now,
+        reason: reason.slice(0, 1000), cycle: structuredClone(previous),
+      }];
+      book.editorialCycle = createEditorialCycle(previous.chapterId);
+      book.status = "paused";
+      book.phase = "chapterReview";
+      book.previousError = "Checkpoint precedente archiviato. Riavvia la redazione dal primo revisore.";
+      book.currentSceneId = undefined;
+      if (book.remote) book.remote.autoSync = false;
+
+      const db = await getDb();
+      const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
+      const latest = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+      if (!latest || latest.updatedAt !== oldTimestamp) {
+        await tx.done;
+        throw new Error("Il libro è stato modificato mentre recuperavi la redazione.");
+      }
+      book.updatedAt = new Date(Math.max(Date.now(), Date.parse(oldTimestamp) + 1)).toISOString();
+      await tx.objectStore("books").put(book, bookId);
+      await tx.objectStore("outbox").delete(bookId);
+      const activity: Activity = {
+        id: crypto.randomUUID(), bookId, runId: crypto.randomUUID(),
+        phase: "chapterReview", status: "succeeded",
+        title: "Recupero supervisionato del checkpoint editoriale",
+        reason: "Conferma esplicita dell'autore: checkpoint non corrente o incompleto.",
+        nextStep: "Riprendi la redazione dal primo revisore; conserva il vecchio rapporto nell'archivio.",
+        summary: "Tornata " + previous.round + " del capitolo " + previous.chapterId +
+          " archiviata con " + previous.reports.length + " rapporti. " +
+          "Autosync disabilitato; canone e capitoli congelati invariati.",
+        createdAt: now, endedAt: now,
+      };
+      await tx.objectStore("activities").put(activity, activity.id);
+      await tx.done;
+    });
+  });
+}
+

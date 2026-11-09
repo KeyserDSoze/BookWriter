@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.68 — 2026-11-09 (main, issue #105, epic #20)
+
+**Recupero esplicito dei checkpoint di redazione invalidi, con archivio non distruttivo**
+
+- Il pannello **Redazione multi-agente** mostra `Recupera checkpoint e ricomincia` solo quando il controllo della copertura della #104 rileva un checkpoint non valido nelle fasi `review`, `adjudicate` o `summary`. Il comando richiede una conferma dell'autore e avverte di ripetizione delle chiamate AI, backup e sospensione della sincronizzazione.
+- La nuova `recoverEditorialCheckpoint` opera con Web Locks esclusivi del libro e outbox, controlla che l'autopilot sia fermo, che il checkpoint sia realmente invalido e che i rapporti non possano essere riutilizzati. Prima di creare una nuova `createEditorialCycle`, salva la copia **integrale e datata** della precedente sessione nell'archivio `editorialRecoveryArchives`, con motivazione e tutte le tornate, senza attribuire giudizi falsi né toccare prosa, memoria o capitoli congelati.
+- In una sola transazione IndexedDB: nuovo ciclo `review` round 1, libro `paused`, `remote.autoSync=false`, outbox eliminata e Activity tracciabile. Confronto ottimistico `updatedAt` e massimo **8** snapshot; al limite l'operazione si ferma senza eliminare materiale precedente.
+- Lo storico viene mostrato nel pannello per sola consultazione e incluso nella validazione del backup ZIP. Vitest verifica conferma, capitolo/canone invariati, salvataggio/ZIP, limiti, privacy e lock; Playwright desktop/mobile conferma annullamento, archiviazione via UI, nuova review senza chiamata al provider.
+- ADR 0100, guida, AGENTS, README, feature e manifest/lock v0.11.68. Nessun backend, nuova dipendenza o nuovo costo AI non approvato; la review deve essere riavviata **dall'autore**, non dal sistema autonomamente.
+- **Limiti:** lo snapshot è archivio locale di audit, non prova crittografica né certificazione del giudizio semantico. Per i cicli in fase `repair`, `blocked` o già conclusi restano le procedure di riapertura/supervisione distinte. L'epic #20 resta aperta.
+
 ## 0.11.67 — 2026-11-09 (main, issue #104, epic #20)
 
 **Gate strutturale completo dei report prima del giudizio e del freeze**

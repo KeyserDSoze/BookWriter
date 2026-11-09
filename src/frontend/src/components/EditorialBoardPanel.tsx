@@ -8,7 +8,7 @@ import { EditorialDiffLedgerPanel } from "./EditorialDiffLedgerPanel";
 import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs,
   buildEditorialRecommendationDisagreements, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
-import { reopenChapterReview } from "../application/editorial-control";
+import { editorialRecoveryProblem, recoverEditorialCheckpoint, reopenChapterReview } from "../application/editorial-control";
 import { Button } from "./ui/button";
 import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
 import { HistoricalSourceRelationsPanel } from "./HistoricalSourceRelationsPanel";
@@ -361,6 +361,7 @@ export function EditorialBoardPanel({
   const [error, setError] = useState("");
   const cycle = book.editorialCycle;
   const chapter = cycle && book.chapters.find(ch => ch.id === cycle.chapterId);
+  const recoveryProblem = editorialRecoveryProblem(book);
   const completedReports = cycle?.reports.length ?? 0;
   const totalSlots = cycle?.reports[0]?.segmentCount ?
     cycle.reports[0].segmentCount * EDITORIAL_ROLES.length : null;
@@ -381,6 +382,24 @@ export function EditorialBoardPanel({
       await onRefresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Impossibile riaprire il capitolo.");
+    } finally { setBusy(false); }
+  }
+
+  async function recoverCheckpoint() {
+    if (busy || book.status === "running" || !recoveryProblem) return;
+    if (!window.confirm(
+      "Vuoi archiviare il checkpoint non valido e ripetere DA ZERO tutti i 12 revisori? " +
+      "I rapporti precedenti resteranno consultabili, ma le nuove chiamate AI avranno un costo. " +
+      "Il canone non sarà modificato. Autosync sarà disabilitato e l'outbox cancellata. " +
+      "È consigliato un backup ZIP prima di procedere.",
+    )) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      await recoverEditorialCheckpoint(book.id, true);
+      setMessage("Checkpoint archiviato. Ora puoi premere Riprendi per una nuova review.");
+      await onRefresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Impossibile recuperare il checkpoint.");
     } finally { setBusy(false); }
   }
 
@@ -414,6 +433,20 @@ export function EditorialBoardPanel({
           {cycle.judgment && " Correzioni approvate: " + pending + "."}
         </p>
       </div>
+      {recoveryProblem && <div className="space-y-2 rounded-lg border border-amber-500/40 p-3"
+        aria-label="Checkpoint editoriale da recuperare">
+        <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+          <ShieldAlert size={18} className="shrink-0"/>
+          Il checkpoint non è più valido: {recoveryProblem}
+        </p>
+        <p className="muted text-xs">Puoi conservare rapporti e giudizi precedenti nell'archivio e
+          ricominciare dal primo revisore, senza toccare prosa o capitoli congelati.
+          La nuova review consuma ulteriori chiamate AI. Prima salva un backup ZIP.</p>
+        <Button size="sm" variant="outline" disabled={busy || book.status === "running"}
+          onClick={() => void recoverCheckpoint()}>
+          <RotateCcw size={16}/> Recupera checkpoint e ricomincia
+        </Button>
+      </div>}
       {cycle.stage === "blocked" && <div className="space-y-2 rounded-lg border border-amber-500/40 p-3">
         <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
           <ShieldAlert size={18} className="shrink-0"/> {cycle.blockedReason}
@@ -447,6 +480,26 @@ export function EditorialBoardPanel({
           activeWikisourceIds={activeWikisourceExcerpts(chapter.historicalDossier).map(x=>x.id)}/></div>
       </details>)}
     </div>}
+    {(book.editorialRecoveryArchives?.length ?? 0) > 0 && <details className="mt-4 rounded-lg border border-amber-500/40 p-3">
+      <summary className="cursor-pointer text-sm font-semibold">
+        Archivio recuperi editoriali ({book.editorialRecoveryArchives!.length})
+      </summary>
+      <p className="muted mt-2 text-xs">Snapshot consultabili per audit, mai utilizzati per approvare
+        correzioni o per congelare un capitolo. I contenuti sono dati locali dell'autore.</p>
+      {book.editorialRecoveryArchives!.map((entry, index) => <details key={index}
+        className="mt-2 rounded border border-slate-300 p-2 dark:border-slate-700">
+        <summary className="cursor-pointer text-xs font-semibold">
+          Capitolo {entry.chapterId} · tornata {entry.cycle.round} · {entry.cycle.reports.length} rapporti
+          {" · "}{new Date(entry.archivedAt).toLocaleString("it-IT")}
+        </summary>
+        <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">
+          Motivo: {entry.reason}</p>
+        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs"
+          aria-label={"Checkpoint archiviato " + (index + 1)}>
+          {JSON.stringify(entry.cycle, null, 2)}
+        </pre>
+      </details>)}
+    </details>}
     <NarrativeEventDecisionsPanel key={book.id} book={book} onRefresh={onRefresh}/>
     {book.chapters.length > 0 && <div className="mt-4 space-y-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold"><BookCheck size={17}/> Stato dei capitoli</h3>

@@ -128,6 +128,12 @@ export interface BookProject {
   previousError?: string;
   editorialReviewSceneIds?: string[]; // Explicit canon confirmation before autopilot can resume.
   editorialCycle?: ChapterEditorialCycle;
+  /** Author-confirmed recovery archive; an invalid active review is preserved
+   * verbatim before restarting, never promoted to an approved editorial round. */
+  editorialRecoveryArchives?: Array<{
+    chapterId: string; archivedAt: string; reason: string;
+    cycle: ChapterEditorialCycle;
+  }>;
   bookSummary?: string;
   aiBudget?: BookAiBudget;
   ideas?: string;

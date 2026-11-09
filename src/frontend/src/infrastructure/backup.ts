@@ -112,6 +112,12 @@ const archivedCycleSchema = z.object({
   judgment: archivedJudgmentSchema.optional(),
   priorRounds: z.array(archivedRoundSchema).max(3),
 }).passthrough();
+const editorialRecoveryArchiveSchema = z.object({
+  chapterId: zId,
+  archivedAt: z.string().datetime(),
+  reason: z.string().min(1).max(1000),
+  cycle: archivedCycleSchema,
+}).strict();
 
 const chapterSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
@@ -250,6 +256,7 @@ const bookSchema = z.object({
   narrativeTransferShareDecisions: z.array(narrativeTransferShareSchema).max(180).optional(),
   editorialVerificationChoices: z.array(editorialVerificationChoiceSchema).max(160).optional(),
   editorialCycle: archivedCycleSchema.optional(),
+  editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
   revision: z.object({

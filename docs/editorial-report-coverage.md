@@ -1,4 +1,4 @@
-# Copertura e freschezza dei rapporti prima del giudizio (v0.11.67)
+# Copertura e freschezza dei rapporti prima del giudizio (v0.11.68)
 
 La redazione di BookWriter produce un rapporto indipendente per ognuno dei **sette specialisti** e **cinque lettori** su ciascun segmento del capitolo. Solo dopo questa fase il direttore editoriale può scegliere se accettare o respingere motivatamente i rilievi. Prima della v0.11.67 il runner considerava conclusa la fase quando il numero dei report coincideva con il numero atteso; un checkpoint interrotto/importato o manomesso poteva però contenere duplicati oppure ruoli e segmenti sbagliati.
 
@@ -8,6 +8,14 @@ La redazione di BookWriter produce un rapporto indipendente per ognuno dei **set
 - **Impronta del testo letto:** i rapporti nuovi includono `segmentTextStamp` della prosa di quel preciso segmento, anche quando il revisore dice `pass`. Una modifica alla scena dopo la sua lettura rende il rapporto non più aggiornato. Questa impronta è una checksum locale **non crittografica**, non garantisce l'autenticità del rapporto e non costituisce prova che il modello abbia effettivamente eseguito una review indipendente.
 - **Evidenze verificabili:** finding con ID, scena e citazione letterale devono essere coerenti con il segmento corrente e con l'ancoraggio archiviato. Un duplicato o una prova cambiata blocca il processo.
 - **Gate ripetuti:** prima di inviare il prossimo segmento a un revisore, prima di chiamare il giudice, prima di applicare il suo verdetto e **prima del freeze**. L'esito è sempre calcolato sul libro corrente, così non vengono avallati checkpoint diventati obsoleti.
+
+## Recupero supervisionato di checkpoint invalidi (v0.11.68)
+
+Se il gate ferma una review attiva nelle fasi di revisione, giudizio o sinossi, il pannello presenta **Recupera checkpoint e ricomincia** con spiegazione del problema. L'autore può annullare oppure confermare. La conferma archivia l'intera sessione (inclusi report, verdetti e tornate precedenti) e crea una nuova review, senza modificare la prosa o i capitoli già congelati. L'archivio resta consultabile nel pannello e nel backup ZIP, fino a otto recuperi; non viene mai cancellato automaticamente per liberare spazio.
+
+Prima del recupero conserva un backup ZIP. Dopo la conferma **autosync è spenta**, l'outbox remota è svuotata e i nuovi 12 revisori richiederanno nuove chiamate AI soltanto quando premi Riprendi. I checkpoint validi, i cicli in `repair` o `blocked` e le redazioni già finite non vengono azzerati tramite questa azione. Il comando non permette di ignorare il giudice o forzare il freeze.
+
+[Procedura dettagliata](editorial-checkpoint-recovery.md), [ADR 0100](../ADR/0100-author-confirmed-editorial-checkpoint-recovery.md), [issue #105](https://github.com/KeyserDSoze/BookWriter/issues/105).
 
 ## Se il libro si ferma
 
