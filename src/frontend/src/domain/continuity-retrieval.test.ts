@@ -569,6 +569,76 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(blind.prompt).not.toContain("PRIVATO:");
   });
 
+  it("distribuisce 48 termini fra sei scene correnti nella query del direttore",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    const source=b.chapters[1]!.scenes[0]!;
+    source.title="";source.objective="";source.date=undefined;
+    source.characters=[];source.items=[];source.locations=[];
+    source.text="Sul molo il sigillo scompare sotto il ponte.";
+    const first=Array.from({length:70},(_,i)=>
+      "codice"+String(i).padStart(3,"0")).join(" ");
+    current.scenes=[
+      scene("review-1",first,{number:1,title:"",objective:"",date:undefined}),
+      ...Array.from({length:4},(_,i)=>scene("review-"+(i+2),
+        "Piove piano.",{number:i+2,title:"",objective:"",date:undefined})),
+      scene("review-6","Il sigillo affonda nell'acqua.",{
+        number:6,title:"",objective:"",date:undefined}),
+    ];
+    markDownstreamContinuity(b,origin,"author_reopen",["origin"]);
+    const snapshot=JSON.stringify(b);
+    const prior=b.chapters.filter(ch=>ch.number<current.number);
+    const full=retrievePriorContinuityScenes(prior,origin,current,["origin"]);
+    const match=full.sampled.find(x=>x.scene.id==="key")!;
+    expect(match.selectionReason).toBe("targeted_match");
+    expect(match.match.terms).toContain("sigillo");
+    expect(match.match.score).toBeGreaterThan(0);
+    const firstOnly=retrievePriorContinuityScenes(prior,origin,current,
+      ["origin"],current.scenes[0]);
+    expect(firstOnly.sampled.find(x=>x.scene.id==="key")?.match.terms)
+      .not.toContain("sigillo");
+    const sixthOnly=retrievePriorContinuityScenes(prior,origin,current,
+      ["origin"],current.scenes[5]);
+    expect(sixthOnly.sampled.find(x=>x.scene.id==="key")?.match.terms)
+      .toContain("sigillo");
+    const pack=buildContinuityEvidence(b,current)!;
+    expect(pack.scenes.find(x=>x.sceneId==="key")?.matchSignals.terms)
+      .toContain("sigillo");
+    const judge=adjudicationPrompt(b,createEditorialCycle(current.id));
+    expect(judge.prompt).toContain("Sul molo il sigillo");
+    const blind=reviewerPrompt(b,createEditorialCycle(current.id),
+      "readerMystery",chapterSegments(current)[0]!,6);
+    expect(blind.prompt).not.toContain("Sul molo il sigillo");
+    expect(blind.prompt).not.toContain("PRIVATO:");
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+    expect(JSON.stringify(b)).toBe(snapshot);
+    expect(buildContinuityEvidence(b,current)).toEqual(pack);
+  });
+
+  it("rispetta il limite di sei scene nella query di capitolo",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    const source=b.chapters[1]!.scenes[0]!;
+    // Keep the source as mandatory latest anchor even with score zero.
+    b.chapters=[origin,b.chapters[1]!,current];
+    source.title="";source.objective="";source.date=undefined;
+    source.characters=[];source.items=[];source.locations=[];
+    source.text="La lucerna è rimasta nella soffitta.";
+    current.scenes=[
+      ...Array.from({length:6},(_,i)=>scene("review-"+i,"Piove piano.",{
+        number:i+1,title:"",objective:"",date:undefined})),
+      scene("review-7","La lucerna si accende.",{
+        number:7,title:"",objective:"",date:undefined}),
+    ];
+    const prior=b.chapters.filter(ch=>ch.number<current.number);
+    const byChapter=retrievePriorContinuityScenes(prior,origin,current,[]);
+    const selected=byChapter.sampled.find(x=>x.scene.id==="key")!;
+    expect(selected.match.terms).not.toContain("lucerna");
+    expect(selected.match.score).toBe(0);
+    const targeted=retrievePriorContinuityScenes(prior,origin,current,[],
+      current.scenes[6]);
+    expect(targeted.sampled.find(x=>x.scene.id==="key")?.match.terms)
+      .toContain("lucerna");
+  });
+
   it("registra nel freeze la copertura quantitativa, senza certificare coerenza",()=>{
     const b=fixture(),target=b.chapters[5]!;
     markDownstreamContinuity(b,b.chapters[0]!,"author_reopen");

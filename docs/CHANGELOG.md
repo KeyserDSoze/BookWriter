@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.36 — 2026-11-09 (main, issue #20)
+
+**Query di continuità del direttore: termini lessicali bilanciati fra scene correnti**
+
+- Nella rivalidazione di intero capitolo, `retrievePriorContinuityScenes` non consente più che la prima delle sei scene correnti saturi da sola il budget di **48 termini**: la query inserisce i termini distinti **a turni, uno per scena**, fino al limite. Una scena finale con riferimento a un oggetto può così recuperare una scena precedente pertinente anche quando la prima scena contiene oltre 48 parole diverse.
+- Il recupero per **una singola scena** resta invariato; la query considera al massimo le prime **6 scene con testo** e le prime **96 parole campionate per scena**, senza dare alla settima scena una copertura inesistente. Restano i limiti 16k caratteri per scansione, 1.600 candidati, 4 scene mostrate, 2 per capitolo, 48 termini distinti e 2 finestre originali per scena lunga.
+- Vitest sulla query multi-scena con prova pertinente solo nella sesta, richiesta con singola scena, limite sulla settima, pacchetto del direttore e nessuna esposizione ai cinque lettori ciechi; Playwright desktop/mobile sull'avviso editoriale. ADR 0069, guida, README, AGENTS e package/lock v0.11.36.
+- Nessuna nuova chiamata AI/HTTP, accesso a registri alias/secret, persistenza, schema ZIP, sincronizzazione, modifica di canone, giudizi, permessi o freeze.
+
+**Limite:** il ranking resta letterale ed euristico: trovare parole in comune non costituisce una verifica della coerenza narrativa.
+
+
 ## 0.11.35 — 2026-11-09 (main, issue #20)
 
 **Continuità: confini reali per i nomi e i termini letti nelle tre porzioni di scena**

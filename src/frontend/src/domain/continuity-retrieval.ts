@@ -109,6 +109,31 @@ function queryScenes(chapter:Chapter,currentScene?:Scene):Scene[] {
     chapter.scenes.filter(s=>s.text.trim()).slice(0,6);
 }
 
+/** Bound the chapter-level lexical query without letting the first long scene
+ * occupy all 48 slots. One term per current scene per round, in scene order;
+ * preserve the previous order when reviewing one specific scene. Words remain
+ * literal, unverified and drawn only from public current-scene text/metadata. */
+function balancedQueryTerms(scenes:readonly Scene[]):string[] {
+  const batches=scenes.map(s=>
+    scanWords(s.text+" "+s.title+" "+s.objective).slice(0,96));
+  const chosen:string[]=[];
+  const seen=new Set<string>();
+  for(let position=0;position<96&&chosen.length<MAX_TERMS;position++){
+    let found=false;
+    for(const terms of batches){
+      const term=terms[position];
+      if(term===undefined)continue;
+      found=true;
+      if(seen.has(term))continue;
+      seen.add(term);
+      chosen.push(term);
+      if(chosen.length===MAX_TERMS)break;
+    }
+    if(!found)break;
+  }
+  return chosen;
+}
+
 /** Ranking never invokes a model or network service. No index is persisted. */
 export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   origin:Chapter,chapter:Chapter,originSceneIds:readonly string[],
@@ -123,9 +148,9 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
     .slice(0,MAX_LITERAL_NAME_QUERIES);
   const dateQuery=new Set(selectedQuery.map(s=>s.date?.trim())
     .filter((x):x is string=>!!x&&x.length<=80));
-  // Balance the query over scene windows; don't let one enormous scene fill it.
-  const termQuery=[...new Set(selectedQuery.flatMap(s=>
-    scanWords(s.text+" "+s.title+" "+s.objective).slice(0,96)))].slice(0,MAX_TERMS);
+  // Preserve bounded 16k sampling and max 96 words per current scene.
+  // Round-robin ensures that late scenes contribute to the chapter review.
+  const termQuery=balancedQueryTerms(selectedQuery);
   const termSet=new Set(termQuery);
   const latest=[...prior].sort((a,b)=>
     b.number-a.number || a.id.localeCompare(b.id))[0]!;
