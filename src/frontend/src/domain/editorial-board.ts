@@ -431,6 +431,41 @@ export function assertCurrentHistoricalReviewSources(
   }
 }
 
+/** An imported or resumed report must still cite the SAME earlier witness
+ * that its authorized specialist could read today. A valid current-scene
+ * quote alone does not keep an earlier attestation or lexical sample alive.
+ * This is provenance validation, not a factual ruling about the narrative. */
+export function assertCurrentNarrativeReviewWitnesses(
+  book: BookProject, chapter: Chapter, cycle: Pick<ChapterEditorialCycle, "reports">,
+): void {
+  const segments = chapterSegments(chapter);
+  const attestedBySegment = new Map<number, ReturnType<typeof buildAttestedReviewContext>>();
+  const allowed: readonly EditorialRole[] = ["continuity","timeline","secrets","characterVoice"];
+  for (const report of cycle.reports) {
+    for (const finding of report.findings) {
+      const attested = finding.narrativeConflict;
+      const unconfirmed = finding.priorSceneConflict;
+      if (!attested && !unconfirmed) continue;
+      if (!allowed.includes(report.role) || (attested && unconfirmed))
+        throw new Error("Testimone narrativo non autorizzato: solo i quattro specialisti possono citare un'unica fonte precedente.");
+      const segment = segments[report.segmentIndex];
+      if (!segment || segment.sceneId !== finding.sceneId)
+        throw new Error("Testimone narrativo non più corrente: segmento esaminato assente.");
+      if (attested) {
+        let current = attestedBySegment.get(segment.index);
+        if (!current) {
+          current = buildAttestedReviewContext(book, chapter, segment.text);
+          attestedBySegment.set(segment.index, current);
+        }
+        if (!current.witnesses.some(w => w.eventDecisionId === attested.priorEventDecisionId))
+          throw new Error("Testimone narrativo precedente non più corrente: attestazione ritirata o fuori dal contesto autorizzato.");
+      }
+      if (unconfirmed && !isUnattestedSourceCurrent(book,chapter,segment.text,unconfirmed))
+        throw new Error("Testimone narrativo precedente non più corrente: scena, freeze o campione letterale cambiato.");
+    }
+  }
+}
+
 /** Check the ENTIRE ordered report prefix before using its length to plan
  * the next reviewer. The judge and freeze require the complete 12×N matrix.
  * Legacy reports remain readable, but cannot silently resume a fresh review. */
@@ -477,6 +512,8 @@ export function assertEditorialReviewCoverage(
   // Run documentary checks on reports with still-current narrative text.
   // A historical quote can expire independently of the manuscript.
   assertCurrentHistoricalReviewSources(chapter, cycle);
+  // Earlier witnesses can expire without a single edit to this chapter.
+  assertCurrentNarrativeReviewWitnesses(book, chapter, cycle);
   return { reportCount: cycle.reports.length, expectedCount, segmentCount: segments.length };
 }
 

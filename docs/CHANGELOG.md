@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.70 — 2026-11-09 (main, issue #107, epic #20)
+
+**Rivalidazione dei testimoni narrativi precedenti nei checkpoint di review**
+
+- Nuovo gate locale `assertCurrentNarrativeReviewWitnesses`: per ogni finding `narrativeConflict` o `priorSceneConflict` nei rapporti della tornata, il testimone deve **ancora** essere presente nel contesto autorizzato dello stesso segmento della scena corrente. Solo i quattro specialisti di continuità possono citarlo; nessuna doppia fonte nello stesso rilievo.
+- Eventi precedenti attestati sono ricontrollati mediante `buildAttestedReviewContext` (decisione, alias, provenance, campionamento), citazioni non attestate via `isUnattestedSourceCurrent` (freeze, contenuto, offset, finestra campionata). Il gate entra in `assertEditorialReviewCoverage` prima di revisori successivi, giudice, applicazione verdetto e freeze, anche quando testo corrente e numero dei 12 report sono invariati.
+- Il recupero supervisionato #105 rende leggibile lo stallo e conserva vecchie testimonianze per audit; nessuna modifica automatica di prosa, attestazioni, giudizi o consenso, e nessuna chiamata provider durante la verifica.
+- Vitest su attestazioni e citazioni valide/scadute, ruoli vietati e doppio riferimento; Playwright desktop/mobile su checkpoint completo con testimone revocato prima del giudice, senza chiamate LLM. ADR 0102, guida autore, AGENTS, README e package/lock 0.11.70.
+- **Limite:** riferimenti correnti non significano verità narrativa, identità o contraddizione provata; il giudice resta indipendente e l'epic #20 aperta.
+
+
 ## 0.11.69 — 2026-11-09 (main, issue #106, epic #20 e #23)
 
 **Gate documentale live delle fonti storiche fra revisori, giudice e remediation**
