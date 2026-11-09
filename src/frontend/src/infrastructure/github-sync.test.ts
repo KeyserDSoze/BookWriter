@@ -166,11 +166,11 @@ describe("GitHub sync conservativa", () => {
     expect(result.commit).toBe(NEXT);
     expect(calls.some(call => call.startsWith("POST") || call.startsWith("PATCH"))).toBe(false);
     expect((await getBook(book.id))?.remote?.lastSyncedCommit).toBe(NEXT);
-    // The remote marker identifies an older source revision. Even though the
-    // lost ACK is recovered without a write, our newer local checkpoint must
-    // remain queued under a fresh operationId.
+    // The remote marker identifies an older source revision and a DIFFERENT
+    // operationId from the local queue. That independent pending checkpoint
+    // must be retained unchanged, not rotated or incorrectly acknowledged.
     const pending = await getOutbox(book.id);
-    expect(pending?.operationId).not.toBe(queuedBeforeRecovery?.operationId);
+    expect(pending).toEqual(queuedBeforeRecovery);
     expect(pending?.state).toBe("pending");
     expect((await getBook(book.id))?.remote?.lastSyncedLocalUpdatedAt).toBe(remoteRevision);
   });
