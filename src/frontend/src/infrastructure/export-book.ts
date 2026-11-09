@@ -209,8 +209,10 @@ export async function buildPdf(book: BookProject): Promise<Uint8Array> {
     }
   }
   addWrapped(title, 21, true, 9);
+  let firstBodyPage = 0;
   for (const chapter of safeChapters) {
     pdf.addPage(); y = top;
+    if (!firstBodyPage) firstBodyPage = pdf.getNumberOfPages();
     addWrapped(chapter.title, 17, true, 8);
     y += 5;
     for (const scene of chapter.scenes) {
@@ -222,6 +224,17 @@ export async function buildPdf(book: BookProject): Promise<Uint8Array> {
         y += 4;
       }
     }
+  }
+  // Apply folios only after layout has finished, including automatic page breaks.
+  // The entire title matter remains unnumbered, even if a long title spans pages.
+  const lastPage = pdf.getNumberOfPages();
+  const contentPageCount = lastPage - firstBodyPage + 1;
+  for (let page = firstBodyPage; page <= lastPage; page++) {
+    pdf.setPage(page);
+    pdf.setFont("times", "normal");
+    pdf.setFontSize(9);
+    pdf.text("Pagina " + (page - firstBodyPage + 1) + " di " + contentPageCount,
+      pageWidth / 2, 286, { align: "center" });
   }
   return new Uint8Array(pdf.output("arraybuffer"));
 }

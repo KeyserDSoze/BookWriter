@@ -40,6 +40,12 @@ Titoli e paragrafi passano attraverso la stessa sanitizzazione XML dell'EPUB: ca
 
 Questo verifica **integrità strutturale e parsing XML** sul file generato, non compatibilità garantita con tutte le versioni di Word/LibreOffice, qualità tipografica, accessibilità o firma/validazione formale Office Open XML. Vedi [ADR 0091](../ADR/0091-docx-canonical-xml-package.md) e [issue #95](https://github.com/KeyserDSoze/BookWriter/issues/95).
 
+## Numerazione delle pagine PDF — v0.11.62
+
+Il PDF ora numererà le pagine **a partire dal primo capitolo effettivamente esportato**: sotto ciascuna pagina del corpo del romanzo appare `Pagina X di Y`. La numerazione prosegue attraverso i capitoli successivi e i salti pagina automatici di capitoli lunghi. **Il frontespizio resta non numerato**: anche quando un titolo molto lungo si distribuisce su più pagine, la numerazione inizia da `Pagina 1` sul primo capitolo canonico.
+
+Il numero è inserito dopo che jsPDF ha completato la disposizione del contenuto, centrato nel margine inferiore separato dall'area della prosa. Non vengono esportati numeri di pagine di scene `draft/planned`, brief o memoria. Test Vitest controllano i numeri nei byte PDF generati, anche su contenuti lunghi; Playwright desktop/mobile conferma i footer nel file scaricato. Non sono test di impaginazione professionale, rendering su stampanti o accessibilità PDF. [ADR 0094](../ADR/0094-pdf-canonical-folios.md), [issue #99](https://github.com/KeyserDSoze/BookWriter/issues/99).
+
 ## PDF — controllo dei glifi prima dell'esportazione v0.11.60
 
 Il generatore PDF continua a usare Times, un font standard di jsPDF, **non** un font Unicode completo. Ora `buildPdf` prepara e controlla, prima di creare il file, titolo del libro, titoli di capitoli/scene e paragrafi delle sole scene canoniche. Accetta caratteri ASCII, lettere accentate Latin-1 e punteggiatura WinAnsi comune (per esempio `città`, `L’ombra`, `—` ed `€`).

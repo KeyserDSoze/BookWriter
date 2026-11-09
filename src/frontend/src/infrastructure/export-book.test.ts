@@ -250,10 +250,39 @@ describe("PDF standard — preflight charset e file verificabile", () => {
     expect(pdf).toContain("Capitolo 1");
     expect(pdf).toContain("Capitolo 3");
     expect(pdf.indexOf("Capitolo 1")).toBeLessThan(pdf.indexOf("Capitolo 3"));
+    expect([...pdf.matchAll(/Pagina (\d+) di (\d+)/g)].map(m => m[0]))
+      .toEqual(["Pagina 1 di 2", "Pagina 2 di 2"]);
     for (const secret of [
       "BRIEF-SUPER-PRIVATO", "SEGRETO-NON-ESPORTARE", "PROSA-DRAFT-MAI-ESPORTARE",
       "PROSA-PLANNED-MAI-ESPORTARE", "Capitolo solo draft", "NON-CANON",
     ]) expect(pdf).not.toContain(secret);
+  });
+
+  it("numera ogni pagina canonica anche quando un capitolo prosegue su più fogli", async () => {
+    const book = pdfManuscript();
+    book.chapters[0]!.scenes[0]!.text =
+      Array(380).fill("La città si svegliava, e la storia continuava.").join(" ");
+    const pdf = new TextDecoder("latin1").decode(await buildPdf(book));
+    const pages = (pdf.match(/\/Type\s*\/Page\b/g) ?? []).length;
+    expect(pages).toBeGreaterThan(3);
+    const folios = [...pdf.matchAll(/Pagina (\d+) di (\d+)/g)]
+      .map(match => ({ current: Number(match[1]), total: Number(match[2]) }));
+    expect(folios).toEqual(Array.from({ length: pages - 1 }, (_, index) => ({
+      current: index + 1, total: pages - 1,
+    })));
+    expect(pdf).not.toContain("SEGRETO-NON-ESPORTARE");
+    expect(pdf).not.toContain("PROSA-DRAFT-MAI-ESPORTARE");
+  });
+
+  it("lascia non numerato il frontespizio anche quando il titolo occupa più pagine", async () => {
+    const book = pdfManuscript();
+    book.title = "Titolo editoriale " + "molto lungo ".repeat(320);
+    const pdf = new TextDecoder("latin1").decode(await buildPdf(book));
+    const pages = (pdf.match(/\/Type\s*\/Page\b/g) ?? []).length;
+    expect(pages).toBeGreaterThan(3);
+    // There are only two short canonical chapter pages; the other pages are title matter.
+    expect([...pdf.matchAll(/Pagina (\d+) di (\d+)/g)].map(match => match[0]))
+      .toEqual(["Pagina 1 di 2", "Pagina 2 di 2"]);
   });
 
   it("consente accenti italiani e segni WinAnsi, ignora caratteri fuori standard nelle bozze", async () => {

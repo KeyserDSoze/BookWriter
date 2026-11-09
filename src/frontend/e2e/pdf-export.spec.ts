@@ -72,6 +72,9 @@ test("PDF canonico: blocco glyph unsupported e download verificato desktop/mobil
   expect(pdf).toContain("Capitolo 1");
   expect(pdf).toContain("Capitolo 3");
   expect(pdf.indexOf("Capitolo 1")).toBeLessThan(pdf.indexOf("Capitolo 3"));
+  // Only the two pages containing canonical chapters have printed folios.
+  expect([...pdf.matchAll(/Pagina (\d+) di (\d+)/g)].map(match => match[0]))
+    .toEqual(["Pagina 1 di 2", "Pagina 2 di 2"]);
   for (const privateData of [
     "BRIEF-PRIVATO-NON-PUBBLICARE", "SEGRETO-MEMORIA-NON-PUBBLICARE",
     "TESTO-BOZZA-PRIVATA", "TESTO-PLANNED-PRIVATO", "Solo draft",

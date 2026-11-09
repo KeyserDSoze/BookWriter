@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.62 — 2026-11-09 (main, issue #99, epic #4)
+
+**PDF con numerazione editoriale delle pagine dei capitoli canonici**
+
+- Dopo il rendering dei titoli, delle scene e dei paragrafi, `buildPdf` calcola tutte le pagine e aggiunge in basso al centro il footer `Pagina X di Y`, con **X=1** sulla prima pagina del primo capitolo pubblicato e **Y** pari al numero totale delle pagine del testo canonico (inclusi i fogli di continuazione).
+- Il titolo/frontespizio non riceve folio, nemmeno quando il titolo molto lungo occupa più pagine. Il numero non compare nelle aree della prosa: margine inferiore riservato, font standard Times 9 pt, nessun cambio al file input o al suo stato persistito.
+- La whitelist WinAnsi fail-closed e i confini di privacy restano invariati: nessuna scena `draft/planned`, brief, memory o chiave; i PDF con caratteri non supportati continuano a bloccarsi prima del download, con alternativa EPUB/DOCX.
+- Vitest verifica intestazione/trailer PDF, conteggio pagine e footer in sequenza, capitoli canonici lunghi su più pagine e frontespizio multipagina; Playwright desktop/mobile apre il PDF scaricato realmente e controlla i footer oltre alle verifiche privacy e fail-closed preesistenti.
+- [ADR 0094](../ADR/0094-pdf-canonical-folios.md), AGENTS, README, guida, feature e `package.json`/`package-lock.json` 0.11.62 aggiornati, senza nuove dipendenze o endpoint. La verifica di deploy Pages rimane separata nella [issue #98](https://github.com/KeyserDSoze/BookWriter/issues/98); nessuna dichiarazione di pubblicazione web finché Pages non è verde.
+- Limitazioni ancora aperte nell'epic #4: font Unicode incorporati, PDF accessibile/PDF-A, veri lettori, copertine e impaginazione avanzata.
+
 ## 0.11.61 — 2026-11-09 (main, issue #97, epic #4)
 
 **EPUB 3 con frontespizio nel reading order e landmarks semantici**
