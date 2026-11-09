@@ -452,9 +452,18 @@ export async function pushGitHubBook(
   if (!commit?.sha || !shaPattern.test(commit.sha)) throw new Error("GitHub non ha creato un commit valido.");
 
   // A non-fast-forward update is rejected, NEVER force-push over another device.
-  await request(token, apiPath(remote, "/git/refs/heads/" +
-    remote.branch.split("/").map(encodeURIComponent).join("/")),
-  { method: "PATCH", body: { sha: commit.sha, force: false } });
+  // HTTP 2xx alone is not proof that our commit is the current branch HEAD.
+  const patched = await request<{ object?: { sha?: string } }>(
+    token, apiPath(remote, "/git/refs/heads/" +
+      remote.branch.split("/").map(encodeURIComponent).join("/")),
+    { method: "PATCH", body: { sha: commit.sha, force: false } },
+  );
+  if (patched?.object?.sha !== commit.sha)
+    throw new RemoteConflict("GitHub non ha confermato lo SHA richiesto dopo il push: ACK locale non applicato.");
+  // Read back the exact HEAD before attesting the local baseline or removing
+  // the durable outbox request. Never infer success from a 2xx PATCH alone.
+  if (await headSha(token, remote) !== commit.sha)
+    throw new RemoteConflict("La HEAD GitHub è diversa dal commit pubblicato: ACK locale non applicato.");
 
   await persistRemoteAcknowledgment(
     bookId, remote, commit.sha, current.updatedAt,

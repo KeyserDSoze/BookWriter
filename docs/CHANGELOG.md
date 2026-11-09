@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.51 — 2026-11-09 (main, issue #87, #10, #3, #6)
+
+**Push GitHub: HEAD esatta verificata prima di confermare e svuotare l'outbox**
+
+- `pushGitHubBook` usava `PATCH /git/refs/heads/<branch>` con `force:false` ma considerava il solo status 2xx sufficiente per attestare `lastSyncedCommit` e chiudere la coda. Ora **verifica che la risposta `object.sha` corrisponda esattamente al commit appena creato**, poi legge di nuovo la HEAD del branch e richiede lo stesso SHA prima dell'ACK locale.
+- Se GitHub dichiara un SHA diverso o mancante, la HEAD resta sul commit precedente, avanza verso un altro SHA o la rilettura fallisce, il push viene rifiutato in modo conservativo: **libro, baseline GitHub e outbox non vengono falsamente confermati**. Nessun `force:true` o retry automatico del PATCH incerto.
+- La logica di recupero del marker `.bookwriter/sync.json` introdotta nelle versioni precedenti rimane attiva: se l'ACK della rete è perso dopo l'aggiornamento remoto, un successivo tentativo con identico `operationId` può riconoscere in sola lettura il commit esatto senza ripetere POST/PATCH.
+- L'ACK IndexedDB unico `books+outbox` della v0.11.50 segue i due controlli remoti; conserva un checkpoint creato da un'altra tab durante il push. Le verifiche di contenuti congelati, permessi PAT, repository pubbliche e lease writer AI non cambiano.
+- Vitest su PATCH 2xx con risposta sbagliata o incompleta, HEAD non avanzata/diversa, perdita della verifica di rete, invio riuscito con tre letture della HEAD e recovery read-only. Playwright desktop/mobile con due schede e simulazione di falso 2xx, nuovo invio esplicito corretto e scrittura concorrente durante il PATCH. ADR 0083, AGENTS, README e guide aggiornati.
+- Questa garanzia riguarda la HEAD **nell'istante della conferma**: GitHub e IndexedDB restano sistemi indipendenti e altre scritture possono arrivare dopo. Il fencing cross-device e il gap HTTP→commit locale rimangono aperti nelle epic #10/#3.
+
+
 ## 0.11.50 — 2026-11-09 (main, issue #86, #10, #3, #6)
 
 **Conferma del commit GitHub e outbox atomiche nel browser**

@@ -49,6 +49,7 @@ function archive(page: Page) {
 
 test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la coda", async ({ page }) => {
   let patchStarted = false;
+  let remoteHead = PREVIOUS;
   let bookId = "";
   let releasePatch: () => void = () => undefined;
   const patchGate = new Promise<void>(resolve => { releasePatch = resolve; });
@@ -75,7 +76,7 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
       body = { private: true, full_name: "ack-test/novel",
         default_branch: "main", permissions: { push: true } };
     } else if (method === "GET" && path.endsWith("/git/ref/heads/main")) {
-      body = { object: { sha: PREVIOUS } };
+      body = { object: { sha: remoteHead } };
     } else if (method === "GET" && path.endsWith("/git/commits/" + PREVIOUS)) {
       body = { tree: { sha: BASE_TREE } };
     } else if (method === "GET" && path.includes("/contents/.bookwriter/manifest.json")) {
@@ -98,10 +99,17 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
     } else if (method === "PATCH" && path.endsWith("/git/refs/heads/main")) {
       const payload = request.postDataJSON() as { force: boolean; sha: string };
       expect(payload).toEqual({ force: false, sha: COMMIT });
-      patchStarted = true;
       patchCount++;
-      await patchGate;
-      body = { object: { sha: COMMIT } };
+      if (patchCount === 1) {
+        // Simulate a faulty/stale HTTP 2xx: GitHub accepts the response but
+        // has NOT moved the branch. The client must refuse the local ACK.
+        body = { object: { sha: COMMIT } };
+      } else {
+        patchStarted = true;
+        await patchGate;
+        remoteHead = COMMIT; // Real fast-forward confirmed on the second try.
+        body = { object: { sha: COMMIT } };
+      }
     } else if (method === "GET" && path.includes("/git/ref/heads/bookwriter-lock/")) {
       status = 404; body = { message: "Not Found" };
     } else {
@@ -160,6 +168,14 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
     await second.goto("/");
     await expect(second.getByRole("textbox", { name: "Istruzione di revisione" })).toBeVisible();
     await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
+    await expect(page.getByText(/HEAD GitHub è diversa dal commit pubblicato/)).toBeVisible();
+    const notAcknowledged = await snapshot(page);
+    expect(notAcknowledged.lastSyncedCommit).toBe(PREVIOUS);
+    expect(notAcknowledged.updatedAt).toBe(before.updatedAt);
+    expect(notAcknowledged.outbox).toEqual(before.outbox);
+
+    // A separate explicit retry can succeed when GitHub actually advances.
+    await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
     await expect.poll(() => patchStarted).toBe(true);
 
     const change = await second.evaluate(() => new Promise<{
@@ -214,7 +230,8 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
     expect(after.outbox?.revision).toBe(change.revision);
     expect(after.outbox?.operationId).toBe(change.operationId);
     expect(after.outbox?.state).toBe("pending");
-    expect(patchCount).toBe(1);
+    expect(patchCount).toBe(2);
+    expect(remoteHead).toBe(COMMIT);
   } finally {
     releasePatch();
     await second.close();
