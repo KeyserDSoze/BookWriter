@@ -75,6 +75,10 @@ export default function App() {
   const [audience, setAudience] = useState("Lettori adulti");
   const [intervention, setIntervention] = useState("");
   const [notice, setNotice] = useState("");
+  // On a rejected edit IndexedDB may still have the same revision as React.
+  // Force only the affected uncontrolled model input to remount and display
+  // the actually persisted value, never a draft that was refused by the lock.
+  const [bookModelResets, setBookModelResets] = useState<Partial<Record<TaskKind, number>>>({});
   const [ready, setReady] = useState(false);
   const [backupMode, setBackupMode] = useState<BackupMode>("content");
   const [backupPassword, setBackupPassword] = useState("");
@@ -204,6 +208,9 @@ export default function App() {
       setNotice("Modello per il libro aggiornato in sicurezza.");
     } catch (error) {
       await refresh(); // A stale route should show the newest saved value.
+      // A lock failure can leave updatedAt unchanged: refresh alone does not
+      // reset an uncontrolled input's visible, rejected edit.
+      setBookModelResets(old => ({ ...old, [task]: (old[task] ?? 0) + 1 }));
       setNotice(error instanceof Error ? error.message : "Modello del libro non aggiornato.");
     }
   }
@@ -549,7 +556,7 @@ export default function App() {
                   {settings.endpoints.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select>
                 <input
-                  key={`${current.id}:${kind}:${current.updatedAt}`}
+                  key={`${current.id}:${kind}:${current.updatedAt}:${bookModelResets[kind] ?? 0}`}
                   className="field" aria-label={`Modello libro per ${LABELS[kind]}`}
                   defaultValue={configured?.modelId ?? ""}
                   onBlur={e => {
