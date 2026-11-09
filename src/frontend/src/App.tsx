@@ -20,6 +20,7 @@ import { AiUsagePanel } from "./components/AiUsagePanel";
 import { AiBudgetPanel } from "./components/AiBudgetPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
+import { updateBookModelRoute } from "./application/book-settings";
 import packageInfo from "../package.json";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
@@ -194,9 +195,17 @@ export default function App() {
   }
   async function updateBookRoute(task: TaskKind, endpointId: string, modelId: string) {
     if (!current) return;
-    const modified = structuredClone(current);
-    modified.modelRoutes = { ...modified.modelRoutes, [task]: { endpointId, modelId } };
-    await saveBook(modified); await refresh();
+    // The UI may hold an older snapshot than IndexedDB after another tab
+    // saved or an AI checkpoint advanced. Never overwrite the whole book.
+    const { id, updatedAt } = current;
+    try {
+      await updateBookModelRoute(id, updatedAt, task, endpointId, modelId);
+      await refresh();
+      setNotice("Modello per il libro aggiornato in sicurezza.");
+    } catch (error) {
+      await refresh(); // A stale route should show the newest saved value.
+      setNotice(error instanceof Error ? error.message : "Modello del libro non aggiornato.");
+    }
   }
 
 
@@ -539,7 +548,16 @@ export default function App() {
                 <select className="field" aria-label={`Endpoint libro per ${LABELS[kind]}`} value={configured?.endpointId ?? settings.defaultRoute.endpointId} onChange={e => void updateBookRoute(kind, e.target.value, configured?.modelId ?? settings.defaultRoute.modelId)}>
                   {settings.endpoints.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select>
-                <input className="field" aria-label={`Modello libro per ${LABELS[kind]}`} value={configured?.modelId ?? ""} onChange={e => void updateBookRoute(kind, configured?.endpointId ?? settings.defaultRoute.endpointId, e.target.value)} placeholder="Modello per questo libro" />
+                <input
+                  key={`${current.id}:${kind}:${current.updatedAt}`}
+                  className="field" aria-label={`Modello libro per ${LABELS[kind]}`}
+                  defaultValue={configured?.modelId ?? ""}
+                  onBlur={e => {
+                    if (e.target.value !== (configured?.modelId ?? ""))
+                      void updateBookRoute(kind, configured?.endpointId ?? settings.defaultRoute.endpointId, e.target.value);
+                  }}
+                  placeholder="Modello per questo libro"
+                />
               </div>;
             })}
           </div>

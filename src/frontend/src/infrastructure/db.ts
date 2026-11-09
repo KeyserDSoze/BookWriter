@@ -47,11 +47,28 @@ export async function getBook(id: string): Promise<BookProject | undefined> {
   return (await db.get("books", id)) as BookProject | undefined;
 }
 
-export async function saveBook(book: BookProject, queueSync = true): Promise<void> {
+/** A manual editor is submitting a snapshot that is no longer current. */
+export class BookRevisionConflict extends Error {
+  constructor() {
+    super("Il libro è cambiato in un'altra scheda: aggiorna i dati prima di salvare.");
+    this.name = "BookRevisionConflict";
+  }
+}
+
+export async function saveBook(
+  book: BookProject, queueSync = true, expectedUpdatedAt?: string,
+): Promise<void> {
   const db = await getDb();
+  // The read, revision comparison, book update and optional outbox enqueue
+  // share one IndexedDB readwrite transaction: no stale snapshot can win
+  // between the revision check and the actual save.
   const tx = db.transaction(["books", "outbox"], "readwrite");
   const books = tx.objectStore("books");
   const stored = await books.get(book.id) as BookProject | undefined;
+  if (expectedUpdatedAt !== undefined && stored?.updatedAt !== expectedUpdatedAt) {
+    await tx.done; // Commit an unchanged transaction, without touching outbox.
+    throw new BookRevisionConflict();
+  }
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   if (queueSync) await enqueueCheckpoint(book, tx.objectStore("outbox"));

@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Override del modello protetti v0.11.46 (main):** modificare endpoint/modello per un libro non sovrascrive più snapshot obsoleti. Web Locks impedisce il cambio durante la scrittura AI e un confronto atomico di `updatedAt` preserva libro/outbox su conflitto. Input modello salvato all'uscita dal campo, test su due tab desktop/mobile. [Guida](docs/autopilot.md), ADR 0078, issue #82/#10.
+
 **Recovery multi-tab v0.11.45 (main):** aprire una seconda scheda non mette più in pausa l'autopilot attivo nella prima. Prima di riconoscere una sessione come interrotta BookWriter acquisisce il Web Lock del libro; senza lock disponibile mantiene checkpoint e audit. Test Vitest e Playwright desktop/mobile con due schede. [Guida](docs/autopilot.md), ADR 0077, issue #81/#6/#10.
 
 **Rinnovo lease verificato v0.11.44 (main):** dopo un tentativo di rinnovo, BookWriter richiede che GitHub punti esattamente al nuovo commit; un 409 o una richiesta non applicata non è più considerata successo solo perché la sessione precedente è ancora attiva. Un ACK smarrito dopo l'applicazione è invece riconosciuto senza ripetere il commit. [Guida](docs/github-sync.md), ADR 0076, issue #80/#10.

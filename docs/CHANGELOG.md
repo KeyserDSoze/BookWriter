@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.46 — 2026-11-09 (main, issue #82, #10, #6, #3)
+
+**Impostazioni per libro: stop a salvataggi manuali di snapshot obsoleti**
+
+- Se due schede mostrano versioni diverse dello stesso libro, cambiare l'override dell'endpoint o modello **non** salva più l'intero record React senza controllare la revisione. `updateBookModelRoute` tenta il Web Lock esclusivo del writer per il singolo libro e legge i dati correnti solo sotto lock; se il lock è occupato, Web Locks manca o il libro è ancora `running`, la modifica è rifiutata senza interrompere l'autopilot.
+- `saveBook` supporta una precondizione **facoltativa** `expectedUpdatedAt`: il confronto viene eseguito dentro la stessa transazione IndexedDB `books+outbox`, per impedire che una scrittura tra lettura e commit faccia perdere canone, altri override o stato. Su conflitto il libro e l'outbox restano intatti; i vecchi caller AI mantengono le loro firme e protezioni.
+- La UI mostra un messaggio in italiano, **ricarica** il libro sul conflitto e consente di reinserire il valore desiderato; il campo modello committa **su blur** anziché su ogni carattere, per non invalidare la revisione durante la digitazione. Gli override modificano solo `modelRoutes[task]`.
+- Nuovi Vitest: successo/preservazione degli altri campi, writer occupato, assenza Web Locks, libro `running`, collisione fra due edit e CAS stale con outbox invariata. Playwright desktop/mobile: due tab con snapshot obsoleto, lock reale attivo e successivo editing consentito dopo rilascio.
+- ADR 0078, AGENTS, README, guide autopilot/GitHub aggiornati. Nessun nuovo formato, backend, token, provider o chiamata HTTP. **Restano aperte** nella #10 le altre modifiche manuali e il fencing inter-dispositivo.
+
+
 ## 0.11.45 — 2026-11-09 (main, issue #81, #6, #10, #3)
 
 **Recovery in seconda scheda: non interrompere l'autopilot che sta ancora scrivendo**
