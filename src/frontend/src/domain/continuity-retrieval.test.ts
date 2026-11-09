@@ -622,7 +622,7 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(buildContinuityEvidence(b,current)).toEqual(pack);
   });
 
-  it("non estende la ricerca dei 16 nomi dalla settima scena alla query aggregata",()=>{
+  it("in sette scene include il nome della scena finale nella query aggregata",()=>{
     const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
     const source=b.chapters[1]!.scenes[0]!;
     b.chapters=[origin,b.chapters[1]!,current];
@@ -639,8 +639,8 @@ describe("Recupero mirato locale della continuità",()=>{
     const prior=b.chapters.filter(ch=>ch.number<current.number);
     const aggregated=retrievePriorContinuityScenes(prior,origin,current,[]);
     const witness=aggregated.sampled.find(x=>x.scene.id==="key")!;
-    expect(witness.match.literalEntities).toBeUndefined();
-    expect(witness.match.score).toBe(0);
+    expect(witness.match.literalEntities).toEqual(["donna alba"]);
+    expect(witness.match.score).toBeGreaterThan(0);
     const targeted=retrievePriorContinuityScenes(prior,origin,current,[],
       current.scenes[6]);
     expect(targeted.sampled.find(x=>x.scene.id==="key")?.match.literalEntities)
@@ -695,7 +695,7 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(buildContinuityEvidence(b,current)).toEqual(pack);
   });
 
-  it("rispetta il limite di sei scene nella query di capitolo",()=>{
+  it("in sette scene include il termine lessicale della scena finale",()=>{
     const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
     const source=b.chapters[1]!.scenes[0]!;
     // Keep the source as mandatory latest anchor even with score zero.
@@ -712,12 +712,79 @@ describe("Recupero mirato locale della continuità",()=>{
     const prior=b.chapters.filter(ch=>ch.number<current.number);
     const byChapter=retrievePriorContinuityScenes(prior,origin,current,[]);
     const selected=byChapter.sampled.find(x=>x.scene.id==="key")!;
-    expect(selected.match.terms).not.toContain("lucerna");
-    expect(selected.match.score).toBe(0);
+    expect(selected.match.terms).toContain("lucerna");
+    expect(selected.match.score).toBeGreaterThan(0);
     const targeted=retrievePriorContinuityScenes(prior,origin,current,[],
       current.scenes[6]);
     expect(targeted.sampled.find(x=>x.scene.id==="key")?.match.terms)
       .toContain("lucerna");
+  });
+
+  it("oltre sei scene campiona prima, ultime e intermedi senza oltrepassare i sei slot",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    b.chapters=[origin,b.chapters[1]!,current];
+    const source=b.chapters[1]!.scenes[0]!;
+    source.title="";source.objective="";source.date=undefined;
+    source.characters=[];source.locations=[];source.items=[];
+    const now=Array.from({length:8},(_,i)=>
+      scene("review-"+(i+1),"Piove.",{
+        number:i+1,title:"",objective:"",date:undefined,
+        characters:i===2?["Ombra"]:i===7?["Ivo"]:[],
+        items:[],locations:[],
+      }));
+    current.scenes=now;
+    const prior=b.chapters.filter(ch=>ch.number<current.number);
+    source.text="Ivo custodisce il diario.";
+    const snapshot=JSON.stringify(b);
+    const first=retrievePriorContinuityScenes(prior,origin,current,[]);
+    const witness=first.sampled.find(x=>x.scene.id==="key")!;
+    expect(witness.match.literalEntities).toEqual(["ivo"]);
+    expect(witness.match.score).toBeGreaterThan(0);
+    const reordered={...current,scenes:[...now].reverse()};
+    const reverse=retrievePriorContinuityScenes(prior,origin,reordered,[]);
+    expect(reverse.sampled.map(x=>[x.scene.id,x.match]))
+      .toEqual(first.sampled.map(x=>[x.scene.id,x.match]));
+    const singleLast=retrievePriorContinuityScenes(prior,origin,current,[],now[7]);
+    expect(singleLast.sampled.find(x=>x.scene.id==="key")?.match.literalEntities)
+      .toEqual(["ivo"]);
+    source.text="Ombra custodisce il diario.";
+    const missed=retrievePriorContinuityScenes(prior,origin,current,[]);
+    const omitted=missed.sampled.find(x=>x.scene.id==="key")!;
+    expect(omitted.match.literalEntities).toBeUndefined();
+    expect(omitted.match.score).toBe(0);
+    const singleMiddle=retrievePriorContinuityScenes(prior,origin,current,[],now[2]);
+    expect(singleMiddle.sampled.find(x=>x.scene.id==="key")?.match.literalEntities)
+      .toEqual(["ombra"]);
+    source.text="Ivo custodisce il diario.";
+    expect(JSON.stringify(b)).toBe(snapshot);
+  });
+
+  it("la query aggregata non visita più di sei scene su un capitolo enorme",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    b.chapters=[origin,b.chapters[1]!,current];
+    const source=b.chapters[1]!.scenes[0]!;
+    source.text="La mappa emerge dalla sabbia.";
+    source.title="";source.objective="";source.date=undefined;
+    source.characters=[];source.items=[];source.locations=[];
+    current.scenes=Array.from({length:101},(_,i)=>
+      scene("review-"+(i+1),"Piove.",{
+        number:i+1,title:"",objective:"",date:undefined,
+        items:i===100?["mappa"]:[],characters:[],locations:[],
+      }));
+    const prior=b.chapters.filter(ch=>ch.number<current.number);
+    const aggregate=retrievePriorContinuityScenes(prior,origin,current,[]);
+    expect(aggregate.sampled.find(x=>x.scene.id==="key")?.match.literalEntities)
+      .toEqual(["mappa"]);
+    const packBefore=JSON.stringify(b);
+    markDownstreamContinuity(b,origin,"author_reopen");
+    const snapshot=JSON.stringify(b);
+    const pack=buildContinuityEvidence(b,current)!;
+    expect(pack.scenes.find(x=>x.sceneId==="key")?.matchSignals.literalEntities)
+      .toEqual(["mappa"]);
+    expect(JSON.stringify(b)).toBe(snapshot);
+    expect(snapshot).not.toBe(packBefore);
+    expect(pack.scenes.length).toBeLessThanOrEqual(4);
+    expect(pack.retrieval.scannedSceneCount).toBe(2);
   });
 
   it("registra nel freeze la copertura quantitativa, senza certificare coerenza",()=>{

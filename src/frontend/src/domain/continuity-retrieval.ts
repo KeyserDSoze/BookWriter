@@ -104,9 +104,19 @@ function referenced(scene:Scene):string[] {
   ].filter((v):v is string=>typeof v==="string"&&v.length>0&&v.length<=100)
     .map(v=>v.trim().toLocaleLowerCase("it")).filter(Boolean))].slice(0,30);
 }
+const MAX_QUERY_SCENES = 6;
+/** The director receives the same fixed-size chapter query even for long
+ * chapters. Beyond six nonempty scenes, cover both ends and four evenly
+ * spaced positions in narrative order; never claim complete inspection.
+ * Single-scene specialists and chapters with <=6 scenes are unchanged. */
 function queryScenes(chapter:Chapter,currentScene?:Scene):Scene[] {
-  return currentScene?[currentScene]:
-    chapter.scenes.filter(s=>s.text.trim()).slice(0,6);
+  if(currentScene)return [currentScene];
+  const written=chapter.scenes.filter(s=>s.text.trim());
+  if(written.length<=MAX_QUERY_SCENES)return written;
+  const ordered=[...written].sort((a,b)=>
+    a.number-b.number || a.id.localeCompare(b.id));
+  return Array.from({length:MAX_QUERY_SCENES},(_,i)=>
+    ordered[Math.round(i*(ordered.length-1)/(MAX_QUERY_SCENES-1))]!);
 }
 
 /** The chapter-level untagged-name query has only 16 slots. Spread them

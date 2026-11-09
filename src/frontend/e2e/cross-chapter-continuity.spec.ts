@@ -61,13 +61,13 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("il limite di 1.600 viene");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
-    .toContainText("i 48 termini di ricerca sono");
+    .toContainText("i 48 termini di ricerca e i");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
-    .toContainText("distribuiti tra le prime sei scene con testo");
+    .toContainText("16 nomi espliciti cercati nella prosa precedente");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
-    .toContainText("Anche i 16 nomi espliciti cercati nella");
+    .toContainText("massimo sei scene rappresentative: inizio, fine e scene intermedie");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
-    .toContainText("prosa precedente sono ripartiti tra quelle scene");
+    .toContainText("altre scene restano escluse");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("due riferimenti distanti ricevono");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))

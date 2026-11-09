@@ -477,10 +477,11 @@ export function EditorialBoardPanel({
           Nelle scene lunghe, quando possibile, due riferimenti distanti ricevono
           due estratti distinti, anche se un nome viene ripetuto più avanti;
           altrimenti resta un frammento di contesto.
-          Per la revisione dell'intero capitolo, i 48 termini di ricerca sono
-          distribuiti tra le prime sei scene con testo, senza privilegiare
-          soltanto la prima scena. Anche i 16 nomi espliciti cercati nella
-          prosa precedente sono ripartiti tra quelle scene.
+          Per la revisione dell'intero capitolo, i 48 termini di ricerca e i
+          16 nomi espliciti cercati nella prosa precedente sono distribuiti su
+          massimo sei scene rappresentative: inizio, fine e scene intermedie.
+          Se il capitolo ha più di sei scene, altre scene restano escluse
+          dalla query aggregata ma sono controllate nelle review individuali.
           Se un capitolo contiene troppe scene, il limite di 1.600 viene
           distribuito tra capitoli per conservare origine e ultimo predecessore.
           Il campionamento dei testi lunghi evita riscontri di nomi e parole

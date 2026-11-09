@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.38 — 2026-11-09 (main, issue #20)
+
+**Rivalidazione del direttore: sei scene rappresentative anche nei capitoli lunghi**
+
+- Per i capitoli con più di sei scene non vuote, `queryScenes` seleziona **prima, ultima e quattro scene intermedie equidistanti** nell'ordine deterministico di numero/ID, invece delle sole prime sei. Conserva l'esatto comportamento precedente con sei scene o meno e quando viene fornita una singola `currentScene`.
+- La query del direttore continua a distribuire fra le sei scene rappresentate i **48 termini lessicali** e **16 nomi espliciti** e a considerare i loro metadati strutturati e date. Il budget rimane fisso: massimo sei scene correnti, scansione di 16k caratteri per scena lunga, 1.600 candidate precedenti, quattro scene selezionate e due per capitolo, due finestre originali da 1.250.
+- Test Vitest per capitoli con 7, 8 e 101 scene, presenza del riferimento nell'ultima, campionamento deterministico anche con record invertiti, scena intermedia esclusa esplicitamente, review di singola scena invariata e nessuna mutazione. Playwright desktop/mobile sul nuovo avviso di campionamento. ADR 0071, AGENTS, guida, README e versione npm/lock.
+- Nessuna nuova chiamata AI/HTTP, accesso ai lettori ciechi, segreti, registri alias, storage/ZIP, sincronizzazione, mutazione canonica, decisioni o freeze. Il campione resta parziale: un indizio testuale non dimostra una contraddizione.
+
+
 ## 0.11.37 — 2026-11-09 (main, issue #20)
 
 **Recupero cross-chapter: bilanciamento dei 16 nomi letterali fra scene correnti**
