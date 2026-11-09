@@ -407,6 +407,30 @@ export function editorialSegmentTextStamp(text: string): string {
   return text.length + ":" + (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+/** Revalidate the documentary provenance of every historical finding
+ * against the CURRENT chapter dossier. Text stamps (#104) cannot detect a
+ * withdrawn source, changed excerpt or revoked source-independence relation.
+ * A quotation is only literal source evidence, never historical truth. */
+export function assertCurrentHistoricalReviewSources(
+  chapter: Chapter, cycle: Pick<ChapterEditorialCycle, "reports">,
+): void {
+  for (const report of cycle.reports) {
+    for (const finding of report.findings) {
+      if (report.role !== "historical") {
+        if (finding.historical) throw new Error(
+          "Fonte storica non autorizzata: solo il revisore storico può citarla.");
+        continue;
+      }
+      try {
+        validateHistoricalClaim(finding.historical, chapter.historicalDossier);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "Evidenza non valida.";
+        throw new Error("Fonte storica del rapporto non più corrente: " + reason);
+      }
+    }
+  }
+}
+
 /** Check the ENTIRE ordered report prefix before using its length to plan
  * the next reviewer. The judge and freeze require the complete 12×N matrix.
  * Legacy reports remain readable, but cannot silently resume a fresh review. */
@@ -450,6 +474,9 @@ export function assertEditorialReviewCoverage(
         throw new Error("Rapporto editoriale con prova narrativa assente, manomessa o non più corrente.");
     }
   }
+  // Run documentary checks on reports with still-current narrative text.
+  // A historical quote can expire independently of the manuscript.
+  assertCurrentHistoricalReviewSources(chapter, cycle);
   return { reportCount: cycle.reports.length, expectedCount, segmentCount: segments.length };
 }
 
@@ -793,6 +820,7 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
   { system: string; prompt: string } {
   const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
   if (!chapter) throw new Error("Capitolo assente.");
+  assertCurrentHistoricalReviewSources(chapter, cycle);
   assertPriorChaptersFrozen(book, chapter);
   const continuityPack = buildContinuityEvidence(book, chapter);
   // The judge can inspect the same independent, locally revalidated prior
@@ -1084,6 +1112,9 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
 }
 export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
   chapter?: Chapter, book?: BookProject): EditorialJudgment {
+  // Recheck once more when applying the judge's output to a live book. A
+  // dossier change during the provider call must never authorize a repair.
+  if (chapter) assertCurrentHistoricalReviewSources(chapter, cycle);
   const parsed = judgmentSchema.parse(parseJson(raw));
   const findingsById = new Map(allFindings(cycle).map(x => [x.id, x]));
   const disagreements=chapter
@@ -1260,6 +1291,9 @@ export function repairPrompt(book: BookProject, cycle: ChapterEditorialCycle,
   const ch = book.chapters.find(x => x.id === cycle.chapterId);
   const scene = ch?.scenes.find(x => x.id === sceneId);
   if (!scene) throw new Error("Scena da correggere assente.");
+  // Resume/import may enter repair after a source was retired. The same
+  // check is repeated by the runner when committing the model's response.
+  assertCurrentHistoricalReviewSources(ch!, cycle);
   const fixes = acceptedRepairs(cycle).filter(x => x.sceneId === sceneId);
   if (!fixes.length) throw new Error("Nessuna correzione approvata.");
   // A restored/imported cycle was never authenticated by this runtime.

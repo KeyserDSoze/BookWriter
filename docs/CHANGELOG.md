@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.69 — 2026-11-09 (main, issue #106, epic #20 e #23)
+
+**Gate documentale live delle fonti storiche fra revisori, giudice e remediation**
+
+- `assertCurrentHistoricalReviewSources` ricalcola `validateHistoricalClaim` sui report del **solo revisore storico** contro il dossier corrente del capitolo. Controlla revisioni **ancora attive**, estratti e citazioni letterali associati a ciascun sourceId, relazioni di derivazione e indipendenza delle fonti, contesto delle divergenze. Rifiuta fonti storiche iniettate da ruoli non autorizzati e fonti rimosse, modificate o invalidate dal nuovo dossier.
+- Il gate è ora richiamato da `assertEditorialReviewCoverage` (#104), che decide se avanzare al prossimo revisore e se un checkpoint può autorizzare giudice e freeze. Un checkpoint con testo identico ma fonte scaduta è considerato obsoleto; l'azione di recupero supervisionato della #105 lo può archiviare e riavviare dall'inizio, su conferma autore. Non inviare richieste AI su fonti non correnti.
+- Le funzioni `adjudicationPrompt`, `validateJudgment` con capitolo live e `repairPrompt` rivalidano anche per chiamate dirette o checkpoint `repair` ripresi/importati; il runner verifica di nuovo `repairPrompt` quando applica la risposta per impedire correzioni su fonti ritirate durante la chiamata LLM.
+- Vitest copre fonte attiva, nuova revisione che ritira la precedente, testo della fonte alterato, `unverified` senza fonte, ruolo falso, judgment e remediation invalidati, conservazione immutata dei vecchi report. Playwright desktop/mobile usa un checkpoint completo **12×1** con una fonte storica sostituita: deve mostrare il recupero disponibile e bloccare il giudice con **zero chiamate AI**.
+- ADR 0101, manuale, AGENTS, feature, README e versioni package/lock 0.11.69 aggiornati; nessuna nuova dipendenza o endpoint. Il gate verifica **provenienza e citazione**, non la verità di un fatto, la correttezza dell'interpretazione LLM o l'indipendenza cognitiva dei revisori. Epic #20 e #23 restano aperte.
+
 ## 0.11.68 — 2026-11-09 (main, issue #105, epic #20)
 
 **Recupero esplicito dei checkpoint di redazione invalidi, con archivio non distruttivo**

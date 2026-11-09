@@ -1,4 +1,10 @@
-# Redazione multi-agente di BookWriter — v0.11.67
+# Redazione multi-agente di BookWriter — v0.11.69
+
+## Fonti storiche correnti fino alla remediation (v0.11.69)
+
+La conformità della prosa non basta: un rapporto storico può citare una revisione Wikipedia, una trascrizione o un estratto che l'autore ha nel frattempo disattivato, sostituito o rettificato. BookWriter ricontrolla **l'origine, l'attivazione e la citazione letterale** sul dossier del capitolo corrente prima del prossimo revisore, prima del giudice e del freeze, e anche prima delle remediation già approvate che vengano riprese da checkpoint precedenti. Se una fonte non è più valida, la review si blocca **senza ulteriore costo AI** e il recupero supervisionato può archiviare i vecchi report.
+
+Questa verifica non certifica che il modello abbia interpretato correttamente il documento, né che due fonti rappresentino lo stesso evento; i rapporti `unverified` rimangono dubbi, non diventano fatti. [Guida](editorial-historical-source-freshness.md), [ADR 0101](../ADR/0101-live-historical-sources-at-editorial-gates.md), [issue #106](https://github.com/KeyserDSoze/BookWriter/issues/106).
 
 ## Copertura completa prima del giudice critico (v0.11.67)
 
