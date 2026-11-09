@@ -48,8 +48,6 @@ jobs:
   epubcheck:
     name: EPUBCheck 5.4.0 (4 manoscritti sintetici)
     runs-on: ubuntu-latest
-    env:
-      EPUBCHECK_OUTPUT_DIR: ${{ runner.temp }}/bookwriter-epubcheck-fixtures
     defaults:
       run:
         working-directory: src/frontend
@@ -66,6 +64,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Generate four real EPUBs with buildEpub
         shell: bash
+        env:
+          EPUBCHECK_OUTPUT_DIR: ${{ runner.temp }}/bookwriter-epubcheck-fixtures
         run: |
           set -euo pipefail
           mkdir -p "$EPUBCHECK_OUTPUT_DIR"
@@ -76,6 +76,8 @@ jobs:
           for epub in "${fixtures[@]}"; do test -s "$epub"; done
       - name: Download and verify official W3C EPUBCheck 5.4.0
         shell: bash
+        env:
+          EPUBCHECK_OUTPUT_DIR: ${{ runner.temp }}/bookwriter-epubcheck-fixtures
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/epubcheck-5.4.0.zip"
