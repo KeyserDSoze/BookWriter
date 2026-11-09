@@ -4,6 +4,9 @@ test("redazione a segmenti Unicode: i primi due prompt conservano interi i grafe
   test.setTimeout(60_000);
   const sceneText = "a".repeat(9_999) + "👩‍💻Mara incontra il guardiano davanti alla porta.";
   const reviews: Array<{ system: string; prompt: string }> = [];
+  const providerSystems: string[] = [];
+  const browserErrors: string[] = [];
+  page.on("pageerror", error => browserErrors.push(error.message));
   const pass = JSON.stringify({
     verdict: "pass", summary: "Questo segmento non contiene rilievi verificabili.",
     findings: [], memoryNote: "Osservazione completata senza suggerimenti.",
@@ -22,6 +25,7 @@ test("redazione a segmenti Unicode: i primi due prompt conservano interi i grafe
     };
     const system = payload.messages.find(item => item.role === "system")?.content ?? "";
     const prompt = payload.messages.find(item => item.role === "user")?.content ?? "";
+    providerSystems.push(system.slice(0, 100));
     if (system.includes("revisore letterario INDIPENDENTE")) reviews.push({ system, prompt });
     const result = system.includes("direttore editoriale CRITICO") ?
       JSON.stringify({
@@ -92,7 +96,37 @@ test("redazione a segmenti Unicode: i primi due prompt conservano interi i grafe
   await expect(page.getByRole("region", { name: "Redazione multi-agente" }))
     .toBeVisible();
   await page.getByRole("button", { name: "Riprendi" }).click();
-  await expect.poll(() => reviews.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(2);
+  try {
+    await expect.poll(() => reviews.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(2);
+  } catch (error) {
+    // On a CI failure distinguish a slow browser from an autopilot that
+    // stopped before the HTTP request (or a changed request system prompt).
+    const stored = await page.evaluate(() => new Promise<unknown>((resolve, reject) => {
+      const opened = indexedDB.open("bookwriter");
+      opened.onerror = () => reject(opened.error);
+      opened.onsuccess = () => {
+        const db = opened.result;
+        const request = db.transaction("books", "readonly").objectStore("books").getAll();
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const book = request.result[0] as {
+            status?: string; phase?: string; previousError?: string;
+            editorialCycle?: { stage?: string; reports?: unknown[] };
+          } | undefined;
+          resolve({
+            status: book?.status, phase: book?.phase, previousError: book?.previousError,
+            stage: book?.editorialCycle?.stage,
+            reports: book?.editorialCycle?.reports?.length,
+          });
+          db.close();
+        };
+      };
+    }));
+    throw new Error("Nessun prompt Unicode ricevuto: " + JSON.stringify({
+      stored, providerSystems, browserErrors, reviews: reviews.length,
+      original: error instanceof Error ? error.message : String(error),
+    }));
+  }
 
   function reviewedText(prompt: string): string {
     const after = prompt.split("<manoscritto>\n");
