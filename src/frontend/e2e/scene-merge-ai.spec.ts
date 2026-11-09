@@ -17,6 +17,9 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization,content-type,x-github-api-version",
     "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
+    // CORS-exposed header used for the conservative clock sanity check.
+    "access-control-expose-headers": "X-RateLimit-Reset",
+    "x-ratelimit-reset": String(Math.floor((Date.now()+30*60_000)/1000)),
   };
   const base64 = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text)));
 
