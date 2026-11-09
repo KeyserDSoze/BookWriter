@@ -1,7 +1,7 @@
 import type { BookProject, Chapter, Scene } from "./types";
 import { extractNarrativeEventCandidates, type NarrativeEventCandidate } from "./narrative-event-candidates";
-import { retrievePriorContinuityScenes, targetedLiteralWindows, type RetrievalMatch,
-  type RankedPriorScene } from "./continuity-retrieval";
+import { retrievePriorContinuityScenes, targetedLiteralWindows, type CurrentQueryCoverage,
+  type RetrievalMatch, type RankedPriorScene } from "./continuity-retrieval";
 
 /** Revalidation is a pending obligation, not a claim that any contradiction exists. */
 export type ContinuityTrigger = "author_reopen" | "retroactive_revision" | "historical_evidence";
@@ -24,6 +24,11 @@ export interface ContinuityRecheckAudit extends ContinuityRecheck {
   candidateSceneCount?: number;
   scannedSceneCount?: number;
   unscannedSceneCount?: number;
+  /** Optional, additive fields: old books have no current-query coverage audit. */
+  currentWrittenSceneCount?: number;
+  currentQueriedSceneCount?: number;
+  currentOmittedSceneCount?: number;
+  currentQueriedSceneIds?: string[];
 }
 
 export interface ContinuityEvidenceWindow { offset: number; text: string }
@@ -48,6 +53,8 @@ export interface ContinuityEvidencePack {
   originChapterNumber: number;
   trigger: ContinuityTrigger;
   scope: "public_prior_scenes_partial_sample";
+  /** Which CURRENT scenes supplied the lexical query; not the prior witnesses. */
+  currentQuery: CurrentQueryCoverage;
   examinedChapterIds: string[];
   omittedSceneCount: number;
   retrieval: {
@@ -143,6 +150,7 @@ export function buildContinuityEvidence(book: BookProject, chapter: Chapter,
   return {
     originChapterId:origin.id,originChapterNumber:origin.number,
     trigger:recheck.trigger,scope:"public_prior_scenes_partial_sample",
+    currentQuery:selected.currentQuery,
     examinedChapterIds:[...new Set(sampledScenes.map(s=>s.chapterId))],
     omittedSceneCount:Math.max(0,selected.candidateSceneCount-selected.sampled.length),
     retrieval:{
@@ -173,7 +181,12 @@ export function completeContinuityRecheck(book: BookProject, chapter: Chapter,
     sampledSceneIds:pack.scenes.map(s=>s.sceneId),
     partialCoverage:pack.omittedSceneCount>0 ||
       pack.retrieval.unscannedSceneCount>0 ||
+      pack.currentQuery.omittedSceneCount>0 ||
       pack.scenes.some(s=>s.coverage==="partial"),
+    currentWrittenSceneCount:pack.currentQuery.writtenSceneCount,
+    currentQueriedSceneCount:pack.currentQuery.queriedSceneIds.length,
+    currentOmittedSceneCount:pack.currentQuery.omittedSceneCount,
+    currentQueriedSceneIds:[...pack.currentQuery.queriedSceneIds],
     retrievalMethod:pack.retrieval.method,
     candidateSceneCount:pack.retrieval.candidateSceneCount,
     scannedSceneCount:pack.retrieval.scannedSceneCount,

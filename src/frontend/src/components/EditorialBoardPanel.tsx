@@ -482,6 +482,8 @@ export function EditorialBoardPanel({
           massimo sei scene rappresentative: inizio, fine e scene intermedie.
           Se il capitolo ha più di sei scene, altre scene restano escluse
           dalla query aggregata ma sono controllate nelle review individuali.
+          Il direttore riceve il conteggio delle scene correnti incluse e
+          omesse dalla query: non equivale a revisione integrale.
           Se un capitolo contiene troppe scene, il limite di 1.600 viene
           distribuito tra capitoli per conservare origine e ultimo predecessore.
           Il campionamento dei testi lunghi evita riscontri di nomi e parole
@@ -502,6 +504,15 @@ export function EditorialBoardPanel({
               (ch.lastContinuityReview.candidateSceneCount ?? 0) + " precedenti; " +
               (ch.lastContinuityReview.unscannedSceneCount ?? 0) +
               " non esaminate dal ranking per limite operativo."
+            : ""}
+          {ch.lastContinuityReview.currentWrittenSceneCount !== undefined &&
+          ch.lastContinuityReview.currentQueriedSceneCount !== undefined &&
+          ch.lastContinuityReview.currentOmittedSceneCount !== undefined
+            ? " Query sul capitolo corrente: " +
+              ch.lastContinuityReview.currentQueriedSceneCount + " scene su " +
+              ch.lastContinuityReview.currentWrittenSceneCount + " con testo; " +
+              ch.lastContinuityReview.currentOmittedSceneCount +
+              " escluse dalla ricerca aggregata."
             : ""}
           {ch.lastContinuityReview.partialCoverage
             ? " Il confronto campiona solo alcune scene o finestre, non tutta la continuità."

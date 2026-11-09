@@ -69,6 +69,8 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("altre scene restano escluse");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("Il direttore riceve il conteggio delle scene correnti incluse e");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("due riferimenti distanti ricevono");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("anche se un nome viene ripetuto più avanti");
@@ -107,6 +109,40 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
     cycle:"ch-1",status:"paused",
   });
   expect(outbound).toEqual([]);
+  // Old saved audits remain readable; new optional fields are shown only
+  // when present, with an explicit count of excluded CURRENT scenes.
+  await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const tx=open.result.transaction("books","readwrite"),store=tx.objectStore("books");
+      const get=store.getAll();
+      get.onerror=()=>reject(get.error);
+      get.onsuccess=()=>{
+        const b=get.result[0] as {
+          id:string;chapters:Array<Record<string,unknown>>;
+        };
+        const ch=b.chapters[1]!;
+        ch.frozenAt="2026-11-09T08:00:00.000Z";
+        ch.lastContinuityReview={
+          originChapterId:"ch-1",originChapterNumber:1,
+          trigger:"author_reopen",requestedAt:"2026-11-09T07:00:00.000Z",
+          originSceneIds:[],completedAt:"2026-11-09T08:00:00.000Z",
+          sampledSceneIds:["s-1"],partialCoverage:true,
+          retrievalMethod:"local_structured_lexical_v1",
+          candidateSceneCount:1,scannedSceneCount:1,unscannedSceneCount:0,
+          currentWrittenSceneCount:8,currentQueriedSceneCount:6,
+          currentOmittedSceneCount:2,
+          currentQueriedSceneIds:["s-1","s-2","s-4","s-5","s-7","s-8"],
+        };
+        store.put(b,b.id);
+        tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  await expect(page.locator('[aria-label="Storico rivalidazione capitolo 2"]'))
+    .toContainText("Query sul capitolo corrente: 6 scene su 8 con testo; 2 escluse dalla ricerca aggregata.");
   const size=await page.evaluate(()=>({
     scroll:document.documentElement.scrollWidth,width:window.innerWidth,
   }));

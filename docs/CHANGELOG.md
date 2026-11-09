@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.39 — 2026-11-09 (main, issue #20)
+
+**Audit trasparente della copertura delle scene correnti nel confronto cross-chapter**
+
+- `retrievePriorContinuityScenes` restituisce ora `currentQuery` con `scope` (`chapter_sample`/`single_scene`), numero di scene correnti scritte, ID effettivamente usati nella query, e numero di scene correnti omesse. Questi contatori sono **distinti** da `candidateSceneCount`/`unscannedSceneCount` dei testimoni precedenti. Il pacchetto raggiunge soltanto quattro specialisti autorizzati (e storico con trigger) e il direttore, mai i cinque lettori ciechi.
+- Dopo `completeContinuityRecheck`, `partialCoverage=true` anche se **solo scene correnti** risultano omesse e tutte le precedenti sono state campionate senza tagli. Il riepilogo conserva **campi opzionali** `currentWrittenSceneCount`, `currentQueriedSceneCount`, `currentOmittedSceneCount` e `currentQueriedSceneIds`; audit preesistenti senza questi campi restano leggibili. UI con i conteggi visibili all'autore.
+- Il direttore è istruito a non dichiarare verificata la parte di capitolo fuori dalla query aggregata; la query `single_scene` omette volutamente gli altri segmenti, non dichiara una revisione complessiva.
+- Test Vitest per 8 scene (6 nella query, 2 omesse), singola scena (1 vs 7), tutti i testimoni precedenti completi, `partialCoverage` con e senza omissioni e isolamento dei lettori ciechi; Playwright desktop/mobile sul conteggio nello storico. ADR 0072, guida, AGENTS, README e package/lock.
+- **Invariati** selezione delle scene, punteggi, campionamento, massimo 1600 candidate/4 scene/2 per capitolo, budget AI/HTTP, canone, permessi, sync, regole di giudizio o freeze. Nessuna interpretazione semantica aggiuntiva.
+
+
 ## 0.11.38 — 2026-11-09 (main, issue #20)
 
 **Rivalidazione del direttore: sei scene rappresentative anche nei capitoli lunghi**

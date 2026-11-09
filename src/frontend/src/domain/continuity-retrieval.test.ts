@@ -787,6 +787,96 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(pack.retrieval.scannedSceneCount).toBe(2);
   });
 
+  it("distingue copertura della query corrente dai testimoni precedenti nel pacchetto del giudice",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    b.chapters=[origin,b.chapters[1]!,current];
+    current.scenes=Array.from({length:8},(_,i)=>scene("s-"+(i+1),
+      "Piove.",{number:i+1,title:"",objective:"",date:undefined,
+        characters:i===7?["Ivo"]:[],items:[],locations:[]}));
+    markDownstreamContinuity(b,origin,"author_reopen");
+    const before=JSON.stringify(b);
+    const pack=buildContinuityEvidence(b,current)!;
+    expect(pack.currentQuery).toEqual({
+      scope:"chapter_sample",writtenSceneCount:8,
+      queriedSceneIds:["s-1","s-2","s-4","s-5","s-7","s-8"],
+      omittedSceneCount:2,
+    });
+    expect(pack.retrieval).toEqual({
+      method:"local_structured_lexical_v1",
+      candidateSceneCount:2,scannedSceneCount:2,unscannedSceneCount:0,
+      maxSelectedScenes:4,
+    });
+    expect(pack.omittedSceneCount).toBe(0);
+    expect(pack.scenes.every(x=>x.coverage==="complete")).toBe(true);
+    const same=buildContinuityEvidence(b,current)!;
+    expect(same).toEqual(pack);
+    const single=buildContinuityEvidence(b,current,current.scenes[2])!;
+    expect(single.currentQuery).toEqual({
+      scope:"single_scene",writtenSceneCount:8,
+      queriedSceneIds:["s-3"],omittedSceneCount:7,
+    });
+    expect(JSON.stringify(b)).toBe(before);
+    const cycle=createEditorialCycle(current.id);
+    const judge=adjudicationPrompt(b,cycle);
+    expect(judge.prompt).toContain('"scope":"chapter_sample"');
+    expect(judge.prompt).toContain('"writtenSceneCount":8');
+    expect(judge.prompt).toContain('"omittedSceneCount":2');
+    expect(judge.prompt).toContain("scene CORRENTI");
+    const specialist=reviewerPrompt(b,cycle,"continuity",
+      chapterSegments(current)[2]!,8);
+    expect(specialist.prompt).toContain('"scope":"single_scene"');
+    expect(specialist.prompt).toContain('"omittedSceneCount":7');
+    const blind=reviewerPrompt(b,cycle,"readerMystery",
+      chapterSegments(current)[2]!,8);
+    expect(blind.prompt).not.toContain('"scope":"single_scene"');
+    expect(blind.prompt).not.toContain('"writtenSceneCount":8');
+    expect(blind.prompt).not.toContain("PRIVATO:");
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+  });
+
+  it("freeze: conteggi opzionali della query corrente rendono parziale il campione anche con tutti i testimoni completi",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    b.chapters=[origin,b.chapters[1]!,current];
+    current.scenes=Array.from({length:8},(_,i)=>scene("s-"+(i+1),
+      "Piove.",{number:i+1,title:"",objective:"",date:undefined,
+        characters:[],items:[],locations:[]}));
+    markDownstreamContinuity(b,origin,"author_reopen");
+    const pack=buildContinuityEvidence(b,current)!;
+    expect(pack.omittedSceneCount).toBe(0);
+    expect(pack.retrieval.unscannedSceneCount).toBe(0);
+    expect(pack.scenes.every(x=>x.coverage==="complete")).toBe(true);
+    completeContinuityRecheck(b,current,stamp);
+    expect(current.lastContinuityReview).toMatchObject({
+      partialCoverage:true,
+      candidateSceneCount:2,scannedSceneCount:2,unscannedSceneCount:0,
+      currentWrittenSceneCount:8,currentQueriedSceneCount:6,
+      currentOmittedSceneCount:2,
+      currentQueriedSceneIds:["s-1","s-2","s-4","s-5","s-7","s-8"],
+    });
+    expect(current.lastContinuityReview?.sampledSceneIds).toEqual(["origin","key"]);
+    expect(current.continuityRecheck).toBeUndefined();
+  });
+
+  it("freeze: sei o meno scene correnti preservano la copertura senza omissioni",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    b.chapters=[origin,b.chapters[1]!,current];
+    current.scenes=Array.from({length:2},(_,i)=>scene("s-"+(i+1),
+      "Piove.",{number:i+1,title:"",objective:"",date:undefined,
+        characters:[],items:[],locations:[]}));
+    markDownstreamContinuity(b,origin,"author_reopen");
+    const pack=buildContinuityEvidence(b,current)!;
+    expect(pack.currentQuery).toEqual({
+      scope:"chapter_sample",writtenSceneCount:2,
+      queriedSceneIds:["s-1","s-2"],omittedSceneCount:0,
+    });
+    completeContinuityRecheck(b,current,stamp);
+    expect(current.lastContinuityReview).toMatchObject({
+      partialCoverage:false,
+      currentWrittenSceneCount:2,currentQueriedSceneCount:2,
+      currentOmittedSceneCount:0,currentQueriedSceneIds:["s-1","s-2"],
+    });
+  });
+
   it("registra nel freeze la copertura quantitativa, senza certificare coerenza",()=>{
     const b=fixture(),target=b.chapters[5]!;
     markDownstreamContinuity(b,b.chapters[0]!,"author_reopen");

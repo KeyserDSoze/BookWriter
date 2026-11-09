@@ -37,8 +37,17 @@ export interface RankedPriorScene {
   match: RetrievalMatch;
   selectionReason: "origin_anchor" | "latest_anchor" | "targeted_match" | "coverage_fallback";
 }
+/** Current-chapter QUERY coverage, separate from sampled prior witnesses.
+ * This is NOT a statement that the director read the omitted current scenes. */
+export interface CurrentQueryCoverage {
+  scope: "single_scene" | "chapter_sample";
+  writtenSceneCount: number;
+  queriedSceneIds: string[];
+  omittedSceneCount: number;
+}
 export interface TargetedContinuityResult {
   method: "local_structured_lexical_v1";
+  currentQuery: CurrentQueryCoverage;
   candidateSceneCount: number;
   scannedSceneCount: number;
   unscannedSceneCount: number;
@@ -175,6 +184,15 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   currentScene?:Scene):TargetedContinuityResult {
   const all=prior.flatMap(ch=>ch.scenes.map(scene=>({chapter:ch,scene})));
   const selectedQuery=queryScenes(chapter,currentScene);
+  const written=chapter.scenes.filter(s=>s.text.trim());
+  const queriedSceneIds=selectedQuery.map(s=>s.id);
+  const queriedIds=new Set(queriedSceneIds);
+  const currentQuery:CurrentQueryCoverage={
+    scope:currentScene?"single_scene":"chapter_sample",
+    writtenSceneCount:written.length,
+    queriedSceneIds,
+    omittedSceneCount:written.filter(s=>!queriedIds.has(s.id)).length,
+  };
   const entityQuery=new Set(selectedQuery.flatMap(referenced));
   // Only explicit scene entity labels (no secret/alias inference).
   // Balance the 16 prose-name slots over current scenes for chapter review.
@@ -270,6 +288,7 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
     a.scene.number-b.scene.number || a.scene.id.localeCompare(b.scene.id));
   return {
     method:"local_structured_lexical_v1",
+    currentQuery,
     candidateSceneCount:all.length,
     scannedSceneCount:scanned.length,
     unscannedSceneCount:Math.max(0,all.length-scanned.length),
