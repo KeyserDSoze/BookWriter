@@ -65,6 +65,10 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("distribuiti tra le prime sei scene con testo");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("Anche i 16 nomi espliciti cercati nella");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
+    .toContainText("prosa precedente sono ripartiti tra quelle scene");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("due riferimenti distanti ricevono");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("anche se un nome viene ripetuto più avanti");

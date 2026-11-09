@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Nomi bilanciati v0.11.37 (main):** durante la rivalidazione dell'intero capitolo, anche i 16 nomi espliciti usati per cercare menzioni nella prosa precedente sono distribuiti tra le prime sei scene correnti: una lunga lista nella prima scena non oscura più il personaggio della sesta. La ricerca a singola scena e i limiti e permessi restano invariati. [Guida](docs/targeted-continuity-retrieval.md), ADR 0070, issue #20.
+
 **Query multi-scena v0.11.36 (main):** nella rivalidazione dell'intero capitolo i 48 termini del confronto con le scene precedenti vengono distribuiti a turni fra le prime sei scene correnti, evitando che la prima scena escluda le successive. Le review di una singola scena e tutti i limiti, le citazioni originali e la privacy restano invariati. [Guida](docs/targeted-continuity-retrieval.md), ADR 0069, issue #20.
 
 **Confini dei frammenti v0.11.35 (main):** la rivalidazione dei testi lunghi non scambia più i resti di una parola spezzata dal campionamento per un nome completo: `Ivo` non può nascere dal taglio di `Vivo`, né `orologio` da `orologiox`. Validazione dei confini originali anche per Unicode, senza nuovi dati, AI o ampliamento del campione. [Guida](docs/targeted-continuity-retrieval.md), ADR 0068, issue #20.

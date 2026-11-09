@@ -569,6 +569,84 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(blind.prompt).not.toContain("PRIVATO:");
   });
 
+  it("bilancia 16 nomi espliciti fra sei scene per recuperare il testimone senza tag",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    const source=b.chapters[1]!.scenes[0]!;
+    // Keep the untagged witness in the sample even when testing a query
+    // whose 16 name slots do not include its name.
+    b.chapters=[origin,b.chapters[1]!,b.chapters[4]!,current];
+    source.text="Ivo custodisce un plico sotto una pietra.";
+    source.characters=[];source.items=[];source.locations=[];source.factions=[];
+    source.title="";source.objective="";source.date=undefined;
+    const firstNames=Array.from({length:25},(_,i)=>
+      "Personaggio"+String(i).padStart(2,"0"));
+    current.scenes=[
+      scene("review-1","Piove.",{number:1,title:"",objective:"",
+        characters:firstNames,items:[],locations:[],date:undefined}),
+      ...Array.from({length:4},(_,i)=>
+        scene("review-"+(i+2),"Piove.",{number:i+2,title:"",
+          objective:"",characters:[],items:[],locations:[],date:undefined})),
+      scene("review-6","Piove.",{number:6,title:"",objective:"",
+        characters:["Ivo"],items:[],locations:[],date:undefined}),
+    ];
+    markDownstreamContinuity(b,origin,"author_reopen");
+    const snapshot=JSON.stringify(b);
+    const prior=b.chapters.filter(ch=>ch.number<current.number);
+    const full=retrievePriorContinuityScenes(prior,origin,current,[]);
+    const match=full.sampled.find(x=>x.scene.id==="key")!;
+    expect(match.selectionReason).toBe("targeted_match");
+    expect(match.match.entities).toEqual([]);
+    expect(match.match.literalEntities).toEqual(["ivo"]);
+    expect(match.match.score).toBeGreaterThan(0);
+    const firstOnly=retrievePriorContinuityScenes(prior,origin,current,[],
+      current.scenes[0]);
+    const early=firstOnly.sampled.find(x=>x.scene.id==="key")!;
+    expect(early.match.literalEntities).toBeUndefined();
+    expect(early.match.score).toBe(0);
+    const sixthOnly=retrievePriorContinuityScenes(prior,origin,current,[],
+      current.scenes[5]);
+    expect(sixthOnly.sampled.find(x=>x.scene.id==="key")?.match.literalEntities)
+      .toEqual(["ivo"]);
+    const pack=buildContinuityEvidence(b,current)!;
+    const found=pack.scenes.find(x=>x.sceneId==="key")!;
+    expect(found.matchSignals.literalEntities).toEqual(["ivo"]);
+    expect(found.windows.some(w=>w.text.includes("Ivo custodisce"))).toBe(true);
+    const judge=adjudicationPrompt(b,createEditorialCycle(current.id));
+    expect(judge.prompt).toContain("Ivo custodisce");
+    const blind=reviewerPrompt(b,createEditorialCycle(current.id),
+      "readerMystery",chapterSegments(current)[0]!,6);
+    expect(blind.prompt).not.toContain("Ivo custodisce");
+    expect(blind.prompt).not.toContain("PRIVATO:");
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+    expect(JSON.stringify(b)).toBe(snapshot);
+    expect(buildContinuityEvidence(b,current)).toEqual(pack);
+  });
+
+  it("non estende la ricerca dei 16 nomi dalla settima scena alla query aggregata",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    const source=b.chapters[1]!.scenes[0]!;
+    b.chapters=[origin,b.chapters[1]!,current];
+    source.text="Donna Alba conserva un manoscritto nel solaio.";
+    source.characters=[];source.items=[];source.locations=[];source.factions=[];
+    source.title="";source.objective="";source.date=undefined;
+    current.scenes=[
+      ...Array.from({length:6},(_,i)=>scene("review-"+i,"Piove.",{
+        number:i+1,title:"",objective:"",characters:[],items:[],
+        locations:[],date:undefined})),
+      scene("review-7","Piove.",{number:7,title:"",objective:"",
+        characters:["Donna Alba"],items:[],locations:[],date:undefined}),
+    ];
+    const prior=b.chapters.filter(ch=>ch.number<current.number);
+    const aggregated=retrievePriorContinuityScenes(prior,origin,current,[]);
+    const witness=aggregated.sampled.find(x=>x.scene.id==="key")!;
+    expect(witness.match.literalEntities).toBeUndefined();
+    expect(witness.match.score).toBe(0);
+    const targeted=retrievePriorContinuityScenes(prior,origin,current,[],
+      current.scenes[6]);
+    expect(targeted.sampled.find(x=>x.scene.id==="key")?.match.literalEntities)
+      .toEqual(["donna alba"]);
+  });
+
   it("distribuisce 48 termini fra sei scene correnti nella query del direttore",()=>{
     const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
     const source=b.chapters[1]!.scenes[0]!;

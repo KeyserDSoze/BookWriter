@@ -479,7 +479,8 @@ export function EditorialBoardPanel({
           altrimenti resta un frammento di contesto.
           Per la revisione dell'intero capitolo, i 48 termini di ricerca sono
           distribuiti tra le prime sei scene con testo, senza privilegiare
-          soltanto la prima scena.
+          soltanto la prima scena. Anche i 16 nomi espliciti cercati nella
+          prosa precedente sono ripartiti tra quelle scene.
           Se un capitolo contiene troppe scene, il limite di 1.600 viene
           distribuito tra capitoli per conservare origine e ultimo predecessore.
           Il campionamento dei testi lunghi evita riscontri di nomi e parole

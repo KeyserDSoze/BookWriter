@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.37 — 2026-11-09 (main, issue #20)
+
+**Recupero cross-chapter: bilanciamento dei 16 nomi letterali fra scene correnti**
+
+- La query aggregata del direttore non lascia più che i metadati della prima scena riempiano tutti i **16 nomi** cercati nella prosa precedente senza tag. `balancedLiteralNames` ripartisce le etichette esplicite, valide (3–80 caratteri), **a turni fra le prime sei scene correnti**, con deduplica stabile; il controllo dei metadati strutturati `entities` mantiene la query ampia precedente.
+- La query **di singola scena** resta identica; massimo 30 riferimenti espliciti per scena, 16 nomi cercati/8 riscontri per scena precedente, 48 termini bilanciati, 1.600 candidate, 4 scene selezionate/2 per capitolo e 2 finestre letterali da 1.250 caratteri.
+- Nuovi Vitest con 25 personaggi nella prima scena, menzione non etichettata del personaggio della sesta in un capitolo precedente, confronto con le query singole, integrazione giudice, privacy dei cinque lettori ciechi, esclusione della settima e nessuna mutazione; Playwright desktop/mobile sull'avviso UI. ADR 0070, README, guida e AGENTS.
+- Nessuna nuova chiamata AI/HTTP, lettura del registro alias o dei segreti, indice, campo persistito/ZIP, sync, cambiamenti al canone o ai permessi degli agenti. Un match resta soltanto un indizio letterale, non una diagnosi semantica.
+
+
 ## 0.11.36 — 2026-11-09 (main, issue #20)
 
 **Query di continuità del direttore: termini lessicali bilanciati fra scene correnti**

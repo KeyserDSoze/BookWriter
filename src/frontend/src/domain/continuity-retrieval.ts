@@ -109,6 +109,31 @@ function queryScenes(chapter:Chapter,currentScene?:Scene):Scene[] {
     chapter.scenes.filter(s=>s.text.trim()).slice(0,6);
 }
 
+/** The chapter-level untagged-name query has only 16 slots. Spread them
+ * across up to six current scenes rather than exhausting them on the first
+ * scene's character list. Single-scene queries keep the original order.
+ * Only explicit public scene metadata is used, never author-only aliases. */
+function balancedLiteralNames(scenes:readonly Scene[]):string[] {
+  const batches=scenes.map(scene=>referenced(scene)
+    .filter(name=>name.length>=3&&name.length<=80));
+  const names:string[]=[];
+  const seen=new Set<string>();
+  for(let position=0;position<30&&names.length<MAX_LITERAL_NAME_QUERIES;position++){
+    let found=false;
+    for(const batch of batches){
+      const name=batch[position];
+      if(name===undefined)continue;
+      found=true;
+      if(seen.has(name))continue;
+      seen.add(name);
+      names.push(name);
+      if(names.length===MAX_LITERAL_NAME_QUERIES)break;
+    }
+    if(!found)break;
+  }
+  return names;
+}
+
 /** Bound the chapter-level lexical query without letting the first long scene
  * occupy all 48 slots. One term per current scene per round, in scene order;
  * preserve the previous order when reviewing one specific scene. Words remain
@@ -141,11 +166,10 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   const all=prior.flatMap(ch=>ch.scenes.map(scene=>({chapter:ch,scene})));
   const selectedQuery=queryScenes(chapter,currentScene);
   const entityQuery=new Set(selectedQuery.flatMap(referenced));
-  // Conservative: only explicit current-scene entity labels. No guesses from
-  // secret memory, character descriptions, past author alias decisions, or AI.
-  const literalQuery=[...entityQuery]
-    .filter(name=>name.length>=3&&name.length<=80)
-    .slice(0,MAX_LITERAL_NAME_QUERIES);
+  // Only explicit scene entity labels (no secret/alias inference).
+  // Balance the 16 prose-name slots over current scenes for chapter review.
+  // Keep the full entityQuery for structured metadata overlaps as before.
+  const literalQuery=balancedLiteralNames(selectedQuery);
   const dateQuery=new Set(selectedQuery.map(s=>s.date?.trim())
     .filter((x):x is string=>!!x&&x.length<=80));
   // Preserve bounded 16k sampling and max 96 words per current scene.
