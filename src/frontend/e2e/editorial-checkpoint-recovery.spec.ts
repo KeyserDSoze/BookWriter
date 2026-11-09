@@ -64,6 +64,7 @@ test("recupero checkpoint incompleto: conferma autore, archivio e riavvio senza 
   await expect(panel.getByText(/Tornata 1\/3/)).toBeVisible();
   await expect(panel.getByText(/Verifiche completate: 0/)).toBeVisible();
   await panel.getByText("Archivio recuperi editoriali (1)").click();
+  await panel.locator("summary").filter({ hasText: "Capitolo chapter-1 · tornata 1" }).click();
   await expect(panel.getByText("Nessuna incongruenza segnalata.")).toBeVisible();
   const saved = await page.evaluate(() => new Promise<{
     cycleReports: number; status: string; stage: string; archived: number;
