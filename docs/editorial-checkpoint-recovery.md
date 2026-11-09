@@ -20,3 +20,7 @@ Il problema può nascere da un report legacy privo dell'impronta v0.11.67, da un
 Il recupero richiede Web Locks su libro/outbox, controllo ottimistico `updatedAt` e conferma dell'autore. Massimo **8** snapshot: quando l'archivio è pieno BookWriter si ferma per evitare cancellazioni silenziose. Gli archivi sono inclusi nel backup ZIP e consultabili localmente ma non sono certificazioni né firme del modello. Il comando non recupera automaticamente una scena in fase `repair`, non salva un canone malformato e non sostituisce il giudizio umano.
 
 [ADR 0100](../ADR/0100-author-confirmed-editorial-checkpoint-recovery.md) · [Issue #105](https://github.com/KeyserDSoze/BookWriter/issues/105) · [Epic #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+
+## Estensione v0.11.71
+
+La fase `repair` non è più esclusa **quando la prossima correzione non può essere applicata in sicurezza**; una remediation sana continua. Le scene già riscritte sono preservate e la nuova review non è un rollback. [Guida dedicata](editorial-repair-recovery.md) e [ADR 0103](../ADR/0103-supervised-stale-repair-recovery.md).

@@ -846,3 +846,10 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Per evento attestato ricreare il pack `buildAttestedReviewContext(book,chapter,segment.text)`, confrontare ID esplicitamente presente fra i testimoni correnti, con alias e limiti di campionamento; per prosa precedente non attestata usare `isUnattestedSourceCurrent` sul segmento esatto. Non usare solo `segmentTextStamp` della scena attuale, né affidarsi a un ID di attestazione archiviato.
 - Il gate deve vivere in `assertEditorialReviewCoverage` prima di giudice/freeze, non cambiare rapporti, canon, decisioni autore, checkpoint, costi o consenso; il recupero resta quello supervisionato #105. Continuare a validare in modo indipendente il commit di ogni remediation narrativa accettata.
 - Vitest/E2E desktop/mobile su attivo/revocato, freeze modificato, ruoli falsi, assenza di chiamate AI. Nessuna attestazione o citazione letterale prova automaticamente una contraddizione, un'identità o un fatto. Epic #20 aperta.
+
+
+## Recupero di remediation non riprendibili v0.11.71 — ADR 0103 / issue #108
+
+- In `stage=repair`, `editorialRecoveryProblem` consente il recupero **solo** se il prossimo passo non è eseguibile: controllo di `judgment.verdict=repair`, `repairCursor`, prossimo sceneId e chiamata **locale** a `repairPrompt`. Prima del primo edit verificare anche la matrice 12×N; dopo un edit i timbri dei vecchi report diventano vecchi per progetto, quindi **non** usare `assertEditorialReviewCoverage` per bloccare una riparazione sana.
+- Riutilizzare #105: conferma autore, lock writer/outbox, CAS, max 8 snapshot integri con giudizio/cursore, transazione books/activities/outbox, autosync off e zero nuove richieste AI. Conservare **esattamente** testo corrente, modifiche già applicate, status draft, memoria e capitoli congelati: non è un rollback; la nuova review non deve considerare automaticamente approvate le vecchie correzioni.
+- Bloccare `blocked/reconcile`, non permettere recupero di una remediation sana, test Vitest e Playwright desktop/mobile su fonti stale, primo/secondo repair e integrità dell'audit.

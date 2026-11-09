@@ -390,7 +390,7 @@ export function EditorialBoardPanel({
     if (!window.confirm(
       "Vuoi archiviare il checkpoint non valido e ripetere DA ZERO tutti i 12 revisori? " +
       "I rapporti precedenti resteranno consultabili, ma le nuove chiamate AI avranno un costo. " +
-      "Il canone non sarà modificato. Autosync sarà disabilitato e l'outbox cancellata. " +
+      "Il canone corrente non sarà modificato: eventuali correzioni già salvate non saranno annullate (non è un rollback). Autosync sarà disabilitato e l'outbox cancellata. " +
       "È consigliato un backup ZIP prima di procedere.",
     )) return;
     setBusy(true); setError(""); setMessage("");
@@ -440,7 +440,7 @@ export function EditorialBoardPanel({
           Il checkpoint non è più valido: {recoveryProblem}
         </p>
         <p className="muted text-xs">Puoi conservare rapporti e giudizi precedenti nell'archivio e
-          ricominciare dal primo revisore, senza toccare prosa o capitoli congelati.
+          ricominciare dal primo revisore, senza toccare prosa o capitoli congelati. Le eventuali correzioni già salvate restano nel testo: non è un rollback.
           La nuova review consuma ulteriori chiamate AI. Prima salva un backup ZIP.</p>
         <Button size="sm" variant="outline" disabled={busy || book.status === "running"}
           onClick={() => void recoverCheckpoint()}>

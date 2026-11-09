@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.71 — 2026-11-09 (main, issue #108, epic #20)
+
+**Recupero supervisionato dei checkpoint `repair` che non possono più proseguire**
+
+- `editorialRecoveryProblem` prova giudizio/cursore/prossima scena e `repairPrompt` live; prima del primo edit richiede anche 12×N report correnti. Dopo una remediation già salvata non considera l'alterazione intenzionale del testo di un rapporto un motivo per forzare restart.
+- Il recupero già protetto da consenso, Web Locks writer/outbox, CAS, archive bounded e transazione atomica salva vecchi rapporti, giudizio e cursore prima di ricominciare. Non modifica le scene neppure se già riscritte in `draft`, non fa rollback del canon e non contatta AI durante il recupero.
+- Vitest su repair sano/stale, dopo primo commit, matrice, giudizio/cursor invalidi e archivio pieno; Playwright desktop/mobile su un repair storico con fonte ritirata, conferma/annullamento e zero chiamate AI.
+- ADR 0103, guida, README/AGENTS e versioni package/lock 0.11.71. Nessun backend o nuova dipendenza. Le epic #20/#23 restano aperte.
+
+
 ## 0.11.70 — 2026-11-09 (main, issue #107, epic #20)
 
 **Rivalidazione dei testimoni narrativi precedenti nei checkpoint di review**
