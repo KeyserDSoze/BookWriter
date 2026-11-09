@@ -167,5 +167,27 @@ test("EPUB scaricato: XML valido, ZIP EPUB 3 e solo scene canoniche desktop/mobi
   expect(opf.match(/<itemref idref="[^"]+"\/>/g)).toEqual([
     '<itemref idref="titlepage"/>', '<itemref idref="chapter-1"/>', '<itemref idref="chapter-2"/>',
   ]);
+  const packageReferences = await page.evaluate(({ opf, archivePaths }: {
+    opf: string; archivePaths: string[];
+  }) => {
+    const packageNS = "http://www.idpf.org/2007/opf";
+    const doc = new DOMParser().parseFromString(opf, "application/xml");
+    const entries = Array.from(doc.getElementsByTagNameNS(packageNS, "item"))
+      .map(item => ({ id: item.getAttribute("id"), href: item.getAttribute("href") }));
+    const byId = new Map(entries.map(item => [item.id, item.href]));
+    const spine = Array.from(doc.getElementsByTagNameNS(packageNS, "itemref"))
+      .map(item => byId.get(item.getAttribute("idref")) ?? null);
+    return {
+      missing: entries.filter(item => !item.href || !archivePaths.includes("OEBPS/" + item.href)),
+      spine,
+    };
+  }, {
+    opf: strFromU8(files["OEBPS/content.opf"]),
+    archivePaths: Object.keys(files),
+  });
+  expect(packageReferences.missing).toEqual([]);
+  expect(packageReferences.spine).toEqual([
+    "titlepage.xhtml", "chapter-1.xhtml", "chapter-2.xhtml",
+  ]);
   await expect(page.getByText(/Esportazione EPUB completata/)).toBeVisible();
 });

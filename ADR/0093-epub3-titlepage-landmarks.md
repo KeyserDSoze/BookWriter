@@ -21,7 +21,7 @@ L'EPUB 3 v0.11.60 ha un TOC XHTML di capitoli e scene canoniche (ADR 0090), ma i
 ## Prove
 
 - Vitest controlla file aggiunto, XHTML escaped, `manifest`/`spine` ordinati, `toc` immutato, un solo `landmarks`, link e semantica, assenza di brief, segreti extra-manuscript e bozze, titoli malformati Unicode, caso in cui il primo capitolo canonico sia il 3 originario e nessun canon.
-- Playwright desktop/mobile scarica un EPUB da Archivio, apre ZIP, analizza XML per container/OPF/nav/frontespizio/capitoli e segue `landmarks` tramite `DOMParser` fino ai target XHTML, confermando `epub:type` e titolo attesi; mantiene il controllo dei collegamenti di scena.
+- Playwright desktop/mobile scarica un EPUB da Archivio, apre ZIP, analizza XML per container/OPF/nav/frontespizio/capitoli e segue `landmarks` tramite `DOMParser` fino ai target XHTML, confermando `epub:type` e titolo attesi; risolve **tutte le entry del manifest** a file reali del ZIP e **ogni idref dello spine** al relativo href, senza file o riferimenti mancanti, e mantiene il controllo dei collegamenti di scena.
 
 ## Limiti
 
