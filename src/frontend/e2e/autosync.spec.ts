@@ -14,6 +14,9 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization,content-type,x-github-api-version",
     "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
+    // GitHub exposes this header to browser JavaScript; HTTP Date is hidden.
+    "access-control-expose-headers": "X-RateLimit-Reset",
+    "x-ratelimit-reset": String(Math.floor((Date.now()+30*60_000)/1000)),
   };
   await page.route("https://api.github.com/repos/sync-owner/book-archive**", async route => {
     const request = route.request();
@@ -85,6 +88,7 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   await page.getByRole("button", { name: "Verifica repository" }).click();
   await expect(page.getByText(/Repository privata verificata/)).toBeVisible();
   await page.getByRole("button", { name: "Collega questo libro" }).click();
+  await expect(page.getByText(/La verifica dell'orologio GitHub è approssimativa/)).toBeVisible();
   await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
   await expect.poll(() => commits).toBe(1);
   const toggle = page.getByRole("checkbox", { name: /Sincronizzazione automatica ai checkpoint/ });
@@ -110,4 +114,13 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   await nav.getByRole("button", { name: "Dashboard" }).click();
   await page.getByRole("button", { name: "Autopilot", exact: true }).click();
   await expect(page.getByText(/già in scrittura da un altro dispositivo/)).toBeVisible();
+
+  // A grossly skewed device clock must not be allowed to claim the lease.
+  await page.evaluate(() => {
+    const correct=Date.now.bind(Date);
+    Date.now=()=>correct()+24*60*60_000;
+  });
+  await page.getByRole("button", { name: "Autopilot", exact: true }).click();
+  await expect(page.getByText(/orologio del dispositivo non è compatibile/)).toBeVisible();
+  await expect(page.getByText(/Da avviare · Brainstorming/)).toBeVisible();
 });

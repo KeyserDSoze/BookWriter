@@ -298,7 +298,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
             </Button>}
         </div>}
         {leaseCheckError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">{leaseCheckError}</p>}
-        <p className="muted mt-2 text-xs">Ogni attività AI richiede un lease GitHub valido per i libri collegati. Il lock viene rinnovato finché la pagina scrive, e liberato al termine. In assenza di rete l'autopilot si arresta.</p>
+        <p className="muted mt-2 text-xs">Ogni attività AI richiede un lease GitHub valido per i libri collegati. Il lock viene rinnovato finché la pagina scrive, e liberato al termine. In assenza di rete l'autopilot si arresta. La verifica dell'orologio GitHub è approssimativa: rileva solo scarti molto grandi tramite la finestra X-RateLimit-Reset; il takeover resta manuale con margine di sicurezza.</p>
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <label className="flex items-center gap-3">

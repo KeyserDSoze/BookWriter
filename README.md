@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Controllo clock lease v0.11.42 (main):** i libri GitHub collegati bloccano l'autopilot e il takeover quando l'orologio del browser è palesemente incoerente con la finestra `X-RateLimit-Reset` esposta da GitHub o manca l'header. È una verifica **approssimativa**, non sincronizzazione orari o fencing completo. [Guida](docs/github-sync.md), ADR 0075, issue #78/#10.
+
 **Autopilot protetto v0.11.41 (main):** la generazione AI su libri **anche locali** richiede Web Locks per escludere sessioni concorrenti fra tab dello stesso browser. Se l'API non è disponibile, l'avvio fallisce senza generare né alterare il manoscritto. I libri GitHub collegati continuano a richiedere anche il lease remoto. [Guida](docs/autopilot.md), ADR 0074, issue #77/#6/#10.
 
 **Scansione lessicale parziale v0.11.40 (main):** il direttore e l'autore vedono ora anche quante scene correnti **incluse** nella ricerca sono troppo lunghe per la scansione lessicale completa dei primi/centro/fine 16.000 caratteri. Il freeze le marca come copertura parziale; ZIP strict compatibile con vecchi audit. Nessun aumento delle chiamate AI. [Guida](docs/targeted-continuity-retrieval.md), ADR 0073, issue #76/#20.

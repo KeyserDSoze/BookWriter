@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.42 — 2026-11-09 (main, issue #78, #10, #6)
+
+**Lease GitHub: rifiuto conservativo degli orologi manifestamente fuori sincronizzazione**
+
+- Tutte le risposte REST riuscite del lease GitHub sono ora validate rispetto alla finestra temporale grossolana dell'header CORS-esposto `X-RateLimit-Reset` (finestra 60 minuti + margine 5 minuti). Se l'orologio del browser è fuori finestra, l'header manca o è invalido, il lease blocca nuove verifiche, rinnovi, acquisizioni e takeover **prima** della scrittura o di una chiamata AI. Non si usa `Date`, non leggibile via CORS in modo garantito, né si fa una richiesta extra.
+- `RemoteWriterLost` espone messaggi in italiano e privi di credenziali; l'Archivio dichiara il carattere **approssimativo** del controllo. TTL 120s, rinnovo 25s, grace 60s, lease v1, Web Locks e CAS `force:false` invariati; il recupero resta manuale.
+- Vitest con clock falsato di +24h/−24h, header assente/malformato, ramo senza lease, verifica/rinnovo e CAS invariati; Playwright desktop/mobile su lease occupato, messaggio dell'Archivio e orologio alterato. Documentazione autopilot/sync, ADR 0075, AGENTS, README, versioni npm/lock.
+- **Limite:** la finestra grossolana non rileva sfasamenti di qualche minuto e non è un clock server preciso. Il fencing distribuito manuale e l'intervallo tra controllo remoto e IndexedDB **restano aperti in #10**. Nessuna nuova chiamata HTTP/AI, backend, segreto, formato canon, ZIP o sincronizzazione.
+
+
 ## 0.11.41 — 2026-11-09 (main, issue #77, #6, #10)
 
 **Autopilot locale: niente generazione AI senza protezione fra schede**

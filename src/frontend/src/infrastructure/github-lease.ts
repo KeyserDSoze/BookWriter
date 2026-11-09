@@ -13,6 +13,12 @@ import { validateRemote } from "./github-sync";
 export const LEASE_TTL_MS = 120_000;
 export const LEASE_RENEW_MS = 25_000;
 export const LEASE_TAKEOVER_GRACE_MS = 60_000;
+/** The GitHub core limit resets within its one-hour window. This exposed
+ * response header gives only a coarse sanity check, NOT the server's clock.
+ * Allow five minutes for header/caching/transport variations; smaller skew
+ * can still exist and the lease remains best-effort. */
+const RATE_LIMIT_WINDOW_MS = 60 * 60_000;
+const CLOCK_MARGIN_MS = 5 * 60_000;
 const API = "https://api.github.com";
 const SHA = /^[a-f\d]{40}$/i;
 const leaseSchema = z.object({
@@ -67,6 +73,21 @@ async function token(): Promise<string> {
   if (!settings.githubToken) throw new Error("Per scrivere questo libro collegato serve un PAT GitHub configurato.");
   return decryptLocal(settings.githubToken);
 }
+/** GitHub exposes X-RateLimit-Reset to browser CORS clients; it does NOT
+ * expose the HTTP Date header. Reject gross local clock skew before any lease
+ * ownership/recovery decision or write. This does not synchronize clocks. */
+function assertPlausibleClock(response:Response):void {
+  const raw=response.headers.get("X-RateLimit-Reset");
+  if(!raw || !/^\d{9,12}$/.test(raw))
+    throw new RemoteWriterLost("GitHub non espone un X-RateLimit-Reset valido: verifica del clock impossibile, scrittura bloccata.");
+  const reset=Number(raw)*1000;
+  if(!Number.isSafeInteger(reset))
+    throw new RemoteWriterLost("Orario GitHub non valido: scrittura bloccata.");
+  const local=Date.now();
+  if(local<reset-RATE_LIMIT_WINDOW_MS-CLOCK_MARGIN_MS ||
+      local>reset+CLOCK_MARGIN_MS)
+    throw new RemoteWriterLost("L'orologio del dispositivo non è compatibile con la finestra temporale GitHub. Correggi data e ora automatiche prima di riprendere.");
+}
 function responseError(status: number): Error {
   if (status === 401) return new Error("PAT GitHub non valido (HTTP 401). Scrittura AI non avviata.");
   if (status === 403) return new Error("GitHub ha negato l'accesso al lease (HTTP 403). Verifica Contents: write.");
@@ -102,6 +123,7 @@ async function api<T>(secret: string, path: string,
   }
   if (allow404 && response.status === 404) return null;
   if (!response.ok) throw responseError(response.status);
+  assertPlausibleClock(response);
   const raw = await response.text();
   if (raw.length > 20_000) throw new Error("Risposta GitHub lease troppo grande.");
   try { return JSON.parse(raw) as T; }

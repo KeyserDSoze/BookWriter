@@ -13,9 +13,15 @@ const TOKEN = "github_pat_test_lease_not_real_2026";
 const MAIN = "a".repeat(40);
 const TREE = "b".repeat(40);
 const remote = { owner: "test-owner", repository: "book-repo", branch: "main" };
-const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+const jsonResponse = (body: unknown, status = 200,
+  reset: string | null = String(Math.floor((Date.now()+30*60_000)/1000))) =>
+  new Response(JSON.stringify(body), { status,
+    headers: reset===null?{}:{"X-RateLimit-Reset":reset} });
 
-function githubServer() {
+function githubServer(resetHeader:()=>string|null=()=>
+  String(Math.floor((Date.now()+30*60_000)/1000))) {
+  const reply=(body:unknown,status=200)=>
+    jsonResponse(body,status,resetHeader());
   const lockRefs = new Map<string, string>();
   const trees = new Map<string, string>([[TREE, ""]]);
   const commits = new Map<string, { parent: string | null; tree: string }>(
@@ -35,33 +41,33 @@ function githubServer() {
     expect(url.origin).toBe("https://api.github.com");
     expect(init?.redirect).toBe("error");
     if (method === "GET" && path === "/git/ref/heads/main")
-      return jsonResponse({ object: { sha: MAIN } });
+      return reply({ object: { sha: MAIN } });
     if (method === "GET" && path.startsWith(refPath)) {
       const found = lockRefs.get("bookwriter-lock/" + path.slice(refPath.length));
-      return found ? jsonResponse({ object: { sha: found } }) : jsonResponse({ message: "Not Found" }, 404);
+      return found ? reply({ object: { sha: found } }) : reply({ message: "Not Found" }, 404);
     }
     if (method === "GET" && path.startsWith("/git/commits/")) {
       const commit = commits.get(path.slice("/git/commits/".length));
-      return commit ? jsonResponse({ tree: { sha: commit.tree } }) : jsonResponse({}, 404);
+      return commit ? reply({ tree: { sha: commit.tree } }) : reply({}, 404);
     }
     if (method === "POST" && path === "/git/trees") {
       const payload = body as { tree: Array<{ content?: string }> };
       const id = sha();
       trees.set(id, payload.tree[0]?.content ?? "");
-      return jsonResponse({ sha: id }, 201);
+      return reply({ sha: id }, 201);
     }
     if (method === "POST" && path === "/git/commits") {
       const payload = body as { tree: string; parents: string[] };
       const id = sha();
       commits.set(id, { parent: payload.parents[0] ?? null, tree: payload.tree });
-      return jsonResponse({ sha: id }, 201);
+      return reply({ sha: id }, 201);
     }
     if (method === "POST" && path === "/git/refs") {
       const payload = body as { ref: string; sha: string };
       const key = payload.ref.replace("refs/heads/", "");
-      if (lockRefs.has(key)) return jsonResponse({ message: "already exists" }, 422);
+      if (lockRefs.has(key)) return reply({ message: "already exists" }, 422);
       lockRefs.set(key, payload.sha);
-      return jsonResponse({ object: { sha: payload.sha } }, 201);
+      return reply({ object: { sha: payload.sha } }, 201);
     }
     if (method === "PATCH" && path.startsWith("/git/refs/heads/")) {
       const key = path.slice("/git/refs/heads/".length);
@@ -69,18 +75,18 @@ function githubServer() {
       expect(payload.force).toBe(false);
       const head = lockRefs.get(key);
       if (commits.get(payload.sha)?.parent !== head)
-        return jsonResponse({ message: "non fast forward" }, 409);
+        return reply({ message: "non fast forward" }, 409);
       lockRefs.set(key, payload.sha);
-      return jsonResponse({ object: { sha: payload.sha } });
+      return reply({ object: { sha: payload.sha } });
     }
     if (method === "GET" && path === filename) {
       const id = url.searchParams.get("ref") ?? "";
       const text = trees.get(commits.get(id)?.tree ?? "");
-      return text ? jsonResponse({
+      return text ? reply({
         type: "file", encoding: "base64", content: btoa(text),
-      }) : jsonResponse({ message: "Not Found" }, 404);
+      }) : reply({ message: "Not Found" }, 404);
     }
-    return jsonResponse({ message: "unexpected " + method + " " + path }, 500);
+    return reply({ message: "unexpected " + method + " " + path }, 500);
   }));
   return {
     calls,
@@ -98,7 +104,7 @@ beforeEach(async () => {
   settings.githubToken = await encryptLocal(TOKEN);
   await saveSettings(settings);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.restoreAllMocks();vi.unstubAllGlobals(); });
 
 describe("Lease distribuito GitHub (branch fast-forward only)", () => {
   it("impedisce due autopilot simultanei; rinnova e rilascia senza force push", async () => {
@@ -133,6 +139,68 @@ describe("Lease distribuito GitHub (branch fast-forward only)", () => {
     const second = await acquireWriterLease(remote, bookId, secondId, true);
     expect(second.sessionId).toBe(secondId);
     await expect(assertWriterLease(first)).rejects.toBeInstanceOf(RemoteWriterLost);
+  });
+
+  it("rifiuta clock locale avanti di 24 ore prima del takeover e di qualunque commit",async()=>{
+    const actual=Date.now();
+    const reset=String(Math.floor((actual+30*60_000)/1000));
+    const server=githubServer(()=>reset);
+    const bookId=crypto.randomUUID();
+    const original=await acquireWriterLease(remote,bookId,crypto.randomUUID());
+    vi.spyOn(Date,"now").mockReturnValue(actual+24*60*60_000);
+    await expect(inspectWriterLease(remote,bookId))
+      .rejects.toThrow(/orologio del dispositivo/);
+    await expect(acquireWriterLease(remote,bookId,crypto.randomUUID(),true))
+      .rejects.toThrow(/orologio del dispositivo/);
+    await expect(recoverExpiredWriterLease(remote,bookId))
+      .rejects.toThrow(/orologio del dispositivo/);
+    await expect(assertWriterLease(original))
+      .rejects.toBeInstanceOf(RemoteWriterLost);
+    expect(server.calls.filter(c=>c.method==="PATCH")).toHaveLength(0);
+  });
+
+  it("rifiuta clock locale indietro di 24 ore prima del rinnovo, anche con sessione proprietaria",async()=>{
+    const actual=Date.now();
+    const reset=String(Math.floor((actual+30*60_000)/1000));
+    const server=githubServer(()=>reset);
+    const bookId=crypto.randomUUID();
+    const original=await acquireWriterLease(remote,bookId,crypto.randomUUID());
+    vi.spyOn(Date,"now").mockReturnValue(actual-24*60*60_000);
+    await expect(renewWriterLease(original))
+      .rejects.toThrow(/orologio del dispositivo/);
+    await expect(acquireWriterLease(remote,bookId,crypto.randomUUID()))
+      .rejects.toThrow(/orologio del dispositivo/);
+    expect(server.calls.filter(c=>c.method==="PATCH")).toHaveLength(0);
+  });
+
+  it("non dipende dall'header Date nascosto dal CORS: usa X-RateLimit-Reset quando plausibile",async()=>{
+    const server=githubServer();
+    const bookId=crypto.randomUUID();
+    const original=await acquireWriterLease(remote,bookId,crypto.randomUUID());
+    expect((await assertWriterLease(original)).sessionId).toBe(original.sessionId);
+    await releaseWriterLease(original);
+    expect((await inspectWriterLease(remote,bookId))?.state).toBe("released");
+    expect(server.calls.some(c=>c.method==="PATCH")).toBe(true);
+  });
+
+  it("fail-closed senza X-RateLimit-Reset o con valore non valido, anche sul lease esistente",async()=>{
+    let reset:string|null=String(Math.floor((Date.now()+30*60_000)/1000));
+    const server=githubServer(()=>reset);
+    const bookId=crypto.randomUUID();
+    const original=await acquireWriterLease(remote,bookId,crypto.randomUUID());
+    reset=null;
+    await expect(inspectWriterLease(remote,bookId))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
+    await expect(renewWriterLease(original))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
+    await expect(acquireWriterLease(remote,bookId,crypto.randomUUID(),true))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
+    reset="not-a-number";
+    await expect(inspectWriterLease(remote,bookId))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
+    expect(server.calls.filter(c=>c.method==="PATCH")).toHaveLength(0);
+    await expect(acquireWriterLease(remote,crypto.randomUUID(),crypto.randomUUID()))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
   });
 
   it("non cede a due richieste concorrenti il medesimo lease", async () => {
