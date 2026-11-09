@@ -74,7 +74,9 @@ describe("Conferma umana delle proposte di scena", () => {
     const runner = new AutopilotRunner();
     const update = vi.fn(async () => undefined);
     await expect(runner.run(book.id, update)).rejects.toThrow(/Rileggi e conferma/);
-    await expect(requestRevision(book.id, "Riscrivi tutto")).rejects.toThrow(/Conferma le scene/);
+    const latest = await getBook(book.id);
+    await expect(requestRevision(book.id, "Riscrivi tutto", latest!.updatedAt))
+      .rejects.toThrow(/Conferma le scene/);
     const untouched = await getBook(book.id);
     expect(untouched?.status).toBe("paused");
     expect(untouched?.chapters[0]?.scenes[0]?.status).toBe("draft");
