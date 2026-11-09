@@ -152,7 +152,10 @@ describe("Lease distribuito GitHub (branch fast-forward only)", () => {
       expect(server.calls.filter(call => call.method === "PATCH")).toHaveLength(1);
       expect(server.calls.filter(call => call.method === "PATCH").every(call =>
         (call.body as Record<string, unknown>)?.force === false)).toBe(true);
-      expect(JSON.stringify(server.calls)).not.toContain(TOKEN);
+      // The in-memory mock intentionally records Authorization headers; only
+      // GitHub paths and persisted request bodies must remain token-free.
+      expect(JSON.stringify(server.calls.map(({ path, method, body }) =>
+        ({ path, method, body })))).not.toContain(TOKEN);
     },
   );
 
