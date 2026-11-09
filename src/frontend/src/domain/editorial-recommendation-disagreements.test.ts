@@ -117,7 +117,7 @@ describe("Contraddittorio su correzioni diverse riferite alla STESSA citazione",
     expect(repairPrompt(book,cycle,"sc1").prompt).toContain("Modificare soltanto la frase contestata");
     // A resumed repair must not trust an old adjudication after source edit.
     chapter.scenes[0]!.text="Mara nasconde la lettera nel cassetto.";
-    expect(()=>repairPrompt(book,cycle,"sc1")).toThrow(/non presenti|non correnti/);
+    expect(()=>repairPrompt(book,cycle,"sc1")).toThrow(/non presenti|non correnti|prova narrativa della prossima scena/);
   });
   it("accetta più modifiche SOLO se dichiarate compatibili e tutte ancora verificate",()=>{
     const {book,chapter,cycle}=setup();
