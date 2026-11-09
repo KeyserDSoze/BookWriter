@@ -1,5 +1,14 @@
 # Changelog — BookWriter
 
+## 0.11.75 — 2026-11-10 (main, issue #112, epic #17/#6)
+
+**Usage AI conservato anche su HTTP 200 con JSON valido e risposta senza testo**
+
+- `callModel` mantiene il rifiuto di un completamento vuoto o solo spazi, ma ora lancia un `EmptyProviderContentError` privo di prosa e credenziali, con solo modello/endpoint e conteggi `usage` sanitizzati dalla risposta HTTP 2xx con JSON valido.
+- Autopilot e fusione AI catturano questi contatori nel ledger `failed/cancelled` **prima** di registrare l'errore; nessun report, draft o testo canonico viene approvato. Chiamate senza dati o con token parziali/non validi rimangono incerte nel budget, senza retry automatici.
+- Test unitari su risposta vuota/whitespace, usage completo/parziale/invalido, HTTP 429 e JSON corrotto; integrazioni su runner/fusione, E2E desktop/mobile e importo nella Dashboard dopo reload. ADR 0107, guida, README/AGENTS e package/lock 0.11.75. Nessuna nuova dipendenza o modifica schema.
+
+
 ## 0.11.74 — 2026-11-10 (main, issue #111, epic #17/#6)
 
 **Contabilizzare lo usage provider osservato anche quando la prosa o il rapporto AI sono rifiutati**

@@ -49,3 +49,7 @@ Decisione tecnica: [ADR 0010](../ADR/0010-ai-usage-observability.md).
 ## v0.11.74 — risultati AI scartati con usage valido
 
 Un errore nel JSON editoriale, nella freschezza del checkpoint o nella validazione della bozza può impedire di applicare il testo **dopo** una risposta valida di trasporto. I token input/output già dichiarati dal provider vengono ora conservati nella Activity `failed/cancelled`, quindi nella stima del budget, senza creare canone fittizio. Le chiamate prive di usage continuano a essere incerte. [Guida](ai-usage-rejected-responses.md) · [ADR 0106](../ADR/0106-provider-usage-before-editorial-validation.md).
+
+## v0.11.75 — output vuoto con usage provider
+
+Un endpoint può completare con HTTP 200 e JSON valido ma nessun contenuto testuale utilizzabile. La richiesta editoriale fallisce e non scrive canone, ma `usage` riportato viene conservato nel registro delle attività se i numeri sono interi non negativi. Manca un conteggio? Rimane incerto e il budget non inventa token. [Guida](ai-empty-provider-usage.md) · [ADR 0107](../ADR/0107-empty-provider-response-usage.md).

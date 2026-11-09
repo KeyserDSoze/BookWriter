@@ -4,6 +4,7 @@ import { newBook, DEFAULT_SETTINGS, type BookProject } from "../domain/types";
 import { compareBookVersions } from "../domain/conflicts";
 import { buildSceneMergePrompt } from "../domain/scene-merge";
 import { accountBookAiBudget, preflightBookAiBudget } from "../domain/ai-budget";
+import { EmptyProviderContentError } from "../infrastructure/ai-provider-error";
 import type { ConflictReview } from "../infrastructure/conflict-recovery";
 import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infrastructure/db";
 import { getOutbox } from "../infrastructure/outbox";
@@ -199,6 +200,32 @@ describe("Laboratorio di fusione senza canonizzazione automatica", () => {
     expect(history[0]).toMatchObject({status:"failed",aiRequested:true});
     expect(history[0]?.inputTokens).toBeUndefined();
     expect(history[0]?.outputTokens).toBeUndefined();
+  });
+
+  it("HTTP 200 con output vuoto non crea draft ma conserva usage del provider", async () => {
+    const review=await fixture();
+    const book=(await getBook(review.bookId))!;
+    book.aiBudget={enabled:true,enabledAt:new Date(Date.now()-5000).toISOString(),
+      limitEur:5,maxOutputTokens:8192};
+    await saveBook(book,false);
+    review.localUpdatedAt=book.updatedAt;
+    review.local=structuredClone(book);
+    const settings=structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId="merge-model";
+    settings.aiPriceRates=[{endpointId:"openai",modelId:"merge-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}];
+    await saveSettings(settings);
+    callMock.mockRejectedValue(new EmptyProviderContentError("openai","merge-model",{
+      prompt_tokens:170,completion_tokens:0,
+    }));
+    await expect(generateSceneMergeDraft(review,"chapter-1","scene-1","",
+      new AbortController())).rejects.toThrow(/senza testo utilizzabile/);
+    expect(await listSceneMergeDrafts(review,"chapter-1","scene-1")).toHaveLength(0);
+    const activities=await listActivities(book.id);
+    expect(activities[0]).toMatchObject({status:"failed",aiRequested:true,
+      inputTokens:170,outputTokens:0});
+    expect(accountBookAiBudget(activities,settings,book.aiBudget!).incompleteCount).toBe(0);
+    expect((await getBook(book.id))?.chapters).toEqual(book.chapters);
   });
 
   it("può salvare e rifiutare una bozza manuale senza spendere token AI", async () => {

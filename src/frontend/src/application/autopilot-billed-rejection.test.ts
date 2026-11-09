@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
 import { accountBookAiBudget, preflightBookAiBudget } from "../domain/ai-budget";
+import { EmptyProviderContentError } from "../infrastructure/ai-provider-error";
 import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infrastructure/db";
 
 const { callMock, guardMock } = vi.hoisted(() => ({
@@ -44,6 +45,40 @@ async function specimen() {
 }
 
 describe("Accounting del provider separato dalla validità narrativa", () => {
+  it("HTTP 200 con testo vuoto: conserva usage noto nonostante callModel lanci", async () => {
+    const {book,settings}=await specimen();
+    callMock.mockRejectedValue(new EmptyProviderContentError("openai","review-model",{
+      prompt_tokens:243,completion_tokens:72,
+    }));
+    await new AutopilotRunner().run(book.id,async()=>{});
+    const current=(await getBook(book.id))!;
+    const records=await listActivities(book.id);
+    expect(current.status).toBe("error");
+    expect(current.editorialCycle?.reports).toHaveLength(0);
+    expect(current.chapters).toEqual(book.chapters);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({status:"failed",aiRequested:true,
+      inputTokens:243,outputTokens:72});
+    const counted=accountBookAiBudget(records,settings,book.aiBudget!);
+    expect(counted.incompleteCount).toBe(0);
+    expect(counted.estimatedSpentEur).toBeCloseTo((243*3+72*9)/1_000_000);
+    expect(preflightBookAiBudget(current,settings,records,
+      "chapterAudit","System","Nuovo prompt")).toBeDefined();
+  });
+  it("HTTP 200 vuoto con usage parziale resta budget incerto", async () => {
+    const {book,settings}=await specimen();
+    callMock.mockRejectedValue(new EmptyProviderContentError("openai","review-model",{
+      prompt_tokens:300,
+    }));
+    await new AutopilotRunner().run(book.id,async()=>{});
+    const rows=await listActivities(book.id);
+    expect(rows[0]).toMatchObject({status:"failed",inputTokens:300});
+    expect(rows[0]?.outputTokens).toBeUndefined();
+    expect(accountBookAiBudget(rows,settings,book.aiBudget!).incompleteCount).toBe(1);
+    expect(()=>preflightBookAiBudget(book,settings,rows,
+      "chapterAudit","System","Nuovo prompt")).toThrow(/senza usage completo/);
+  });
+
   it("mantiene i token già osservati se il report del revisore non è JSON valido", async () => {
     const {book,settings}=await specimen();
     callMock.mockResolvedValue({

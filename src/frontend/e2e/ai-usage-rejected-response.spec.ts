@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("usage noto e testo editoriale rifiutato: ledger conservato senza canone (desktop/mobile)", async ({page}) => {
+for (const caseName of ["report malformato", "HTTP 200 con testo vuoto"] as const) {
+test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mobile)", async ({page}) => {
   test.setTimeout(90_000);
   let providerCalls=0;
   await page.route("https://api.openai.com/v1/chat/completions",async route=>{
@@ -16,7 +17,8 @@ test("usage noto e testo editoriale rifiutato: ledger conservato senza canone (d
       "content-type":"application/json","access-control-allow-origin":"*",
       "access-control-allow-headers":"authorization,content-type",
     },body:JSON.stringify({
-      choices:[{message:{content:"Questo non è JSON valido per un report editoriale."}}],
+      choices:[{message:{content:caseName === "HTTP 200 con testo vuoto" ? "   " :
+        "Questo non è JSON valido per un report editoriale."}}],
       usage:{prompt_tokens:243,completion_tokens:72},
     })});
   });
@@ -107,3 +109,4 @@ test("usage noto e testo editoriale rifiutato: ledger conservato senza canone (d
     .toContainText("0,0014"); // (243*3 + 72*9) / 1_000_000 €, rounded to 4 decimals
   await expect(ledger.getByText(/Consumi incerti/)).toHaveCount(0);
 });
+}

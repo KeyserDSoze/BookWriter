@@ -49,3 +49,7 @@ Le tariffe sono quelle che inserisci tu, non prezzi verificati automaticamente. 
 ## v0.11.74 — usage conosciuto ma testo rifiutato
 
 Se il provider restituisce conteggi `usage` validi ma la revisione editoriale o la bozza AI di fusione è rifiutata, BookWriter **non canonizza** il testo e lascia l'Activity `failed/cancelled`, ma conserva i token già riportati dal provider ai fini della stima. Solo i conteggi effettivamente presenti sono registrati: in caso di usage mancante o incompleto il blocco conservativo rimane. [Guida](ai-usage-rejected-responses.md) · [ADR 0106](../ADR/0106-provider-usage-before-editorial-validation.md).
+
+## v0.11.75 — HTTP 200 senza testo ma con usage
+
+Quando un endpoint invia HTTP 200 con JSON decodificabile ma risposta testuale vuota, il testo viene **rifiutato** come prima. Se include `usage` valido, i token osservati rimangono nella Activity fallita e nella stima del budget. Se il provider non invia tutti i conteggi validi, il blocco conservativo resta attivo. [Guida](ai-empty-provider-usage.md) · [ADR 0107](../ADR/0107-empty-provider-response-usage.md).

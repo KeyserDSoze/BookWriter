@@ -7,6 +7,7 @@ import {
 } from "../domain/scene-merge";
 import type { ConflictReview } from "../infrastructure/conflict-recovery";
 import { callModel } from "../infrastructure/ai";
+import { keepObservedUsageOnEmptyReply } from "../infrastructure/ai-provider-error";
 import { confirmGitHubHead, RemoteConflict } from "../infrastructure/github-sync";
 import { getBook, getDb, listActivities, loadSettings, saveActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
@@ -127,6 +128,7 @@ export async function generateSceneMergeDraft(
       await guard.assertActive();
       return await persistDraft(review, draft, attempted);
     } catch (error) {
+      keepObservedUsageOnEmptyReply(attempted, error);
       await saveActivity({
         ...attempted, status: controller.signal.aborted ? "cancelled" : "failed",
         endedAt: new Date().toISOString(),

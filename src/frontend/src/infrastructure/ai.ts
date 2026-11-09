@@ -1,6 +1,8 @@
 import type { AppSettings, BookProject, TaskKind } from "../domain/types";
 import { routeFor } from "../domain/types";
 import { decryptLocal } from "./crypto";
+import { validTokenCount } from "../domain/ai-usage";
+import { EmptyProviderContentError } from "./ai-provider-error";
 
 export type ModelAnswer = {
   text: string;
@@ -79,10 +81,12 @@ export async function callModel(
   };
   const content = data.choices?.[0]?.message?.content;
   const text = typeof content === "string" ? content : Array.isArray(content) ? content.map(x => x.text ?? "").join("\n") : "";
-  if (!text.trim()) throw new Error("Il provider AI ha risposto senza testo utilizzabile.");
+  if (!text.trim()) throw new EmptyProviderContentError(
+    endpoint.id, assignment.modelId, data.usage);
   return {
     text: text.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
-    inputTokens: data.usage?.prompt_tokens, outputTokens: data.usage?.completion_tokens,
+    inputTokens: validTokenCount(data.usage?.prompt_tokens),
+    outputTokens: validTokenCount(data.usage?.completion_tokens),
   };
 }
 
