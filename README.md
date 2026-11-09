@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**ACK GitHub e outbox atomici v0.11.50 (main):** dopo il commit remoto, l'ACK rilegge il libro e salva i metadati del commit e lo stato della coda nella **stessa transazione IndexedDB**, senza perdere un checkpoint creato nel frattempo. La conferma obsoleta non retrocede la baseline; test a due tab desktop/mobile. Il gap GitHub–IndexedDB è recuperabile ma non è una transazione distribuita. [Guida](docs/github-sync.md), ADR 0082, issue #86/#10.
+
 **Collegamento GitHub e autosync protetti v0.11.49 (main):** le modifiche manuali della repository e della policy autosync acquisiscono i Web Locks del writer e della coda GitHub, verificano la revisione IndexedDB al commit e non riscrivono dati canonici obsoleti. Guardie editoriali ricontrollate al momento dell'attivazione; test due schede desktop/mobile. [Guida](docs/github-sync.md), ADR 0081, issue #85/#10.
 
 **Conferma scene fuse e audit atomici v0.11.48 (main):** la promozione manuale a `canon` ora richiede la revisione valida **anche nella transazione** che salva libro e attività. Un cambio concorrente impedisce sia la canonizzazione obsoleta sia un falso audit. Test a due schede desktop/mobile. [Guida](docs/scene-merge.md), ADR 0080, issue #84/#10.

@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { encryptLocal } from "../infrastructure/crypto";
 import { connectBookRemote, setBookAutoSync } from "../application/github-book-settings";
-import { acknowledgeOutbox, getOutbox, retryBlockedSync } from "../infrastructure/outbox";
+import { getOutbox, retryBlockedSync } from "../infrastructure/outbox";
 import { drainGitHubOutbox } from "../application/auto-sync";
 import {
   inspectWriterLease, isLeaseRecoverable, recoverExpiredWriterLease,
@@ -188,8 +188,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       if (!book) throw new Error("Nessun libro selezionato.");
       if (book.remote?.autoSync) throw new Error("Con autosync attivo, usa il controllo della coda invece della sincronizzazione manuale.");
       const result = await pushGitHubBook(book.id, publicConsent);
-      const item = await getOutbox(book.id);
-      if (item) await acknowledgeOutbox(book.id, item.operationId, result.sourceRevision);
+      // The GitHub client has already confirmed book metadata and outbox
+      // together: never acknowledge a potentially newer queue item here.
       setOutbox(await getOutbox(book.id));
       await onRefresh();
       return "Sincronizzato " + result.repository +

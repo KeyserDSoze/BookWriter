@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Activity, BookProject, GitHubRemote } from "../domain/types";
+import type { Activity, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { projectBook } from "../domain/narrarium";
 import { decryptLocal } from "./crypto";
 import { getDb, getBook, listActivities, loadSettings } from "./db";
@@ -279,20 +279,53 @@ export interface PushResult {
   recovered?: boolean;
 }
 
-async function persistRemoteAcknowledgment(
+/**
+ * After the GitHub SHA is confirmed, persist its ACK and the durable queue
+ * decision in ONE IndexedDB transaction. This cannot make the HTTP PATCH
+ * atomic with IndexedDB; the remote operation marker handles a lost ACK.
+ */
+export async function persistRemoteAcknowledgment(
   bookId: string, remote: GitHubRemote, sha: string, sourceRevision: string,
+  operationId: string, expectedLastSyncedCommit?: string,
 ): Promise<void> {
   const db = await getDb();
-  const latest = await db.get("books", bookId) as BookProject | undefined;
-  if (latest?.remote && latest.remote.owner === remote.owner &&
-      latest.remote.repository === remote.repository && latest.remote.branch === remote.branch) {
-    latest.remote = {
-      ...latest.remote, lastSyncedCommit: sha,
-      lastSyncAt: new Date().toISOString(),
-      lastSyncedLocalUpdatedAt: sourceRevision,
-    };
-    await db.put("books", latest, bookId);
+  const tx = db.transaction(["books", "outbox"], "readwrite");
+  const books = tx.objectStore("books");
+  const latest = await books.get(bookId) as BookProject | undefined;
+  if (!latest?.remote || latest.remote.owner !== remote.owner ||
+      latest.remote.repository !== remote.repository || latest.remote.branch !== remote.branch ||
+      (latest.remote.lastSyncedCommit !== expectedLastSyncedCommit &&
+       latest.remote.lastSyncedCommit !== sha)) {
+    // Reject stale/foreign ACKs before *any* write, including an outbox ACK.
+    await tx.done;
+    throw new RemoteConflict("Il libro o la baseline GitHub sono cambiati durante il commit: conferma locale annullata.");
   }
+
+  const pending = await tx.objectStore("outbox").get(bookId) as SyncOutboxItem | undefined;
+  // The book was re-read under the transaction: retain newer prose, canon,
+  // author constraints and status. An ACK alone must not bump updatedAt.
+  latest.remote = {
+    ...latest.remote, lastSyncedCommit: sha,
+    lastSyncAt: new Date().toISOString(), lastSyncedLocalUpdatedAt: sourceRevision,
+  };
+  await books.put(latest, bookId);
+
+  if (pending && latest.updatedAt === sourceRevision) {
+    // The current local book really is the published snapshot. A manual push
+    // may also supersede an older queued operationId.
+    await tx.objectStore("outbox").delete(bookId);
+  } else if (pending?.operationId === operationId && pending.state !== "blocked") {
+    // New prose/metadata arrived during the PATCH. Rotate the attempt marker
+    // and leave a fresh durable checkpoint for a subsequent GitHub commit.
+    await tx.objectStore("outbox").put({
+      ...pending, operationId: crypto.randomUUID(),
+      attempts: 0, retryAfter: undefined, lastError: undefined,
+      state: "pending",
+    }, bookId);
+  }
+  // Independent or blocked requests stay unchanged; never silently resolve
+  // a real conflict or falsely mark newer prose as published.
+  await tx.done;
 }
 
 export async function pushGitHubBook(
@@ -338,7 +371,10 @@ export async function pushGitHubBook(
         }).safeParse(parseJson<unknown>(metadataRaw, "Sync marker")) : null;
         if (metadata?.success &&
             metadata.data.operationId === operationId && metadata.data.bookId === bookId) {
-          await persistRemoteAcknowledgment(bookId, remote, head, metadata.data.sourceRevision);
+          await persistRemoteAcknowledgment(
+            bookId, remote, head, metadata.data.sourceRevision,
+            operationId, current.remote.lastSyncedCommit,
+          );
           return {
             commit: head, paths: 0, repository: remote.owner + "/" + remote.repository,
             operationId, sourceRevision: metadata.data.sourceRevision, recovered: true,
@@ -420,7 +456,10 @@ export async function pushGitHubBook(
     remote.branch.split("/").map(encodeURIComponent).join("/")),
   { method: "PATCH", body: { sha: commit.sha, force: false } });
 
-  await persistRemoteAcknowledgment(bookId, remote, commit.sha, current.updatedAt);
+  await persistRemoteAcknowledgment(
+    bookId, remote, commit.sha, current.updatedAt,
+    operationId, current.remote.lastSyncedCommit,
+  );
   return {
     commit: commit.sha, paths: treeEntries.length,
     repository: remote.owner + "/" + remote.repository,

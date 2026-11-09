@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
 import { getDb, saveBook, saveSettings } from "../infrastructure/db";
-import { getOutbox } from "../infrastructure/outbox";
+import { acknowledgeOutbox, getOutbox } from "../infrastructure/outbox";
 
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 vi.mock("../infrastructure/github-sync", () => ({
@@ -45,9 +45,14 @@ describe("Coordinatore di autosync", () => {
   it("conferma la coda quando il commit è salvato, anche con autopilot in esecuzione", async () => {
     const book = await queuedBook();
     const operation = await getOutbox(book.id);
-    pushMock.mockResolvedValue({
-      commit: "b".repeat(40), operationId: operation!.operationId,
-      sourceRevision: book.updatedAt,
+    // pushGitHubBook now owns the atomic book+outbox ACK. The mocked
+    // client must simulate its queue decision, not the caller.
+    pushMock.mockImplementation(async () => {
+      await acknowledgeOutbox(book.id, operation!.operationId, book.updatedAt);
+      return {
+        commit: "b".repeat(40), operationId: operation!.operationId,
+        sourceRevision: book.updatedAt,
+      };
     });
     await drainGitHubOutbox();
     expect(pushMock).toHaveBeenCalledWith(book.id, false, {
@@ -72,6 +77,7 @@ describe("Coordinatore di autosync", () => {
     pushMock.mockImplementationOnce(async () => {
       await new Promise(resolve => setTimeout(resolve, 3));
       await saveBook(book);
+      await acknowledgeOutbox(book.id, original!.operationId, priorUpdatedAt);
       return { commit: "b".repeat(40), sourceRevision: priorUpdatedAt };
     });
     await drainGitHubOutbox();

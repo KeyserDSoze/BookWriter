@@ -1,8 +1,7 @@
 import { getBook, loadSettings } from "../infrastructure/db";
 import { pushGitHubBook, RemoteConflict } from "../infrastructure/github-sync";
 import {
-  acknowledgeOutbox, getOutbox, listOutbox,
-  markAttempt, recordSyncFailure,
+  getOutbox, listOutbox, markAttempt, recordSyncFailure,
 } from "../infrastructure/outbox";
 
 let processing: Promise<void> | undefined;
@@ -38,11 +37,12 @@ async function processOutbox(): Promise<void> {
       if (!book?.remote?.autoSync || !book.remote.lastSyncedCommit) continue;
       if (!await markAttempt(item)) continue;
       try {
-        const result = await pushGitHubBook(book.id, false, {
+        // pushGitHubBook now persists the remote ACK AND outbox decision
+        // in one IndexedDB transaction. No separate, crash-vulnerable ACK.
+        await pushGitHubBook(book.id, false, {
           automatic: true,
           operationId: item.operationId,
         });
-        await acknowledgeOutbox(item.bookId, item.operationId, result.sourceRevision);
       } catch (error) {
         await recordSyncFailure(item.bookId, item.operationId, sanitize(error), nonRetryable(error));
       }

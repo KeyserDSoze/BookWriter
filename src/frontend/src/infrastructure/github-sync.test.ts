@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encryptLocal } from "./crypto";
 import { getBook, saveBook, saveSettings } from "./db";
+import { getOutbox } from "./outbox";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
 import { importGitHubBook, pushGitHubBook, RemoteConflict, validateRemote } from "./github-sync";
 
@@ -138,6 +139,7 @@ describe("GitHub sync conservativa", () => {
     book.remote!.lastSyncedCommit = BEFORE;
     book.remote!.autoSync = true;
     await saveBook(book);
+    const queuedBeforeRecovery = await getOutbox(book.id);
     const operationId = crypto.randomUUID();
     const remoteRevision = "2026-11-05T13:00:00.123Z";
     const calls: string[] = [];
@@ -164,6 +166,13 @@ describe("GitHub sync conservativa", () => {
     expect(result.commit).toBe(NEXT);
     expect(calls.some(call => call.startsWith("POST") || call.startsWith("PATCH"))).toBe(false);
     expect((await getBook(book.id))?.remote?.lastSyncedCommit).toBe(NEXT);
+    // The remote marker identifies an older source revision. Even though the
+    // lost ACK is recovered without a write, our newer local checkpoint must
+    // remain queued under a fresh operationId.
+    const pending = await getOutbox(book.id);
+    expect(pending?.operationId).not.toBe(queuedBeforeRecovery?.operationId);
+    expect(pending?.state).toBe("pending");
+    expect((await getBook(book.id))?.remote?.lastSyncedLocalUpdatedAt).toBe(remoteRevision);
   });
 
   it("non scambia un commit estraneo per un ACK automatico e non forza il branch", async () => {

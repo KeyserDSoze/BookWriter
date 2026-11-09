@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.50 — 2026-11-09 (main, issue #86, #10, #3, #6)
+
+**Conferma del commit GitHub e outbox atomiche nel browser**
+
+- Dopo la conferma di un `PATCH force:false` GitHub, il precedente ACK leggeva il libro in una transazione e lo riscriveva in un'altra: una nuova revisione canonica o un vincolo dell'autore potevano andare persi. La funzione `persistRemoteAcknowledgment` ora **rilegge il libro e aggiorna soltanto i metadati GitHub nella stessa transazione readwrite che controlla l'outbox**, preservando il testo e il timestamp `updatedAt` più recenti.
+- La coda viene completata **nello stesso commit locale** dell'ACK. Se la revisione pubblicata è quella corrente, la richiesta viene rimossa anche per una sincronizzazione manuale; se un writer ha creato una nuova revisione durante il PATCH, la nuova richiesta resta pendente, con ID ritentabile e contatori azzerati soltanto per l'operazione vecchia. I conflitti già bloccati o le richieste indipendenti non vengono silenziosamente sbloccati.
+- Il commit locale rifiuta una repository diversa, un libro non più presente o una baseline `lastSyncedCommit` già avanzata verso un altro SHA: nessuna risposta tardiva può retrocedere la baseline. Il recupero del marker remoto `.bookwriter/sync.json` usa la stessa logica, **senza nuove chiamate POST/PATCH**.
+- Rimossi da `auto-sync.ts` e `GitHubSyncPanel.tsx` gli ACK outbox successivi a `pushGitHubBook`: la doppia scrittura non è più necessaria e un arresto fra ACK e cancellazione coda non può più lasciare un duplicato locale.
+- Nuovi Vitest su ACK, revisione concorrente, outbox, cambio repository, conferme obsolete, idempotenza e dati bloccati; test Playwright desktop/mobile con due schede che intercalano una modifica del libro a un PATCH GitHub simulato. ADR 0082, AGENTS, README e guide aggiornati.
+- Il commit remoto **non** è parte della transazione IndexedDB: nel gap tra rete e commit locale il recovery con marker rimane conservativo. Restano le altre vulnerabilità cross-device, gli altri editor manuali e gli scenari fisici mobile (#10/#3/#6). Nessun nuovo formato, schema, provider o token.
+
+
 ## 0.11.49 — 2026-11-09 (main, issue #85, #10, #6, #3)
 
 **Collegamento GitHub e policy autosync protetti dagli stessi Web Locks del writer e della coda**
