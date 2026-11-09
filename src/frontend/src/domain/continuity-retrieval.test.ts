@@ -572,6 +572,9 @@ describe("Recupero mirato locale della continuità",()=>{
   it("distribuisce 48 termini fra sei scene correnti nella query del direttore",()=>{
     const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
     const source=b.chapters[1]!.scenes[0]!;
+    // Keep this scene in the four-slot sample even for an unmatched single
+    // scene query, so the negative assertion tests an actual zero score.
+    b.chapters=[origin,b.chapters[1]!,b.chapters[4]!,current];
     source.title="";source.objective="";source.date=undefined;
     source.characters=[];source.items=[];source.locations=[];
     source.text="Sul molo il sigillo scompare sotto il ponte.";
