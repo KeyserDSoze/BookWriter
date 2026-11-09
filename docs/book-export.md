@@ -16,6 +16,14 @@ Titoli e prosa vengono escapati per XML (`&`, `<`, `>`, virgolette, apostrofi). 
 
 I test `export-book.test.ts` aprono il ZIP e verificano struttura e contenuto; Playwright desktop/mobile scarica l'EPUB tramite interfaccia e analizza container, OPF, nav e XHTML con il parser XML di Chromium. Questi controlli **non sono una certificazione EPUBCheck** e non sostituiscono la prova con il lettore o il dispositivo di destinazione.
 
+## Frontespizio e landmarks di lettura — v0.11.61
+
+Il file EPUB esportato contiene ora un **frontespizio XHTML** con il titolo effettivo del libro. È la prima voce di lettura nel `spine` di `content.opf`, seguita dai soli capitoli con scene canoniche; non vengono inventati un autore, una copertina grafica o altri dati mancanti dal progetto. Il titolo mantiene accenti, emoji e escaping XML, anche se arriva da contenuto importato malformato.
+
+L'indice `nav.xhtml` ha due aiuti di navigazione distinti: l'indice `toc` capitoli→scene e una guida `landmarks` con **Frontespizio** e **Inizio del libro**. I landmarks usano i valori EPUB 3 standard `titlepage` e `bodymatter` e portano a pagine reali del package. Il secondo link porta al primo capitolo **pubblicato**, anche se i primi capitoli nel progetto erano bozze; il numero originale del capitolo rimane visibile nel TOC. Il frontespizio non aggiunge prosa privata e non rende pubblicabili le bozze.
+
+Vitest controlla manifest/spine, escaping e landmark; Playwright desktop/mobile scarica l'EPUB e risolve gli href della guida a elementi strutturali XHTML via `DOMParser`. È interoperabilità strutturale EPUB 3, **non** certificazione EPUBCheck né verifica su dispositivi reali. [ADR 0093](../ADR/0093-epub3-titlepage-landmarks.md), [issue #97](https://github.com/KeyserDSoze/BookWriter/issues/97).
+
 ## Navigazione per scene canoniche — v0.11.58
 
 L'indice EPUB mostra ora, sotto ogni capitolo effettivamente esportato, un secondo livello con le **singole scene canoniche**. Ogni voce porta all'ancora relativa `chapter-N.xhtml#scene-M`, collegata alla sezione XHTML e al suo titolo `h2`. `N` e `M` sono posizioni consecutive **fra i capitoli e le scene esportati** (non gli UUID e non i numeri originari del piano editoriale); il numero originale del capitolo resta visibile nell'indice. Bozze, scene pianificate e scene vuote non generano link.

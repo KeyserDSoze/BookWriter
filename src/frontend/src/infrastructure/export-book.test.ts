@@ -47,7 +47,7 @@ describe("EPUB 3 portable canon export", () => {
 
     const files = unzipSync(bytes);
     expect(Object.keys(files)).toEqual([
-      "mimetype", "META-INF/container.xml", "OEBPS/style.css",
+      "mimetype", "META-INF/container.xml", "OEBPS/style.css", "OEBPS/titlepage.xhtml",
       "OEBPS/chapter-1.xhtml", "OEBPS/chapter-2.xhtml",
       "OEBPS/nav.xhtml", "OEBPS/content.opf",
     ]);
@@ -57,13 +57,25 @@ describe("EPUB 3 portable canon export", () => {
     expect(opf).toContain('<dc:identifier id="uid">urn:uuid:' + book.id + "</dc:identifier>");
     expect(opf).toContain("<dc:title>L&#39;eco &amp; il tempo &lt;infinito&gt;</dc:title>");
     expect(opf).toContain("<meta property=\"dcterms:modified\">2026-11-09T13:42:15Z</meta>");
-    expect(opf.match(/<itemref idref="chapter-\d+"\/>/g)).toEqual([
+    expect(opf.match(/<itemref idref="[^"]+"\/>/g)).toEqual([
+      '<itemref idref="titlepage"/>',
       '<itemref idref="chapter-1"/>', '<itemref idref="chapter-2"/>',
     ]);
+    expect(opf).toContain('<item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>');
+    const front = decode(files, "OEBPS/titlepage.xhtml");
+    expect(front).toContain('<section epub:type="titlepage" aria-labelledby="book-title">');
+    expect(front).toContain('<h1 id="book-title">L&#39;eco &amp; il tempo &lt;infinito&gt;</h1>');
+    expect(front).not.toContain("L&#39;inizio");
+    expect(front).not.toContain("SEGRETO");
     expect(opf).not.toContain("Capitolo solo draft");
 
     const nav = decode(files, "OEBPS/nav.xhtml");
     expect(nav).toContain('<nav epub:type="toc"');
+    expect(nav).toContain('<nav epub:type="landmarks" id="landmarks">');
+    expect(nav.match(/<nav epub:type="landmarks"/g)).toHaveLength(1);
+    expect(nav).toContain('<a epub:type="titlepage" href="titlepage.xhtml">Frontespizio</a>');
+    expect(nav).toContain('<a epub:type="bodymatter" href="chapter-1.xhtml">Inizio del libro</a>');
+    expect(nav).not.toContain('epub:type="toc" href="#toc"');
     expect(nav).toContain('<a href="chapter-1.xhtml">Capitolo 1 — L&#39;inizio &amp; &quot;il patto&quot;</a>');
     expect(nav).toContain('<a href="chapter-2.xhtml">Capitolo 3 — Il finale</a>');
     expect(nav).toContain('<a href="chapter-1.xhtml#scene-1">Prima &quot;luce&quot;</a>');
@@ -122,13 +134,37 @@ describe("EPUB 3 portable canon export", () => {
     chapter.title = "Capitolo\u0001 & \uDC00";
     chapter.scenes[0]!.text = "Ciao\u0003\u000B mondo 😃\n\nUn'eco \uD800 avanti.";
     const files = unzipSync(buildEpub(book, modified));
-    const combined = ["OEBPS/content.opf", "OEBPS/nav.xhtml", "OEBPS/chapter-1.xhtml"]
+    const combined = ["OEBPS/content.opf", "OEBPS/nav.xhtml", "OEBPS/titlepage.xhtml", "OEBPS/chapter-1.xhtml"]
       .map(path => decode(files, path)).join("\n");
+    expect(decode(files, "OEBPS/titlepage.xhtml")).toContain("Titolo sicuro 🪶 �");
+    expect(decode(files, "OEBPS/titlepage.xhtml")).not.toContain("\uD800");
     expect(combined).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/u);
     expect(combined).toContain("🪶");
     expect(combined).toContain("😃");
     expect(combined).toContain("�");
     expect(combined).toContain("Un&#39;eco");
+  });
+
+
+  it("landmarks e lettura partono dal primo capitolo pubblicato, anche quando i primi sono draft", () => {
+    const book = manuscript();
+    book.chapters[0]!.scenes.forEach(item => { item.status = "draft"; });
+    const files = unzipSync(buildEpub(book, modified));
+    const opf = decode(files, "OEBPS/content.opf");
+    const nav = decode(files, "OEBPS/nav.xhtml");
+    expect(Object.keys(files)).toEqual([
+      "mimetype", "META-INF/container.xml", "OEBPS/style.css", "OEBPS/titlepage.xhtml",
+      "OEBPS/chapter-1.xhtml", "OEBPS/nav.xhtml", "OEBPS/content.opf",
+    ]);
+    expect(opf.match(/<itemref idref="[^"]+"\/>/g)).toEqual([
+      '<itemref idref="titlepage"/>', '<itemref idref="chapter-1"/>',
+    ]);
+    expect(nav).toContain('<a href="chapter-1.xhtml">Capitolo 3 — Il finale</a>');
+    expect(nav).toContain('<a epub:type="bodymatter" href="chapter-1.xhtml">Inizio del libro</a>');
+    expect(decode(files, "OEBPS/chapter-1.xhtml")).toContain('<body epub:type="bodymatter">');
+    expect(decode(files, "OEBPS/chapter-1.xhtml")).toContain("Capitolo 3 — Il finale");
+    expect(nav).not.toContain("Capitolo 1");
+    expect(nav).not.toContain("Capitolo solo draft");
   });
 
   it("senza scene canoniche rifiuta la produzione senza creare un EPUB vuoto", () => {

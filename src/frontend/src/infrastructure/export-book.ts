@@ -60,7 +60,17 @@ export function buildEpub(book: BookProject, modifiedAt = new Date()): Uint8Arra
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
     '<item id="style" href="style.css" media-type="text/css"/>',
   ];
-  const spine: string[] = [];
+  // The front matter is first in reading order; only canonical chapters follow.
+  entries["OEBPS/titlepage.xhtml"] = strToU8(
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="it">' +
+    '<head><title>' + html(book.title) +
+    '</title><link href="style.css" rel="stylesheet" type="text/css"/></head>' +
+    '<body><section epub:type="titlepage" aria-labelledby="book-title">' +
+    '<h1 id="book-title">' + html(book.title) + '</h1></section></body></html>',
+  );
+  manifest.push('<item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>');
+  const spine: string[] = ['<itemref idref="titlepage"/>'];
   chapters.forEach(({ chapter, scenes }, i) => {
     const id = "chapter-" + (i + 1);
     const path = id + ".xhtml";
@@ -81,8 +91,8 @@ export function buildEpub(book: BookProject, modifiedAt = new Date()): Uint8Arra
     ).join("\n");
     entries["OEBPS/" + path] = strToU8(
       '<?xml version="1.0" encoding="UTF-8"?>' +
-      '<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="it"><head><title>' +
-      html(chapter.title) + '</title><link href="style.css" rel="stylesheet" type="text/css"/></head><body>' +
+      '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="it"><head><title>' +
+      html(chapter.title) + '</title><link href="style.css" rel="stylesheet" type="text/css"/></head><body epub:type="bodymatter">' +
       "<h1>Capitolo " + chapter.number + " — " + html(chapter.title) + "</h1>" + body +
       "</body></html>",
     );
@@ -91,7 +101,11 @@ export function buildEpub(book: BookProject, modifiedAt = new Date()): Uint8Arra
     '<?xml version="1.0" encoding="UTF-8"?>' +
     '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="it">' +
     '<head><title>Indice</title></head><body><nav epub:type="toc" id="toc"><h1>Indice</h1><ol>' +
-    nav.join("") + "</ol></nav></body></html>",
+    nav.join("") + '</ol></nav>' +
+    '<nav epub:type="landmarks" id="landmarks"><h2>Sezioni del libro</h2><ol>' +
+    '<li><a epub:type="titlepage" href="titlepage.xhtml">Frontespizio</a></li>' +
+    '<li><a epub:type="bodymatter" href="chapter-1.xhtml">Inizio del libro</a></li>' +
+    '</ol></nav></body></html>',
   );
   entries["OEBPS/content.opf"] = strToU8(
     '<?xml version="1.0" encoding="UTF-8"?>' +

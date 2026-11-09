@@ -73,7 +73,7 @@ test("EPUB scaricato: XML valido, ZIP EPUB 3 e solo scene canoniche desktop/mobi
   const files = unzipSync(new Uint8Array(bytes));
   expect(strFromU8(files.mimetype)).toBe("application/epub+zip");
   expect(Object.keys(files)).toEqual([
-    "mimetype", "META-INF/container.xml", "OEBPS/style.css",
+    "mimetype", "META-INF/container.xml", "OEBPS/style.css", "OEBPS/titlepage.xhtml",
     "OEBPS/chapter-1.xhtml", "OEBPS/chapter-2.xhtml",
     "OEBPS/nav.xhtml", "OEBPS/content.opf",
   ]);
@@ -90,14 +90,14 @@ test("EPUB scaricato: XML valido, ZIP EPUB 3 e solo scene canoniche desktop/mobi
   ]) expect(contents).not.toContain(forbidden);
   const xml = [
     "META-INF/container.xml", "OEBPS/content.opf", "OEBPS/nav.xhtml",
-    "OEBPS/chapter-1.xhtml", "OEBPS/chapter-2.xhtml",
+    "OEBPS/titlepage.xhtml", "OEBPS/chapter-1.xhtml", "OEBPS/chapter-2.xhtml",
   ].map(name => strFromU8(files[name]));
   const parserErrors = await page.evaluate((documents: string[]) =>
     documents.map(source => {
       const result = new DOMParser().parseFromString(source, "application/xml");
       return result.querySelector("parsererror")?.textContent ?? null;
     }), xml);
-  expect(parserErrors).toEqual([null, null, null, null, null]);
+  expect(parserErrors).toEqual(Array(xml.length).fill(null));
   const tocTargets = await page.evaluate(({ nav, documents }: {
     nav: string; documents: Record<string, string>;
   }) => {
@@ -124,6 +124,48 @@ test("EPUB scaricato: XML valido, ZIP EPUB 3 e solo scene canoniche desktop/mobi
     { href: "chapter-1.xhtml#scene-1", title: "Scena <prima>", heading: "Scena <prima>" },
     { href: "chapter-1.xhtml#scene-2", title: 'Ultima & "voce"', heading: 'Ultima & "voce"' },
     { href: "chapter-2.xhtml#scene-1", title: "Conclusione", heading: "Conclusione" },
+  ]);
+  const landmarks = await page.evaluate(({ nav, documents }: {
+    nav: string; documents: Record<string, string>;
+  }) => {
+    const parser = new DOMParser();
+    const xhtmlNS = "http://www.w3.org/1999/xhtml";
+    const epubNS = "http://www.idpf.org/2007/ops";
+    const index = parser.parseFromString(nav, "application/xml");
+    const containers = Array.from(index.getElementsByTagNameNS(xhtmlNS, "nav"))
+      .filter(element => element.getAttributeNS(epubNS, "type") === "landmarks");
+    return containers.map(container =>
+      Array.from(container.getElementsByTagNameNS(xhtmlNS, "a")).map(link => {
+        const type = link.getAttributeNS(epubNS, "type");
+        const href = link.getAttribute("href") ?? "";
+        const target = documents[href] ? parser.parseFromString(documents[href], "application/xml") : null;
+        const structuralTarget = type === "titlepage"
+          ? target?.getElementsByTagNameNS(xhtmlNS, "section")[0]
+          : target?.getElementsByTagNameNS(xhtmlNS, "body")[0];
+        return {
+          type, href,
+          targetType: structuralTarget?.getAttributeNS(epubNS, "type") ?? null,
+          heading: target?.getElementsByTagNameNS(xhtmlNS, "h1")[0]?.textContent ?? null,
+        };
+      }),
+    );
+  }, {
+    nav: strFromU8(files["OEBPS/nav.xhtml"]),
+    documents: {
+      "titlepage.xhtml": strFromU8(files["OEBPS/titlepage.xhtml"]),
+      "chapter-1.xhtml": strFromU8(files["OEBPS/chapter-1.xhtml"]),
+      "chapter-2.xhtml": strFromU8(files["OEBPS/chapter-2.xhtml"]),
+    },
+  });
+  expect(landmarks).toEqual([[
+    { type: "titlepage", href: "titlepage.xhtml", targetType: "titlepage",
+      heading: "L'ultima stella & il sogno" },
+    { type: "bodymatter", href: "chapter-1.xhtml", targetType: "bodymatter",
+      heading: "Capitolo 1 — Il viaggio & la 🌙" },
+  ]]);
+  const opf = strFromU8(files["OEBPS/content.opf"]);
+  expect(opf.match(/<itemref idref="[^"]+"\/>/g)).toEqual([
+    '<itemref idref="titlepage"/>', '<itemref idref="chapter-1"/>', '<itemref idref="chapter-2"/>',
   ]);
   await expect(page.getByText(/Esportazione EPUB completata/)).toBeVisible();
 });

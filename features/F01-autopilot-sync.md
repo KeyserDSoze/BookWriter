@@ -2,6 +2,7 @@
 
 ## Progresso versionato
 
+- [x] v0.11.61 (issue #97): frontespizio EPUB 3 XML-safe, spine e landmarks titlepage/bodymatter sul primo capitolo canonico, con test ZIP/XML browser desktop/mobile (ADR 0093); epic #4 resta aperta.
 - [x] v0.11.60 (issue #96): PDF con preflight WinAnsi fail-closed, builder verificabile e test desktop/mobile su errore senza download e file valido (ADR 0092); l'Unicode completo resta nella epic #4.
 - [x] v0.11.59 (issue #95): DOCX ZIP OPC generato da builder testabile, contenuto canonico XML-safe, download e parsing WordprocessingML in test desktop/mobile (ADR 0091); epic #4 ancora aperta.
 - [x] v0.11.58 (issue #94): indice EPUB per capitoli e scene canoniche con ancore XHTML stabili, semantica `aria-labelledby` e test ZIP/XML reali desktop/mobile (ADR 0090); epic #4 ancora aperta.

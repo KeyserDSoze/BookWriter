@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.61 — 2026-11-09 (main, issue #97, epic #4)
+
+**EPUB 3 con frontespizio nel reading order e landmarks semantici**
+
+- `buildEpub` crea `OEBPS/titlepage.xhtml` con soltanto il titolo pubblico, in `h1` etichettato e `section epub:type="titlepage"`. Il testo è passato dall'escaping/sanitizzazione XML già usata per l'EPUB; non sono inventati autore, copertina o contenuti narrativi.
+- Il frontespizio è dichiarato nel manifest e compare come **primo `itemref` dello spine**. I capitoli `canon` mantengono l'ordine esistente; i rispettivi XHTML dichiarano `body epub:type="bodymatter"` e continuano ad avere le ancore di scena v0.11.58.
+- `nav.xhtml` mantiene un solo `toc` a due livelli capitoli→scene e aggiunge un solo `nav epub:type="landmarks"`: due link semanticamente distinti verso `titlepage.xhtml` e `chapter-1.xhtml`, che è il **primo capitolo pubblicato** anche quando il capitolo numerato 1 è solo bozza. Nessuna credenziale o bozza raggiungibile da TOC o landmarks.
+- Vitest verifica struttura ZIP/manifests/spine, HTML-escaping/Unicode, ordine e caso primo capitolo draft; Playwright desktop/mobile scarica l'EPUB e segue i due landmarks nel vero ZIP con `DOMParser(application/xml)`, oltre ai preesistenti link TOC per scena.
+- ADR 0093, guida, AGENTS, feature, README, versioni `package.json`/`package-lock.json` 0.11.61 aggiornati senza nuove librerie o API. **Non** equivale a EPUBCheck o audit su e-reader fisici.
+
 ## 0.11.60 — 2026-11-09 (main, issue #96, epic #4)
 
 **PDF fail-closed per glifi non supportati e builder verificabile**
