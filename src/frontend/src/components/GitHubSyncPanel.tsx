@@ -47,6 +47,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   const [outbox, setOutbox] = useState<SyncOutboxItem | undefined>();
   const [writerLease, setWriterLease] = useState<WriterLeaseStatus | null>(null);
   const [leaseCheckError, setLeaseCheckError] = useState("");
+  const [leaseCheckState, setLeaseCheckState] = useState<"checking" | "checked" | "error">("checking");
 
   useEffect(() => {
     setOwner(book?.remote?.owner ?? "");
@@ -69,20 +70,37 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
 
   useEffect(() => {
     let mounted = true;
+    let requestSequence = 0;
     const checkLease = () => {
+      const requestId = ++requestSequence;
       if (!book?.remote || !settings.githubToken) {
-        if (mounted) { setWriterLease(null); setLeaseCheckError(""); }
+        if (mounted) {
+          setWriterLease(null);
+          setLeaseCheckError("");
+          setLeaseCheckState("checked");
+        }
         return;
       }
+      // Pending and failed reads must never be presented as verified lease
+      // status. Ignore older responses from overlapping periodic checks.
+      setLeaseCheckState("checking");
       void inspectWriterLease(book.remote, book.id).then(value => {
-        if (mounted) { setWriterLease(value); setLeaseCheckError(""); }
+        if (mounted && requestId === requestSequence) {
+          setWriterLease(value);
+          setLeaseCheckError("");
+          setLeaseCheckState("checked");
+        }
       }).catch(() => {
-        if (mounted) setLeaseCheckError("Impossibile verificare il lock GitHub; non presumere che il libro sia libero.");
+        if (mounted && requestId === requestSequence) {
+          setWriterLease(null);
+          setLeaseCheckError("Impossibile verificare il lock GitHub; non presumere che il libro sia libero.");
+          setLeaseCheckState("error");
+        }
       });
     };
     checkLease();
     const timer = setInterval(checkLease, 20_000);
-    return () => { mounted = false; clearInterval(timer); };
+    return () => { mounted = false; requestSequence++; clearInterval(timer); };
   }, [book?.id, book?.remote?.branch, book?.remote?.repository, book?.remote?.owner, settings.githubToken]);
 
   async function recoverWriter() {
@@ -286,8 +304,9 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <p className="font-semibold">Scrittura protetta tra dispositivi</p>
-        {!leaseCheckError && !writerLease && <p className="muted mt-2">Nessun lock remoto attivo. L'autopilot ne acquisisce uno prima di chiamare i modelli AI.</p>}
-        {writerLease && <div className="mt-2 space-y-1">
+        {leaseCheckState === "checking" && <p role="status" className="muted mt-2">Verifica del lock GitHub in corso…</p>}
+        {leaseCheckState === "checked" && !writerLease && <p className="muted mt-2">Nessun lock remoto attivo. L'autopilot ne acquisisce uno prima di chiamare i modelli AI.</p>}
+        {leaseCheckState === "checked" && writerLease && <div className="mt-2 space-y-1">
           <p><b>Lease:</b> {writerLease.state === "released" ? "Rilasciato" :
             isLeaseRecoverable(writerLease) ? "Scaduto: recupero manuale possibile" :
             Date.parse(writerLease.expiresAt) <= Date.now() ? "Scaduto, in attesa del margine di sicurezza" : "Scrittura in uso"}</p>
@@ -297,7 +316,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
               Recupera lease scaduto
             </Button>}
         </div>}
-        {leaseCheckError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">{leaseCheckError}</p>}
+        {leaseCheckState === "error" && leaseCheckError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">{leaseCheckError}</p>}
         <p className="muted mt-2 text-xs">Ogni attività AI richiede un lease GitHub valido per i libri collegati. Il lock viene rinnovato finché la pagina scrive, e liberato al termine. In assenza di rete l'autopilot si arresta. La verifica dell'orologio GitHub è approssimativa: rileva solo scarti molto grandi tramite la finestra X-RateLimit-Reset; il takeover resta manuale con margine di sicurezza.</p>
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">

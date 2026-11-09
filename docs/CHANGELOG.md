@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.43 — 2026-11-09 (main, issue #79, #10, #6)
+
+**Lease GitHub: un 404 non verificato non significa «nessun lock»**
+
+- Anche il 404 previsto quando la branch `bookwriter-lock/<bookId>` non esiste deve superare il controllo approssimativo del clock tramite `X-RateLimit-Reset`: header CORS assente/malformato o orologio macroscopicamente sfasato arrestano acquisizione e ispezione senza altri GET, POST/PATCH o chiamate AI. I normali 404 con header valido restano assenza del ramo; altri errori HTTP invariati.
+- In Archivio lo stato «nessun lock» compare solo dopo una verifica GitHub **riuscita**. Durante il controllo compare «Verifica in corso»; dopo errore il vecchio lease viene invalidato e le risposte obsolete sono ignorate, senza presentare pulsanti di recupero per dati non verificati.
+- Vitest su 404 senza header, header invalido, clock +24h e primo acquisto consentito quando l'header è valido; Playwright desktop/mobile su lock assente non verificabile e successiva guarigione. ADR 0075, AGENTS, README e documentazione aggiornati.
+- Restano esplicitamente aperti in #10 il fencing transazionale, l'errore di clock moderato e le modifiche manuali fra dispositivi. Nessun backend, provider aggiuntivo, segreto, nuovo formato ZIP o chiamata HTTP/AI aggiuntiva.
+
+
 ## 0.11.42 — 2026-11-09 (main, issue #78, #10, #6)
 
 **Lease GitHub: rifiuto conservativo degli orologi manifestamente fuori sincronizzazione**

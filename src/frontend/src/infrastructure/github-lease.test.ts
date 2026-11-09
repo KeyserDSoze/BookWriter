@@ -204,6 +204,39 @@ describe("Lease distribuito GitHub (branch fast-forward only)", () => {
       .rejects.toThrow(/X-RateLimit-Reset valido/);
   });
 
+  it("valida il clock anche per il 404 di branch assente, prima di qualunque scrittura", async () => {
+    const actual = Date.now();
+    const plausibleReset = String(Math.floor((actual + 30 * 60_000) / 1000));
+    let reset: string | null = null;
+    const server = githubServer(() => reset);
+    const bookId = crypto.randomUUID();
+
+    await expect(inspectWriterLease(remote, bookId))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
+    await expect(acquireWriterLease(remote, bookId, crypto.randomUUID()))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
+    expect(server.calls.map(call => call.method)).toEqual(["GET", "GET"]);
+    expect(server.calls.every(call => call.path.includes("/git/ref/heads/bookwriter-lock/")))
+      .toBe(true);
+
+    reset = "invalid";
+    await expect(inspectWriterLease(remote, bookId))
+      .rejects.toThrow(/X-RateLimit-Reset valido/);
+    reset = plausibleReset;
+    const clock = vi.spyOn(Date, "now").mockReturnValue(actual + 24 * 60 * 60_000);
+    await expect(inspectWriterLease(remote, bookId))
+      .rejects.toThrow(/orologio del dispositivo/);
+    await expect(acquireWriterLease(remote, bookId, crypto.randomUUID()))
+      .rejects.toThrow(/orologio del dispositivo/);
+    expect(server.calls.every(call => call.method === "GET")).toBe(true);
+
+    clock.mockRestore();
+    expect(await inspectWriterLease(remote, bookId)).toBeNull();
+    const acquired = await acquireWriterLease(remote, bookId, crypto.randomUUID());
+    expect(acquired.bookId).toBe(bookId);
+    expect(server.calls.some(call => call.method === "POST")).toBe(true);
+  });
+
   it("non cede a due richieste concorrenti il medesimo lease", async () => {
     githubServer();
     const bookId = crypto.randomUUID();

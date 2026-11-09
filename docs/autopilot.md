@@ -74,3 +74,7 @@ Con Web Locks disponibili, rimane la richiesta **non bloccante** `ifAvailable:tr
 ## v0.11.42 — fail-closed per orologi palesemente sfasati su GitHub
 
 Per un libro collegato, il writer guard verifica che il clock del dispositivo sia plausibile rispetto alla finestra `X-RateLimit-Reset` esposta dall'API GitHub prima di usare il lease. In caso di scarto di ore, header mancante o errore remoto, l'operazione fallisce prima della chiamata AI: controlla che data e ora automatiche siano attive e poi riprova. Il controllo è **grossolano**, non sincronizza orologi al secondo, non protegge editor manuali concorrenti e non elimina l'intervallo non atomico tra verifica GitHub e IndexedDB. Vedi `docs/github-sync.md`, ADR 0075 e issue #78/#10.
+
+## v0.11.43 — 404 di lock remoto verificato e UI fail-closed
+
+Nel libro collegato a GitHub, un `404` sulla branch di lock non è considerato prova di assenza se manca il `X-RateLimit-Reset` CORS-esposto o l'orologio è palesemente incoerente. Anche la prima acquisizione si ferma prima di chiamate AI o scritture Git. In Archivio lo stato è «verifica in corso», «verificato» oppure «non verificabile»; un errore invalida l'ultimo risultato mostrato, e risposte tardive non prevalgono su controlli recenti. Nessuna chiamata o dato nuovo. Vedi ADR 0075, issue #79/#10 e `docs/github-sync.md`.

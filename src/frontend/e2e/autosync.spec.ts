@@ -9,6 +9,7 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   const remoteFiles = new Map<string, string>();
   const foreignSha = "f".repeat(40);
   let foreignLease: string | null = null;
+  let hideResetOnMissingLease = false;
   const headers = {
     "content-type": "application/json",
     "access-control-allow-origin": "*",
@@ -70,7 +71,10 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
     } else {
       status = 500; response = { message: "Unexpected request: " + method + " " + path };
     }
-    await route.fulfill({ status, headers, body: JSON.stringify(response) });
+    const replyHeaders: Record<string, string> = { ...headers };
+    if (status === 404 && path.includes("/git/ref/heads/bookwriter-lock/") && hideResetOnMissingLease)
+      delete replyHeaders["x-ratelimit-reset"];
+    await route.fulfill({ status, headers: replyHeaders, body: JSON.stringify(response) });
   });
 
   await page.goto("/");
@@ -123,4 +127,21 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   await page.getByRole("button", { name: "Autopilot", exact: true }).click();
   await expect(page.getByText(/orologio del dispositivo non è compatibile/)).toBeVisible();
   await expect(page.getByText(/Da avviare · Brainstorming/)).toBeVisible();
+
+  // A missing lock branch is not proof of freedom if the 404 lacks
+  // the CORS-exposed clock header; reload restores the real clock.
+  foreignLease = null;
+  hideResetOnMissingLease = true;
+  await page.reload();
+  await nav.getByRole("button", { name: "Archivio" }).click();
+  await expect(page.getByRole("alert").getByText(/Impossibile verificare il lock GitHub/)).toBeVisible();
+  await expect(page.getByText(/Nessun lock remoto attivo/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Recupera lease scaduto" })).toHaveCount(0);
+
+  // An exposed, plausible header makes the same 404 a checked absence.
+  hideResetOnMissingLease = false;
+  await page.reload();
+  await nav.getByRole("button", { name: "Archivio" }).click();
+  await expect(page.getByText(/Nessun lock remoto attivo/)).toBeVisible();
+  await expect(page.getByText(/Impossibile verificare il lock GitHub/)).toHaveCount(0);
 });

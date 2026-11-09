@@ -121,7 +121,12 @@ async function api<T>(secret: string, path: string,
   } finally {
     clearTimeout(deadline);
   }
-  if (allow404 && response.status === 404) return null;
+  if (allow404 && response.status === 404) {
+    // A missing lock branch is also a lease decision: never infer "free"
+    // from an unchecked 404 or an unavailable CORS-exposed clock header.
+    assertPlausibleClock(response);
+    return null;
+  }
   if (!response.ok) throw responseError(response.status);
   assertPlausibleClock(response);
   const raw = await response.text();
