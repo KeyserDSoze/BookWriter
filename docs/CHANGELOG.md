@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.32 — 2026-11-09 (main, issue #20)
+
+**Rivalidazione cross-chapter: distribuzione equa dei candidati prima del ranking**
+
+- Con oltre 1.600 scene precedenti, `retrievePriorContinuityScenes` non lascia più che un singolo capitolo origine molto esteso occupi l'intero budget di scansione: esamina a turni le scene dei capitoli, ordinati con priorità **origine, ultimo predecessore e intermedi più recenti**, e poi riprende il turno per le scene successive. Le scene d'origine dichiarate come modificate sono prioritarie all'interno dell'origine.
+- Il limite di **1.600 scene scansionate**, i massimi di **4 scene selezionate / 2 per capitolo**, i segnali lessicali e strutturati, i due estratti letterali con offset e la privacy degli agenti sono invariati. Se i capitoli superano gli slot, solo il campione prioritario viene letto; nessuna copertura esaustiva o contraddizione dedotta.
+- Test Vitest su capitoli da 1.705 scene con testimone intermedio, priorità alla scena modificata, ultimo predecessore non escluso, 1.602 capitoli, stabilità a ordine invertito e conteggi di esclusione; Playwright desktop/mobile per l'avviso di campionamento. Guida, README, AGENTS e ADR 0065.
+- Nessun dato persistente o nuova migrazione, schema ZIP, canone, note autore, sincronizzazione, rete, prompt dei lettori ciechi, nuove chiamate AI o costi aggiuntivi.
+
+**Limite:** il bilanciamento è un criterio deterministico di selezione di materiale da esaminare, non una ricerca semantica sull'intero romanzo.
+
+
 ## 0.11.31 — 2026-11-08 (main, issue #20)
 
 **Finestre di continuità allineate alle menzioni letterali realmente recuperate**

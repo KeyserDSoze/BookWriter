@@ -58,6 +58,10 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
     .toContainText("non prova una contraddizione");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("priorità a nomi e parole intere, con offset della prosa originale");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("il limite di 1.600 viene");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
+    .toContainText("distribuito tra capitoli per conservare origine e ultimo predecessore");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("modifica a monte nel capitolo 1");
   await expect(board.getByText(/Capitolo riaperto. Premi Riprendi/)).toBeVisible();

@@ -108,16 +108,39 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   const termQuery=[...new Set(selectedQuery.flatMap(s=>
     words(scanText(s.text+" "+s.title+" "+s.objective)).slice(0,96)))].slice(0,MAX_TERMS);
   const termSet=new Set(termQuery);
-  const latest=[...prior].sort((a,b)=>b.number-a.number)[0]!;
-  // For enormous imports, reserve origin/latest and scan the remaining
-  // candidate scenes in a stable most-recent-first order, never silently.
-  const prioritized=[...all].sort((a,b)=>
-    Number(b.chapter.id===origin.id)-Number(a.chapter.id===origin.id) ||
-    Number(b.chapter.id===latest.id)-Number(a.chapter.id===latest.id) ||
-    b.chapter.number-a.chapter.number || a.scene.number-b.scene.number ||
-    a.scene.id.localeCompare(b.scene.id));
-  const scanned=prioritized.slice(0,MAX_CANDIDATES);
+  const latest=[...prior].sort((a,b)=>
+    b.number-a.number || a.id.localeCompare(b.id))[0]!;
   const changed=new Set(originSceneIds);
+  // A single huge origin chapter used to consume all 1,600 scan slots and
+  // silently exclude the latest predecessor. Round-robin over chapters only
+  // when the limit is reached: origin, latest, then other chapters newest-first.
+  // This preserves one scene per represented chapter before taking a second,
+  // and prioritizes explicitly changed scenes within the origin chapter.
+  const scanned:(typeof all)=all.length<=MAX_CANDIDATES?all:(()=>{
+    const chapters=[...prior].sort((a,b)=>
+      Number(b.id===origin.id)-Number(a.id===origin.id) ||
+      Number(b.id===latest.id)-Number(a.id===latest.id) ||
+      b.number-a.number || a.id.localeCompare(b.id));
+    let active=chapters.filter(ch=>ch.scenes.length).map(ch=>({
+      chapter:ch,
+      scenes:[...ch.scenes].sort((a,b)=>
+        (ch.id===origin.id?Number(changed.has(b.id))-Number(changed.has(a.id)):0) ||
+        a.number-b.number || a.id.localeCompare(b.id)),
+      at:0,
+    }));
+    const result:typeof all=[];
+    while(active.length && result.length<MAX_CANDIDATES){
+      const next:typeof active=[];
+      for(const group of active){
+        if(result.length>=MAX_CANDIDATES)break;
+        result.push({chapter:group.chapter,scene:group.scenes[group.at]!});
+        group.at++;
+        if(group.at<group.scenes.length)next.push(group);
+      }
+      active=next;
+    }
+    return result;
+  })();
   const rated=scanned.map(({chapter:ch,scene})=>{
     const entityOverlap=referenced(scene).filter(e=>entityQuery.has(e)).slice(0,10);
     // Check original bounded prose windows separately, never stitched snippets.

@@ -178,6 +178,66 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(pack.omittedSceneCount).toBe(pack.retrieval.candidateSceneCount-pack.scenes.length);
   });
 
+  it("cap 1.600 bilanciato: un capitolo origine enorme non oscura l'ultimo e il capitolo intermedio",()=>{
+    const b=fixture(),origin=b.chapters[0]!,middle=b.chapters[1]!,
+      latest=b.chapters[4]!,current=b.chapters[5]!;
+    origin.scenes=Array.from({length:1705},(_,i)=>
+      scene("origin-"+i,"Il vento muove le fronde del giardino.",
+        {number:i+1,title:"",objective:"",characters:[]}));
+    origin.scenes.at(-1)!.text="La porta murata viene riaperta.";
+    middle.scenes=[scene("intermedio-Ivo","Ivo custodisce la pergamena.",
+      {title:"",objective:"",characters:["Ivo"]})];
+    latest.scenes=Array.from({length:1705},(_,i)=>
+      scene("latest-"+i,"La notte scende sul villaggio.",
+        {number:i+1,title:"",objective:"",characters:[]}));
+    const now=current.scenes[0]!;
+    now.characters=["Ivo"];now.items=[];now.locations=[];
+    now.title="";now.objective="";now.text="Ivo osserva il cielo.";
+    markDownstreamContinuity(b,origin,"author_reopen",["origin-1704"]);
+    const before=JSON.stringify(b);
+    const prior=b.chapters.filter(ch=>ch.number<current.number);
+    const result=retrievePriorContinuityScenes(prior,origin,current,
+      ["origin-1704"],now);
+    expect(result.candidateSceneCount).toBe(3413);
+    expect(result.scannedSceneCount).toBe(1600);
+    expect(result.unscannedSceneCount).toBe(1813);
+    expect(result.sampled.find(s=>s.selectionReason==="origin_anchor")?.scene.id)
+      .toBe("origin-1704");
+    expect(result.sampled.find(s=>s.selectionReason==="latest_anchor")?.chapter.id)
+      .toBe(latest.id);
+    expect(result.sampled.find(s=>s.scene.id==="intermedio-Ivo")?.selectionReason)
+      .toBe("targeted_match");
+    expect(result.sampled.length).toBeLessThanOrEqual(4);
+    expect(result.sampled.filter(s=>s.chapter.id===origin.id).length)
+      .toBeLessThanOrEqual(2);
+    const pack=buildContinuityEvidence(b,current,now)!;
+    expect(pack.retrieval.scannedSceneCount).toBe(1600);
+    expect(pack.scenes.some(s=>s.sceneId==="intermedio-Ivo")).toBe(true);
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+    expect(JSON.stringify(b)).toBe(before);
+  });
+
+  it("oltre 1.600 capitoli conserva origine e ultimo e dichiara gli esclusi",()=>{
+    const previous=Array.from({length:1602},(_,i)=>
+      chapter(i+1,[scene("s"+i,"Il ponte non è ancora stato varcato.",
+        {title:"",objective:""})]));
+    const next=chapter(1603,[scene("current","L'alba giunge.",
+      {title:"",objective:""})]);
+    const origin=previous[0]!;
+    const first=retrievePriorContinuityScenes(previous,origin,next,[],next.scenes[0]);
+    const reverse=retrievePriorContinuityScenes([...previous].reverse(),
+      origin,next,[],next.scenes[0]);
+    expect(first.scannedSceneCount).toBe(1600);
+    expect(first.unscannedSceneCount).toBe(2);
+    expect(first.sampled.find(s=>s.selectionReason==="origin_anchor")?.chapter.id)
+      .toBe(origin.id);
+    expect(first.sampled.find(s=>s.selectionReason==="latest_anchor")?.chapter.id)
+      .toBe(previous.at(-1)!.id);
+    expect(first.sampled.map(s=>[s.chapter.id,s.scene.id,s.selectionReason]))
+      .toEqual(reverse.sampled.map(s=>[s.chapter.id,s.scene.id,s.selectionReason]));
+    expect(first.sampled.every(s=>s.chapter.number<next.number)).toBe(true);
+  });
+
   it("recupera nomi letterali nella prosa precedente anche senza tag, senza esporre segreti ai lettori",()=>{
     const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
     const untagged=b.chapters[1]!.scenes[0]!;
