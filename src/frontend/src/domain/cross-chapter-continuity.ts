@@ -29,6 +29,9 @@ export interface ContinuityRecheckAudit extends ContinuityRecheck {
   currentQueriedSceneCount?: number;
   currentOmittedSceneCount?: number;
   currentQueriedSceneIds?: string[];
+  /** Optional since 0.11.40; marks included scenes sampled at 16k chars. */
+  currentLexicallyTruncatedSceneCount?: number;
+  currentLexicallyTruncatedSceneIds?: string[];
 }
 
 export interface ContinuityEvidenceWindow { offset: number; text: string }
@@ -182,11 +185,14 @@ export function completeContinuityRecheck(book: BookProject, chapter: Chapter,
     partialCoverage:pack.omittedSceneCount>0 ||
       pack.retrieval.unscannedSceneCount>0 ||
       pack.currentQuery.omittedSceneCount>0 ||
+      pack.currentQuery.lexicallyTruncatedSceneCount>0 ||
       pack.scenes.some(s=>s.coverage==="partial"),
     currentWrittenSceneCount:pack.currentQuery.writtenSceneCount,
     currentQueriedSceneCount:pack.currentQuery.queriedSceneIds.length,
     currentOmittedSceneCount:pack.currentQuery.omittedSceneCount,
     currentQueriedSceneIds:[...pack.currentQuery.queriedSceneIds],
+    currentLexicallyTruncatedSceneCount:pack.currentQuery.lexicallyTruncatedSceneCount,
+    currentLexicallyTruncatedSceneIds:[...pack.currentQuery.lexicallyTruncatedSceneIds],
     retrievalMethod:pack.retrieval.method,
     candidateSceneCount:pack.retrieval.candidateSceneCount,
     scannedSceneCount:pack.retrieval.scannedSceneCount,

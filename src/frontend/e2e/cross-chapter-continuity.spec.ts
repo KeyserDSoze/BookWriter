@@ -69,7 +69,9 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("altre scene restano escluse");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
-    .toContainText("Il direttore riceve il conteggio delle scene correnti incluse e");
+    .toContainText("Il direttore riceve il conteggio delle scene correnti incluse,");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
+    .toContainText("campionate solo parzialmente oltre 16.000 caratteri");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("due riferimenti distanti ricevono");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
@@ -134,6 +136,8 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
           currentWrittenSceneCount:8,currentQueriedSceneCount:6,
           currentOmittedSceneCount:2,
           currentQueriedSceneIds:["s-1","s-2","s-4","s-5","s-7","s-8"],
+          currentLexicallyTruncatedSceneCount:1,
+          currentLexicallyTruncatedSceneIds:["s-8"],
         };
         store.put(b,b.id);
         tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
@@ -143,6 +147,8 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
   await page.reload();
   await expect(page.locator('[aria-label="Storico rivalidazione capitolo 2"]'))
     .toContainText("Query sul capitolo corrente: 6 scene su 8 con testo; 2 escluse dalla ricerca aggregata.");
+  await expect(page.locator('[aria-label="Storico rivalidazione capitolo 2"]'))
+    .toContainText("1 scena inclusa con scansione lessicale parziale oltre 16.000 caratteri.");
   const size=await page.evaluate(()=>({
     scroll:document.documentElement.scrollWidth,width:window.innerWidth,
   }));

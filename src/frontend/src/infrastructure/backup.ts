@@ -46,11 +46,21 @@ const continuityAuditSchema = continuityRecheckSchema.extend({
   currentQueriedSceneCount: z.number().int().min(0).max(6).optional(),
   currentOmittedSceneCount: z.number().int().min(0).max(200).optional(),
   currentQueriedSceneIds: z.array(zId).max(6).optional(),
+  // Optional 0.11.40 pair: only queried scenes can be lexically truncated.
+  currentLexicallyTruncatedSceneCount: z.number().int().min(0).max(6).optional(),
+  currentLexicallyTruncatedSceneIds: z.array(zId).max(6).optional(),
 }).strict().superRefine((audit,ctx)=>{
   const {currentWrittenSceneCount:written,currentQueriedSceneCount:queried,
     currentOmittedSceneCount:omitted,currentQueriedSceneIds:ids}=audit;
   const values=[written,queried,omitted,ids];
-  if(values.every(v=>v===undefined))return; // valid legacy audit
+  if(values.every(v=>v===undefined)){
+    if(audit.currentLexicallyTruncatedSceneCount!==undefined ||
+      audit.currentLexicallyTruncatedSceneIds!==undefined){
+      ctx.addIssue({code:z.ZodIssueCode.custom,
+        message:"Scansione parziale senza copertura corrente."});
+    }
+    return; // valid legacy audit without any current-query data
+  }
   if(written===undefined || queried===undefined || omitted===undefined ||
     ids===undefined){
     ctx.addIssue({code:z.ZodIssueCode.custom,
@@ -62,6 +72,17 @@ const continuityAuditSchema = continuityRecheckSchema.extend({
     new Set(ids).size!==ids.length){
     ctx.addIssue({code:z.ZodIssueCode.custom,
       message:"Conteggi di copertura corrente incoerenti."});
+  }
+  const n=audit.currentLexicallyTruncatedSceneCount;
+  const truncated=audit.currentLexicallyTruncatedSceneIds;
+  // Older audits (including 0.11.39) lack this pair; never invent it.
+  if(n===undefined&&truncated===undefined)return;
+  if(n===undefined||truncated===undefined ||
+    n!==truncated.length ||
+    new Set(truncated).size!==truncated.length ||
+    truncated.some(id=>!ids.includes(id))){
+    ctx.addIssue({code:z.ZodIssueCode.custom,
+      message:"Scansione lessicale parziale incoerente."});
   }
 });
 // Preserve legacy editorial reports, but validate NEW structured narratives

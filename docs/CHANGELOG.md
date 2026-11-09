@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.40 — 2026-11-09 (main, issue #76, #20, #4)
+
+**Copertura onesta delle scene correnti lunghe nel ranking lessicale**
+
+- `CurrentQueryCoverage` indica ora `lexicallyTruncatedSceneIds` e `lexicallyTruncatedSceneCount`: sono **soltanto scene correnti incluse nella query** con `scene.text + title + objective` oltre i 16.000 caratteri campionati da `scanWords`. Il numero delle scene correnti **escluse** rimane distinto in `omittedSceneCount`; nessuna modifica a punteggio, selezione o quantità di prosa letta.
+- `completeContinuityRecheck` rende `partialCoverage=true` anche quando questa è **l'unica** causa di copertura lessicale parziale. Lo storico aggiunge due campi opzionali, con visualizzazione esplicita nell'interfaccia e avvertenza al direttore/editor autorizzato. Nessun dato per i cinque lettori ciechi.
+- ZIP: `continuityAuditSchema` resta `strict`. La nuova coppia di campi è facoltativa per backup legacy, altrimenti deve essere completa, con massimo sei ID, senza duplicati e sottoinsieme delle scene effettivamente comprese nella query. Vitest su soglia esatta, scene escluse e incluse, audit, privacy; test ZIP su round-trip/legacy/file ostili; Playwright desktop/mobile.
+- ADR 0073, guida e AGENTS aggiornati. Nessun nuovo campo di canone, call AI/HTTP, trigger, sincronizzazione o generazione automatica di conflitti. **Un match o un indicatore di copertura non certifica coerenza.**
+
+
 ## 0.11.39 — 2026-11-09 (main, issue #20)
 
 **Audit trasparente della copertura delle scene correnti nel confronto cross-chapter**

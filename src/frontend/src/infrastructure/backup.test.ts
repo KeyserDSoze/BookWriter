@@ -139,6 +139,8 @@ describe("Backup portabile BookWriter", () => {
       candidateSceneCount:1,scannedSceneCount:1,unscannedSceneCount:0,
       currentWrittenSceneCount:1,currentQueriedSceneCount:1,
       currentOmittedSceneCount:0,currentQueriedSceneIds:["s-2"],
+      currentLexicallyTruncatedSceneCount:0,
+      currentLexicallyTruncatedSceneIds:[],
     });
     const archive=unzipSync(new Uint8Array(await auditedZip.arrayBuffer()));
     const bad=JSON.parse(strFromU8(archive["content.json"]!));
@@ -175,12 +177,53 @@ describe("Backup portabile BookWriter", () => {
     });
     await expect(readBackup(incompleteAudit))
       .rejects.toThrow(/Schema backup non valido/);
+    const invalidTruncatedIds=fromAudit(audit=>{
+      audit.currentLexicallyTruncatedSceneCount=1;
+      audit.currentLexicallyTruncatedSceneIds=["unknown"];
+    });
+    await expect(readBackup(invalidTruncatedIds))
+      .rejects.toThrow(/Schema backup non valido/);
+    const duplicateTruncated=fromAudit(audit=>{
+      audit.currentLexicallyTruncatedSceneCount=2;
+      audit.currentLexicallyTruncatedSceneIds=["s-2","s-2"];
+    });
+    await expect(readBackup(duplicateTruncated))
+      .rejects.toThrow(/Schema backup non valido/);
+    const missingTruncatedCount=fromAudit(audit=>{
+      delete audit.currentLexicallyTruncatedSceneCount;
+    });
+    await expect(readBackup(missingTruncatedCount))
+      .rejects.toThrow(/Schema backup non valido/);
+    const missingTruncatedIds=fromAudit(audit=>{
+      delete audit.currentLexicallyTruncatedSceneIds;
+    });
+    await expect(readBackup(missingTruncatedIds))
+      .rejects.toThrow(/Schema backup non valido/);
+    const priorAudit=fromAudit(audit=>{
+      delete audit.currentLexicallyTruncatedSceneCount;
+      delete audit.currentLexicallyTruncatedSceneIds;
+    });
+    const prior=(await readBackup(priorAudit)).books
+      .find(b=>b.title==="Il primo manoscritto")!.chapters[1]!;
+    expect(prior.lastContinuityReview?.currentQueriedSceneIds).toEqual(["s-2"]);
+    expect(prior.lastContinuityReview?.currentLexicallyTruncatedSceneCount)
+      .toBeUndefined();
+    const validTruncated=fromAudit(audit=>{
+      audit.currentLexicallyTruncatedSceneCount=1;
+      audit.currentLexicallyTruncatedSceneIds=["s-2"];
+    });
+    const validated=(await readBackup(validTruncated)).books
+      .find(b=>b.title==="Il primo manoscritto")!.chapters[1]!;
+    expect(validated.lastContinuityReview?.currentLexicallyTruncatedSceneIds)
+      .toEqual(["s-2"]);
     // Legacy archives with none of the optional v0.11.39 fields still import.
     const legacyAudit=fromAudit(audit=>{
       delete audit.currentWrittenSceneCount;
       delete audit.currentQueriedSceneCount;
       delete audit.currentOmittedSceneCount;
       delete audit.currentQueriedSceneIds;
+      delete audit.currentLexicallyTruncatedSceneCount;
+      delete audit.currentLexicallyTruncatedSceneIds;
     });
     const old=(await readBackup(legacyAudit)).books
       .find(b=>b.title==="Il primo manoscritto")!.chapters[1]!;

@@ -44,6 +44,10 @@ export interface CurrentQueryCoverage {
   writtenSceneCount: number;
   queriedSceneIds: string[];
   omittedSceneCount: number;
+  /** Query scenes whose lexical text exceeded the 16k sampling limit.
+   * These IDs are a subset of queriedSceneIds, not additional witnesses. */
+  lexicallyTruncatedSceneIds: string[];
+  lexicallyTruncatedSceneCount: number;
 }
 export interface TargetedContinuityResult {
   method: "local_structured_lexical_v1";
@@ -157,9 +161,12 @@ function balancedLiteralNames(scenes:readonly Scene[]):string[] {
  * occupy all 48 slots. One term per current scene per round, in scene order;
  * preserve the previous order when reviewing one specific scene. Words remain
  * literal, unverified and drawn only from public current-scene text/metadata. */
+function lexicalQueryText(scene:Scene):string {
+  return scene.text+" "+scene.title+" "+scene.objective;
+}
 function balancedQueryTerms(scenes:readonly Scene[]):string[] {
   const batches=scenes.map(s=>
-    scanWords(s.text+" "+s.title+" "+s.objective).slice(0,96));
+    scanWords(lexicalQueryText(s)).slice(0,96));
   const chosen:string[]=[];
   const seen=new Set<string>();
   for(let position=0;position<96&&chosen.length<MAX_TERMS;position++){
@@ -187,11 +194,17 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
   const written=chapter.scenes.filter(s=>s.text.trim());
   const queriedSceneIds=selectedQuery.map(s=>s.id);
   const queriedIds=new Set(queriedSceneIds);
+  // Match the exact input used by scanWords: metadata concatenation also
+  // consumes the fixed 16k lexical scan budget. No extra prose is surfaced.
+  const lexicallyTruncatedSceneIds=selectedQuery
+    .filter(s=>lexicalQueryText(s).length>MAX_SCAN_CHARS).map(s=>s.id);
   const currentQuery:CurrentQueryCoverage={
     scope:currentScene?"single_scene":"chapter_sample",
     writtenSceneCount:written.length,
     queriedSceneIds,
     omittedSceneCount:written.filter(s=>!queriedIds.has(s.id)).length,
+    lexicallyTruncatedSceneIds,
+    lexicallyTruncatedSceneCount:lexicallyTruncatedSceneIds.length,
   };
   const entityQuery=new Set(selectedQuery.flatMap(referenced));
   // Only explicit scene entity labels (no secret/alias inference).
