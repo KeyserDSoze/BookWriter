@@ -22,10 +22,13 @@ function fakeGitHub(options: {
   isPrivate?: boolean; head?: string;
   patchResponseSha?: string | null;
   applyPatch?: boolean; headAfterPatch?: string; failHeadReadback?: boolean;
+  patchOutcome?: "network-after" | "network-before" | "http-500-after" | "http-409";
+  markerMismatch?: "operation" | "book" | "revision" | "message" | "missing";
 } = {}) {
   const calls: Array<{ path: string; method: string; body: unknown; headers: Headers }> = [];
   let head = options.head ?? BEFORE;
   let patched = false;
+  let marker: { operationId: string; bookId: string; sourceRevision: string } | undefined;
   const fetchMock = vi.fn(async (url: string | URL, request?: RequestInit): Promise<Response> => {
     const parsed = new URL(String(url));
     const path = parsed.pathname;
@@ -41,17 +44,42 @@ function fakeGitHub(options: {
         throw new Error("Connessione interrotta durante la conferma HEAD");
       return reply({ object: { sha: head } });
     }
+    if (path.includes("/contents/.bookwriter/sync.json") && method === "GET") {
+      if (!marker || options.markerMismatch === "missing")
+        return reply({ message: "Not Found" }, 404);
+      const published = { ...marker };
+      if (options.markerMismatch === "operation") published.operationId = crypto.randomUUID();
+      if (options.markerMismatch === "book") published.bookId = crypto.randomUUID();
+      if (options.markerMismatch === "revision") published.sourceRevision = "stale source";
+      return reply({ type: "file", encoding: "base64",
+        content: btoa(JSON.stringify(published)) });
+    }
     if (path.includes("/contents/") && method === "GET")
       return reply({ message: "Not Found" }, 404);
     if (path.endsWith("/git/commits/" + (options.head ?? BEFORE)) && method === "GET")
       return reply({ tree: { sha: TREE } });
-    if (path.endsWith("/git/trees") && method === "POST")
+    if (path.endsWith("/git/trees") && method === "POST") {
+      const files = (body as {
+        tree: Array<{ path: string; content?: string }>
+      }).tree;
+      const content = files.find(f => f.path === ".bookwriter/sync.json")?.content;
+      if (content) marker = JSON.parse(content) as typeof marker;
       return reply({ sha: NEXT_TREE }, 201);
+    }
+    if (path.endsWith("/git/commits/" + NEXT) && method === "GET")
+      return reply({ message: options.markerMismatch === "message"
+        ? "commit non riconosciuto" : "bookwriter: sync " + marker?.operationId });
     if (path.endsWith("/git/commits") && method === "POST")
       return reply({ sha: NEXT }, 201);
     if (path.endsWith("/git/refs/heads/main") && method === "PATCH") {
       patched = true;
-      if (options.applyPatch !== false) head = options.headAfterPatch ?? NEXT;
+      if (options.patchOutcome === "http-409") return reply({ message: "Conflict" }, 409);
+      if (options.patchOutcome !== "network-before" && options.applyPatch !== false)
+        head = options.headAfterPatch ?? NEXT;
+      if (options.patchOutcome === "network-after" || options.patchOutcome === "network-before")
+        throw new TypeError("Simulated dropped PATCH response");
+      if (options.patchOutcome === "http-500-after")
+        return reply({ message: "Simulated failure after commit" }, 503);
       return reply({ object: options.patchResponseSha === null
         ? {} : { sha: options.patchResponseSha ?? NEXT } });
     }
@@ -160,6 +188,108 @@ describe("GitHub sync conservativa", () => {
     await expect(pushGitHubBook(book.id)).rejects.toThrow(/GitHub non raggiungibile/);
     expect(await getBook(book.id)).toEqual(beforeBook);
     expect(await getOutbox(book.id)).toEqual(beforeQueue);
+  });
+
+  it("recupera subito il push manuale se la risposta PATCH si perde dopo l'applicazione", async () => {
+    const book = await sampleBook();
+    book.remote!.autoSync = true;
+    await saveBook(book);
+    const revision = book.updatedAt;
+    const { calls } = fakeGitHub({ patchOutcome: "network-after" });
+
+    const result = await pushGitHubBook(book.id);
+    expect(result).toMatchObject({ commit: NEXT, recovered: true, sourceRevision: revision });
+    expect(calls.filter(c => c.method === "PATCH")).toHaveLength(1);
+    expect(calls.filter(c => c.method === "POST" && c.path.endsWith("/git/commits"))).toHaveLength(1);
+    expect(calls.some(c => c.path.includes("/contents/.bookwriter/sync.json"))).toBe(true);
+    const latest = (await getBook(book.id))!;
+    expect(latest.remote).toMatchObject({
+      lastSyncedCommit: NEXT, lastSyncedLocalUpdatedAt: revision,
+    });
+    expect(latest.updatedAt).toBe(revision);
+    expect(await getOutbox(book.id)).toBeUndefined();
+  });
+
+  it("recupera anche un HTTP 503 dopo che GitHub ha applicato il commit", async () => {
+    const book = await sampleBook();
+    const { calls } = fakeGitHub({ patchOutcome: "http-500-after" });
+    const result = await pushGitHubBook(book.id);
+    expect(result.recovered).toBe(true);
+    expect(result.commit).toBe(NEXT);
+    expect(calls.filter(c => c.method === "PATCH")).toHaveLength(1);
+  });
+
+  it("non attesta la risposta PATCH persa prima dell'applicazione", async () => {
+    const book = await sampleBook();
+    book.remote!.autoSync = true;
+    await saveBook(book);
+    const beforeBook = await getBook(book.id);
+    const beforeQueue = await getOutbox(book.id);
+    const { calls } = fakeGitHub({ patchOutcome: "network-before" });
+
+    await expect(pushGitHubBook(book.id)).rejects.toThrow(/GitHub non raggiungibile/);
+    expect(calls.filter(c => c.method === "PATCH")).toHaveLength(1);
+    expect(calls.filter(c => c.method === "GET" && c.path.endsWith("/git/ref/heads/main")))
+      .toHaveLength(3);
+    expect(await getBook(book.id)).toEqual(beforeBook);
+    expect(await getOutbox(book.id)).toEqual(beforeQueue);
+  });
+
+  it("non attesta una HEAD modificata da terzi dopo la perdita dell'ACK", async () => {
+    const book = await sampleBook();
+    book.remote!.autoSync = true;
+    await saveBook(book);
+    const before = await getOutbox(book.id);
+    const { calls } = fakeGitHub({
+      patchOutcome: "network-after", headAfterPatch: "f".repeat(40),
+    });
+    await expect(pushGitHubBook(book.id)).rejects.toThrow(/GitHub non raggiungibile/);
+    expect(calls.filter(c => c.method === "PATCH")).toHaveLength(1);
+    expect((await getBook(book.id))?.remote?.lastSyncedCommit).toBeUndefined();
+    expect(await getOutbox(book.id)).toEqual(before);
+  });
+
+  it.each(["operation", "book", "revision", "message", "missing"] as const)(
+    "non recupera un commit con marker remoto non verificabile: %s", async markerMismatch => {
+      const book = await sampleBook();
+      book.remote!.autoSync = true;
+      await saveBook(book);
+      const before = await getBook(book.id);
+      const beforeQueue = await getOutbox(book.id);
+      const { calls } = fakeGitHub({ patchOutcome: "network-after", markerMismatch });
+      await expect(pushGitHubBook(book.id)).rejects.toThrow(/GitHub non raggiungibile/);
+      expect(await getBook(book.id)).toEqual(before);
+      expect(await getOutbox(book.id)).toEqual(beforeQueue);
+      expect(calls.filter(c => c.method === "PATCH")).toHaveLength(1);
+    },
+  );
+
+  it("non attesta l'ACK perso se la rilettura della HEAD è irraggiungibile", async () => {
+    const book = await sampleBook();
+    book.remote!.autoSync = true;
+    await saveBook(book);
+    const before = await getOutbox(book.id);
+    const { calls } = fakeGitHub({
+      patchOutcome: "network-after", failHeadReadback: true,
+    });
+    await expect(pushGitHubBook(book.id)).rejects.toThrow(/GitHub non raggiungibile/);
+    expect(await getOutbox(book.id)).toEqual(before);
+    expect((await getBook(book.id))?.remote?.lastSyncedCommit).toBeUndefined();
+    expect(calls.filter(c => c.method === "PATCH")).toHaveLength(1);
+  });
+
+  it("non usa il recovery su rifiuto HTTP 409 e non ripete PATCH", async () => {
+    const book = await sampleBook();
+    book.remote!.autoSync = true;
+    await saveBook(book);
+    const before = await getOutbox(book.id);
+    const { calls } = fakeGitHub({ patchOutcome: "http-409" });
+    await expect(pushGitHubBook(book.id)).rejects.toBeInstanceOf(RemoteConflict);
+    expect(await getOutbox(book.id)).toEqual(before);
+    expect((await getBook(book.id))?.remote?.lastSyncedCommit).toBeUndefined();
+    expect(calls.filter(c => c.method === "PATCH")).toHaveLength(1);
+    expect(calls.filter(c => c.method === "GET" && c.path.endsWith("/git/ref/heads/main")))
+      .toHaveLength(2);
   });
 
   it("blocca il push manuale e automatico finché le scene fuse non sono state approvate", async () => {

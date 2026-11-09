@@ -54,6 +54,10 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
   let releasePatch: () => void = () => undefined;
   const patchGate = new Promise<void>(resolve => { releasePatch = resolve; });
   let patchCount = 0;
+  let publishedMarker: {
+    operationId: string; bookId: string; sourceRevision: string;
+  } | undefined;
+  let recoveredMarkerReads = 0;
   const headers = {
     "content-type": "application/json",
     "access-control-allow-origin": "*",
@@ -79,6 +83,14 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
       body = { object: { sha: remoteHead } };
     } else if (method === "GET" && path.endsWith("/git/commits/" + PREVIOUS)) {
       body = { tree: { sha: BASE_TREE } };
+    } else if (method === "GET" && path.endsWith("/git/commits/" + COMMIT)) {
+      body = { message: "bookwriter: sync " + publishedMarker?.operationId };
+    } else if (method === "GET" && path.includes("/contents/.bookwriter/sync.json")) {
+      recoveredMarkerReads++;
+      if (!publishedMarker) { status = 404; body = { message: "Not Found" }; }
+      else body = {
+        type: "file", encoding: "base64", content: btoa(JSON.stringify(publishedMarker)),
+      };
     } else if (method === "GET" && path.includes("/contents/.bookwriter/manifest.json")) {
       // The book is explicitly seeded with a prior synced commit. GitHub
       // must contain the matching manifest or the safe sync refuses the
@@ -93,6 +105,12 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
     } else if (method === "GET" && path.includes("/contents/")) {
       status = 404; body = { message: "Not Found" };
     } else if (method === "POST" && path.endsWith("/git/trees")) {
+      const payload = request.postDataJSON() as {
+        tree: Array<{ path: string; content?: string }>;
+      };
+      const markerText = payload.tree.find(f => f.path === ".bookwriter/sync.json")?.content;
+      if (!markerText) throw new Error("Marker del commit non incluso nel tree");
+      publishedMarker = JSON.parse(markerText) as typeof publishedMarker;
       status = 201; body = { sha: NEW_TREE };
     } else if (method === "POST" && path.endsWith("/git/commits")) {
       status = 201; body = { sha: COMMIT };
@@ -107,8 +125,11 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
       } else {
         patchStarted = true;
         await patchGate;
-        remoteHead = COMMIT; // Real fast-forward confirmed on the second try.
-        body = { object: { sha: COMMIT } };
+        remoteHead = COMMIT; // GitHub applied the fast-forward.
+        // Simulate the ACK being lost BEFORE a response reached the browser.
+        // The client must recover via exact HEAD + commit message + marker.
+        await route.abort("failed");
+        return;
       }
     } else if (method === "GET" && path.includes("/git/ref/heads/bookwriter-lock/")) {
       status = 404; body = { message: "Not Found" };
@@ -174,7 +195,8 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
     expect(notAcknowledged.updatedAt).toBe(before.updatedAt);
     expect(notAcknowledged.outbox).toEqual(before.outbox);
 
-    // A separate explicit retry can succeed when GitHub actually advances.
+    // A separate explicit push loses its PATCH response after GitHub advanced;
+    // the in-call read-only recovery must still confirm the same commit.
     await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
     await expect.poll(() => patchStarted).toBe(true);
 
@@ -232,6 +254,9 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
     expect(after.outbox?.state).toBe("pending");
     expect(patchCount).toBe(2);
     expect(remoteHead).toBe(COMMIT);
+    expect(recoveredMarkerReads).toBe(1);
+    expect(publishedMarker?.bookId).toBe(bookId);
+    expect(publishedMarker?.sourceRevision).toBe(before.updatedAt);
   } finally {
     releasePatch();
     await second.close();

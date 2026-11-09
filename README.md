@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Push GitHub con recovery di ACK perso v0.11.52 (main):** una risposta PATCH persa dopo il commit può ora essere verificata **in sola lettura** tramite HEAD, messaggio Git e marker di operazione, anche nel push manuale. Senza prove esatte, nessun ACK o doppio PATCH. Test Vitest e browser desktop/mobile. [Guida](docs/github-sync.md), ADR 0084, issue #88/#10.
+
 **HEAD GitHub verificata dopo il push v0.11.51 (main):** una risposta HTTP positiva non basta: BookWriter confronta lo SHA del PATCH e rilegge la HEAD esatta **prima** di aggiornare il commit locale e l'outbox. Una risposta incoerente non viene segnata come sincronizzata, e un ACK perso resta recuperabile tramite marker. Test Vitest + due tab desktop/mobile. [Guida](docs/github-sync.md), ADR 0083, issue #87/#10.
 
 **ACK GitHub e outbox atomici v0.11.50 (main):** dopo il commit remoto, l'ACK rilegge il libro e salva i metadati del commit e lo stato della coda nella **stessa transazione IndexedDB**, senza perdere un checkpoint creato nel frattempo. La conferma obsoleta non retrocede la baseline; test a due tab desktop/mobile. Il gap GitHub–IndexedDB è recuperabile ma non è una transazione distribuita. [Guida](docs/github-sync.md), ADR 0082, issue #86/#10.

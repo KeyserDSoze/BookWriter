@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.52 — 2026-11-09 (main, issue #88, #10, #3, #6)
+
+**Push GitHub: recupero immediato in sola lettura di un PATCH già applicato con risposta persa**
+
+- Una richiesta PATCH del branch può aggiornare GitHub prima che la connessione si interrompa o restituisca un HTTP 5xx. Prima BookWriter vedeva solo l'errore; il worker autosync poteva recuperare al retry successivo grazie all'operationId duraturo, ma il **push manuale** generava un nuovo ID a ogni tentativo e non poteva recuperare il commit già riuscito.
+- Ora, **soltanto dopo l'errore ambiguo del PATCH**, il client rilegge la HEAD e richiede lo SHA esatto del commit appena creato, controlla il messaggio `bookwriter: sync <operationId>`, poi legge il marker `.bookwriter/sync.json` da quello stesso SHA. `operationId`, `bookId` e `sourceRevision` devono coincidere con lo snapshot effettivamente pubblicato.
+- Soltanto se tutte le prove corrispondono, il push (anche manuale) termina con `recovered:true` e salva l'ACK tramite la transazione atomica `books+outbox` introdotta in 0.11.50. Nuove scene, prosa o vincoli creati durante il PATCH non vengono persi; un checkpoint più recente rimane in coda. Non viene effettuato alcun nuovo PATCH né `force:true`.
+- Se la HEAD non avanza, è di un altro writer, il marker è incompleto/estraneo, la rilettura perde la rete o GitHub rifiuta certamente la scrittura (409/422), l'operazione resta fallita **senza ACK locale**, senza ritentare il PATCH. Restano in vigore i controlli SHA/HEAD del 2xx dalla 0.11.51 e il recovery preesistente sul retry con operationId.
+- Vitest su errore trasporto prima e dopo l'applicazione, HTTP 503 dopo commit, marker/messaggio errati, readback perso, 409, un solo PATCH e risultato manuale recuperato. Playwright desktop/mobile con due schede, primo falso 2xx fail-closed e poi PATCH applicato con risposta persa più nuovo checkpoint concorrente preservato.
+- ADR 0084, AGENTS, README, guide e package/lock aggiornati. Restano aperte transazione distribuita GitHub/IndexedDB, crash dell'intero browser durante push manuale, device separati e snapshot ZIP periodici (#10/#3/#6).
+
+
 ## 0.11.51 — 2026-11-09 (main, issue #87, #10, #3, #6)
 
 **Push GitHub: HEAD esatta verificata prima di confermare e svuotare l'outbox**

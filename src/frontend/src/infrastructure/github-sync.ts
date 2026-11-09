@@ -328,6 +328,26 @@ export async function persistRemoteAcknowledgment(
   await tx.done;
 }
 
+/**
+ * A remote marker is authoritative only together with the exact HEAD commit
+ * message, book ID and operation ID. Never treat HEAD alone as an ACK.
+ */
+async function matchingPublishedMarker(
+  token: string, remote: GitHubRemote, sha: string, bookId: string, operationId: string,
+): Promise<string | null> {
+  const latestCommit = await request<{ message?: string }>(
+    token, apiPath(remote, "/git/commits/" + sha),
+  );
+  if (latestCommit?.message !== "bookwriter: sync " + operationId) return null;
+  const metadataRaw = await readFile(token, remote, ".bookwriter/sync.json", sha);
+  const metadata = metadataRaw ? z.object({
+    operationId: z.string(), sourceRevision: z.string(), bookId: z.string(),
+  }).safeParse(parseJson<unknown>(metadataRaw, "Sync marker")) : null;
+  return metadata?.success &&
+      metadata.data.operationId === operationId && metadata.data.bookId === bookId
+    ? metadata.data.sourceRevision : null;
+}
+
 export async function pushGitHubBook(
   bookId: string, consentPublic = false, options: PushOptions = {},
 ): Promise<PushResult> {
@@ -361,25 +381,18 @@ export async function pushGitHubBook(
     // An interrupted PATCH may have succeeded remotely but failed before its local ACK.
     // Only our EXACT HEAD commit marker authorizes recovery, never an unrelated newer commit.
     if (options.operationId) {
-      const latestCommit = await request<{ message?: string }>(
-        token, apiPath(remote, "/git/commits/" + head),
+      const publishedRevision = await matchingPublishedMarker(
+        token, remote, head, bookId, operationId,
       );
-      if (latestCommit?.message === "bookwriter: sync " + operationId) {
-        const metadataRaw = await readFile(token, remote, ".bookwriter/sync.json", head);
-        const metadata = metadataRaw ? z.object({
-          operationId: z.string(), sourceRevision: z.string(), bookId: z.string(),
-        }).safeParse(parseJson<unknown>(metadataRaw, "Sync marker")) : null;
-        if (metadata?.success &&
-            metadata.data.operationId === operationId && metadata.data.bookId === bookId) {
-          await persistRemoteAcknowledgment(
-            bookId, remote, head, metadata.data.sourceRevision,
-            operationId, current.remote.lastSyncedCommit,
-          );
-          return {
-            commit: head, paths: 0, repository: remote.owner + "/" + remote.repository,
-            operationId, sourceRevision: metadata.data.sourceRevision, recovered: true,
-          };
-        }
+      if (publishedRevision !== null) {
+        await persistRemoteAcknowledgment(
+          bookId, remote, head, publishedRevision,
+          operationId, current.remote.lastSyncedCommit,
+        );
+        return {
+          commit: head, paths: 0, repository: remote.owner + "/" + remote.repository,
+          operationId, sourceRevision: publishedRevision, recovered: true,
+        };
       }
     }
     if (current.remote.lastSyncedCommit)
@@ -453,11 +466,45 @@ export async function pushGitHubBook(
 
   // A non-fast-forward update is rejected, NEVER force-push over another device.
   // HTTP 2xx alone is not proof that our commit is the current branch HEAD.
-  const patched = await request<{ object?: { sha?: string } }>(
-    token, apiPath(remote, "/git/refs/heads/" +
-      remote.branch.split("/").map(encodeURIComponent).join("/")),
-    { method: "PATCH", body: { sha: commit.sha, force: false } },
-  );
+  let patched: { object?: { sha?: string } } | null;
+  try {
+    patched = await request<{ object?: { sha?: string } }>(
+      token, apiPath(remote, "/git/refs/heads/" +
+        remote.branch.split("/").map(encodeURIComponent).join("/")),
+      { method: "PATCH", body: { sha: commit.sha, force: false } },
+    );
+  } catch (patchError) {
+    // A transport loss or HTTP 5xx is ambiguous: GitHub may have applied
+    // force:false and dropped the response. Never issue another PATCH here.
+    // 409/422/permission errors are definite rejections, not recoverable ACKs.
+    const ambiguous = patchError instanceof Error && (
+      patchError.message.includes("GitHub non raggiungibile") ||
+      /GitHub ha risposto con HTTP 5\d\d\./.test(patchError.message)
+    );
+    if (!ambiguous) throw patchError;
+
+    let proven = false;
+    try {
+      if (await headSha(token, remote) === commit.sha) {
+        const publishedRevision = await matchingPublishedMarker(
+          token, remote, commit.sha, bookId, operationId,
+        );
+        proven = publishedRevision === current.updatedAt;
+      }
+    } catch {
+      // An unavailable ref/marker is NOT evidence that the push succeeded.
+    }
+    if (!proven) throw patchError;
+    await persistRemoteAcknowledgment(
+      bookId, remote, commit.sha, current.updatedAt,
+      operationId, current.remote.lastSyncedCommit,
+    );
+    return {
+      commit: commit.sha, paths: treeEntries.length,
+      repository: remote.owner + "/" + remote.repository,
+      sourceRevision: current.updatedAt, operationId, recovered: true,
+    };
+  }
   if (patched?.object?.sha !== commit.sha)
     throw new RemoteConflict("GitHub non ha confermato lo SHA richiesto dopo il push: ACK locale non applicato.");
   // Read back the exact HEAD before attesting the local baseline or removing
