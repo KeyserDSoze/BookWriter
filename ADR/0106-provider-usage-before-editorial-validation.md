@@ -4,7 +4,7 @@
 - **Data:** 2026-11-10
 - **Issue:** [#111](https://github.com/KeyserDSoze/BookWriter/issues/111)
 - **Epic:** [#17](https://github.com/KeyserDSoze/BookWriter/issues/17), [#6](https://github.com/KeyserDSoze/BookWriter/issues/6)
-- **Precedenti:** [ADR 0010](0010-ai-usage-ledger.md), [ADR 0012](0012-book-ai-budget-guardrails.md)
+- **Precedenti:** [ADR 0010](0010-ai-usage-observability.md), [ADR 0012](0012-book-ai-budget-guardrails.md)
 
 ## Problema
 
