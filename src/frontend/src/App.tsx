@@ -172,6 +172,9 @@ export default function App() {
       await refresh();
       setNotice("Scena canonizzata dopo conferma dell'autore. Verifica la continuità prima del push manuale.");
     } catch (error) {
+      // An editor in another tab may have advanced the canon. Discard our
+      // stale render so the author must inspect the current scene again.
+      await refresh();
       setNotice(error instanceof Error ? error.message : "Conferma scena non riuscita.");
     }
   }

@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.48 — 2026-11-09 (main, issue #84, #10, #15, #6, #3)
+
+**Conferma delle scene fuse: aggiornamento del canon e audit con la stessa precondizione atomica**
+
+- La conferma editoriale manuale di una scena `draft` già verifica `updatedAt` e usa i Web Locks del writer e dell'outbox. La protezione ora arriva **fino al commit IndexedDB**: `saveBookAndActivity` accetta un `expectedUpdatedAt` facoltativo e lo confronta dentro la stessa transazione `books+activities+outbox`, **prima di qualsiasi scrittura**.
+- Se fra lettura e commit il libro è cambiato, l'approvazione fallisce con `BookRevisionConflict`: nessuna scena canonizzata dalla versione obsoleta, nessuna attività di approvazione fittizia, nessuna modifica alla coda outbox. Due conferme con lo stesso token possono produrre un solo audit.
+- `confirmEditorialScene` passa fino al commit il token della revisione vista dall'autore; i lock, il doppio consenso, i controlli `draft`/testo e la policy autosync disabilitata restano invariati. L'interfaccia ricarica il libro anche su errore, chiedendo una nuova rilettura; nessun retry o push implicito.
+- Nuovi Vitest per successo, CAS stale senza effetti collaterali e concorrenza; Playwright Chromium desktop/mobile con **due schede reali**, lock occupato, conferma canonica valida e rifiuto della seconda conferma stale senza duplicare l'audit.
+- `saveBookAndActivity` mantiene la firma compatibile per i checkpoint AI esistenti grazie al terzo parametro facoltativo. Nessun cambio al modello dati, ZIP, lease, GitHub API, token o chiamate AI. ADR 0080, AGENTS, README e guida fusioni aggiornati. **Restano aperti** il fencing degli altri editor, la concorrenza fra dispositivi e il gap tra GitHub e IndexedDB (#10).
+
+
 ## 0.11.47 — 2026-11-09 (main, issue #83, #10, #6, #3)
 
 **Feedback autore: revisioni manuali senza sovrascrivere checkpoint più recenti**

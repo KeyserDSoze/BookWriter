@@ -40,7 +40,7 @@ export async function confirmEditorialScene(
         summary: "Scena " + scene.id + " confermata come canonica dopo la fusione delle versioni.",
         createdAt: now, endedAt: now,
       };
-      await saveBookAndActivity(book as BookProject, activity);
+      await saveBookAndActivity(book as BookProject, activity, expectedUpdatedAt);
     });
   });
 }

@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Conferma scene fuse e audit atomici v0.11.48 (main):** la promozione manuale a `canon` ora richiede la revisione valida **anche nella transazione** che salva libro e attività. Un cambio concorrente impedisce sia la canonizzazione obsoleta sia un falso audit. Test a due schede desktop/mobile. [Guida](docs/scene-merge.md), ADR 0080, issue #84/#10.
+
 **Feedback dell'autore protetto v0.11.47 (main):** richiedere una revisione richiede Web Locks sul libro e conferma atomica della revisione IndexedDB; una tab obsoleta o un writer AI attivo non vengono sovrascritti, e il testo del feedback rifiutato rimane disponibile per una nuova valutazione. Test su due schede desktop/mobile. [Guida](docs/autopilot.md), ADR 0079, issue #83/#10.
 
 **Override del modello protetti v0.11.46 (main):** modificare endpoint/modello per un libro non sovrascrive più snapshot obsoleti. Web Locks impedisce il cambio durante la scrittura AI e un confronto atomico di `updatedAt` preserva libro/outbox su conflitto. Input modello salvato all'uscita dal campo, test su due tab desktop/mobile. [Guida](docs/autopilot.md), ADR 0078, issue #82/#10.

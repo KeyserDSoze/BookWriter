@@ -80,11 +80,20 @@ export async function saveActivity(activity: Activity): Promise<void> {
   await db.put("activities", activity, activity.id);
 }
 
-export async function saveBookAndActivity(book: BookProject, activity: Activity): Promise<void> {
+export async function saveBookAndActivity(
+  book: BookProject, activity: Activity, expectedUpdatedAt?: string,
+): Promise<void> {
   const db = await getDb();
+  // An editorial approval must not commit a stale canon AND a false audit.
+  // Check the optional precondition in the SAME readwrite transaction that
+  // writes the book, its activity, and potentially a sync checkpoint.
   const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
   const books = tx.objectStore("books");
   const stored = await books.get(book.id) as BookProject | undefined;
+  if (expectedUpdatedAt !== undefined && stored?.updatedAt !== expectedUpdatedAt) {
+    await tx.done; // Read-only transaction: no book, activity or outbox writes.
+    throw new BookRevisionConflict();
+  }
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   await tx.objectStore("activities").put(activity, activity.id);

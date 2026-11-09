@@ -52,3 +52,9 @@ L'app non modifica il repository durante il confronto, la proposta AI o l'approv
 - [ADR 0009](../ADR/0009-scene-diff-assisted-merge.md)
 - [ADR 0008](../ADR/0008-conflict-review-and-recovery.md)
 - [Issue #15](https://github.com/KeyserDSoze/BookWriter/issues/15)
+
+## v0.11.48 — canonizzazione con audit atomico (ADR 0080)
+
+La conferma umana nel Lettore prende già i Web Locks del libro e della sincronizzazione e ricontrolla che la scena sia ancora in attesa e `draft`. Ora il token `updatedAt` della versione riletta viene passato **anche alla transazione IndexedDB finale** che salva insieme il nuovo stato `canon`, la lista di scene in attesa e l'attività «Conferma editoriale della scena». Se nel frattempo un editor non cooperativo ha aggiornato il libro, la transazione **non scrive nulla**: non compare un falso audit, non cambia il testo e non viene creata una richiesta outbox.
+
+Dopo un rifiuto, il Lettore ricarica i dati più recenti e mostra l'errore: è necessaria una **nuova lettura e conferma esplicita**, non esiste un retry automatico. Il vincolo autosync spento e la successiva sincronizzazione GitHub manuale non cambiano. Test unitari più Playwright desktop/mobile con due schede reali, lock occupato e seconda conferma stale senza attività duplicate. Questo CAS protegge soltanto **questa singola approvazione locale**: resta il problema del fencing fra dispositivi diversi (issue #10). [ADR 0080](../ADR/0080-atomic-editorial-scene-approval-audit.md), [issue #84](https://github.com/KeyserDSoze/BookWriter/issues/84).
