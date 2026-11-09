@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
 import { newBook, type BookProject, type Chapter, type Scene } from "../domain/types";
-import { buildDocx, buildEpub } from "./export-book";
+import { buildDocx, buildEpub, buildPdf } from "./export-book";
 
 const modified = new Date("2026-11-09T13:42:15.000Z");
 function scene(number: number, status: Scene["status"], text: string, title = "Scena"): Scene {
@@ -192,5 +192,59 @@ describe("DOCX canonico, OPC e WordprocessingML", () => {
     const book = manuscript();
     book.chapters.forEach(ch => ch.scenes.forEach(sc => { sc.status = "draft"; }));
     await expect(buildDocx(book)).rejects.toThrow(/almeno una scena canonizzata/);
+  });
+});
+
+
+describe("PDF standard — preflight charset e file verificabile", () => {
+  function pdfManuscript(): BookProject {
+    const book = manuscript();
+    book.chapters[0]!.scenes[0]!.text = "La città è viva. L’ombra — €\n\nFINE-CANON-ONE.";
+    book.chapters[2]!.scenes[0]!.text = "FINE-CANON-TWO.";
+    return book;
+  }
+
+  it("genera un PDF leggibile strutturalmente con soli capitoli canonici", async () => {
+    const book = pdfManuscript();
+    const bytes = await buildPdf(book);
+    const pdf = new TextDecoder("latin1").decode(bytes);
+    expect(pdf.startsWith("%PDF-")).toBe(true);
+    expect(pdf.trimEnd().endsWith("%%EOF")).toBe(true);
+    expect((pdf.match(/\/Type\s*\/Page\b/g) ?? []).length).toBe(3);
+    expect(pdf).toContain("Capitolo 1");
+    expect(pdf).toContain("Capitolo 3");
+    expect(pdf.indexOf("Capitolo 1")).toBeLessThan(pdf.indexOf("Capitolo 3"));
+    for (const secret of [
+      "BRIEF-SUPER-PRIVATO", "SEGRETO-NON-ESPORTARE", "PROSA-DRAFT-MAI-ESPORTARE",
+      "PROSA-PLANNED-MAI-ESPORTARE", "Capitolo solo draft", "NON-CANON",
+    ]) expect(pdf).not.toContain(secret);
+  });
+
+  it("consente accenti italiani e segni WinAnsi, ignora caratteri fuori standard nelle bozze", async () => {
+    const book = pdfManuscript();
+    book.title = "L’eco — città €: “parole”";
+    book.chapters[0]!.scenes[1]!.text = "BOZZA-EMOJI-🙈";
+    book.memory.secrets["privato"] = "PRIVATO-🙂";
+    await expect(buildPdf(book)).resolves.toBeInstanceOf(Uint8Array);
+  });
+
+  it("blocca caratteri non rappresentabili in ogni elemento effettivamente esportato", async () => {
+    const edit = [
+      (book: BookProject) => { book.title = "Titolo 🪶"; },
+      (book: BookProject) => { book.chapters[0]!.title = "Capitolo 中文"; },
+      (book: BookProject) => { book.chapters[0]!.scenes[0]!.title = "Scena \uD800"; },
+      (book: BookProject) => { book.chapters[0]!.scenes[0]!.text = "Testo 😃"; },
+    ];
+    for (const mutate of edit) {
+      const book = pdfManuscript();
+      mutate(book);
+      await expect(buildPdf(book)).rejects.toThrow(/PDF con font standard non supporta.*EPUB o DOCX/);
+    }
+  });
+
+  it("non crea PDF senza alcuna scena canonica", async () => {
+    const book = pdfManuscript();
+    book.chapters.forEach(ch => ch.scenes.forEach(s => { s.status = "draft"; }));
+    await expect(buildPdf(book)).rejects.toThrow(/almeno una scena canonizzata/);
   });
 });

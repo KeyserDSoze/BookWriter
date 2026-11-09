@@ -32,6 +32,12 @@ Titoli e paragrafi passano attraverso la stessa sanitizzazione XML dell'EPUB: ca
 
 Questo verifica **integrità strutturale e parsing XML** sul file generato, non compatibilità garantita con tutte le versioni di Word/LibreOffice, qualità tipografica, accessibilità o firma/validazione formale Office Open XML. Vedi [ADR 0091](../ADR/0091-docx-canonical-xml-package.md) e [issue #95](https://github.com/KeyserDSoze/BookWriter/issues/95).
 
-## PDF
+## PDF — controllo dei glifi prima dell'esportazione v0.11.60
+
+Il generatore PDF continua a usare Times, un font standard di jsPDF, **non** un font Unicode completo. Ora `buildPdf` prepara e controlla, prima di creare il file, titolo del libro, titoli di capitoli/scene e paragrafi delle sole scene canoniche. Accetta caratteri ASCII, lettere accentate Latin-1 e punteggiatura WinAnsi comune (per esempio `città`, `L’ombra`, `—` ed `€`).
+
+Se una parte da pubblicare contiene caratteri non rappresentabili (es. emoji, ideogrammi, surrogati Unicode malformati), **non viene scaricato alcun PDF**. L'Archivio mostra un messaggio che identifica il codice Unicode del carattere e consiglia EPUB/DOCX, che conservano tali caratteri. Una bozza o una nota privata con emoji non blocca il PDF: questi dati non sarebbero esportati. I controlli XML vietati vengono eliminati come negli altri formati.
+
+I test Vitest verificano la struttura del PDF (`%PDF`, `%%EOF`, oggetti pagina) e il rifiuto degli input non rappresentabili; Playwright desktop/mobile scarica realmente un PDF valido, controlla header/trailer/pagine ed esclusione di segreti e bozze, oltre all'assenza di download nel caso non supportato. **Non sono test di resa tipografica o certificazione PDF/A/accessibilità**: la soluzione completa richiederà un font Unicode incorporato, autorizzato e verificato. [ADR 0092](../ADR/0092-pdf-preflight-and-portable-export.md), [issue #96](https://github.com/KeyserDSoze/BookWriter/issues/96).
 
 Il pulsante PDF esporta la prosa canonica con intestazioni, ma usa per ora un font base di jsPDF, che **può non rappresentare tutti i caratteri Unicode**. Copertine, layout, font e accessibilità editoriali restano aperti nella [issue #4](https://github.com/KeyserDSoze/BookWriter/issues/4). La validazione EPUB originale è descritta in [ADR 0089](../ADR/0089-epub3-canonical-export-validation.md), [issue #93](https://github.com/KeyserDSoze/BookWriter/issues/93).

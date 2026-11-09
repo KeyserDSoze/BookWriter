@@ -148,10 +148,36 @@ export async function exportDocx(book: BookProject): Promise<void> {
   }), cleanName(book.title) + ".docx");
 }
 
-export async function exportPdf(book: BookProject): Promise<void> {
-  const { jsPDF } = await import("jspdf");
+/** jsPDF's built-in Times font uses WinAnsi, not arbitrary Unicode.
+ * Reject text that would lose glyphs rather than silently corrupt the manuscript. */
+const PDF_WINANSI_EXTRA = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+function printablePdfText(value: string): string {
+  const normalized = safeXmlText(value).replaceAll("\t", "    ");
+  for (const character of normalized) {
+    const cp = character.codePointAt(0)!;
+    if ((cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) ||
+        cp === 0x0a || cp === 0x0d || PDF_WINANSI_EXTRA.includes(character)) continue;
+    const code = cp.toString(16).toUpperCase().padStart(4, "0");
+    throw new Error("Il PDF con font standard non supporta il carattere U+" + code +
+      ". Esporta in EPUB o DOCX per conservare integralmente il testo.");
+  }
+  return normalized;
+}
+
+/** Generate inspectable PDF bytes without triggering a download or network request.
+ * Unsupported glyphs fail closed before the first page is rendered. */
+export async function buildPdf(book: BookProject): Promise<Uint8Array> {
   const chapters = ensureChapters(book);
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const title = printablePdfText(book.title);
+  const safeChapters = chapters.map(({ chapter, scenes }) => ({
+    title: printablePdfText("Capitolo " + chapter.number + " - " + chapter.title),
+    scenes: scenes.map(scene => ({
+      title: printablePdfText(scene.title),
+      paragraphs: paragraphs(scene.text).map(printablePdfText),
+    })),
+  }));
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: false });
   const pageWidth = 210;
   const top = 22; const bottom = 276; const margin = 23;
   let y = top;
@@ -161,7 +187,6 @@ export async function exportPdf(book: BookProject): Promise<void> {
   function addWrapped(text: string, fontSize: number, bold = false, lineHeight = 6) {
     pdf.setFont("times", bold ? "bold" : "normal");
     pdf.setFontSize(fontSize);
-    // The standard PDF font has limited Unicode support. jsPDF replaces unsupported characters.
     const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin) as string[];
     for (const line of lines) {
       ensureLine(lineHeight);
@@ -169,20 +194,26 @@ export async function exportPdf(book: BookProject): Promise<void> {
       y += lineHeight;
     }
   }
-  addWrapped(book.title, 21, true, 9);
-  for (const { chapter, scenes } of chapters) {
+  addWrapped(title, 21, true, 9);
+  for (const chapter of safeChapters) {
     pdf.addPage(); y = top;
-    addWrapped("Capitolo " + chapter.number + " - " + chapter.title, 17, true, 8);
+    addWrapped(chapter.title, 17, true, 8);
     y += 5;
-    for (const scene of scenes) {
+    for (const scene of chapter.scenes) {
       ensureLine(18);
       addWrapped(scene.title, 13, true, 7);
       y += 3;
-      for (const p of paragraphs(scene.text)) {
+      for (const p of scene.paragraphs) {
         addWrapped(p, 11, false, 5.7);
         y += 4;
       }
     }
   }
-  pdf.save(cleanName(book.title) + ".pdf");
+  return new Uint8Array(pdf.output("arraybuffer"));
+}
+
+export async function exportPdf(book: BookProject): Promise<void> {
+  const bytes = await buildPdf(book);
+  download(new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
+    cleanName(book.title) + ".pdf");
 }

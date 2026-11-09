@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.60 — 2026-11-09 (main, issue #96, epic #4)
+
+**PDF fail-closed per glifi non supportati e builder verificabile**
+
+- `infrastructure/export-book.ts` separa `buildPdf(book): Promise<Uint8Array>` dal download `exportPdf`, che resta locale e usa MIME `application/pdf`. La prosa non lascia il browser, e non sono stati aggiunti font di terze parti, dipendenze o chiamate di rete.
+- Prima di renderizzare, `printablePdfText` filtra controlli XML vietati e verifica titolo, intestazioni e paragrafi canonici. Sono ammessi ASCII, Latin-1 e segni speciali WinAnsi (euro, apostrofi/virgolette tipografiche, trattini). Unicode non rappresentabile come emoji/CJK/surrogati invalidi blocca l'esportazione **senza scaricare** un PDF corrotto, indicando EPUB o DOCX.
+- I controlli non prendono in esame `brief`, memoria, sceneggiature `draft/planned` o altri contenuti privati. Solo scene `canon` non vuote producono pagine; nessun canon = errore già previsto.
+- Vitest controlla byte PDF, pagine, ordine dei capitoli e delimitazione degli input Unicode; Playwright desktop/mobile verifica l'assenza di download su emoji e il download PDF reale con italiano accentato e parti private escluse.
+- ADR 0092, AGENTS, README, guida, feature e package/lock v0.11.60 aggiornati. **La compatibilità Unicode completa resta aperta**: servono font incorporati, licenze e test visivi/di estrazione su lettori PDF; questa release evita una perdita silenziosa, non la risolve universalmente.
+
 ## 0.11.59 — 2026-11-09 (main, issue #95, epic #4)
 
 **DOCX controllabile come ZIP OPC, WordprocessingML XML-safe e prosa solo canonica**
