@@ -60,11 +60,18 @@ test("giudizio importato duplicato: recovery senza chiamate AI (desktop/mobile)"
         ];
         const reports = roles.map(role => ({
           role, segmentIndex: 0, segmentCount: 1,
-          verdict: role === "historical" ? "issues" : "pass",
+          verdict: role === "historical" || role === "style" ? "issues" : "pass",
           summary: "Esame documentale del segmento completato.",
           memoryNote: "", createdAt: "2026-11-09T18:00:00.000Z",
           segmentTextStamp,
-          findings: role !== "historical" ? [] : [{
+          findings: role === "style" ? [{
+            id: "1:style:0:0", sceneId: "s1", category: "stile", severity: "minor",
+            evidence: "Nel 1848 Mara",
+            reason: "La frase merita una lettura stilistica più attenta.",
+            remediation: "Chiarire il ritmo iniziale senza alterare i riferimenti.",
+            evidenceAnchor: { segmentIndex: 0, offset: 0,
+              quote: "Nel 1848 Mara", occurrences: 1, context: narrative },
+          }] : role !== "historical" ? [] : [{
             id: "1:historical:0:0", sceneId: "s1", category: "storia", severity: "minor",
             evidence: quote,
             reason: "Il riferimento al telegrafo merita un riscontro storico.",
