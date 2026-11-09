@@ -25,8 +25,9 @@ function manuscript(): BookProject {
   return book;
 }
 function decode(files: Record<string, Uint8Array>, path: string): string {
-  expect(files[path], "missing EPUB entry: " + path).toBeDefined();
-  return strFromU8(files[path]);
+  const entry = files[path];
+  if (!entry) throw new Error("Missing EPUB entry: " + path);
+  return strFromU8(entry);
 }
 
 describe("EPUB 3 portable canon export", () => {
@@ -87,8 +88,9 @@ describe("EPUB 3 portable canon export", () => {
   it("non inserisce code point proibiti in XHTML e OPF, senza distruggere emoji", () => {
     const book = manuscript();
     book.title = "Titolo\u0000\u0007 sicuro 🪶 \uD800";
-    book.chapters[0].title = "Capitolo\u0001 & \uDC00";
-    book.chapters[0].scenes[0].text = "Ciao\u0003\u000B mondo 😃\n\nUn'eco \uD800 avanti.";
+    const chapter = book.chapters[0]!;
+    chapter.title = "Capitolo\u0001 & \uDC00";
+    chapter.scenes[0]!.text = "Ciao\u0003\u000B mondo 😃\n\nUn'eco \uD800 avanti.";
     const files = unzipSync(buildEpub(book, modified));
     const combined = ["OEBPS/content.opf", "OEBPS/nav.xhtml", "OEBPS/chapter-1.xhtml"]
       .map(path => decode(files, path)).join("\n");
