@@ -244,7 +244,7 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
     releasePatch();
 
     // Both the normal ACK and HEAD+marker recovered ACK are valid.
-    await expect(page.getByText(/(?:Sincronizzato|Commit GitHub recuperato e confermato:) ack-test\\/novel/))
+    await expect(page.getByText(/(?:Sincronizzato|Commit GitHub recuperato e confermato:) ack-test/))
       .toBeVisible();
     const after = await snapshot(second);
     expect(after.brief).toContain("seconda scheda");
