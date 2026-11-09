@@ -148,11 +148,18 @@ export default function App() {
   function pause() { runner.stop(); setNotice("Pausa richiesta: arresto della chiamata in corso e salvataggio del checkpoint."); }
   async function sendFeedback() {
     if (!current) return;
+    // Capture the revision displayed to the author, not an IndexedDB revision
+    // reloaded only after the submit. A stale tab must ask for confirmation.
+    const { id, updatedAt } = current;
     try {
-      await requestRevision(current.id, intervention);
+      await requestRevision(id, intervention, updatedAt);
       setIntervention(""); setNotice("Istruzione permanente salvata. Riprendi per analizzare l'impatto e riscrivere le scene dipendenti.");
       await refresh();
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Feedback non applicabile."); }
+    } catch (e) {
+      await refresh(); // Present the new canon/state before the author retries.
+      // Keep the user's draft: the instruction was NOT accepted or persisted.
+      setNotice(e instanceof Error ? e.message : "Feedback non applicabile.");
+    }
   }
   async function approveEditorialScene(sceneId: string) {
     if (!current) return;

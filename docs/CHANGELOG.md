@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.47 — 2026-11-09 (main, issue #83, #10, #6, #3)
+
+**Feedback autore: revisioni manuali senza sovrascrivere checkpoint più recenti**
+
+- `requestRevision` richiede ora l'`updatedAt` effettivamente visualizzato dall'autore prima di introdurre un vincolo permanente e impostare `phase=revision` / `status=paused`. Senza token o su revisione stale, rifiuta la modifica senza introdurre un vincolo nell'archivio e senza sovrascrivere checkpoint/canon.
+- Prima di rileggere il libro, richiede il Web Lock esclusivo `bookwriter:writer:<bookId>` con `ifAvailable:true`, lo stesso mantenuto dall'autopilot. L'assenza di Web Locks e il lock detenuto da un'altra scheda bloccano la revisione in modo conservativo, anche se l'interfaccia ancora visualizza il vecchio stato `paused`.
+- La funzione ricontrolla le invarianti editoriali e salva con il CAS `saveBook(book,true,expectedUpdatedAt)`: confronto della revisione **anche nella transazione IndexedDB books+outbox**, rifiuto di conflitti senza alterare dati o coda sync. Nessuna chiamata GitHub/AI aggiuntiva o retry silenzioso.
+- La Dashboard passa la revisione letta, ricarica il libro se il salvataggio viene rifiutato e **mantiene il testo digitato** per permettere una nuova decisione consapevole. Svuota il feedback solo dopo un commit riuscito.
+- Vitest su successo, input vuoto, libro running, vincoli editoriali, due submit contemporanei, lock occupato/mancante e stato stale con outbox preservata; Playwright desktop/mobile con **due schede reali** che simulano stale e writer occupato, quindi retry esplicito. ADR 0079, AGENTS, README e guide aggiornati.
+- Limite: protegge il **percorso feedback autore nel browser**; le altre modifiche manuali e le divergenze fra dispositivi rimangono aperte nell'epic #10, senza garanzie di fencing transazionale remoto.
+
+
 ## 0.11.46 — 2026-11-09 (main, issue #82, #10, #6, #3)
 
 **Impostazioni per libro: stop a salvataggi manuali di snapshot obsoleti**

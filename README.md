@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Feedback dell'autore protetto v0.11.47 (main):** richiedere una revisione richiede Web Locks sul libro e conferma atomica della revisione IndexedDB; una tab obsoleta o un writer AI attivo non vengono sovrascritti, e il testo del feedback rifiutato rimane disponibile per una nuova valutazione. Test su due schede desktop/mobile. [Guida](docs/autopilot.md), ADR 0079, issue #83/#10.
+
 **Override del modello protetti v0.11.46 (main):** modificare endpoint/modello per un libro non sovrascrive più snapshot obsoleti. Web Locks impedisce il cambio durante la scrittura AI e un confronto atomico di `updatedAt` preserva libro/outbox su conflitto. Input modello salvato all'uscita dal campo, test su due tab desktop/mobile. [Guida](docs/autopilot.md), ADR 0078, issue #82/#10.
 
 **Recovery multi-tab v0.11.45 (main):** aprire una seconda scheda non mette più in pausa l'autopilot attivo nella prima. Prima di riconoscere una sessione come interrotta BookWriter acquisisce il Web Lock del libro; senza lock disponibile mantiene checkpoint e audit. Test Vitest e Playwright desktop/mobile con due schede. [Guida](docs/autopilot.md), ADR 0077, issue #81/#6/#10.

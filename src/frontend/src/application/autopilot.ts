@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import { callModel } from "../infrastructure/ai";
-import { getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
+import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
 import { acceptedRepairs, adjudicationPrompt, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
@@ -592,21 +592,41 @@ export class AutopilotRunner {
   }
 }
 
-export async function requestRevision(bookId: string, instruction: string): Promise<void> {
-  const book = await getBook(bookId);
-  if (!book) throw new Error("Libro non trovato.");
-  if (!instruction.trim()) throw new Error("Scrivi la modifica che desideri.");
-  if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
-  if (book.editorialCycle)
-    throw new Error("La redazione del capitolo è attiva o bloccata. Completa il ciclo o usa la riapertura nel pannello Redazione.");
-  if (book.editorialReviewSceneIds?.length)
-    throw new Error("Conferma le scene fuse nel Lettore prima di richiedere altre revisioni AI.");
-  book.authorConstraints = [...(book.authorConstraints ?? []), instruction.trim()];
-  const rev: RevisionRequest = {
-    id: crypto.randomUUID(), instruction: instruction.trim(), beforePhase: book.phase,
-    affectedSceneIds: [], cursor: 0,
-  };
-  book.revision = rev;
-  book.phase = "revision"; book.status = "paused";
-  await saveBook(book);
+/**
+ * A manual instruction must not overwrite a newer chapter or checkpoint
+ * from an AI writer or another tab. Keep the writer Web Lock until the
+ * IndexedDB compare-and-swap and any outbox work have finished.
+ */
+export async function requestRevision(
+  bookId: string, instruction: string, expectedUpdatedAt: string,
+): Promise<void> {
+  const normalized = instruction.trim();
+  if (!normalized) throw new Error("Scrivi la modifica che desideri.");
+  if (!expectedUpdatedAt) throw new BookRevisionConflict();
+
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks?.request)
+    throw new Error("Web Locks non disponibile: revisione bloccata per evitare scritture concorrenti.");
+  await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {
+    if (!lock) throw new Error("Un'altra scheda sta scrivendo questo libro: attendi prima di richiedere una revisione.");
+    const book = await getBook(bookId);
+    if (!book) throw new Error("Libro non trovato.");
+    if (book.updatedAt !== expectedUpdatedAt) throw new BookRevisionConflict();
+    if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
+    if (book.editorialCycle)
+      throw new Error("La redazione del capitolo è attiva o bloccata. Completa il ciclo o usa la riapertura nel pannello Redazione.");
+    if (book.editorialReviewSceneIds?.length)
+      throw new Error("Conferma le scene fuse nel Lettore prima di richiedere altre revisioni AI.");
+
+    book.authorConstraints = [...(book.authorConstraints ?? []), normalized];
+    const rev: RevisionRequest = {
+      id: crypto.randomUUID(), instruction: normalized, beforePhase: book.phase,
+      affectedSceneIds: [], cursor: 0,
+    };
+    book.revision = rev;
+    book.phase = "revision"; book.status = "paused";
+    // Check the revision again inside the books+outbox transaction: a
+    // non-cooperating writer might have changed IndexedDB since getBook.
+    await saveBook(book, true, expectedUpdatedAt);
+  });
 }
