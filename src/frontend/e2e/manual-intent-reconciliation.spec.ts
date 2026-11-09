@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const BASE = "a".repeat(40);
 const PUBLISHED = "b".repeat(40);
+const ADVANCED = "e".repeat(40);
 const LOCAL = "c".repeat(40);
 type Snapshot = {
   book: { id: string; brief: string; updatedAt: string;
@@ -68,12 +69,18 @@ test("riconciliazione esplicita: solo GET, nessuna perdita di libro/outbox", asy
     let status = 200;
     let data: unknown = {};
     if (method === "GET" && path.endsWith("/repos/old-writer/old-novel/git/ref/heads/main")) {
-      data = { object: { sha: PUBLISHED } };
+      data = { object: { sha: ADVANCED } };
+    } else if (method === "GET" &&
+               path.endsWith("/repos/old-writer/old-novel/git/commits/" + ADVANCED)) {
+      data = { message: "Another device checkpoint", parents: [{ sha: PUBLISHED }] };
     } else if (method === "GET" &&
                path.endsWith("/repos/old-writer/old-novel/git/commits/" + PUBLISHED)) {
       data = { message: "bookwriter: sync " + operationId, parents: [{ sha: BASE }] };
     } else if (method === "GET" &&
                path.endsWith("/repos/old-writer/old-novel/contents/.bookwriter/sync.json")) {
+      // The marker must be read at the historical commit, not at the
+      // newer HEAD, which belongs to another device.
+      expect(new URL(req.url()).searchParams.get("ref")).toBe(PUBLISHED);
       data = { type: "file", encoding: "base64", content: btoa(JSON.stringify({
         operationId: validMarker ? operationId : crypto.randomUUID(),
         bookId, sourceRevision,
@@ -177,7 +184,8 @@ test("riconciliazione esplicita: solo GET, nessuna perdita di libro/outbox", asy
     expect(await snapshot(second)).toEqual(before);
     expect(methods.every(method => method.startsWith("GET "))).toBe(true);
 
-    // The exact old operation is now verifiable at the old repository HEAD.
+    // HEAD has advanced; only the historical ancestor and its marker prove
+    // the old operation belongs to this author.
     validMarker = true;
     await button.click();
     await expect(page.getByText(/Tentativo GitHub precedente verificato e archiviato/)).toBeVisible();
@@ -186,7 +194,7 @@ test("riconciliazione esplicita: solo GET, nessuna perdita di libro/outbox", asy
     expect(after.outbox).toEqual(before.outbox);
     expect(after.intent).toBeUndefined();
     expect(methods.every(method => method.startsWith("GET "))).toBe(true);
-    expect(methods.filter(x => x.includes("/repos/old-writer/old-novel/"))).toHaveLength(6);
+    expect(methods.filter(x => x.includes("/repos/old-writer/old-novel/"))).toHaveLength(9);
     await expect(button).toHaveCount(0);
   } finally {
     await second.close();

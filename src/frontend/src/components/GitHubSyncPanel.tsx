@@ -215,7 +215,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         throw new Error("Nessun tentativo GitHub sospeso da verificare.");
       if (!window.confirm(
         "Verificare sulla vecchia repository che il commit sia stato pubblicato? " +
-        "Solo con HEAD, messaggio e marker corrispondenti verrà archiviato il promemoria locale. " +
+        "Solo con una catena lineare verificata (massimo 32 commit), parent e marker " +
+        "dell'operazione corrispondenti verrà archiviato il promemoria locale. " +
         "Il manoscritto, la coda e la nuova destinazione non saranno modificati. Procedere?",
       )) return "Verifica annullata.";
       try {
@@ -223,7 +224,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         setManualIntent(await getManualPushIntent(book.id));
         await onRefresh();
         return "Tentativo GitHub precedente verificato e archiviato su " +
-          verified.repository + " · commit " + verified.commit.slice(0, 12) +
+          verified.repository + " · commit originale " + verified.commit.slice(0, 12) +
           ". Libro, outbox e nuova destinazione invariati.";
       } catch (error) {
         setManualIntent(await getManualPushIntent(book.id));
@@ -354,7 +355,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
           <p className="mt-2">La destinazione o la baseline locale è cambiata. Non è sicuro riutilizzare o eliminare automaticamente il tentativo precedente.</p>
           <Button variant="outline" size="sm" disabled={busy || !settings.githubToken || book?.status === "running"}
             onClick={() => void reconcileManual()}>Verifica e archivia tentativo precedente</Button>
-          <p className="muted mt-2 text-xs">Solo verifica della vecchia HEAD GitHub: nessun push, merge o modifica del libro. Se il commit non è dimostrabile, il tentativo resta bloccato.</p>
+          <p className="muted mt-2 text-xs">Solo verifica della cronologia lineare (massimo 32 commit) della vecchia repository: nessun push, merge o modifica del libro. Se il commit non è dimostrabile, il tentativo resta bloccato.</p>
         </> : <p className="muted mt-2">Puoi riprovare Sincronizza: verrà riutilizzato lo stesso identificatore.</p>}
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">

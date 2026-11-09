@@ -346,11 +346,15 @@ export async function persistRemoteAcknowledgment(
  * A remote marker is authoritative only together with the exact HEAD commit
  * message, book ID and operation ID. Never treat HEAD alone as an ACK.
  */
+interface GitCommitProof {
+  message?: string;
+  parents?: Array<{ sha?: string }>;
+}
 async function matchingPublishedMarker(
   token: string, remote: GitHubRemote, sha: string, bookId: string, operationId: string,
-  expectedParentSha?: string,
+  expectedParentSha?: string, knownCommit?: GitCommitProof,
 ): Promise<string | null> {
-  const latestCommit = await request<{ message?: string; parents?: Array<{ sha?: string }> }>(
+  const latestCommit = knownCommit ?? await request<GitCommitProof>(
     token, apiPath(remote, "/git/commits/" + sha),
   );
   if (latestCommit?.message !== "bookwriter: sync " + operationId) return null;
@@ -366,12 +370,13 @@ async function matchingPublishedMarker(
 }
 
 /**
- * Read-only evidence for a suspended MANUAL operation when the current local
- * repository/baseline has since changed. Only an exact HEAD, operation marker
- * and (when known) parent can justify archiving the old intent.
- *
- * This does NOT acknowledge or mutate the current book or its outbox.
+ * Bound remote history traversal for human-approved reconciliation ONLY.
+ * Every traversed commit must be on one strict linear parent chain, and the
+ * original push must itself be a direct child of its recorded baseline.
+ * No git/compare shortcuts or unbounded walk: merges and long histories stay
+ * blocked for a later supervised review.
  */
+const MAX_MANUAL_RECONCILIATION_DEPTH = 32;
 export async function verifyPublishedManualPush(intent: ManualPushIntent): Promise<string> {
   if (!/^[0-9a-f-]{36}$/i.test(intent.operationId) ||
       !intent.bookId || !intent.sourceRevision ||
@@ -379,15 +384,45 @@ export async function verifyPublishedManualPush(intent: ManualPushIntent): Promi
     throw new RemoteConflict("Intento GitHub precedente non valido: riconciliazione bloccata.");
   const remote = validateRemote(intent);
   const token = await tokenFromVault();
-  const sha = await headSha(token, remote);
-  if (sha === intent.baseSha)
+  const originalHead = await headSha(token, remote);
+  if (originalHead === intent.baseSha)
     throw new RemoteConflict("La HEAD GitHub non dimostra la pubblicazione del tentativo precedente.");
-  const publishedRevision = await matchingPublishedMarker(
-    token, remote, sha, intent.bookId, intent.operationId, intent.baseSha,
-  );
-  if (publishedRevision !== intent.sourceRevision)
-    throw new RemoteConflict("Il commit o il marker GitHub non attestano il tentativo precedente: archiviazione bloccata.");
-  return sha;
+
+  const visited = new Set<string>();
+  let sha = originalHead;
+  for (let depth = 0; depth < MAX_MANUAL_RECONCILIATION_DEPTH; depth++) {
+    if (!shaPattern.test(sha) || visited.has(sha))
+      throw new RemoteConflict("Cronologia GitHub non valida o ciclica: archiviazione bloccata.");
+    visited.add(sha);
+    const commit = await request<GitCommitProof>(
+      token, apiPath(remote, "/git/commits/" + sha),
+    );
+    const parents = commit?.parents;
+    if (!parents || parents.length !== 1 || !parents[0]?.sha ||
+        !shaPattern.test(parents[0].sha) || visited.has(parents[0].sha))
+      throw new RemoteConflict("Cronologia GitHub con merge, parent non valido o ciclo: archiviazione bloccata.");
+
+    if (commit?.message === "bookwriter: sync " + intent.operationId) {
+      if (intent.baseSha && parents[0].sha !== intent.baseSha)
+        throw new RemoteConflict("Il commit GitHub non discende direttamente dalla baseline prevista.");
+      const publishedRevision = await matchingPublishedMarker(
+        token, remote, sha, intent.bookId, intent.operationId,
+        intent.baseSha, commit,
+      );
+      if (publishedRevision !== intent.sourceRevision)
+        throw new RemoteConflict("Il commit o il marker GitHub non attestano il tentativo precedente: archiviazione bloccata.");
+      // Ref may move during the GET sequence. An unstable branch is NOT proof
+      // that the same ancestry was inspected at the moment of local removal.
+      if (await headSha(token, remote) !== originalHead)
+        throw new RemoteConflict("La HEAD GitHub è cambiata durante la verifica: archiviazione bloccata.");
+      return sha; // historical candidate, not necessarily the latest HEAD
+    }
+
+    if (parents[0].sha === intent.baseSha)
+      throw new RemoteConflict("La cronologia non contiene il tentativo prima della baseline originale.");
+    sha = parents[0].sha;
+  }
+  throw new RemoteConflict("Cronologia GitHub oltre 32 commit: serve una revisione manuale, intento conservato.");
 }
 
 export async function pushGitHubBook(

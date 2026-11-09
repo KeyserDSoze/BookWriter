@@ -436,7 +436,8 @@ describe("GitHub sync conservativa", () => {
       return reply({ message: "Unexpected" }, 500);
     }));
     expect(await verifyPublishedManualPush(intent)).toBe(NEXT);
-    expect(calls).toHaveLength(3);
+    // The final GET rechecks that HEAD did not move during the proof.
+    expect(calls).toHaveLength(4);
     expect(calls.every(x => x.startsWith("GET "))).toBe(true);
   });
 

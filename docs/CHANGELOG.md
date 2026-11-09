@@ -1,5 +1,18 @@
 # Changelog — BookWriter
 
+## 0.11.55 — 2026-11-09 (main, issue #91, #10, #3, #6)
+
+**Riconciliazione dei push GitHub storici sulla catena lineare della HEAD**
+
+- La riconciliazione esplicita degli intenti manuali sospesi (v0.11.54) prima accettava soltanto un commit **sulla HEAD corrente**. Se un secondo dispositivo aveva successivamente avanzato lo stesso branch, l'operazione originale poteva essere un antenato legittimo ma non veniva più riconosciuta.
+- Ora `verifyPublishedManualPush` segue in **sole GET** la catena parent Git dalla HEAD della **repository originaria** per massimo **32 commit**, richiedendo a ogni passo un **solo parent con SHA valido** e senza cicli, merge o storia incompleta. Un commit con messaggio `bookwriter: sync <operationId>` viene verificato soltanto se ha parent unico == `baseSha` dell'intento (quando presente), e il marker `.bookwriter/sync.json` allo **SHA del commit storico** contiene `bookId,operationId,sourceRevision` esatti.
+- Una nuova GET della HEAD deve ritrovare **lo stesso SHA iniziale** prima dell'archiviazione. Commit non raggiungibili, branch cambiato, parent o marker non validi, cronologia oltre il limite, merge e errori di rete restano **fail-closed**; non si cancella un intento in base a prove parziali.
+- Lo use case protetto di ADR 0086 conserva conferma autore, Web Locks writer→outbox e CAS `books+meta`; viene cancellato **solo l'intento già provato**, mai manoscritto, nuova baseline, outbox o PAT. Il risultato restituisce lo **SHA del commit originale**, senza attribuire all'autore l'ultimo commit di un'altra scheda.
+- Il push normale e il recovery immediato di un ACK perso continuano a richiedere HEAD identica al commit appena pubblicato. Nessuna scansione storica è usata per giustificare un push automatico.
+- Vitest su commit storico a uno/due salti, prova marker allo SHA originario, HEAD che cambia, marker/messaggio/parent falsi, merge/cicli, limite profondità e rete persa. Playwright desktop/mobile con due schede e HEAD avanzata da altro dispositivo, prova negativa e positiva senza POST/PATCH. ADR 0087, AGENTS, README e guide aggiornati.
+- **Limiti aperti:** il percorso non attraversa merge né storie oltre 32 commit e non è fencing cross-device atomico. Cronologia complessa e modifiche concorrenti remote richiedono review guidata, non reset forzato (#10/#3/#6).
+
+
 ## 0.11.54 — 2026-11-09 (main, issue #90, #10, #3, #6)
 
 **Riconciliazione esplicita dei push GitHub sospesi quando cambiano repository o baseline**
