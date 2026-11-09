@@ -87,30 +87,47 @@ export async function listActivities(bookId: string): Promise<Activity[]> {
 }
 
 export async function recoverInterruptedRuns(): Promise<void> {
+  // Every new tab calls this on mount. A still-running tab owns this exact
+  // Web Lock for the whole AI session: never mark its work as interrupted.
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (!locks?.request) return; // Fail closed; we cannot prove the writer stopped.
+
   const db = await getDb();
-  const tx = db.transaction(["books", "activities"], "readwrite");
-  const store = tx.objectStore("books");
-  let cursor = await store.openCursor();
-  while (cursor) {
-    const book = cursor.value as BookProject;
-    if (book.status === "running") {
-      book.status = "paused";
-      book.previousError = "La pagina è stata interrotta. Riprendi dall'ultimo checkpoint.";
-      await cursor.update(book);
-    }
-    cursor = await cursor.continue();
+  const books = (await db.getAll("books")) as BookProject[];
+  const activities = (await db.getAll("activities")) as Activity[];
+  const candidates = new Set(
+    books.filter(book => book.status === "running").map(book => book.id),
+  );
+  for (const activity of activities) {
+    if (activity.status === "running") candidates.add(activity.bookId);
   }
-  const activityStore = tx.objectStore("activities");
-  let activityCursor = await activityStore.openCursor();
-  while (activityCursor) {
-    const activity = activityCursor.value as Activity;
-    if (activity.status === "running") {
-      activity.status = "cancelled";
-      activity.error = "Browser interrotto prima della conclusione: attività non confermata.";
-      activity.endedAt = new Date().toISOString();
-      await activityCursor.update(activity);
-    }
-    activityCursor = await activityCursor.continue();
+
+  for (const bookId of candidates) {
+    await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {
+      if (!lock) return; // A different tab is still writing this book.
+      // Open the transaction only *after* taking the lock. Re-read the
+      // records under the transaction, not from the earlier candidate scan.
+      const tx = db.transaction(["books", "activities"], "readwrite");
+      const bookStore = tx.objectStore("books");
+      const book = await bookStore.get(bookId) as BookProject | undefined;
+      if (book?.status === "running") {
+        book.status = "paused";
+        book.previousError = "La pagina è stata interrotta. Riprendi dall'ultimo checkpoint.";
+        await bookStore.put(book, bookId);
+      }
+      const activityStore = tx.objectStore("activities");
+      let cursor = await activityStore.openCursor();
+      while (cursor) {
+        const activity = cursor.value as Activity;
+        if (activity.bookId === bookId && activity.status === "running") {
+          activity.status = "cancelled";
+          activity.error = "Browser interrotto prima della conclusione: attività non confermata.";
+          activity.endedAt = new Date().toISOString();
+          await cursor.update(activity);
+        }
+        cursor = await cursor.continue();
+      }
+      await tx.done;
+    });
   }
-  await tx.done;
 }

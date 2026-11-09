@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.45 — 2026-11-09 (main, issue #81, #6, #10, #3)
+
+**Recovery in seconda scheda: non interrompere l'autopilot che sta ancora scrivendo**
+
+- `recoverInterruptedRuns` non trasforma più indiscriminatamente tutti i libri `running` in `paused` e le attività `running` in `cancelled` quando si apre una nuova scheda. Prima di ogni recupero tenta il **medesimo Web Lock esclusivo** `bookwriter:writer:<bookId>` mantenuto dalla sessione AI: se il lock è occupato, conserva lo stato e l'audit della sessione viva.
+- I candidati da recuperare vengono individuati per libro; le modifiche a `books` e `activities` avvengono sotto un'unica transazione IndexedDB **dentro** il lock acquisito, rileggendo i record. Attività di altri libri, attività già concluse e recovery ripetuti restano intatti. Un vero writer interrotto viene riportato in pausa con motivazione italiana e la sua attività incompleta annullata.
+- Senza API Web Locks il recovery **non inventa un crash**; mantiene lo stato senza modifiche e l'autopilot rimane vietato su browser non supportati come già stabilito dalla 0.11.41.
+- Vitest: due libri con un solo lock occupato, idempotenza, browser senza Web Locks e cambio di stato tra scansione e lock. Playwright desktop/mobile: **due schede reali** e mantenimento del writer attivo fino al rilascio del lock, poi recovery al reload. ADR 0077, AGENTS, README, guida autopilot e sync.
+- Invariati schema DB, ZIP, canon, budget, HTTP, credenziali e lease GitHub. **Restano aperti** in #10 il fencing fra dispositivi, le modifiche manuali concorrenti, il gap remoto/IndexedDB e i clock moderatamente sfasati. Sviluppo direttamente su `main`.
+
+
 ## 0.11.44 — 2026-11-09 (main, issue #80, #10, #6, #3)
 
 **Rinnovo del writer lease: conferma della HEAD esatta anche dopo errore di rete**
