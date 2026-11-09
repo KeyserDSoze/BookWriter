@@ -10,7 +10,7 @@ import { createNarrativeEventDecision } from "./narrative-event-decisions";
 import { buildUnattestedSceneContext } from "./unattested-scene-context";
 
 const currentText = "Mara porta la chiave alla torre e ripensa alle azioni della notte.";
-const priorText = "Mara nasconde la chiave nel pozzo durante la notte.";
+const priorText = "Mara nasconde la chiave nel pozzo durante la notte. Mara parte.";
 function sample(): BookProject {
   const book = newBook("Una storia di chiavi.", "La torre", "Sobrio", "Adulti");
   book.chapters = [
