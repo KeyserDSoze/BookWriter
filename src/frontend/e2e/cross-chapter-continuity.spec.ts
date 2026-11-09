@@ -66,6 +66,10 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
     .toContainText("anche se un nome viene ripetuto più avanti");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("altrimenti resta un frammento di contesto");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("evita riscontri di nomi e parole");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
+    .toContainText("spezzati artificialmente dai confini degli estratti");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("distribuito tra capitoli per conservare origine e ultimo predecessore");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))

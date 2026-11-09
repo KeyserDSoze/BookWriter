@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.35 — 2026-11-09 (main, issue #20)
+
+**Continuità: confini reali per i nomi e i termini letti nelle tre porzioni di scena**
+
+- Risolto un falso match in `retrievePriorContinuityScenes` per scene lunghe: un campione che iniziava in mezzo a `Vivo` poteva riconoscere erroneamente `Ivo`, e una porzione che finiva prima dell'ultima lettera o di un segno combinante poteva simulare una parola completa. Lo scanner locale conserva i caratteri immediatamente esterni a ogni porzione del testo originale e li usa **solo per verificare i confini**.
+- Anche i termini lessicali considerati dal ranking passano lo stesso filtro ai bordi; un token nato dal taglio non incrementa più il punteggio. Il testo completo o un nome realmente separato da spazio/punteggiatura continua a essere riconosciuto. Unicode (lettere, cifre, segni combinanti, underscore e surrogati) gestito in modo conservativo.
+- Rimangono immutati i 16.000 caratteri massimi complessivi campionati per scena lunga, 16 nomi, 48 termini, 1.600 candidati, massimo 4 scene/2 per capitolo e 2 finestre originali da 1.250 caratteri. Non cambia il metodo persistito `local_structured_lexical_v1` né la posizione dei frammenti.
+- Nuovi Vitest per taglio su `Vivo`, `Ivoz`, diacritici/underscore/numeri, token lessicale tagliato, menzioni complete sul confine, privacy e non mutazione del libro. Playwright desktop/mobile verifica l'avviso; ADR 0068, guida, README, AGENTS e versione npm/lock aggiornati.
+- Nessuna nuova chiamata AI/HTTP, accesso ai cinque lettori ciechi, memorie segrete, registro alias, indicizzazione persistita, mutazione canonica, freeze, ZIP o sincronizzazione. **Limite:** il campionamento rimane parziale e il punteggio non dimostra contraddizioni.
+
+
 ## 0.11.34 — 2026-11-09 (main, issue #20)
 
 **Continuità in scene lunghe: seconda occorrenza di nomi e oggetti anche se già citati**

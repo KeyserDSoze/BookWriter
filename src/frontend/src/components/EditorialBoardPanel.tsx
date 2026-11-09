@@ -479,6 +479,8 @@ export function EditorialBoardPanel({
           altrimenti resta un frammento di contesto.
           Se un capitolo contiene troppe scene, il limite di 1.600 viene
           distribuito tra capitoli per conservare origine e ultimo predecessore.
+          Il campionamento dei testi lunghi evita riscontri di nomi e parole
+          spezzati artificialmente dai confini degli estratti.
           Campioni limitati: la pertinenza non prova una contraddizione
           né un'identità narrativa.
         </p>}

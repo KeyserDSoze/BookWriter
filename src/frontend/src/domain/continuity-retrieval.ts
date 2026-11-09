@@ -45,34 +45,53 @@ export interface TargetedContinuityResult {
   sampled: RankedPriorScene[];
 }
 
-function words(s:string):string[] {
-  return [...s.toLocaleLowerCase("it").matchAll(/[\p{L}\p{N}]{4,}/gu)]
-    .map(m=>m[0]).filter(w=>!STOP_WORDS.has(w));
-}
-
-/** One bounded, reproducible sample from beginning/middle/end for ranking.
- * The eventual displayed windows are always cut from the *original* full text. */
-function scanParts(s:string):string[] {
-  if(s.length<=MAX_SCAN_CHARS)return [s];
+/** A slice carries the original characters immediately outside its ends.
+ * A cut inside "vivo", "Ivoz" or a combining grapheme is not a word break. */
+interface ScanSlice { text:string; before:string; after:string }
+function scanSlices(s:string):ScanSlice[] {
   const width=Math.floor(MAX_SCAN_CHARS/3);
   const mid=Math.floor((s.length-width)/2);
-  return [s.slice(0,width),s.slice(mid,mid+width),s.slice(-width)];
+  const ranges: Array<[number,number]> = s.length<=MAX_SCAN_CHARS
+    ? [[0,s.length]]
+    : [[0,width],[mid,mid+width],[s.length-width,s.length]];
+  return ranges.map(([start,end])=>({
+    text:s.slice(start,end),
+    before:start>0?s[start-1]??"":"",
+    after:end<s.length?s[end]??"":"",
+  }));
 }
-function scanText(s:string):string {
-  return scanParts(s).join(" ");
+function wordChar(ch:string):boolean {
+  // Treat surrogate halves conservatively as word continuation when a
+  // bounded slice happens to split a non-BMP character.
+  return /[\p{L}\p{N}\p{M}_\uD800-\uDFFF]/u.test(ch);
+}
+/** Only complete lexical tokens from the ORIGINAL sampled portions count.
+ * Keep the established lower-case/stopword ranking and the 16k scan cap. */
+function scanWords(s:string):string[] {
+  return scanSlices(s).flatMap(({text,before,after})=>{
+    const lower=text.toLocaleLowerCase("it");
+    return [...lower.matchAll(/[\p{L}\p{N}]{4,}/gu)]
+      .filter(m=>{
+        const at=m.index;
+        return !(at===0&&wordChar(before)) &&
+          !(at+m[0].length===lower.length&&wordChar(after));
+      })
+      .map(m=>m[0]).filter(w=>!STOP_WORDS.has(w));
+  });
 }
 
 /** Match a complete literal name, including multi-word names, on each original
  * scan slice separately. Never create a false mention across sampled gaps or
  * within a longer word ("Ivo" is not part of "vivo"). */
-function containsWholeLiteral(lowerText:string,rawName:string):boolean {
+function containsWholeLiteral(lowerText:string,rawName:string,
+  beforeSlice:string,afterSlice:string):boolean {
   const name=rawName.normalize("NFC").toLocaleLowerCase("it");
   let at=lowerText.indexOf(name);
-  const word=(ch:string)=>/[\p{L}\p{N}_]/u.test(ch);
   while(at!==-1){
-    const before=at?lowerText[at-1]??"":"";
-    const after=lowerText[at+name.length]??"";
-    if(!word(before)&&!word(after))return true;
+    const before=at?lowerText[at-1]??"":beforeSlice;
+    const after=at+name.length<lowerText.length
+      ? lowerText[at+name.length]??"":afterSlice;
+    if(!wordChar(before)&&!wordChar(after))return true;
     at=lowerText.indexOf(name,at+1);
   }
   return false;
@@ -106,7 +125,7 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
     .filter((x):x is string=>!!x&&x.length<=80));
   // Balance the query over scene windows; don't let one enormous scene fill it.
   const termQuery=[...new Set(selectedQuery.flatMap(s=>
-    words(scanText(s.text+" "+s.title+" "+s.objective)).slice(0,96)))].slice(0,MAX_TERMS);
+    scanWords(s.text+" "+s.title+" "+s.objective).slice(0,96)))].slice(0,MAX_TERMS);
   const termSet=new Set(termQuery);
   const latest=[...prior].sort((a,b)=>
     b.number-a.number || a.id.localeCompare(b.id))[0]!;
@@ -145,13 +164,15 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
     const entityOverlap=referenced(scene).filter(e=>entityQuery.has(e)).slice(0,10);
     // Check original bounded prose windows separately, never stitched snippets.
     // A literal mention is weaker than a matching structured reference.
-    const literalSlices=scanParts(scene.text).map(part=>
-      part.normalize("NFC").toLocaleLowerCase("it"));
+    const literalSlices=scanSlices(scene.text).map(part=>({
+      ...part,text:part.text.normalize("NFC").toLocaleLowerCase("it"),
+    }));
     const literalEntities=literalQuery.filter(name=>
       !entityOverlap.includes(name)&&
-      literalSlices.some(part=>containsWholeLiteral(part,name)))
+      literalSlices.some(part=>containsWholeLiteral(
+        part.text,name,part.before,part.after)))
       .slice(0,MAX_LITERAL_NAME_MATCHES);
-    const tokens=new Set(words(scanText(scene.text+" "+scene.title+" "+scene.objective)));
+    const tokens=new Set(scanWords(scene.text+" "+scene.title+" "+scene.objective));
     const termOverlap=[...termSet].filter(w=>tokens.has(w)).slice(0,16);
     const sameDate=!!scene.date&&dateQuery.has(scene.date.trim());
     const score=entityOverlap.length*35+literalEntities.length*25+

@@ -451,6 +451,124 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(candidate.selectionReason).toBe("coverage_fallback");
   });
 
+  it("rifiuta Ivo tagliato dall'inizio della finestra centrale dentro Vivo",()=>{
+    const total=30_000,width=Math.floor(16_000/3);
+    const mid=Math.floor((total-width)/2);
+    const raw="x".repeat(mid-1)+"Vivo "+"x".repeat(total-mid-4);
+    expect(raw.length).toBe(total);
+    expect(raw.slice(mid,mid+3)).toBe("ivo");
+    const p=[
+      chapter(1,[scene("origin","Il ponte è chiuso.",{title:"",objective:""})]),
+      chapter(2,[scene("cut-start",raw,{title:"",objective:"",characters:[]})]),
+      chapter(3,[scene("latest","Si alza il vento.",{title:"",objective:""})]),
+    ];
+    const current=chapter(4,[scene("now","Piove.",{
+      title:"",objective:"",characters:["Ivo"],
+    })]);
+    const result=retrievePriorContinuityScenes(p,p[0]!,current,[],current.scenes[0]);
+    const found=result.sampled.find(x=>x.scene.id==="cut-start")!;
+    expect(found.match.literalEntities).toBeUndefined();
+    expect(found.match.score).toBe(0);
+    expect(found.selectionReason).toBe("coverage_fallback");
+  });
+
+  it("rifiuta un nome tagliato a fine finestra quando è seguito da lettere o segni combinanti",()=>{
+    const total=30_000,width=Math.floor(16_000/3);
+    const run=(suffix:string)=>{
+      const prefix="x".repeat(width-4)+" Ivo"+suffix;
+      const raw=prefix+"x".repeat(total-prefix.length);
+      expect(raw.slice(width-3,width)).toBe("Ivo");
+      const p=[
+        chapter(1,[scene("origin","A",{title:"",objective:""})]),
+        chapter(2,[scene("cut-end",raw,{title:"",objective:"",characters:[]})]),
+        chapter(3,[scene("latest","B",{title:"",objective:""})]),
+      ];
+      const now=chapter(4,[scene("current","Piove.",{
+        title:"",objective:"",characters:["Ivo"],
+      })]);
+      const ranked=retrievePriorContinuityScenes(p,p[0]!,now,[],now.scenes[0]);
+      return ranked.sampled.find(x=>x.scene.id==="cut-end")!;
+    };
+    for(const next of ["z","\u0301","_","3"]){
+      const candidate=run(next);
+      expect(candidate.match.literalEntities).toBeUndefined();
+      expect(candidate.match.score).toBe(0);
+    }
+  });
+
+  it("anche i termini lessicali di ranking non possono nascere da tagli interni a parole",()=>{
+    const width=Math.floor(16_000/3),total=30_000;
+    const prefix="x".repeat(width-9)+" orologiox";
+    const raw=prefix+"x".repeat(total-prefix.length);
+    expect(raw.slice(width-8,width)).toBe("orologio");
+    const p=[
+      chapter(1,[scene("origin","A",{title:"",objective:""})]),
+      chapter(2,[scene("cut-term",raw,{title:"",objective:"",characters:[]})]),
+      chapter(3,[scene("latest","B",{title:"",objective:""})]),
+    ];
+    const current=chapter(4,[scene("current","L'orologio si è fermato.",{
+      title:"",objective:"",items:[],locations:[],characters:[],
+    })]);
+    const ranked=retrievePriorContinuityScenes(p,p[0]!,current,[],current.scenes[0]);
+    const found=ranked.sampled.find(s=>s.scene.id==="cut-term")!;
+    expect(found.match.terms).not.toContain("orologio");
+    expect(found.match.score).toBe(0);
+    expect(found.selectionReason).toBe("coverage_fallback");
+  });
+
+  it("conserva veri nomi completi ai confini quando fuori c'è separazione reale",()=>{
+    const total=30_000,width=Math.floor(16_000/3),mid=Math.floor((total-width)/2);
+    const textStart="x".repeat(mid-1)+" Ivo "+"x".repeat(total-mid-4);
+    const prefix="x".repeat(width-4)+" Ivo ";
+    const textEnd=prefix+"x".repeat(total-prefix.length);
+    const prior=[
+      chapter(1,[scene("origin","A",{title:"",objective:""})]),
+      chapter(2,[scene("valid-start",textStart,{
+        title:"",objective:"",characters:[],
+      })]),
+      chapter(3,[scene("valid-end",textEnd,{
+        title:"",objective:"",characters:[],
+      })]),
+      chapter(4,[scene("latest","B",{title:"",objective:""})]),
+    ];
+    const now=chapter(5,[scene("current","Piove.",{
+      title:"",objective:"",characters:["Ivo"],
+    })]);
+    const first=retrievePriorContinuityScenes(prior,prior[0]!,now,[],now.scenes[0]);
+    for(const id of ["valid-start","valid-end"]){
+      const match=first.sampled.find(x=>x.scene.id===id)!;
+      expect(match.match.literalEntities).toEqual(["ivo"]);
+      expect(match.selectionReason).toBe("targeted_match");
+    }
+  });
+
+  it("il campionamento non trasferisce falsi segnali o segreti al giudice e ai lettori ciechi",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    // Keep the target as the latest mandatory anchor, even when its score is
+    // correctly zero: other fallback scenes must not crowd out this assertion.
+    b.chapters=[origin,b.chapters[1]!,current];
+    const total=30_000,width=Math.floor(16_000/3),mid=Math.floor((total-width)/2);
+    const prior=b.chapters[1]!.scenes[0]!;
+    prior.characters=[];prior.locations=[];prior.items=[];
+    prior.title="";prior.objective="";
+    prior.text="x".repeat(mid-1)+"Vivo "+"x".repeat(total-mid-4);
+    const now=current.scenes[0]!;
+    now.text="Piove.";now.title="";now.objective="";
+    now.characters=["Ivo"];now.locations=[];now.items=[];
+    markDownstreamContinuity(b,origin,"author_reopen");
+    const snapshot=JSON.stringify(b);
+    const pack=buildContinuityEvidence(b,current,now)!;
+    const found=pack.scenes.find(x=>x.sceneId==="key")!;
+    expect(found.matchSignals.literalEntities).toBeUndefined();
+    expect(found.matchSignals.score).toBe(0);
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+    expect(JSON.stringify(b)).toBe(snapshot);
+    const cycle=createEditorialCycle(current.id),seg=chapterSegments(current)[0]!;
+    const blind=reviewerPrompt(b,cycle,"readerMystery",seg,1);
+    expect(blind.prompt).not.toContain("literalEntities");
+    expect(blind.prompt).not.toContain("PRIVATO:");
+  });
+
   it("registra nel freeze la copertura quantitativa, senza certificare coerenza",()=>{
     const b=fixture(),target=b.chapters[5]!;
     markDownstreamContinuity(b,b.chapters[0]!,"author_reopen");
