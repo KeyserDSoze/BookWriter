@@ -2,6 +2,7 @@
 
 ## Progresso versionato
 
+- [x] v0.11.64 (issue #101): EPUBCheck W3C 5.4.0 obbligatorio su matrice di 4 manoscritti sintetici (canon/draft, primo capitolo tardivo, XML/Unicode, testo lungo), file non vuoti e privacy verificati (ADR 0096).
 - [x] v0.11.63 (issue #100): job CI EPUBCheck 5.4.0 ufficiale con release/digest fissati e fixture `buildEpub` sintetica, privacy e Unicode/escaping testati (ADR 0095); non certifica tutte le esportazioni.
 - [x] v0.11.62 (issue #99): numerazione `Pagina X di Y` per pagine dei capitoli PDF canonici, frontespizio anche multipagina escluso; test bytes e browser desktop/mobile (ADR 0094). Deploy da verificare, issue #98 ancora aperta.
 - [x] v0.11.61 (issue #97): frontespizio EPUB 3 XML-safe, spine e landmarks titlepage/bodymatter sul primo capitolo canonico, con test ZIP/XML browser desktop/mobile (ADR 0093); epic #4 resta aperta.

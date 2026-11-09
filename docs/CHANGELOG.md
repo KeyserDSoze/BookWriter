@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.64 — 2026-11-09 (main, issue #101, epic #4)
+
+**EPUBCheck ufficiale su una matrice di quattro libri sintetici generati da BookWriter**
+
+- `epubcheck-fixture.test.ts` genera quattro manoscritti **distinti** tramite `newBook` e `buildEpub`, con UUID sintetici separati e data fissa: misto canonico/draft/planned; primo capitolo pubblicato solo dopo capitoli interamente esclusi; Unicode multilingua, apostrofi, emoji, escaping XML 1.0, controlli e surrogati malformati; sei capitoli canonici con scene multiple e prosa lunga.
+- Vitest per ciascuno controlla ZIP, titolo/frontespizio, `toc` e `landmarks`, numero e ordine dei capitoli/scene, `spine`, assenza di materiali privati e byte Unicode vietati. I test ordinari generano solo dati in memoria; con `EPUBCHECK_OUTPUT_DIR` impostata dalla CI scrivono un file EPUB a nome fisso per ogni caso.
+- Il job `epubcheck` verifica che esistano **esattamente quattro** file non vuoti ed esegue EPUBCheck **5.4.0 ufficiale su ciascuno**. Fallimento bloccante su test, checksum, file mancante o codice di uscita non zero di qualsiasi singolo EPUB. Release e digest SHA-256 non cambiano.
+- Aggiornati guida, ADR 0096, README, AGENTS, feature, changelog e package/lock 0.11.64. Nessuna nuova dipendenza, nessun cambio all'export in produzione o ai libri persistiti; CI frontend, Playwright desktop/mobile, Pages e cleanup restano obbligatori.
+- **Limiti:** quattro casi rappresentativi non certificano tutte le combinazioni di autori, e-reader, accessibilità o font Unicode PDF. Epic #4 aperta.
+
 ## 0.11.63 — 2026-11-09 (main, issue #100, epic #4)
 
 **Validazione EPUB ufficiale con EPUBCheck 5.4.0 nella CI**
