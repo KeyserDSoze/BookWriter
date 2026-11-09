@@ -3,7 +3,7 @@ import { Cloud, Download, Github, LockKeyhole, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { encryptLocal } from "../infrastructure/crypto";
-import { getBook, saveBook } from "../infrastructure/db";
+import { connectBookRemote, setBookAutoSync } from "../application/github-book-settings";
 import { acknowledgeOutbox, getOutbox, retryBlockedSync } from "../infrastructure/outbox";
 import { drainGitHubOutbox } from "../application/auto-sync";
 import {
@@ -164,21 +164,20 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     return doWork(async () => {
       if (!book) throw new Error("Seleziona prima un libro.");
       if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
+      // Capture the visible revision BEFORE the asynchronous repository check.
+      const { id, updatedAt } = book;
       const target = remote();
       const repo = await inspectRepository(target);
       setInfo(repo);
       if (!repo.private && !publicConsent)
         throw new Error("Devi confermare esplicitamente la pubblicazione su una repository pubblica.");
       if (!repo.canPush) throw new Error("Il PAT necessita di Contents: write su questa repository.");
-      const existing = book.remote;
-      if (existing?.lastSyncedCommit &&
-          (existing.owner !== target.owner || existing.repository !== target.repository ||
-           existing.branch !== target.branch))
-        throw new Error("Il libro è già sincronizzato altrove. Effettua un backup e una migrazione esplicita.");
-      const updated = await getBook(book.id);
-      if (!updated) throw new Error("Libro non più presente nel browser.");
-      updated.remote = { ...existing, ...target };
-      await saveBook(updated);
+      try {
+        await connectBookRemote(id, updatedAt, target);
+      } catch (error) {
+        await onRefresh(); // Refresh the selected book on a stale revision.
+        throw error;
+      }
       await onRefresh();
       return "Libro collegato a " + repo.fullName + " (" + target.branch + "). Salva un checkpoint con Sincronizza.";
     });
@@ -213,6 +212,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   async function toggleAutoSync(enabled: boolean): Promise<void> {
     return doWork(async () => {
       if (!book?.remote) throw new Error("Collega prima il libro a GitHub.");
+      // Keep the revision actually displayed at the moment of the click.
+      const { id, updatedAt } = book;
       if (enabled && book.editorialReviewSceneIds?.length)
         throw new Error("Conferma prima tutte le scene fuse nel Lettore, poi riattiva autosync.");
       if (enabled && (book.editorialCycle || book.chapters.some(ch =>
@@ -231,12 +232,14 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
           allowPublicSync = true;
         }
       }
-      const current = await getBook(book.id);
-      if (!current?.remote) throw new Error("Libro o repository non più disponibili.");
-      current.remote = { ...current.remote, autoSync: enabled, allowPublicSync: enabled && allowPublicSync };
-      await saveBook(current, enabled);
+      try {
+        await setBookAutoSync(id, updatedAt, enabled, allowPublicSync);
+      } catch (error) {
+        await onRefresh(); // A second tab may have changed sync policy.
+        throw error;
+      }
       await onRefresh();
-      setOutbox(await getOutbox(book.id));
+      setOutbox(await getOutbox(id));
       if (enabled) void drainGitHubOutbox();
       return enabled ? "Autosync attivato: checkpoint principali in coda e tentativi mentre la pagina è aperta." :
         "Autosync disattivato. I dati locali e le richieste pendenti restano conservati.";

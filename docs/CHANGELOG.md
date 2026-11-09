@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.49 — 2026-11-09 (main, issue #85, #10, #6, #3)
+
+**Collegamento GitHub e policy autosync protetti dagli stessi Web Locks del writer e della coda**
+
+- Prima, il pannello GitHub collegava una repository oppure modificava l'opzione di autosync con `getBook` / `saveBook` senza Web Locks né revisione attesa: una tab obsoleta poteva riscrivere lo stato del libro durante un checkpoint AI. Le nuove funzioni `connectBookRemote` e `setBookAutoSync` usano il token `updatedAt` visto dall'utente e acquisiscono **writer del libro → github-outbox**, senza attesa, prima di leggere e modificare `remote`.
+- Collegamento GitHub: la destinazione viene ancora convalidata da `validateRemote` e `inspectRepository`, con verifica esplicita della pubblicazione su repository pubbliche. Dopo il lock vengono ricontrollati libro corrente, stato, versione e divieto di migrare silenziosamente un libro già sincronizzato. Il controllo resta valido anche se la verifica remota ha richiesto tempo.
+- Opt-in/out autosync: prima dell'abilitazione il codice applicativo ricontrolla la **versione attuale** di scene fuse, ciclo editoriale, capitoli non congelati e commit GitHub precedente, anziché fidarsi della vecchia UI. L'update di `remote` salva con CAS `saveBook(...,expectedUpdatedAt)` nella transazione `books+outbox`: un conflitto non modifica né libro né richieste pendenti.
+- Un invio GitHub già attivo mantiene il lock outbox: il cambio policy viene rifiutato fino al termine, non si pretende di annullare un upload già partito. Disabilitare autosync **preserva** la coda, abilitarlo accoda solo checkpoint ammessi. La UI ricarica il libro su conflitto e mostra la motivazione italiana, senza retry implicito.
+- Nuovi Vitest su collegamento stale, repository già sincronizzata, writer/outbox occupati, mancanza Web Locks, `running`, guardie editoriali, coda e concorrenza; Playwright desktop/mobile con due tab reali su collegamento e toggle stale e lock realmente occupato.
+- ADR 0081, AGENTS, README e guida GitHub aggiornati. Nessun nuovo endpoint, schema, commit forzato, credenziale o provider. **Restano aperti** gli altri edit manuali, l'ACK GitHub non atomico e il coordinamento fra browser/dispositivi (#10/#3).
+
+
 ## 0.11.48 — 2026-11-09 (main, issue #84, #10, #15, #6, #3)
 
 **Conferma delle scene fuse: aggiornamento del canon e audit con la stessa precondizione atomica**

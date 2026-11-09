@@ -55,6 +55,8 @@
 
 **Indice eventi candidati v0.11.3 (PR #49):** nella redazione appare un indice locale di **menzioni** letterali di scoperte, passaggi di oggetti e cambiamenti di stato, soltanto dai capitoli congelati, con quote e offset. Le menzioni sono **ipotesi testuali**, non fatti del canone: non generano correzioni né aggiornano la memoria. Gli specialisti autorizzati e il direttore le vedono nei campioni cross-chapter; i lettori ciechi restano isolati. [Guida](docs/narrative-event-candidates.md), ADR 0036, issue #20.
 
+**Collegamento GitHub e autosync protetti v0.11.49 (main):** le modifiche manuali della repository e della policy autosync acquisiscono i Web Locks del writer e della coda GitHub, verificano la revisione IndexedDB al commit e non riscrivono dati canonici obsoleti. Guardie editoriali ricontrollate al momento dell'attivazione; test due schede desktop/mobile. [Guida](docs/github-sync.md), ADR 0081, issue #85/#10.
+
 **Conferma scene fuse e audit atomici v0.11.48 (main):** la promozione manuale a `canon` ora richiede la revisione valida **anche nella transazione** che salva libro e attività. Un cambio concorrente impedisce sia la canonizzazione obsoleta sia un falso audit. Test a due schede desktop/mobile. [Guida](docs/scene-merge.md), ADR 0080, issue #84/#10.
 
 **Feedback dell'autore protetto v0.11.47 (main):** richiedere una revisione richiede Web Locks sul libro e conferma atomica della revisione IndexedDB; una tab obsoleta o un writer AI attivo non vengono sovrascritti, e il testo del feedback rifiutato rimane disponibile per una nuova valutazione. Test su due schede desktop/mobile. [Guida](docs/autopilot.md), ADR 0079, issue #83/#10.
