@@ -92,9 +92,35 @@ test("redazione a segmenti Unicode: i primi due prompt conservano interi i grafe
   await page.getByLabel("API key").fill("sk-test-grapheme-not-real");
   await page.getByRole("textbox", { name: "Modello predefinito" }).fill("mock-grapheme-review");
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
+  // App.saveEndpointSettings awaits WebCrypto key encryption and the IndexedDB
+  // write. A Playwright click waits for the click event, NOT that async work.
+  // Reloading immediately can lose the key/model and make the reviewer stop
+  // before calling the mocked endpoint (an intermittent zero-request failure).
+  await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
+  // Verify only a boolean presence flag, NEVER read/print the encrypted key.
+  const settingsPersisted = () => page.evaluate(() => new Promise<boolean>((resolve, reject) => {
+    const opened = indexedDB.open("bookwriter");
+    opened.onerror = () => reject(opened.error);
+    opened.onsuccess = () => {
+      const db = opened.result;
+      const request = db.transaction("settings", "readonly").objectStore("settings").get("global");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const settings = request.result as {
+          defaultRoute?: { modelId?: string };
+          endpoints?: Array<{ id: string; secret?: unknown }>;
+        } | undefined;
+        resolve(settings?.defaultRoute?.modelId === "mock-grapheme-review" &&
+          !!settings?.endpoints?.some(endpoint => endpoint.id === "openai" && endpoint.secret));
+        db.close();
+      };
+    };
+  }));
+  await expect.poll(settingsPersisted).toBe(true);
   await page.reload();
   await expect(page.getByRole("region", { name: "Redazione multi-agente" }))
     .toBeVisible();
+  await expect.poll(settingsPersisted).toBe(true);
   await page.getByRole("button", { name: "Riprendi" }).click();
   try {
     await expect.poll(() => reviews.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(2);

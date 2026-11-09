@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.73 — 2026-11-10 (main, issue #110, epic #6/#20)
+
+**E2E Unicode: eliminata la corsa tra cifratura/salvataggio delle impostazioni e reload**
+
+- Il test Playwright di segmentazione grafemica caricava un libro in `chapterReview`, premeva `Salva impostazioni` e subito `page.reload()`. L'handler React avvia `saveEndpointSettings` in modo asincrono: durante la cifratura WebCrypto, il reload può interrompere la configurazione AI prima del commit IndexedDB, bloccando il reviewer prima del fetch mock (0 prompt).
+- Ora l'E2E attende la notifica **dopo** il commit IndexedDB e controlla l'identità del modello e il solo booleano di presenza della chiave cifrata prima e dopo il reload. Non legge/stampa la chiave né indebolisce alcun assert su code unit, surrogate, grafemi o privacy. La diagnostica precedente resta per anomalie ulteriori.
+- Nessun cambiamento a codice di produzione, provider AI, Web Locks, prezzi, canone, segmentazione o formato ZIP; ADR 0105, guida CI, README/AGENTS, package/lock v0.11.73.
+- La conclusione richiede la CI completa desktop/mobile e un secondo run indipendente per verificare la stabilità del test.
+
+
 ## 0.11.72 — 2026-11-09 (main, issue #109, epic #20)
 
 **Gate di integrità del giudizio salvato durante la remediation**
