@@ -30,13 +30,10 @@ export async function withWriterGuard<T>(
   const signal = controller.signal;
   const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
   if (!locks?.request) {
-    if (remote)
-      throw new Error("Questo browser non supporta Web Locks: scrittura cloud disabilitata per sicurezza.");
-    cancelled(signal);
-    return action({
-      assertActive: async () => cancelled(signal),
-      failure: () => undefined,
-    });
+    // Local books share the same IndexedDB across tabs: allowing AI without
+    // Web Locks can duplicate billed requests and overwrite canon checkpoints.
+    // Never fall back to a non-atomic localStorage flag or an in-memory mutex.
+    throw new Error("Web Locks non disponibile: autopilot bloccato per evitare scritture concorrenti, anche nei libri locali. Usa un browser aggiornato in un contesto HTTPS sicuro.");
   }
 
   return locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {

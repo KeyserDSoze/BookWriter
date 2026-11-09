@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.41 — 2026-11-09 (main, issue #77, #6, #10)
+
+**Autopilot locale: niente generazione AI senza protezione fra schede**
+
+- `withWriterGuard` non consente più ai **libri locali** di eseguire chiamate AI quando Web Locks non è disponibile. In precedenza solo i libri GitHub collegati erano bloccati, mentre i libri locali entravano nel runner senza lock, rischiando doppia generazione e checkpoint concorrenti sullo stesso IndexedDB.
+- Errore in italiano prima del cambio di stato e della rete, con indicazione di usare un browser aggiornato e un contesto HTTPS sicuro. Non sono aggiunti fallback `localStorage` non atomici; in presenza di Web Locks, `ifAvailable:true` e lease remoto restano invariati.
+- Vitest su locale/collegato senza supporto, azione non chiamata, libro persistito intatto, locale con Web Locks e lock occupato. Playwright desktop/mobile su Dashboard, errore visibile, nessuna richiesta AI, status `idle` e nessuna attività `running` o `aiRequested`.
+- ADR 0074, guida autopilot, README, AGENTS e versioni npm/lock. Nessun nuovo formato ZIP, canone, sincronizzazione, costo AI o API.
+
+**Limite:** l'assenza di Web Locks impedisce anche l'autopilot puramente locale; è un blocco intenzionale per la sicurezza dei checkpoint, non una garanzia di coordinamento distribuito per gli editor manuali.
+
+
 ## 0.11.40 — 2026-11-09 (main, issue #76, #20, #4)
 
 **Copertura onesta delle scene correnti lunghe nel ranking lessicale**

@@ -60,6 +60,45 @@ describe("Writer guard applicativa", () => {
     expect(lease.release).toHaveBeenCalled();
   });
 
+  it("blocca fail-closed un libro locale senza Web Locks, prima di qualsiasi azione AI", async () => {
+    const book = newBook("Idea", "Libro locale", "", "");
+    await saveBook(book, false);
+    vi.stubGlobal("navigator", {});
+    const action = vi.fn();
+    await expect(withWriterGuard(book.id, crypto.randomUUID(), new AbortController(), action))
+      .rejects.toThrow(/Web Locks non disponibile.*libri locali/);
+    expect(action).not.toHaveBeenCalled();
+    expect(lease.acquire).not.toHaveBeenCalled();
+    const stored = await getDb().then(db=>db.get("books",book.id));
+    expect(stored).toEqual(book);
+  });
+
+  it("blocca fail-closed anche un libro remoto senza Web Locks e non acquisisce lease", async () => {
+    const book = newBook("Idea", "Libro collegato", "", "");
+    book.remote = { owner: "test-owner", repository: "book-repo", branch: "main" };
+    await saveBook(book, false);
+    vi.stubGlobal("navigator", {});
+    const action = vi.fn();
+    await expect(withWriterGuard(book.id, crypto.randomUUID(), new AbortController(), action))
+      .rejects.toThrow("Web Locks non disponibile");
+    expect(action).not.toHaveBeenCalled();
+    expect(lease.acquire).not.toHaveBeenCalled();
+    expect(await getDb().then(db=>db.get("books",book.id))).toEqual(book);
+  });
+
+  it("mantiene possibile la generazione per libro locale quando Web Locks è disponibile", async () => {
+    const book = newBook("Idea", "Libro locale protetto", "", "");
+    await saveBook(book, false);
+    const action = vi.fn(async (guard: {assertActive:()=>Promise<void>})=>{
+      await guard.assertActive();
+      return "ok";
+    });
+    const result = await withWriterGuard(book.id, crypto.randomUUID(), new AbortController(), action);
+    expect(result).toBe("ok");
+    expect(action).toHaveBeenCalledOnce();
+    expect(lease.acquire).not.toHaveBeenCalled();
+  });
+
   it("esclude due tab contemporanee anche su un libro non collegato", async () => {
     const book = newBook("Idea", "Libro locale", "", "");
     await saveBook(book, false);

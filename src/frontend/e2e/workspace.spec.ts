@@ -37,6 +37,50 @@ test("workspace responsive e accessibile, anche dopo reload", async ({ page }, t
   await expect(page.getByText("Da avviare · Brainstorming")).toBeVisible();
 });
 
+test("autopilot locale si blocca senza Web Locks prima della generazione, desktop/mobile", async ({ page }) => {
+  // Simulate a browser without native cross-tab locking before React loads.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "locks", { configurable: true, value: undefined });
+  });
+  const aiCalls:string[]=[];
+  page.on("request",request=>{
+    if (/\/chat\/completions|\/responses(?:\?|$)/.test(request.url()))
+      aiCalls.push(request.url());
+  });
+  await createBook(page);
+  expect(await page.evaluate(()=>navigator.locks===undefined)).toBe(true);
+  await expect(page.getByText("Da avviare · Brainstorming")).toBeVisible();
+  await page.getByRole("button",{name:"Autopilot",exact:true}).click();
+  await expect(page.getByText(/Web Locks non disponibile: autopilot bloccato/))
+    .toBeVisible();
+  await expect(page.getByText("Da avviare · Brainstorming")).toBeVisible();
+  const persisted=await page.evaluate(()=>new Promise<{
+    status:string;phase:string;runningActivities:number;aiRequests:number
+  }>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const db=open.result;
+      const tx=db.transaction(["books","activities"],"readonly");
+      const books=tx.objectStore("books").getAll();
+      const activities=tx.objectStore("activities").getAll();
+      tx.onerror=()=>reject(tx.error);
+      tx.oncomplete=()=>{
+        const book=books.result[0] as {status:string;phase:string};
+        const a=activities.result as Array<{status:string;aiRequested?:boolean}>;
+        resolve({status:book.status,phase:book.phase,
+          runningActivities:a.filter(x=>x.status==="running").length,
+          aiRequests:a.filter(x=>x.aiRequested).length});
+        db.close();
+      };
+    };
+  }));
+  expect(persisted).toEqual({
+    status:"idle",phase:"brainstorm",runningActivities:0,aiRequests:0,
+  });
+  expect(aiCalls).toEqual([]);
+});
+
 test("ZIP di contenuto esportabile e reimportabile senza sovrascrivere", async ({ page }) => {
   await createBook(page);
   const mobile = test.info().project.name === "mobile-chromium";
