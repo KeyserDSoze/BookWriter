@@ -49,6 +49,7 @@ function archive(page: Page) {
 
 test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la coda", async ({ page }) => {
   let patchStarted = false;
+  let bookId = "";
   let releasePatch: () => void = () => undefined;
   const patchGate = new Promise<void>(resolve => { releasePatch = resolve; });
   let patchCount = 0;
@@ -77,6 +78,17 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
       body = { object: { sha: PREVIOUS } };
     } else if (method === "GET" && path.endsWith("/git/commits/" + PREVIOUS)) {
       body = { tree: { sha: BASE_TREE } };
+    } else if (method === "GET" && path.includes("/contents/.bookwriter/manifest.json")) {
+      // The book is explicitly seeded with a prior synced commit. GitHub
+      // must contain the matching manifest or the safe sync refuses the
+      // push before PATCH, correctly treating that as a remote conflict.
+      body = {
+        type: "file", encoding: "base64",
+        content: btoa(JSON.stringify({
+          schemaVersion: 1, bookId,
+          paths: [".bookwriter/project.json", ".bookwriter/manifest.json", "book.md"],
+        })),
+      };
     } else if (method === "GET" && path.includes("/contents/")) {
       status = 404; body = { message: "Not Found" };
     } else if (method === "POST" && path.endsWith("/git/trees")) {
@@ -139,6 +151,7 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
   await page.reload();
   await archive(page).click();
   const before = await snapshot(page);
+  bookId = before.id;
   expect(before.lastSyncedCommit).toBe(PREVIOUS);
   expect(before.outbox?.state).toBe("pending");
 
