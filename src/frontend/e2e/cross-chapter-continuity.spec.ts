@@ -62,6 +62,8 @@ test("rivalidazione di valle desktop/mobile: origine, rewind, messaggio e nessun
     .toContainText("il limite di 1.600 viene");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
     .toContainText("due riferimenti distanti ricevono");
+  await expect(board.locator('[aria-label="Rivalidazione capitolo 2"]'))
+    .toContainText("anche se un nome viene ripetuto più avanti");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))
     .toContainText("altrimenti resta un frammento di contesto");
   await expect(board.locator('[aria-label="Rivalidazione capitolo 3"]'))

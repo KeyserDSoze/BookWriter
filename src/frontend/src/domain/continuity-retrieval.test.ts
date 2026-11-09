@@ -173,6 +173,75 @@ describe("Recupero mirato locale della continuità",()=>{
     expect(JSON.stringify(b)).toBe(snapshot);
   });
 
+  it("trova la seconda occorrenza del termine alternativo se la prima era già coperta",()=>{
+    const source="x".repeat(3100)+" Ivo prende la chiave dal tavolo. "+
+      "y".repeat(3400)+" La chiave ricompare nel magazzino. "+
+      "z".repeat(3200);
+    const windows=targetedLiteralWindows(source,["Ivo","chiave"]);
+    expect(windows).toHaveLength(2);
+    expect(windows.some(w=>w.text.includes("Ivo prende la chiave"))).toBe(true);
+    expect(windows.some(w=>w.text.includes("chiave ricompare nel magazzino"))).toBe(true);
+    expect(windows.map(w=>w.offset)).toEqual(
+      [...windows.map(w=>w.offset)].sort((a,b)=>a-b));
+    for(const w of windows)
+      expect(source.slice(w.offset,w.offset+w.text.length)).toBe(w.text);
+  });
+
+  it("due menzioni lontane dello stesso nome sostituiscono il contesto generico",()=>{
+    const source="x".repeat(3100)+" Ivo accende la lanterna. "+
+      "y".repeat(3300)+" Ivo spegne la lanterna. "+
+      "z".repeat(3100);
+    const windows=targetedLiteralWindows(source,["Ivo"]);
+    expect(windows).toHaveLength(2);
+    expect(windows.some(w=>w.text.includes("Ivo accende la lanterna"))).toBe(true);
+    expect(windows.some(w=>w.text.includes("Ivo spegne la lanterna"))).toBe(true);
+    expect(windows.every(w=>source.slice(w.offset,w.offset+w.text.length)===w.text))
+      .toBe(true);
+    expect(targetedLiteralWindows(source,["Ivo"])).toEqual(windows);
+  });
+
+  it("un altro segnale distinto ha priorità sulla ripetizione del primo",()=>{
+    const source="x".repeat(3100)+" Ivo apre il portone. "+
+      "y".repeat(3400)+" Ivo richiude il portone. "+
+      "z".repeat(3400)+" La chiave si spezza nella serratura. "+
+      "w".repeat(3100);
+    const windows=targetedLiteralWindows(source,["Ivo","chiave"]);
+    expect(windows.some(w=>w.text.includes("Ivo apre il portone"))).toBe(true);
+    expect(windows.some(w=>w.text.includes("chiave si spezza"))).toBe(true);
+    expect(windows.some(w=>w.text.includes("Ivo richiude il portone"))).toBe(false);
+  });
+
+  it("due menzioni distanti non espongono scene precedenti ai lettori ciechi",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    const previous=b.chapters[1]!.scenes[0]!;
+    previous.title="";previous.objective="";
+    previous.characters=[];previous.items=[];previous.locations=[];
+    previous.text="x".repeat(3100)+" Ivo ascolta una voce. "+
+      "y".repeat(3400)+" Ivo interrompe la telefonata. "+
+      "z".repeat(3100);
+    const now=current.scenes[0]!;
+    now.characters=["Ivo"];now.items=[];now.locations=[];
+    now.title="";now.objective="";now.text="Le nuvole coprono il sole.";
+    markDownstreamContinuity(b,origin,"author_reopen",["origin"]);
+    const original=JSON.stringify(b);
+    const pack=buildContinuityEvidence(b,current,now)!;
+    const source=pack.scenes.find(s=>s.sceneId==="key")!;
+    expect(source.matchSignals.literalEntities).toEqual(["ivo"]);
+    expect(source.windows).toHaveLength(2);
+    expect(source.windows.some(w=>w.text.includes("Ivo ascolta una voce"))).toBe(true);
+    expect(source.windows.some(w=>w.text.includes("Ivo interrompe la telefonata")))
+      .toBe(true);
+    expect(source.windows.every(w=>
+      previous.text.slice(w.offset,w.offset+w.text.length)===w.text)).toBe(true);
+    const cycle=createEditorialCycle(current.id),seg=chapterSegments(current)[0]!;
+    const specialist=reviewerPrompt(b,cycle,"continuity",seg,1);
+    const blind=reviewerPrompt(b,cycle,"readerMystery",seg,1);
+    expect(specialist.prompt).toContain("Ivo interrompe la telefonata");
+    expect(blind.prompt).not.toContain("Ivo interrompe la telefonata");
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+    expect(JSON.stringify(b)).toBe(original);
+  });
+
   it("offset UTF-16 dal testo originale, non da una copia casefold più lunga",()=>{
     const source="İ".repeat(1900)+" Ivo guarda il manoscritto. "+
       "L'archivio è vuoto. ".repeat(100);

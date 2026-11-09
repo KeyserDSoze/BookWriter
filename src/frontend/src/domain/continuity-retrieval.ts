@@ -200,15 +200,21 @@ export function retrievePriorContinuityScenes(prior:readonly Chapter[],
 /** Locate whole literal words in the ORIGINAL UTF-16 string. Never search a
  * lowercased/normalized copy for offsets: Unicode case folding can change its
  * length. The escaped regex cannot interpret manuscript text as code. */
-function originalWholeWordOffset(text:string,term:string):number {
+function originalWholeWordOffset(text:string,term:string,
+  from=0,until=text.length):number {
   const query=term.trim();
   if(query.length<3||query.length>100)return -1;
   const escaped=query.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
   const pattern=new RegExp(escaped,"giu");
   const isWord=(ch:string)=>/[\p{L}\p{N}\p{M}_]/u.test(ch);
-  for(const hit of text.matchAll(pattern)){
+  // Search on the ORIGINAL string from an absolute UTF-16 offset. In
+  // particular, do not rebuild offsets from sliced or normalized text.
+  pattern.lastIndex=from;
+  let hit:RegExpExecArray|null;
+  while((hit=pattern.exec(text))!==null){
     const offset=hit.index;
-    if(offset===undefined)continue;
+    if(offset>=until)break;
+    if(offset+hit[0].length>until)continue;
     const before=offset>0 ? (text[offset-1] ?? "") : "";
     const after=text[offset+hit[0].length]??"";
     if(!isWord(before)&&!isWord(after))return offset;
@@ -217,9 +223,9 @@ function originalWholeWordOffset(text:string,term:string):number {
 }
 
 /** Exact original-text windows, preferring the caller's ranked signals.
- * First show the strongest whole-word witness, then an uncovered DIFFERENT
- * signal if available. Otherwise preserve the distant-context fallback.
- * Never claim the two literal excerpts are contiguous or complete. */
+ * Prefer a different whole-word witness outside the first excerpt. If none
+ * exists, a distant repeat of the primary term is more useful than unrelated
+ * fallback context. No inferred semantic identities or stitched quotes. */
 export function targetedLiteralWindows(text:string,matchedTerms:readonly string[]):
   Array<{offset:number;text:string}> {
   if(text.length<=2800)return [{offset:0,text}];
@@ -227,21 +233,34 @@ export function targetedLiteralWindows(text:string,matchedTerms:readonly string[
   const windowStart=(at:number)=>Math.min(maxStart,
     Math.max(0,at-Math.floor(WINDOW_CHARS/2)));
   const terms=matchedTerms.slice(0,48);
-  let primaryHit=-1;
+  let primaryTerm="";
   let primaryStart=0;
-  let secondHit=-1;
   for(const term of terms){
     const hit=originalWholeWordOffset(text,term);
     if(hit<0)continue;
-    if(primaryHit<0){
-      primaryHit=hit;
-      primaryStart=windowStart(hit);
-    }else if(hit<primaryStart || hit>=primaryStart+WINDOW_CHARS){
-      // This is a separate whole-word witness outside the first excerpt.
-      // A second mention inside the first excerpt adds no new coverage.
-      secondHit=hit;
-      break;
+    primaryTerm=term;
+    primaryStart=windowStart(hit);
+    break;
+  }
+  const outside=(term:string):number=>{
+    // The first occurrence of a second name may be WITHIN the primary
+    // window, yet a later occurrence may be far away. Search both
+    // uncovered ranges, without scanning the already displayed excerpt.
+    const earlier=originalWholeWordOffset(text,term,0,primaryStart);
+    return earlier>=0?earlier:
+      originalWholeWordOffset(text,term,primaryStart+WINDOW_CHARS);
+  };
+  let secondHit=-1;
+  if(primaryTerm){
+    for(const term of terms){
+      if(term.trim().toLocaleLowerCase("it")===
+        primaryTerm.trim().toLocaleLowerCase("it"))continue;
+      secondHit=outside(term);
+      if(secondHit>=0)break;
     }
+    // Do not discard a repeated witness when a long scene has just one
+    // matching name; still present it as a literal mention, not a fact.
+    if(secondHit<0)secondHit=outside(primaryTerm);
   }
   const fallback=primaryStart>=maxStart/2?0:maxStart;
   const secondary=secondHit>=0?windowStart(secondHit):fallback;

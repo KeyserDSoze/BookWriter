@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.34 — 2026-11-09 (main, issue #20)
+
+**Continuità in scene lunghe: seconda occorrenza di nomi e oggetti anche se già citati**
+
+- `targetedLiteralWindows` non si limita più al primo match di ciascun termine. Dopo il primo estratto, cerca un **termine diverso nelle porzioni non coperte** sia prima sia dopo, anche se era già presente nell'estratto iniziale. Se non esistono termini distinti esterni, può centrare il secondo estratto su una **ripetizione distante del primo nome**; se manca anche questa, resta il fallback iniziale/finale.
+- La scansione usa `RegExp.lastIndex` sul **testo originale**, range di offset UTF-16 e confini di parola; nessuna interpolazione o deduzione semantica. Rimangono max48 segnali, max2 estratti da 1.250 caratteri per scena lunga, 4 scene finali, 2 per capitolo e 1.600 candidati. Una menzione ripetuta non equivale a prova indipendente.
+- Vitest su termini alternativi ripetuti, ripetizione del primo nome, preferenza del termine diverso, accuratezza degli offset e isolamento dei lettori ciechi; Playwright desktop/mobile sull'avviso UI. Guida, README, AGENTS, ADR 0067 e versione npm/lock v0.11.34.
+- Nessun nuovo schema ZIP/IndexedDB, canon, timeline, secrets, decisioni autore/alias, giudizi, freeze, sync, endpoint, chiamata AI o autorizzazione aggiuntiva.
+
+**Limite:** si tratta di un recupero locale di frammenti letterali e parziali, non di comprensione di sinonimi, omonimie o contraddizioni.
+
+
 ## 0.11.33 — 2026-11-09 (main, issue #20)
 
 **Due riferimenti pertinenti nelle finestre delle scene precedenti lunghe**
