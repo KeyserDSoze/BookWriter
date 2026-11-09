@@ -8,6 +8,14 @@ L'esportazione prende **soltanto scene con stato `canon` e testo non vuoto**, ne
 
 **Attenzione:** una scena `canon` può contenere volutamente segreti o spoiler letterari. EPUB, DOCX e PDF non sono file cifrati. Condividili come condivideresti una bozza o un manoscritto: **solo con destinatari autorizzati**. Per ripristinare il lavoro e la storia editoriale, usa invece il backup ZIP content-only o full (con password se serve protezione dei dati).
 
+## EPUBCheck ufficiale nel workflow CI — v0.11.63
+
+Il repository controlla adesso la compatibilità EPUB mediante **EPUBCheck 5.4.0**, validatore ufficiale mantenuto dal consorzio DAISY per W3C. Ad ogni push su `main` e a ogni PR, un job dedicato della Frontend CI genera **un libro di prova sintetico** usando l'effettivo `buildEpub` dell'app, contenente accenti, emoji, titoli con caratteri XML, capitoli/scene canonici e bozze da escludere. EPUBCheck verifica poi il file ZIP prodotto, il package, i contenuti XHTML e le relative regole di conformità. Qualunque uscita non-zero della CLI blocca il job.
+
+Il controllo usa la distribuzione ufficiale `5.4.0` con hash SHA-256 verificato. Non riceve o carica libri personali, credenziali o dati dal browser. Per istruzioni di riproduzione locale e interpretazione del risultato: [Guida EPUBCheck CI](epubcheck-ci.md), [ADR 0095](../ADR/0095-official-epubcheck-ci.md), [issue #100](https://github.com/KeyserDSoze/BookWriter/issues/100).
+
+**Portata della verifica:** il test ufficiale valida un EPUB rappresentativo creato dal builder, non ogni combinazione di manoscritto possibile. I test unitari, quelli browser e la prova su un e-reader reale restano controlli distinti. Non è un attestato di accessibilità o di compatibilità universale per l'EPUB personale di un autore.
+
 ## EPUB 3 — validazioni v0.11.57
 
 Il generatore locale `buildEpub` produce un ZIP con il file `mimetype` **come prima voce non compressa**, il contenitore `META-INF/container.xml` e il package `OEBPS/content.opf`. Il package dichiara l'identificatore stabile del libro, titolo, lingua `it`, data di generazione UTC, manifest e ordine di lettura `spine`. Ogni capitolo con prosa canonica è un documento XHTML distinto, collegato dall'indice `nav.xhtml` e dal CSS.

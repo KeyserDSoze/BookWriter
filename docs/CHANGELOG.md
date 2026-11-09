@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.63 — 2026-11-09 (main, issue #100, epic #4)
+
+**Validazione EPUB ufficiale con EPUBCheck 5.4.0 nella CI**
+
+- Aggiunto un job parallelo `epubcheck` nel workflow Frontend CI, obbligatorio sui push `main` e sulle PR. Il job usa Temurin Java 21, il CLI EPUBCheck W3C/DAISY **v5.4.0**, scaricato dall'asset ufficiale della release e verificato con SHA-256 `33350c61038e71dfb3d45a76aed04bf5481e6d5500cb780f6e98db8bbd15a28c` ottenuto dal digest dell'asset GitHub.
+- Un test Vitest crea un **manoscritto sintetico** con titolo escaped/emoji, capitoli con prosa `canon`, scene `draft/planned`, capitoli da omettere, memoria e brief riservati. Il test invoca il vero `buildEpub`, controlla ZIP, selezione, nav e privacy; solo con `EPUBCHECK_OUTPUT` impostata dalla CI scrive il file EPUB da sottoporre alla CLI ufficiale. Nessun libro personale viene letto o caricato.
+- Esecuzione bloccante: exit code non-zero di `java -jar epubcheck.jar <file.epub>` fallisce il job, senza `continue-on-error`, output nascosto o download non verificati. Mantiene i test precedenti Vitest/Playwright desktop/mobile.
+- Documentati procedura locale, versione e hash in `docs/epubcheck-ci.md` e ADR 0095; README, AGENTS, feature e package/lock `0.11.63` aggiornati, senza nuove dipendenze runtime né variazioni del canone persistito o dell'export utente.
+- **Limite esplicito:** la validazione ufficiale si applica al *campione sintetico CI*, non equivale alla certificazione di ogni libro generato o al test su un e-reader fisico. Compatibilità Unicode PDF, accessibilità, immagini e ZIP avanzato restano nell'epic #4.
+
 ## 0.11.62 — 2026-11-09 (main, issue #99, epic #4)
 
 **PDF con numerazione editoriale delle pagine dei capitoli canonici**
