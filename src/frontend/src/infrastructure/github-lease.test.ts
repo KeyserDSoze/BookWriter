@@ -5,7 +5,8 @@ import { encryptLocal } from "./crypto";
 import { saveSettings } from "./db";
 import {
   acquireWriterLease, assertWriterLease, inspectWriterLease,
-  LEASE_TAKEOVER_GRACE_MS, releaseWriterLease, renewWriterLease,
+  recoverExpiredWriterLease, LEASE_TAKEOVER_GRACE_MS,
+  releaseWriterLease, renewWriterLease,
   RemoteWriterBusy, RemoteWriterLost,
 } from "./github-lease";
 
