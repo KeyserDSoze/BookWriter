@@ -270,6 +270,13 @@ const activitySchema = z.object({
   id: zId, bookId: zId, runId: z.string(), phase: z.string(), title: z.string(),
   reason: z.string(), nextStep: z.string(), status: z.enum(["running", "succeeded", "cancelled", "failed"]),
   createdAt: z.string(),
+  // Optional on legacy backups. Validate untrusted historical quotes strictly.
+  priceRateSnapshot: z.object({
+    endpointId: z.string().min(1).max(300),
+    modelId: z.string().min(1).max(300),
+    inputEurPerMillion: z.number().finite().min(0).max(10_000),
+    outputEurPerMillion: z.number().finite().min(0).max(10_000),
+  }).strict().optional(),
 }).passthrough();
 const mergeDraftSchema = z.object({
   id: zId, bookId: zId, chapterId: zId, sceneId: zId,

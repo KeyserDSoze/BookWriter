@@ -182,10 +182,17 @@ describe("Laboratorio di fusione senza canonizzazione automatica", () => {
     const history=await listActivities(book.id);
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({status:"failed",aiRequested:true,
-      endpointId:"openai",modelId:"merge-model",inputTokens:450,outputTokens:70});
+      endpointId:"openai",modelId:"merge-model",inputTokens:450,outputTokens:70,
+      priceRateSnapshot:{endpointId:"openai",modelId:"merge-model",
+        inputEurPerMillion:3,outputEurPerMillion:9}});
     const account=accountBookAiBudget(history,settings,book.aiBudget!);
     expect(account.incompleteCount).toBe(0);
     expect(account.estimatedSpentEur).toBeCloseTo((450*3+70*9)/1_000_000);
+    const changed=structuredClone(settings);
+    changed.aiPriceRates=[{endpointId:"openai",modelId:"merge-model",
+      inputEurPerMillion:50,outputEurPerMillion:90}];
+    expect(accountBookAiBudget(history,changed,book.aiBudget!).estimatedSpentEur)
+      .toBeCloseTo(account.estimatedSpentEur);
     expect(preflightBookAiBudget(book,settings,history,"merge","System","Altro tentativo"))
       .toBeDefined();
     expect((await getBook(book.id))!.chapters).toEqual(book.chapters);

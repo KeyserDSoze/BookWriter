@@ -13,6 +13,8 @@ export interface AiBudgetAccounting {
   incompleteCount: number;
   unpricedCount: number;
   countedCalls: number;
+  /** Complete legacy rows priced with today's rate (not a saved historical quote). */
+  legacyPricedCount: number;
 }
 export interface BudgetPreflight extends AiBudgetAccounting {
   estimatedNextEur: number;
@@ -21,12 +23,16 @@ export interface BudgetPreflight extends AiBudgetAccounting {
   limitEur: number;
   remainingEur: number;
 }
-export function isPriceRate(rate: AiPriceRate): boolean {
-  return !!rate.endpointId.trim() && !!rate.modelId.trim() &&
-    Number.isFinite(rate.inputEurPerMillion) && rate.inputEurPerMillion >= 0 &&
-    rate.inputEurPerMillion <= MAX_SAFE_RATE &&
-    Number.isFinite(rate.outputEurPerMillion) && rate.outputEurPerMillion >= 0 &&
-    rate.outputEurPerMillion <= MAX_SAFE_RATE;
+export function isPriceRate(rate: unknown): rate is AiPriceRate {
+  // ZIP/IndexedDB may contain untrusted or legacy values.
+  if (!rate || typeof rate !== "object" || Array.isArray(rate)) return false;
+  const r = rate as Partial<AiPriceRate>;
+  return typeof r.endpointId === "string" && !!r.endpointId.trim() &&
+    typeof r.modelId === "string" && !!r.modelId.trim() &&
+    typeof r.inputEurPerMillion === "number" && Number.isFinite(r.inputEurPerMillion) &&
+    r.inputEurPerMillion >= 0 && r.inputEurPerMillion <= MAX_SAFE_RATE &&
+    typeof r.outputEurPerMillion === "number" && Number.isFinite(r.outputEurPerMillion) &&
+    r.outputEurPerMillion >= 0 && r.outputEurPerMillion <= MAX_SAFE_RATE;
 }
 export function isBudgetValid(budget: BookAiBudget): boolean {
   return Number.isFinite(budget.limitEur) && budget.limitEur > 0 &&
@@ -40,6 +46,13 @@ export function lookupRate(settings: AppSettings, endpointId: string, modelId: s
   if (matches.length !== 1 || !isPriceRate(matches[0]!)) return undefined;
   return matches[0];
 }
+/** Persist a separate copy so later Settings edits cannot reprice past calls. */
+export function snapshotPriceRate(
+  settings: AppSettings, endpointId: string, modelId: string,
+): AiPriceRate | undefined {
+  const rate = lookupRate(settings, endpointId, modelId);
+  return rate ? { ...rate } : undefined;
+}
 function pricedCost(input: number, output: number, rate: AiPriceRate): number {
   return (input * rate.inputEurPerMillion + output * rate.outputEurPerMillion) / 1_000_000;
 }
@@ -52,6 +65,7 @@ export function accountBookAiBudget(
 ): AiBudgetAccounting {
   const result: AiBudgetAccounting = {
     estimatedSpentEur: 0, incompleteCount: 0, unpricedCount: 0, countedCalls: 0,
+    legacyPricedCount: 0,
   };
   const enabledSince = Date.parse(budget.enabledAt);
   if (!Number.isFinite(enabledSince)) return result;
@@ -64,11 +78,23 @@ export function accountBookAiBudget(
       result.incompleteCount++;
       continue;
     }
-    const rate = lookupRate(settings, activity.endpointId ?? "", activity.modelId ?? "");
+    const quoted = activity.priceRateSnapshot;
+    // Never fall back to today's rate when a supplied quote is corrupt
+    // or names another route: fail closed instead of understating the bill.
+    if (quoted !== undefined && (!isPriceRate(quoted) ||
+      quoted.endpointId !== activity.endpointId ||
+      quoted.modelId !== activity.modelId)) {
+      result.unpricedCount++;
+      continue;
+    }
+    // No historical quote is available for pre-0.11.76 records: retain
+    // prior compatibility but expose this repricing risk in the dashboard.
+    const rate = quoted ?? lookupRate(settings, activity.endpointId ?? "", activity.modelId ?? "");
     if (!rate) {
       result.unpricedCount++;
       continue;
     }
+    if (quoted === undefined) result.legacyPricedCount++;
     result.estimatedSpentEur += pricedCost(input, output, rate);
   }
   return result;

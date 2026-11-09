@@ -9,7 +9,7 @@ import { acceptedRepairs, adjudicationPrompt, assertEditorialReviewCoverage, beg
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
-import { AiBudgetStop, preflightBookAiBudget } from "../domain/ai-budget";
+import { AiBudgetStop, preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -527,6 +527,10 @@ export class AutopilotRunner {
           );
           await guard.assertActive();
           if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");
+          // Store the author's validated price BEFORE the provider call.
+          // The quote belongs to this attempt even if its output is rejected.
+          const quote = snapshotPriceRate(settings, assignment.endpointId, assignment.modelId);
+          if (quote) started.priceRateSnapshot = quote;
           // Persist the request attempt BEFORE network fetch: an interrupted browser
           // must not misrepresent a possibly billed call as a free operation.
           started.aiRequested = true;

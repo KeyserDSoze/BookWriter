@@ -127,10 +127,15 @@ export function AiBudgetPanel({
         {snapshot.countedCalls} richieste · {snapshot.incompleteCount} senza usage completo ·
         {snapshot.unpricedCount} senza tariffa.
       </p>
+      {snapshot.legacyPricedCount > 0 && <p role="note" className="text-xs text-amber-700 dark:text-amber-300">
+        {snapshot.legacyPricedCount} chiamate precedenti senza tariffa storicizzata:
+        stima ricalcolata con il listino corrente. Le nuove chiamate conservano
+        la tariffa valida al momento della richiesta.
+      </p>}
     </div>}
     <div className="mt-4 space-y-2 border-t border-slate-300 pt-3 dark:border-slate-700">
       <h3 className="text-sm font-semibold">Tariffe configurate dall'autore (€/milione di token)</h3>
-      <p className="muted text-xs">Ogni modello e provider necessita di una tariffa input e output; non vengono precompilate tariffe commerciali.</p>
+      <p className="muted text-xs">Ogni modello e provider necessita di una tariffa input e output; non vengono precompilate tariffe commerciali. Cambiare il prezzo vale solo per le nuove richieste che salvano la tariffa al momento del tentativo.</p>
       {routes.length ? <>
         <label className="block text-sm">Modello / endpoint
           <select className="field mt-1" aria-label="Modello per tariffa"

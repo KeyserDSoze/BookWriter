@@ -182,6 +182,8 @@ export interface Activity {
   modelId?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Author-entered EUR/million quote captured BEFORE the provider attempt. */
+  priceRateSnapshot?: AiPriceRate;
   /** True once a provider request was about to be sent; absent on legacy logs. */
   aiRequested?: boolean;
   error?: string;

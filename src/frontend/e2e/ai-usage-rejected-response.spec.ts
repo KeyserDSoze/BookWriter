@@ -71,7 +71,9 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   const state=()=>page.evaluate(()=>new Promise<{
     status:string;error?:string;reports:number;scene:string;
     activities:Array<{status:string;aiRequested?:boolean;inputTokens?:number;
-      outputTokens?:number;modelId?:string}>;
+      outputTokens?:number;modelId?:string;priceRateSnapshot?:{
+        inputEurPerMillion:number;outputEurPerMillion:number;
+      }}>;
   }>((resolve,reject)=>{
     const opened=indexedDB.open("bookwriter");
     opened.onerror=()=>reject(opened.error);
@@ -98,7 +100,8 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   expect(saved.scene).toBe("Mara incontra il guardiano davanti al portone del castello.");
   expect(saved.activities).toHaveLength(1);
   expect(saved.activities[0]).toMatchObject({status:"failed",aiRequested:true,
-    modelId:"mock-usage-review",inputTokens:243,outputTokens:72});
+    modelId:"mock-usage-review",inputTokens:243,outputTokens:72,
+    priceRateSnapshot:{inputEurPerMillion:3,outputEurPerMillion:9}});
   // The stored Activity is definitive; reload to also verify the dashboard
   // rebuilds its estimate from disk rather than matching JSX punctuation.
   await page.reload();
@@ -108,5 +111,21 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   await expect(ledger.getByText(/Spesa stimata da usage noto:/).locator(".."))
     .toContainText("0,0014"); // (243*3 + 72*9) / 1_000_000 €, rounded to 4 decimals
   await expect(ledger.getByText(/Consumi incerti/)).toHaveCount(0);
+  await expect(ledger.getByText(/chiamate precedenti senza tariffa storicizzata/))
+    .toHaveCount(0);
+  // A tenfold price update must affect only future calls; test after reload.
+  await ledger.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("30");
+  await ledger.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("90");
+  await ledger.getByRole("button",{name:"Salva tariffa del modello"}).click();
+  await expect(ledger.getByText(/Tariffa salvata localmente/)).toBeVisible();
+  await page.reload();
+  const refreshed=page.getByRole("region",{name:"Budget AI"});
+  await expect(refreshed.getByText(/Spesa stimata da usage noto:/).locator(".."))
+    .toContainText("0,0014");
+  await expect(refreshed.getByRole("spinbutton",{name:"Prezzo input per milione"}))
+    .toHaveValue("30");
+  await expect(refreshed.getByRole("spinbutton",{name:"Prezzo output per milione"}))
+    .toHaveValue("90");
+  await expect(refreshed.getByText(/Consumi incerti/)).toHaveCount(0);
 });
 }

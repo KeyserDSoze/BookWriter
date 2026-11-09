@@ -1,6 +1,6 @@
 import type { Activity, BookProject } from "../domain/types";
 import { routeFor } from "../domain/types";
-import { preflightBookAiBudget } from "../domain/ai-budget";
+import { preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
 import {
   assertDraftMatchesReview, buildSceneMergePrompt,
   validateSceneProposal, type SceneMergeDraft,
@@ -90,12 +90,14 @@ export async function generateSceneMergeDraft(
     await guard.assertActive();
     if (controller.signal.aborted) throw new DOMException("Interrotto prima del provider.", "AbortError");
     const route = routeFor("merge", settings, current);
+    const quote = snapshotPriceRate(settings, route.endpointId, route.modelId);
     const attempted: Activity = {
       id: crypto.randomUUID(), bookId: review.bookId, runId: crypto.randomUUID(),
       phase: "revision", title: "Bozza AI di fusione scena",
       status: "running", reason: "Confronto facoltativo di due versioni della scena.",
       nextStep: "Valuta la proposta prima dell'applicazione al canon.",
       endpointId: route.endpointId, modelId: route.modelId, aiRequested: true,
+      ...(quote ? { priceRateSnapshot: quote } : {}),
       createdAt: new Date().toISOString(),
     };
     // Persist a potentially billable call before network I/O, even on timeout.

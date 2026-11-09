@@ -98,12 +98,19 @@ describe("Accounting del provider separato dalla validità narrativa", () => {
     expect(activities[0]).toMatchObject({
       status:"failed",aiRequested:true,endpointId:"openai",modelId:"review-model",
       inputTokens:243,outputTokens:72,
+      priceRateSnapshot:{endpointId:"openai",modelId:"review-model",
+        inputEurPerMillion:3,outputEurPerMillion:9},
     });
     const accounted=accountBookAiBudget(activities,settings,book.aiBudget!);
     expect(accounted.countedCalls).toBe(1);
     expect(accounted.incompleteCount).toBe(0);
     expect(accounted.unpricedCount).toBe(0);
     expect(accounted.estimatedSpentEur).toBeCloseTo((243*3+72*9)/1_000_000);
+    const repriced=structuredClone(settings);
+    repriced.aiPriceRates=[{endpointId:"openai",modelId:"review-model",
+      inputEurPerMillion:30,outputEurPerMillion:90}];
+    expect(accountBookAiBudget(activities,repriced,book.aiBudget!).estimatedSpentEur)
+      .toBeCloseTo(accounted.estimatedSpentEur);
     expect(preflightBookAiBudget(saved,settings,activities,
       "chapterAudit","Il prossimo ruolo","Prova")).toBeDefined();
   });

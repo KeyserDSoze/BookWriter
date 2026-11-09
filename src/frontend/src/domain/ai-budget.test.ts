@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings } from "./types";
-import { accountBookAiBudget, AiBudgetStop, isBudgetValid, preflightBookAiBudget } from "./ai-budget";
+import { accountBookAiBudget, AiBudgetStop, isBudgetValid, preflightBookAiBudget, snapshotPriceRate } from "./ai-budget";
 
 function fixture(){
   const book = newBook("Premessa","Romanzo","Stile","Adulti");
@@ -85,6 +85,49 @@ describe("Budget AI basato su tariffe inserite dall'autore",()=>{
       inputEurPerMillion:12,outputEurPerMillion:23});
     expect(accountBookAiBudget([call],settings,book.aiBudget!).estimatedSpentEur)
       .toBeCloseTo(0.035);
+  });
+  it("congela la tariffa del tentativo e applica il nuovo listino soltanto al prossimo preflight",()=>{
+    const {book,settings}=fixture();
+    const quote=snapshotPriceRate(settings,"openai","review-model")!;
+    expect(quote).not.toBe(settings.aiPriceRates![0]);
+    const logged=item({priceRateSnapshot:quote,inputTokens:2000,outputTokens:1000});
+    settings.aiPriceRates=[{endpointId:"openai",modelId:"review-model",
+      inputEurPerMillion:50,outputEurPerMillion:70}];
+    const before=accountBookAiBudget([logged],settings,book.aiBudget!);
+    expect(before.estimatedSpentEur).toBeCloseTo((2000*3+1000*9)/1e6);
+    expect(before.legacyPricedCount).toBe(0);
+    const next=preflightBookAiBudget(book,settings,[logged],"chapterReaders","S","P")!;
+    expect(next.estimatedSpentEur).toBeCloseTo(before.estimatedSpentEur);
+    expect(next.estimatedNextEur).toBeGreaterThan(0.5);
+    expect(quote.inputEurPerMillion).toBe(3);
+  });
+  it("prezzi dei log legacy restano ricalcolabili, ma ora sono dichiarati",()=>{
+    const {book,settings}=fixture();
+    const old=item({inputTokens:2000,outputTokens:1000});
+    const fixed=item({inputTokens:2000,outputTokens:1000,
+      priceRateSnapshot:snapshotPriceRate(settings,"openai","review-model")});
+    settings.aiPriceRates=[{endpointId:"openai",modelId:"review-model",
+      inputEurPerMillion:6,outputEurPerMillion:12}];
+    const result=accountBookAiBudget([old,fixed],settings,book.aiBudget!);
+    expect(result.legacyPricedCount).toBe(1);
+    expect(result.unpricedCount).toBe(0);
+    expect(result.estimatedSpentEur).toBeCloseTo((2000*6+1000*12+2000*3+1000*9)/1e6);
+  });
+  it("snapshot presente ma falso, off-route o fuori schema non ricade sulla tariffa nuova",()=>{
+    const {book,settings}=fixture();
+    const quote=snapshotPriceRate(settings,"openai","review-model")!;
+    const rows=[
+      item({priceRateSnapshot:{...quote,modelId:"different"}}),
+      item({priceRateSnapshot:{...quote,inputEurPerMillion:-3}}),
+      item({priceRateSnapshot:null as unknown as typeof quote}),
+      item({priceRateSnapshot:{...quote,outputEurPerMillion:"9" as unknown as number}}),
+    ];
+    const a=accountBookAiBudget(rows,settings,book.aiBudget!);
+    expect(a.unpricedCount).toBe(4);
+    expect(a.legacyPricedCount).toBe(0);
+    expect(a.estimatedSpentEur).toBe(0);
+    expect(()=>preflightBookAiBudget(book,settings,rows,"chapterReaders","S","P"))
+      .toThrow(/prive di un listino/);
   });
   it("non accetta numeri NaN, negativi, output insensati o date invalide",()=>{
     const {book}=fixture();
