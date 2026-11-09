@@ -1,5 +1,5 @@
 import type { Activity, BookProject } from "../domain/types";
-import { acceptedRepairs, assertEditorialReviewCoverage, createEditorialCycle, repairPrompt } from "../domain/editorial-board";
+import { acceptedRepairs, assertEditorialReviewCoverage, assertSavedEditorialJudgmentIntegrity, createEditorialCycle, repairPrompt } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { getBook, getDb } from "../infrastructure/db";
@@ -103,6 +103,7 @@ export function editorialRecoveryProblem(book: BookProject): string | undefined 
         throw new Error("Checkpoint di remediation senza giudizio di correzione valido.");
       if (!Number.isSafeInteger(cycle.repairCursor) || cycle.repairCursor < 0)
         throw new Error("Checkpoint di remediation con cursore non valido.");
+      assertSavedEditorialJudgmentIntegrity(cycle);
       const scenes = [...new Set(acceptedRepairs(cycle).map(fix => fix.sceneId))];
       const nextSceneId = scenes[cycle.repairCursor];
       if (!nextSceneId)

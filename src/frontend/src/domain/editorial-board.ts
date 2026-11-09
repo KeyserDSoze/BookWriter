@@ -1312,6 +1312,47 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
   return { ...parsed, verdict: parsed.decisions.some(x => x.action === "accept") ?
     "repair" : "freeze", createdAt: new Date().toISOString() };
 }
+
+/** Validate a persisted judge's full decision matrix without re-evaluating
+ * already repaired prose. A resumed repair may have changed earlier scenes,
+ * so the current pending scene is the only one whose narrative anchors must
+ * still match verbatim. This proves structure/provenance, not AI authenticity. */
+export function assertSavedEditorialJudgmentIntegrity(
+  cycle: ChapterEditorialCycle, chapter?: Chapter, pendingSceneId?: string,
+): void {
+  const judgment = cycle.judgment;
+  if (!judgment || judgment.verdict !== "repair" ||
+      typeof judgment.createdAt !== "string" ||
+      !Number.isFinite(Date.parse(judgment.createdAt)))
+    throw new Error("Checkpoint di remediation: giudizio salvato mancante o non valido.");
+  const parsed = judgmentSchema.safeParse(judgment);
+  if (!parsed.success)
+    throw new Error("Checkpoint di remediation: schema del giudizio salvato non valido.");
+  const findings = allFindings(cycle);
+  const expected = new Map(findings.map(f => [f.id, f]));
+  if (expected.size !== findings.length)
+    throw new Error("Checkpoint di remediation: finding duplicati nei report.");
+  if (judgment.decisions.length !== expected.size)
+    throw new Error("Checkpoint di remediation: il giudice non ha valutato tutti i rilievi.");
+  const seen = new Set<string>();
+  let accepted = 0;
+  for (const decision of judgment.decisions) {
+    const finding = expected.get(decision.findingId);
+    if (!finding || seen.has(decision.findingId))
+      throw new Error("Checkpoint di remediation: decisione duplicata o finding inesistente.");
+    seen.add(decision.findingId);
+    if (decision.action !== "accept") continue;
+    accepted++;
+    if (decision.remediation.trim().length < 8)
+      throw new Error("Checkpoint di remediation: correzione accettata senza remediation concreta.");
+    if (chapter && pendingSceneId === finding.sceneId &&
+        !isNarrativeEvidenceAnchorCurrent(chapter, finding))
+      throw new Error("Checkpoint di remediation: prova narrativa della prossima scena non più corrente.");
+  }
+  if (!accepted)
+    throw new Error("Checkpoint di remediation: verdetto repair senza correzioni accettate.");
+}
+
 export function acceptedRepairs(cycle: ChapterEditorialCycle): Array<{
   findingId: string; sceneId: string; remediation: string; reason: string;
 }> {
@@ -1328,6 +1369,10 @@ export function repairPrompt(book: BookProject, cycle: ChapterEditorialCycle,
   const ch = book.chapters.find(x => x.id === cycle.chapterId);
   const scene = ch?.scenes.find(x => x.id === sceneId);
   if (!scene) throw new Error("Scena da correggere assente.");
+  // The persisted judgment might be incomplete or altered after import.
+  // Validate every decision and only the still-pending narrative anchors:
+  // previously rewritten scenes must not be mistaken for stale decisions.
+  assertSavedEditorialJudgmentIntegrity(cycle, ch!, sceneId);
   // Resume/import may enter repair after a source was retired. The same
   // check is repeated by the runner when committing the model's response.
   assertCurrentHistoricalReviewSources(ch!, cycle);

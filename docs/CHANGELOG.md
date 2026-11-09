@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.72 — 2026-11-09 (main, issue #109, epic #20)
+
+**Gate di integrità del giudizio salvato durante la remediation**
+
+- Nuovo `assertSavedEditorialJudgmentIntegrity`: verifica localmente lo schema del giudizio, il verdetto `repair`, il timestamp, la corrispondenza **1:1** delle decisioni con tutti i finding, la presenza di almeno un accept e delle remediation concrete. Non accetta doppioni, omissioni, finding inventati o schema manipolato.
+- `repairPrompt` controlla anche ogni prova narrativa accettata della **scena ancora in attesa**, prima della richiesta AI e di nuovo al commit della risposta; non dichiara obsoleti i vecchi estratti delle scene già corrette. Conservati gli altri gate documentali, narrativi e di riconciliazione.
+- `editorialRecoveryProblem` applica lo stesso controllo; il pannello tollera dati incompleti senza crash e permette recupero supervisionato non distruttivo #105/#108.
+- Vitest su matrice, duplicati, omissioni, campi alterati, pending proof stale e partial repair sano; Playwright desktop/mobile con judgment importato duplicato, stop prima del provider e archivio completo. ADR 0104, guida, README, AGENTS, package/lock 0.11.72. Nessuna nuova dipendenza o chiamata AI.
+
+
 ## 0.11.71 — 2026-11-09 (main, issue #108, epic #20)
 
 **Recupero supervisionato dei checkpoint `repair` che non possono più proseguire**

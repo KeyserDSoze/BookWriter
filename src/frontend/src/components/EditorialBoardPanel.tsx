@@ -365,7 +365,13 @@ export function EditorialBoardPanel({
   const completedReports = cycle?.reports.length ?? 0;
   const totalSlots = cycle?.reports[0]?.segmentCount ?
     cycle.reports[0].segmentCount * EDITORIAL_ROLES.length : null;
-  const pending = cycle?.judgment ? acceptedRepairs(cycle).length : 0;
+  // Imported checkpoints may have forged/missing decision IDs: display the
+  // recovery notice instead of crashing before the author can archive them.
+  let pending = 0;
+  if (cycle?.judgment) {
+    try { pending = acceptedRepairs(cycle).length; }
+    catch { /* Integrity gate displays the explanation via recoveryProblem. */ }
+  }
 
   async function reopen(chapterId: string) {
     if (busy || book.status === "running") return;

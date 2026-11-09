@@ -19,3 +19,7 @@ Web Locks writer/outbox, controllo ottimistico di concorrenza, conferma esplicit
 Se il problema nasce da prosa malformata, un contesto troppo lungo o fonti realmente assenti, è possibile che la nuova review richieda intervento umano. La provenienza di un documento non certifica la verità storica.
 
 [ADR 0103](../ADR/0103-supervised-stale-repair-recovery.md) · [Issue #108](https://github.com/KeyserDSoze/BookWriter/issues/108) · [Epic #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+
+## Estensione v0.11.72 — giudizio salvato incompleto
+
+Una remediation `repair` può essere recuperata anche se le decisioni del giudice sono duplicate, mancanti, associate a finding inesistenti, oppure se la prova narrativa della scena **non ancora riparata** è cambiata. La revisione delle scene già salvate resta affidata alla nuova review, non alla falsa freschezza dei vecchi report. [Guida integrità giudizio](editorial-saved-judgment-integrity.md) · [ADR 0104](../ADR/0104-saved-editorial-judgment-integrity.md).
