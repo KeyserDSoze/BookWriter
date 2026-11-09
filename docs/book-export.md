@@ -54,6 +54,14 @@ Titoli e paragrafi passano attraverso la stessa sanitizzazione XML dell'EPUB: ca
 
 Questo verifica **integrità strutturale e parsing XML** sul file generato, non compatibilità garantita con tutte le versioni di Word/LibreOffice, qualità tipografica, accessibilità o firma/validazione formale Office Open XML. Vedi [ADR 0091](../ADR/0091-docx-canonical-xml-package.md) e [issue #95](https://github.com/KeyserDSoze/BookWriter/issues/95).
 
+## PDF latino esteso e cirillico offline — v0.11.65
+
+Il PDF può ora contenere caratteri **latini estesi** (per esempio `Łódź`, `Šibenik`, `Życie`) e **cirillici** (per esempio `Привет, мир!`) quando la font disponibile contiene effettivamente i glifi richiesti. Per il testo italiano già rappresentabile con i font PDF standard rimane Times; soltanto quando il canone contiene caratteri aggiuntivi il generatore carica **PT Serif Regular/Bold**, incorporato nell'app in un modulo JavaScript differito. I due TTF originali sono redistribuiti con copyright e [licenza SIL OFL 1.1](../src/frontend/src/infrastructure/pdf-fonts/OFL.txt) e vengono incorporati nel PDF, non scaricati da CDN durante l'esportazione.
+
+Prima del rendering, la tabella `cmap` dei TTF viene controllata carattere per carattere sul titolo, sulle intestazioni e sui paragrafi delle sole scene canoniche. Se manca un glifo o è necessario un sistema di scrittura non verificato (come **emoji, cinese, greco, arabo/RTL**), **non viene scaricato alcun PDF** e l'interfaccia propone EPUB/DOCX preservando il manoscritto. Le bozze, le scene pianificate e i segreti esterni al canone non entrano nel controllo né nel file. La numerazione delle pagine dei capitoli e l'esclusione del frontespizio restano invariate.
+
+Test Vitest controllano font TTF embedded (`FontFile2` e `ToUnicode`), latino esteso/cirillico e fail-closed per script non coperti; Playwright desktop/mobile scarica il PDF Unicode effettivo, oltre a verificare i download WinAnsi tradizionali. **Non è supporto Unicode universale né una certificazione del rendering su ogni lettore PDF**. [ADR 0097](../ADR/0097-pdf-embedded-ptserif-cmap.md), [issue #102](https://github.com/KeyserDSoze/BookWriter/issues/102).
+
 ## Numerazione delle pagine PDF — v0.11.62
 
 Il PDF ora numererà le pagine **a partire dal primo capitolo effettivamente esportato**: sotto ciascuna pagina del corpo del romanzo appare `Pagina X di Y`. La numerazione prosegue attraverso i capitoli successivi e i salti pagina automatici di capitoli lunghi. **Il frontespizio resta non numerato**: anche quando un titolo molto lungo si distribuisce su più pagine, la numerazione inizia da `Pagina 1` sul primo capitolo canonico.

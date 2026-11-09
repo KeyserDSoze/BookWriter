@@ -55,7 +55,7 @@ test("PDF canonico: blocco glyph unsupported e download verificato desktop/mobil
   const downloaded: string[] = [];
   page.on("download", item => downloaded.push(item.suggestedFilename()));
   await page.getByRole("button", { name: "PDF", exact: true }).click();
-  await expect(page.getByText(/PDF con font standard non supporta il carattere U\+1F603/)).toBeVisible();
+  await expect(page.getByText(/Il PDF non supporta il carattere U\+1F603/)).toBeVisible();
   expect(downloaded).toEqual([]);
 
   await editBook("La città tornò in silenzio — e il mare cambiò. €");
@@ -79,5 +79,24 @@ test("PDF canonico: blocco glyph unsupported e download verificato desktop/mobil
     "BRIEF-PRIVATO-NON-PUBBLICARE", "SEGRETO-MEMORIA-NON-PUBBLICARE",
     "TESTO-BOZZA-PRIVATA", "TESTO-PLANNED-PRIVATO", "Solo draft",
   ]) expect(pdf).not.toContain(privateData);
+  await expect(page.getByText(/Esportazione PDF completata/)).toBeVisible();
+
+  // A real download with an embedded, licensed Unicode TTF (not a CDN font).
+  await editBook("Nel viaggio a Łódź risuonava: Привет, мир!");
+  await page.reload();
+  await page.getByRole("button", { name: "Archivio", exact: true }).click();
+  const unicodePending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "PDF", exact: true }).click();
+  const unicodeFile = await unicodePending;
+  expect(unicodeFile.suggestedFilename()).toMatch(/segreto-del-mare.*\.pdf$/i);
+  const unicodeBytes = readFileSync(await unicodeFile.path());
+  const unicodePdf = unicodeBytes.toString("latin1");
+  expect(unicodePdf.startsWith("%PDF-")).toBe(true);
+  expect(unicodePdf.trimEnd().endsWith("%%EOF")).toBe(true);
+  expect(unicodePdf).toContain("/FontFile2");
+  expect(unicodePdf).toContain("/ToUnicode");
+  expect(unicodeBytes.byteLength).toBeGreaterThan(75_000);
+  expect((unicodePdf.match(/\/Type\s*\/Page\b/g) ?? []).length).toBe(3);
+  expect(unicodePdf).not.toContain("SEGRETO-MEMORIA-NON-PUBBLICARE");
   await expect(page.getByText(/Esportazione PDF completata/)).toBeVisible();
 });

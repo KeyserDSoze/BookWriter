@@ -165,33 +165,40 @@ export async function exportDocx(book: BookProject): Promise<void> {
 /** jsPDF's built-in Times font uses WinAnsi, not arbitrary Unicode.
  * Reject text that would lose glyphs rather than silently corrupt the manuscript. */
 const PDF_WINANSI_EXTRA = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
-function printablePdfText(value: string): string {
-  const normalized = safeXmlText(value).replaceAll("\t", "    ");
-  for (const character of normalized) {
-    const cp = character.codePointAt(0)!;
-    if ((cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) ||
-        cp === 0x0a || cp === 0x0d || PDF_WINANSI_EXTRA.includes(character)) continue;
-    const code = cp.toString(16).toUpperCase().padStart(4, "0");
-    throw new Error("Il PDF con font standard non supporta il carattere U+" + code +
-      ". Esporta in EPUB o DOCX per conservare integralmente il testo.");
-  }
-  return normalized;
+function normalizePdfText(value: string): string {
+  return safeXmlText(value).replaceAll("\t", "    ");
+}
+function isWinAnsiPdfChar(character: string): boolean {
+  const cp = character.codePointAt(0)!;
+  return (cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) ||
+    cp === 0x0a || cp === 0x0d || PDF_WINANSI_EXTRA.includes(character);
 }
 
 /** Generate inspectable PDF bytes without triggering a download or network request.
- * Unsupported glyphs fail closed before the first page is rendered. */
+ * For non-WinAnsi prose, embed licensed PT Serif font bytes from a lazy local
+ * JS chunk, with a glyph-by-glyph cmap preflight to prevent silent corruption. */
 export async function buildPdf(book: BookProject): Promise<Uint8Array> {
   const chapters = ensureChapters(book);
-  const title = printablePdfText(book.title);
+  const title = normalizePdfText(book.title);
   const safeChapters = chapters.map(({ chapter, scenes }) => ({
-    title: printablePdfText("Capitolo " + chapter.number + " - " + chapter.title),
+    title: normalizePdfText("Capitolo " + chapter.number + " - " + chapter.title),
     scenes: scenes.map(scene => ({
-      title: printablePdfText(scene.title),
-      paragraphs: paragraphs(scene.text).map(printablePdfText),
+      title: normalizePdfText(scene.title),
+      paragraphs: paragraphs(scene.text).map(normalizePdfText),
     })),
   }));
+  const publishedTexts = [title, ...safeChapters.flatMap(chapter => [
+    chapter.title, ...chapter.scenes.flatMap(scene => [scene.title, ...scene.paragraphs]),
+  ])];
+  const needsUnicodeFont = publishedTexts.some(text =>
+    Array.from(text).some(character => !isWinAnsiPdfChar(character)));
+  const unicodeFont = needsUnicodeFont ? await import("./pdf-unicode-font") : null;
+  // Finish checking every publishable field before beginning any PDF rendering.
+  if (unicodeFont) publishedTexts.forEach(unicodeFont.assertPdfUnicodeText);
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: false });
+  if (unicodeFont) unicodeFont.registerPdfUnicodeFonts(pdf);
+  const fontFamily = unicodeFont?.PDF_UNICODE_FAMILY ?? "times";
   const pageWidth = 210;
   const top = 22; const bottom = 276; const margin = 23;
   let y = top;
@@ -199,7 +206,7 @@ export async function buildPdf(book: BookProject): Promise<Uint8Array> {
     if (y + height > bottom) { pdf.addPage(); y = top; }
   }
   function addWrapped(text: string, fontSize: number, bold = false, lineHeight = 6) {
-    pdf.setFont("times", bold ? "bold" : "normal");
+    pdf.setFont(fontFamily, bold ? "bold" : "normal");
     pdf.setFontSize(fontSize);
     const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin) as string[];
     for (const line of lines) {
@@ -231,7 +238,7 @@ export async function buildPdf(book: BookProject): Promise<Uint8Array> {
   const contentPageCount = lastPage - firstBodyPage + 1;
   for (let page = firstBodyPage; page <= lastPage; page++) {
     pdf.setPage(page);
-    pdf.setFont("times", "normal");
+    pdf.setFont(fontFamily, "normal");
     pdf.setFontSize(9);
     pdf.text("Pagina " + (page - firstBodyPage + 1) + " di " + contentPageCount,
       pageWidth / 2, 286, { align: "center" });

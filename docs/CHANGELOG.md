@@ -1,5 +1,16 @@
 # Changelog — BookWriter
 
+## 0.11.65 — 2026-11-09 (main, issue #102, epic #4)
+
+**PDF Unicode offline per latino esteso e cirillico con PT Serif incorporato e preflight cmap**
+
+- Per manoscritti che contengono soltanto caratteri WinAnsi, `buildPdf` conserva il percorso rapido e l'impaginazione Times standard, con pagine e numerazione `Pagina X di Y` invariati.
+- Se **solo il contenuto canonico** usa caratteri fuori WinAnsi, BookWriter carica in modo differito il modulo `pdf-unicode-font.ts` con PT Serif Regular/Bold, due **TTF statici originali** da Google Fonts sotto SIL Open Font License 1.1 (copyright ParaType, licenza integralmente conservata in `pdf-fonts/OFL.txt`). I file vengono inlined nei byte JS da Vite (`?inline`), non scaricati in fase di esportazione; nessuna API esterna o nuova dipendenza.
+- Prima di creare qualunque PDF, un parser della tabella TrueType `cmap` format 4 verifica ogni carattere previsto nel titolo, nei capitoli, nelle scene e nei paragrafi canonici contro **entrambi** i font, normale e grassetto. Latin Extended e cirillico che hanno glifi reali sono permessi; emoji, CJK, scritture senza shaping verificato e surrogati malformati sono bloccati con codice `U+XXXX` e invito a EPUB/DOCX. Nessuna sostituzione silenziosa dei glifi non coperti.
+- Vitest testa header/trailer, strutture PDF font embedded (`FontFile2`, `ToUnicode`), pagine, Unicode e limiti del repertorio; Playwright desktop/mobile scarica realmente un PDF con cirillico e latin extended, oltre al percorso fail-closed per emoji. Brief, segreti fuori canone, draft e scene planned restano esclusi.
+- ADR 0097, AGENTS, README, guida e feature aggiornati; `package.json`/`package-lock.json` v0.11.65; nessun cambio al modello dei dati, API di rete, branch o PR.
+- **Limiti:** questa non è copertura Unicode completa: arabo/RTL, CJK, emoji e complessità di shaping/ligature richiedono font e test specifici. Mancano PDF/A, tagging accessibile e certificazione tipografica; epic #4 rimane aperta.
+
 ## 0.11.64 — 2026-11-09 (main, issue #101, epic #4)
 
 **EPUBCheck ufficiale su una matrice di quattro libri sintetici generati da BookWriter**

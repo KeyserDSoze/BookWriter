@@ -2,6 +2,7 @@
 
 ## Progresso versionato
 
+- [x] v0.11.65 (issue #102): PDF Unicode offline per Latin Extended e cirillico con font PT Serif Regular/Bold sotto OFL e preflight TrueType cmap; WinAnsi Times invariato, emoji/CJK fail-closed (ADR 0097).
 - [x] v0.11.64 (issue #101): EPUBCheck W3C 5.4.0 obbligatorio su matrice di 4 manoscritti sintetici (canon/draft, primo capitolo tardivo, XML/Unicode, testo lungo), file non vuoti e privacy verificati (ADR 0096).
 - [x] v0.11.63 (issue #100): job CI EPUBCheck 5.4.0 ufficiale con release/digest fissati e fixture `buildEpub` sintetica, privacy e Unicode/escaping testati (ADR 0095); non certifica tutte le esportazioni.
 - [x] v0.11.62 (issue #99): numerazione `Pagina X di Y` per pagine dei capitoli PDF canonici, frontespizio anche multipagina escluso; test bytes e browser desktop/mobile (ADR 0094). Deploy da verificare, issue #98 ancora aperta.

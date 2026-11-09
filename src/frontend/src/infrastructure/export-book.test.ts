@@ -293,6 +293,33 @@ describe("PDF standard — preflight charset e file verificabile", () => {
     await expect(buildPdf(book)).resolves.toBeInstanceOf(Uint8Array);
   });
 
+  it("incorpora offline PT Serif TTF e tabella ToUnicode per latino esteso e cirillico", async () => {
+    const book = pdfManuscript();
+    book.title = "Łódź, città & Привет";
+    book.chapters[0]!.title = "Życie e Дорога";
+    book.chapters[0]!.scenes[0]!.title = "Scena: Čechov";
+    book.chapters[0]!.scenes[0]!.text = "Il cammino da Łódź. Привет, мир!\n\nIl cielo di Šibenik.";
+    const bytes = await buildPdf(book);
+    const pdf = new TextDecoder("latin1").decode(bytes);
+    expect(pdf.startsWith("%PDF-")).toBe(true);
+    expect(pdf.trimEnd().endsWith("%%EOF")).toBe(true);
+    expect((pdf.match(/\/Type\s*\/Page\b/g) ?? []).length).toBe(3);
+    expect(pdf).toContain("/FontFile2");
+    expect(pdf).toContain("/ToUnicode");
+    expect(pdf).toContain("PTSerif");
+    expect(bytes.byteLength).toBeGreaterThan(75_000);
+    expect(pdf).not.toContain("SEGRETO-NON-ESPORTARE");
+    expect(pdf).not.toContain("PROSA-DRAFT-MAI-ESPORTARE");
+  });
+
+  it("rifiuta i glifi senza cmap e le scritture non verificate, senza file parziale", async () => {
+    for (const unsupported of ["中文", "α", "😀", "ش", "\uD800"]) {
+      const book = pdfManuscript();
+      book.chapters[0]!.scenes[0]!.text = "Testo " + unsupported;
+      await expect(buildPdf(book)).rejects.toThrow(/Il PDF non supporta il carattere U\+.*EPUB o DOCX/);
+    }
+  });
+
   it("blocca caratteri non rappresentabili in ogni elemento effettivamente esportato", async () => {
     const edit = [
       (book: BookProject) => { book.title = "Titolo 🪶"; },
@@ -303,7 +330,7 @@ describe("PDF standard — preflight charset e file verificabile", () => {
     for (const mutate of edit) {
       const book = pdfManuscript();
       mutate(book);
-      await expect(buildPdf(book)).rejects.toThrow(/PDF con font standard non supporta.*EPUB o DOCX/);
+      await expect(buildPdf(book)).rejects.toThrow(/Il PDF non supporta il carattere U\+.*EPUB o DOCX/);
     }
   });
 
