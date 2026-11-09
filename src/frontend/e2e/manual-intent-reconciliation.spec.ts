@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const BASE = "a".repeat(40);
 const PUBLISHED = "b".repeat(40);
 const ADVANCED = "e".repeat(40);
+const SIDE = "f".repeat(40);
 const LOCAL = "c".repeat(40);
 type Snapshot = {
   book: { id: string; brief: string; updatedAt: string;
@@ -72,7 +73,13 @@ test("riconciliazione esplicita: solo GET, nessuna perdita di libro/outbox", asy
       data = { object: { sha: ADVANCED } };
     } else if (method === "GET" &&
                path.endsWith("/repos/old-writer/old-novel/git/commits/" + ADVANCED)) {
-      data = { message: "Another device checkpoint", parents: [{ sha: PUBLISHED }] };
+      // A genuine two-parent merge: the old push is an ancestor only on
+      // the second branch. Both branches must be inspected, not guessed.
+      data = { message: "Merge from another device",
+        parents: [{ sha: SIDE }, { sha: PUBLISHED }] };
+    } else if (method === "GET" &&
+               path.endsWith("/repos/old-writer/old-novel/git/commits/" + SIDE)) {
+      data = { message: "Unrelated checkpoint", parents: [{ sha: BASE }] };
     } else if (method === "GET" &&
                path.endsWith("/repos/old-writer/old-novel/git/commits/" + PUBLISHED)) {
       data = { message: "bookwriter: sync " + operationId, parents: [{ sha: BASE }] };
@@ -184,8 +191,8 @@ test("riconciliazione esplicita: solo GET, nessuna perdita di libro/outbox", asy
     expect(await snapshot(second)).toEqual(before);
     expect(methods.every(method => method.startsWith("GET "))).toBe(true);
 
-    // HEAD has advanced; only the historical ancestor and its marker prove
-    // the old operation belongs to this author.
+    // HEAD is a two-parent merge from another device; only both traversed
+    // branches plus the historical marker can attribute the old operation.
     validMarker = true;
     await button.click();
     await expect(page.getByText(/Tentativo GitHub precedente verificato e archiviato/)).toBeVisible();
@@ -194,7 +201,8 @@ test("riconciliazione esplicita: solo GET, nessuna perdita di libro/outbox", asy
     expect(after.outbox).toEqual(before.outbox);
     expect(after.intent).toBeUndefined();
     expect(methods.every(method => method.startsWith("GET "))).toBe(true);
-    expect(methods.filter(x => x.includes("/repos/old-writer/old-novel/"))).toHaveLength(9);
+    expect(methods.filter(x => x.includes("/repos/old-writer/old-novel/"))).toHaveLength(11);
+    expect(methods.some(x => x.endsWith("/git/commits/" + SIDE))).toBe(true);
     await expect(button).toHaveCount(0);
   } finally {
     await second.close();

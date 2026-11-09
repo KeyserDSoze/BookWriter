@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.56 — 2026-11-09 (main, issue #92, #10, #3, #6)
+
+**Intenti GitHub manuali sospesi riconciliabili attraverso merge binari verificati**
+
+- Prima la verifica del vecchio push sospeso richiedeva una catena parent **lineare**, quindi un successivo merge Git impediva di riconoscere un commit già pubblicato, pur essendo antenato della HEAD. Ora la riconciliazione **esplicita dell'autore** percorre via sole GET **entrambi i parent** dei merge Git standard e l'intero grafo raggiungibile dal branch originale, sopra la baseline originaria.
+- Il budget è di **32 commit distinti complessivi** (non 32 per ramo). Parent SHA devono essere validi, senza duplicati o self-parent; un controllo DFS verifica assenza di cicli, distinguendo gli antenati condivisi da veri loop. I merge octopus (>2 parent), commit mancanti, grafi più grandi e prove incomplete restano fail-closed.
+- Un solo commit storico può corrispondere al messaggio `bookwriter: sync <operationId>`; deve avere parent **unico e uguale alla baseline** (se nota), e il marker `.bookwriter/sync.json` letto con `ref=<sha del candidato>` deve attestare `bookId,operationId,sourceRevision` esatti. Un secondo candidato sul ramo opposto o marker incoerente impediscono l'archiviazione. La HEAD viene riletta **dopo aver verificato tutti i rami**, e deve rimanere invariata.
+- Le garanzie locali della v0.11.54 rimangono: consenso umano, Web Locks writer→outbox, CAS `books+meta`, cancellazione **solo dell'intento durabile** verificato. Nessun push, force push, merge di contenuti, modifica di canon, libro, outbox, remote o PAT. Il risultato indica lo SHA originale, non la successiva HEAD di merge.
+- Unit test Vitest su merge valido sui due rami e annidato, doppio candidato, marker falso, parent sbagliato, loop, octopus, budget esaurito, HEAD mobile e rete persa. Playwright desktop/mobile con due schede, HEAD in merge e primo marker falso seguito dalla prova valida, sempre tramite GET. ADR 0088, AGENTS, README e guide aggiornati.
+- **Limitazioni:** il controllo puntuale della HEAD non crea fencing remoto e GitHub/IndexedDB restano transazioni distinte. Storie profonde, octopus merge e sincronizzazioni cross-device complesse restano nelle issue #10/#3/#6.
+
+
 ## 0.11.55 — 2026-11-09 (main, issue #91, #10, #3, #6)
 
 **Riconciliazione dei push GitHub storici sulla catena lineare della HEAD**
