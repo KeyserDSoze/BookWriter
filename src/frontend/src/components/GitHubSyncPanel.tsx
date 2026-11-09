@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { encryptLocal } from "../infrastructure/crypto";
 import { connectBookRemote, setBookAutoSync } from "../application/github-book-settings";
+import { pushManualGitHubBook } from "../application/manual-github-push";
 import { getOutbox, retryBlockedSync } from "../infrastructure/outbox";
 import { drainGitHubOutbox } from "../application/auto-sync";
 import {
@@ -11,7 +12,7 @@ import {
   type WriterLeaseStatus,
 } from "../infrastructure/github-lease";
 import {
-  importGitHubBook, inspectRepository, pushGitHubBook, validateRemote,
+  importGitHubBook, inspectRepository, validateRemote,
   type RepoInfo,
 } from "../infrastructure/github-sync";
 
@@ -187,13 +188,14 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     return doWork(async () => {
       if (!book) throw new Error("Nessun libro selezionato.");
       if (book.remote?.autoSync) throw new Error("Con autosync attivo, usa il controllo della coda invece della sincronizzazione manuale.");
-      const result = await pushGitHubBook(book.id, publicConsent);
+      const result = await pushManualGitHubBook(book.id, publicConsent);
       // The GitHub client has already confirmed book metadata and outbox
       // together: never acknowledge a potentially newer queue item here.
       setOutbox(await getOutbox(book.id));
       await onRefresh();
-      return "Sincronizzato " + result.repository +
-        " · commit " + result.commit.slice(0, 12) + " · " + result.paths + " file. Nessun force push.";
+      return (result.recovered ? "Commit GitHub recuperato e confermato: " : "Sincronizzato ") +
+        result.repository + " · commit " + result.commit.slice(0, 12) +
+        " · " + result.paths + " file. Nessun force push.";
     });
   }
 

@@ -1,5 +1,17 @@
 # Changelog — BookWriter
 
+## 0.11.53 — 2026-11-09 (main, issue #89, #10, #3, #6)
+
+**Push manuale GitHub recuperabile anche dopo reload e arresto improvviso della scheda**
+
+- Il push manuale prima generava `operationId` soltanto in memoria: dopo un crash, un nuovo click non poteva riconoscere il marker del proprio commit già pubblicato. Ora registra **prima di qualunque HTTP** un `ManualPushIntent` durabile nello store IndexedDB `meta` esistente, con libro, UUID, destinazione, baseline, revisione iniziale e timestamp, senza PAT o dati segreti.
+- Il pulsante **Sincronizza su GitHub** usa `pushManualGitHubBook`, che acquisisce senza attesa i Web Lock `bookwriter:writer:<bookId>` e `bookwriter:github-outbox` nello stesso ordine delle modifiche manuali protette. Niente chiamate se il writer o la coda sono in uso, o se manca il supporto Web Locks.
+- Quando l'autore riprova dopo un reload, il nuovo invio riutilizza l'UUID esatto del tentativo precedente. Se GitHub ha già pubblicato quel commit, il recovery in sola lettura della v0.11.52 verifica HEAD, messaggio Git e marker; **nessun POST/PATCH aggiuntivo**, anche quando un'altra scheda ha aggiornato il testo locale nel frattempo.
+- `persistRemoteAcknowledgment` registra insieme commit GitHub, decisione sulla outbox e cancellazione del **solo intento manuale con UUID corrispondente** nella transazione `books+outbox+meta`. Un errore remoto, una baseline cambiata o un ACK estraneo non eliminano il record durabile né la coda; le modifiche al canone più recenti restano intatte.
+- Un intento verso una repository/branch o baseline diversa viene rifiutato con errore esplicito, senza ruotare l'ID o aggirare il controllo dei conflitti. La coda autosync rimane separata e non viene riproposta implicitamente per il push manuale.
+- Vitest su intent persistente, lock occupati/assenti, ACK atomico, outbox indipendente e mismatch; Playwright desktop/mobile con **due schede reali**, PATCH applicato ma risposta e readback persi, reload, retry senza nuovi commit e nuovo checkpoint preservato. ADR 0085, AGENTS, README e guide aggiornati. **Limitazione:** l'intento locale non è condiviso tra dispositivi; GitHub e IndexedDB restano non atomici cross-device.
+
+
 ## 0.11.52 — 2026-11-09 (main, issue #88, #10, #3, #6)
 
 **Push GitHub: recupero immediato in sola lettura di un PATCH già applicato con risposta persa**

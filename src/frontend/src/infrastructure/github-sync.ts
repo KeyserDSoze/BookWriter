@@ -289,7 +289,9 @@ export async function persistRemoteAcknowledgment(
   operationId: string, expectedLastSyncedCommit?: string,
 ): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(["books", "outbox"], "readwrite");
+  // The manual operation ID and remote ACK must commit or roll back together:
+  // a crash cannot leave an ACKed commit with an obsolete manual marker.
+  const tx = db.transaction(["books", "outbox", "meta"], "readwrite");
   const books = tx.objectStore("books");
   const latest = await books.get(bookId) as BookProject | undefined;
   if (!latest?.remote || latest.remote.owner !== remote.owner ||
@@ -323,6 +325,17 @@ export async function persistRemoteAcknowledgment(
       state: "pending",
     }, bookId);
   }
+  // Only the exact manual operation that was remotely acknowledged may
+  // release its durable intent. Never clear a newer or unrelated attempt.
+  const intentKey = "manual-github-push:" + bookId;
+  const intent = await tx.objectStore("meta").get(intentKey) as {
+    operationId: string; owner: string; repository: string; branch: string;
+  } | undefined;
+  if (intent?.operationId === operationId &&
+      intent.owner === remote.owner &&
+      intent.repository === remote.repository &&
+      intent.branch === remote.branch)
+    await tx.objectStore("meta").delete(intentKey);
   // Independent or blocked requests stay unchanged; never silently resolve
   // a real conflict or falsely mark newer prose as published.
   await tx.done;
