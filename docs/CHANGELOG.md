@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.33 — 2026-11-09 (main, issue #20)
+
+**Due riferimenti pertinenti nelle finestre delle scene precedenti lunghe**
+
+- `targetedLiteralWindows` conserva il primo estratto centrato sulla menzione a parola intera di priorità più alta; se un **altro segnale** tra i primi 48 appare **fuori** da quel frammento, la seconda finestra punta a quella menzione invece di mostrare sempre un contesto generico da inizio/fine. In mancanza di un secondo testimone distinto, rimane il fallback originale.
+- Non aumentano finestre (max **2 × 1.250 caratteri**), scene selezionate (4), limiti per capitolo (2) o candidati esaminati (1.600). Offset e testi originali, ordine deterministico, ricerca letterale a parola intera e limiti di recupero dichiarati rimangono invariati.
+- Test Vitest su due indizi narrativi separati, indizi concentrati nella stessa finestra con fallback, nomi regex escaped, provenienza letterale e isolamento dei lettori ciechi; Playwright desktop/mobile sul nuovo avviso di campionamento. ADR 0066, guida, AGENTS, README.
+- Nessuna modifica a persistenza, ZIP, canon, segreti, note autore, consenso, sync, giudizi, freeze o chiamate AI/HTTP. **Limite:** i frammenti restano parziali e non sono prova di identità, possesso, conoscenza o contraddizione.
+
+
 ## 0.11.32 — 2026-11-09 (main, issue #20)
 
 **Rivalidazione cross-chapter: distribuzione equa dei candidati prima del ranking**

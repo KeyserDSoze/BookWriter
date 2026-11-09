@@ -216,22 +216,37 @@ function originalWholeWordOffset(text:string,term:string):number {
   return -1;
 }
 
-/** Exact original-text windows, preferring the caller's ranked signal order.
- * No substring ("Ivo" in "vivo"), normalized-offset drift or stitched quotes.
- * On no whole-word match, deliberately fall back to first/last context. */
+/** Exact original-text windows, preferring the caller's ranked signals.
+ * First show the strongest whole-word witness, then an uncovered DIFFERENT
+ * signal if available. Otherwise preserve the distant-context fallback.
+ * Never claim the two literal excerpts are contiguous or complete. */
 export function targetedLiteralWindows(text:string,matchedTerms:readonly string[]):
   Array<{offset:number;text:string}> {
   if(text.length<=2800)return [{offset:0,text}];
-  let hit=-1;
-  for(const term of matchedTerms.slice(0,48)){
-    hit=originalWholeWordOffset(text,term);
-    if(hit>=0)break;
-  }
   const maxStart=text.length-WINDOW_CHARS;
-  const focused=hit>=0?Math.min(maxStart,Math.max(0,hit-Math.floor(WINDOW_CHARS/2))):0;
-  const distant=focused>=maxStart/2?0:maxStart;
-  const offsets=[...new Set([focused,distant])].sort((a,b)=>a-b);
-  if(offsets.length===1)offsets.push(focused===0?maxStart:0);
+  const windowStart=(at:number)=>Math.min(maxStart,
+    Math.max(0,at-Math.floor(WINDOW_CHARS/2)));
+  const terms=matchedTerms.slice(0,48);
+  let primaryHit=-1;
+  let primaryStart=0;
+  let secondHit=-1;
+  for(const term of terms){
+    const hit=originalWholeWordOffset(text,term);
+    if(hit<0)continue;
+    if(primaryHit<0){
+      primaryHit=hit;
+      primaryStart=windowStart(hit);
+    }else if(hit<primaryStart || hit>=primaryStart+WINDOW_CHARS){
+      // This is a separate whole-word witness outside the first excerpt.
+      // A second mention inside the first excerpt adds no new coverage.
+      secondHit=hit;
+      break;
+    }
+  }
+  const fallback=primaryStart>=maxStart/2?0:maxStart;
+  const secondary=secondHit>=0?windowStart(secondHit):fallback;
+  const offsets=[...new Set([primaryStart,secondary])];
+  if(offsets.length===1)offsets.push(primaryStart===0?maxStart:0);
   return offsets.sort((a,b)=>a-b).map(offset=>({
     offset,text:text.slice(offset,offset+WINDOW_CHARS),
   }));

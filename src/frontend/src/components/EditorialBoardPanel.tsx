@@ -474,6 +474,8 @@ export function EditorialBoardPanel({
           cerca anche nomi dichiarati nella scena corrente che compaiono
           letteralmente nella prosa precedente senza tag. Gli estratti danno
           priorità a nomi e parole intere, con offset della prosa originale.
+          Nelle scene lunghe, quando possibile, due riferimenti distanti ricevono
+          due estratti distinti; altrimenti resta un frammento di contesto.
           Se un capitolo contiene troppe scene, il limite di 1.600 viene
           distribuito tra capitoli per conservare origine e ultimo predecessore.
           Campioni limitati: la pertinenza non prova una contraddizione

@@ -103,6 +103,76 @@ describe("Recupero mirato locale della continuità",()=>{
       w.text.includes("Donna Alba saluta Ivo"))).toBe(true);
   });
 
+  it("due riferimenti distanti danno due finestre focalizzate, senza aumentare gli estratti",()=>{
+    const text="x".repeat(3000)+" Ivo ripone la mappa sul tavolo. "+
+      "y".repeat(3000)+" La chiave passa di mano all'alba. "+
+      "z".repeat(3000);
+    const windows=targetedLiteralWindows(text,["Ivo","chiave"]);
+    expect(windows).toHaveLength(2);
+    expect(windows.some(w=>w.text.includes("Ivo ripone la mappa"))).toBe(true);
+    expect(windows.some(w=>w.text.includes("La chiave passa di mano"))).toBe(true);
+    expect(windows.map(w=>w.offset)).toEqual(windows.map(w=>w.offset).sort((a,b)=>a-b));
+    for(const w of windows){
+      expect(w.text.length).toBe(1250);
+      expect(text.slice(w.offset,w.offset+w.text.length)).toBe(w.text);
+    }
+    expect(targetedLiteralWindows(text,["Ivo","chiave"])).toEqual(windows);
+  });
+
+  it("quando due segnali sono vicini, mantiene il contesto distante anziché duplicare l'estratto",()=>{
+    const text="A".repeat(3000)+" Ivo custodisce la chiave. "+"B".repeat(4000);
+    const windows=targetedLiteralWindows(text,["Ivo","chiave"]);
+    expect(windows).toHaveLength(2);
+    expect(windows.some(w=>w.text.includes("Ivo custodisce la chiave"))).toBe(true);
+    expect(windows.some(w=>w.offset===0||w.offset===text.length-1250)).toBe(true);
+    const missing=targetedLiteralWindows(text,["persona inesistente"]);
+    expect(missing.map(w=>w.offset)).toEqual([0,text.length-1250]);
+    expect(missing.every(w=>text.slice(w.offset,w.offset+w.text.length)===w.text)).toBe(true);
+  });
+
+  it("i nomi con caratteri regex sono cercati letteralmente nel secondo estratto",()=>{
+    const text="x".repeat(3000)+" Ivo scrive una nota. "+
+      "y".repeat(3000)+" Anna (la Rossa) trova il plico. "+
+      "z".repeat(3000);
+    const windows=targetedLiteralWindows(text,["Ivo","Anna (la Rossa)"]);
+    expect(windows.some(w=>w.text.includes("Ivo scrive"))).toBe(true);
+    expect(windows.some(w=>w.text.includes("Anna (la Rossa) trova"))).toBe(true);
+    expect(targetedLiteralWindows(text,["Ivo","Anna (la Rossa)"])).toEqual(windows);
+  });
+
+  it("le due prove di prosa non taggate raggiungono soltanto i revisori autorizzati",()=>{
+    const b=fixture(),origin=b.chapters[0]!,current=b.chapters[5]!;
+    const previous=b.chapters[1]!.scenes[0]!;
+    previous.title="";previous.objective="";
+    previous.characters=[];previous.items=[];previous.locations=[];
+    previous.text="x".repeat(3000)+" Ivo apre il portone. "+
+      "y".repeat(3000)+" La chiave viene nascosta nel pozzo. "+
+      "z".repeat(3000);
+    const now=current.scenes[0]!;
+    now.characters=["Ivo"];now.items=["chiave"];now.locations=[];
+    now.title="";now.objective="";
+    now.text="Il cielo diventa grigio.";
+    markDownstreamContinuity(b,origin,"author_reopen",["origin"]);
+    const snapshot=JSON.stringify(b);
+    const pack=buildContinuityEvidence(b,current,now)!;
+    const scene=pack.scenes.find(x=>x.sceneId==="key")!;
+    expect(scene.matchSignals.literalEntities).toEqual(["ivo","chiave"]);
+    expect(scene.windows).toHaveLength(2);
+    expect(scene.windows.some(w=>w.text.includes("Ivo apre il portone"))).toBe(true);
+    expect(scene.windows.some(w=>w.text.includes("La chiave viene nascosta"))).toBe(true);
+    expect(scene.windows.every(w=>
+      previous.text.slice(w.offset,w.offset+w.text.length)===w.text)).toBe(true);
+    const cycle=createEditorialCycle(current.id),seg=chapterSegments(current)[0]!;
+    const reviewer=reviewerPrompt(b,cycle,"continuity",seg,1);
+    const reader=reviewerPrompt(b,cycle,"readerMystery",seg,1);
+    expect(reviewer.prompt).toContain("Ivo apre il portone");
+    expect(reviewer.prompt).toContain("La chiave viene nascosta");
+    expect(reader.prompt).not.toContain("Ivo apre il portone");
+    expect(reader.prompt).not.toContain("La chiave viene nascosta");
+    expect(JSON.stringify(pack)).not.toContain("PRIVATO:");
+    expect(JSON.stringify(b)).toBe(snapshot);
+  });
+
   it("offset UTF-16 dal testo originale, non da una copia casefold più lunga",()=>{
     const source="İ".repeat(1900)+" Ivo guarda il manoscritto. "+
       "L'archivio è vuoto. ".repeat(100);
