@@ -137,6 +137,8 @@ describe("Backup portabile BookWriter", () => {
     expect(audited.chapters[1]?.lastContinuityReview).toMatchObject({
       retrievalMethod:"local_structured_lexical_v1",
       candidateSceneCount:1,scannedSceneCount:1,unscannedSceneCount:0,
+      currentWrittenSceneCount:1,currentQueriedSceneCount:1,
+      currentOmittedSceneCount:0,currentQueriedSceneIds:["s-2"],
     });
     const archive=unzipSync(new Uint8Array(await auditedZip.arrayBuffer()));
     const bad=JSON.parse(strFromU8(archive["content.json"]!));
@@ -148,6 +150,42 @@ describe("Backup portabile BookWriter", () => {
     },{level:6});
     await expect(readBackup(new Blob([new Uint8Array(hostile)]) as File))
       .rejects.toThrow(/Schema backup non valido/);
+
+    const fromAudit=(transform:(audit:Record<string,unknown>)=>void)=>{
+      const obj=JSON.parse(strFromU8(archive["content.json"]!));
+      const marker=obj.books.find((b:{title:string})=>b.title==="Il primo manoscritto")
+        .chapters[1].lastContinuityReview as Record<string,unknown>;
+      transform(marker);
+      const bytes=zipSync({
+        "manifest.json":archive["manifest.json"]!,
+        "content.json":strToU8(JSON.stringify(obj)),
+      },{level:6});
+      return new Blob([new Uint8Array(bytes)]) as File;
+    };
+    const badCurrentCount=fromAudit(audit=>{audit.currentOmittedSceneCount=4;});
+    await expect(readBackup(badCurrentCount))
+      .rejects.toThrow(/Schema backup non valido/);
+    const badIds=fromAudit(audit=>{
+      audit.currentQueriedSceneIds=["s-2","extra"];
+    });
+    await expect(readBackup(badIds))
+      .rejects.toThrow(/Schema backup non valido/);
+    const incompleteAudit=fromAudit(audit=>{
+      delete audit.currentOmittedSceneCount;
+    });
+    await expect(readBackup(incompleteAudit))
+      .rejects.toThrow(/Schema backup non valido/);
+    // Legacy archives with none of the optional v0.11.39 fields still import.
+    const legacyAudit=fromAudit(audit=>{
+      delete audit.currentWrittenSceneCount;
+      delete audit.currentQueriedSceneCount;
+      delete audit.currentOmittedSceneCount;
+      delete audit.currentQueriedSceneIds;
+    });
+    const old=(await readBackup(legacyAudit)).books
+      .find(b=>b.title==="Il primo manoscritto")!.chapters[1]!;
+    expect(old.lastContinuityReview?.currentWrittenSceneCount).toBeUndefined();
+    expect(old.lastContinuityReview?.retrievalMethod).toBe("local_structured_lexical_v1");
   });
 
 });

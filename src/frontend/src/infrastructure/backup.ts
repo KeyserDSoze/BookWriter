@@ -41,7 +41,29 @@ const continuityAuditSchema = continuityRecheckSchema.extend({
   candidateSceneCount: z.number().int().min(0).max(40_000).optional(),
   scannedSceneCount: z.number().int().min(0).max(1600).optional(),
   unscannedSceneCount: z.number().int().min(0).max(40_000).optional(),
-}).strict();
+  // Additive coverage audit from v0.11.39; tightly bounded for untrusted ZIPs.
+  currentWrittenSceneCount: z.number().int().min(0).max(200).optional(),
+  currentQueriedSceneCount: z.number().int().min(0).max(6).optional(),
+  currentOmittedSceneCount: z.number().int().min(0).max(200).optional(),
+  currentQueriedSceneIds: z.array(zId).max(6).optional(),
+}).strict().superRefine((audit,ctx)=>{
+  const {currentWrittenSceneCount:written,currentQueriedSceneCount:queried,
+    currentOmittedSceneCount:omitted,currentQueriedSceneIds:ids}=audit;
+  const values=[written,queried,omitted,ids];
+  if(values.every(v=>v===undefined))return; // valid legacy audit
+  if(written===undefined || queried===undefined || omitted===undefined ||
+    ids===undefined){
+    ctx.addIssue({code:z.ZodIssueCode.custom,
+      message:"Campi di copertura corrente incompleti."});
+    return;
+  }
+  if(queried+omitted!==written ||
+    ids.length!==queried ||
+    new Set(ids).size!==ids.length){
+    ctx.addIssue({code:z.ZodIssueCode.custom,
+      message:"Conteggi di copertura corrente incoerenti."});
+  }
+});
 // Preserve legacy editorial reports, but validate NEW structured narratives
 // even in imported archives. Imported judgments are NOT authenticated.
 const archivedFindingSchema = z.object({
