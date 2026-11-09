@@ -111,30 +111,41 @@ export function exportEpub(book: BookProject): void {
     cleanName(book.title) + ".epub");
 }
 
-export async function exportDocx(book: BookProject): Promise<void> {
-  const { Document, Packer, Paragraph, HeadingLevel } = await import("docx");
+/** Pure DOCX export: generate an inspectable OPC package without browser download.
+ * AI/imported text is sanitized before the WordprocessingML encoder sees it. */
+export async function buildDocx(book: BookProject): Promise<Uint8Array> {
   const chapters = ensureChapters(book);
+  const { Document, Packer, Paragraph, HeadingLevel } = await import("docx");
   const children: InstanceType<typeof Paragraph>[] = [
-    new Paragraph({ text: book.title, heading: HeadingLevel.TITLE, pageBreakBefore: false }),
+    new Paragraph({ text: safeXmlText(book.title), heading: HeadingLevel.TITLE, pageBreakBefore: false }),
   ];
   for (const { chapter, scenes } of chapters) {
     children.push(new Paragraph({
-      text: "Capitolo " + chapter.number + " — " + chapter.title,
+      text: safeXmlText("Capitolo " + chapter.number + " — " + chapter.title),
       heading: HeadingLevel.HEADING_1, pageBreakBefore: true,
     }));
     for (const scene of scenes) {
-      children.push(new Paragraph({ text: scene.title, heading: HeadingLevel.HEADING_2 }));
+      children.push(new Paragraph({ text: safeXmlText(scene.title), heading: HeadingLevel.HEADING_2 }));
       for (const p of paragraphs(scene.text)) {
-        children.push(new Paragraph({ text: p, spacing: { after: 180 }, indent: { firstLine: 300 } }));
+        children.push(new Paragraph({
+          text: safeXmlText(p), spacing: { after: 180 }, indent: { firstLine: 300 },
+        }));
       }
     }
   }
   const document = new Document({
-    creator: "BookWriter", title: book.title,
+    creator: "BookWriter", title: safeXmlText(book.title),
     sections: [{ properties: {}, children }],
   });
   const blob = await Packer.toBlob(document);
-  download(blob, cleanName(book.title) + ".docx");
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+export async function exportDocx(book: BookProject): Promise<void> {
+  const bytes = await buildDocx(book);
+  download(new Blob([new Uint8Array(bytes)], {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  }), cleanName(book.title) + ".docx");
 }
 
 export async function exportPdf(book: BookProject): Promise<void> {

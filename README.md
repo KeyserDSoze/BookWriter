@@ -11,6 +11,7 @@
 - Persistenza IndexedDB e chiavi API cifrate con Web Crypto.
 - Import/export ZIP content-only o completo (password AES-GCM opzionale, chiaro solo dopo avviso).
 - Generazione EPUB, DOCX e PDF dalla prosa canonica.
+- **DOCX verificabile v0.11.59:** builder Word indipendente dal download, controlli XML/ZIP sul documento reale e sanitizzazione della prosa AI prima della creazione delle parti WordprocessingML. Solo scene canoniche, test browser desktop/mobile e nessun invio del testo in rete. [Guida](docs/book-export.md), [ADR 0091](ADR/0091-docx-canonical-xml-package.md), [issue #95](https://github.com/KeyserDSoze/BookWriter/issues/95).
 - **Indice EPUB a due livelli v0.11.58:** capitoli e singole scene canoniche raggiungibili con collegamenti interni deterministici; sezioni XHTML con intestazioni etichettate, escape XML e test desktop/mobile che controllano i target. [Guida export](docs/book-export.md), [ADR 0090](ADR/0090-epub3-scene-navigation.md), [issue #94](https://github.com/KeyserDSoze/BookWriter/issues/94).
 - **EPUB 3 validato strutturalmente v0.11.57:** package ZIP con `mimetype` STORED, OPF/nav/spine coerenti, escaping XML anche per caratteri AI malformati, esclusione di bozze e memoria non canonica; test unitari e download Playwright desktop/mobile. [Guida export](docs/book-export.md), [ADR 0089](ADR/0089-epub3-canonical-export-validation.md), [issue #93](https://github.com/KeyserDSoze/BookWriter/issues/93).
 - Setup GitHub Pages su **https://ghostwriting.ws** (asset base root).

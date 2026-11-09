@@ -24,8 +24,14 @@ L'escaping è identico a quello della prosa: titoli con `&<>"'` non diventano ma
 
 Decisione: [ADR 0090](../ADR/0090-epub3-scene-navigation.md), [issue #94](https://github.com/KeyserDSoze/BookWriter/issues/94).
 
-## DOCX e PDF
+## DOCX — pacchetto Word verificabile v0.11.59
 
-Gli altri due pulsanti esportano la prosa canonica con intestazioni dei capitoli e delle scene. PDF usa per ora un font base di jsPDF, che **può non rappresentare tutti i caratteri Unicode**; la tipografia, le copertine, le illustrazioni, l'accessibilità e l'integrazione di font rimangono attività aperte nella [issue #4](https://github.com/KeyserDSoze/BookWriter/issues/4).
+Anche l'esportazione DOCX ha un builder indipendente dal download: `buildDocx` crea i byte del file Word, mentre il pulsante **Word (DOCX)** scarica localmente il file senza trasferire il manoscritto in rete. La struttura ZIP OPC contiene `[Content_Types].xml`, le relazioni e il documento `word/document.xml` con titoli dei capitoli e delle scene `canon` e relativi paragrafi, nell'ordine del libro. Capitoli solo bozze, scene `draft/planned` e informazioni extra-manuscript non sono esportati.
 
-Decisione progettuale: [ADR 0089](../ADR/0089-epub3-canonical-export-validation.md). Tranche sviluppata in [issue #93](https://github.com/KeyserDSoze/BookWriter/issues/93).
+Titoli e paragrafi passano attraverso la stessa sanitizzazione XML dell'EPUB: caratteri di controllo XML proibiti sono eliminati, surrogati UTF-16 isolati vengono sostituiti e gli accenti e le emoji sono preservati. Il serializzatore Word si occupa dell'escaping XML; i contenuti AI rimangono testo. Test Vitest aprono il DOCX reale come ZIP; Playwright desktop/mobile lo scarica e controlla package e WordprocessingML con `DOMParser`.
+
+Questo verifica **integrità strutturale e parsing XML** sul file generato, non compatibilità garantita con tutte le versioni di Word/LibreOffice, qualità tipografica, accessibilità o firma/validazione formale Office Open XML. Vedi [ADR 0091](../ADR/0091-docx-canonical-xml-package.md) e [issue #95](https://github.com/KeyserDSoze/BookWriter/issues/95).
+
+## PDF
+
+Il pulsante PDF esporta la prosa canonica con intestazioni, ma usa per ora un font base di jsPDF, che **può non rappresentare tutti i caratteri Unicode**. Copertine, layout, font e accessibilità editoriali restano aperti nella [issue #4](https://github.com/KeyserDSoze/BookWriter/issues/4). La validazione EPUB originale è descritta in [ADR 0089](../ADR/0089-epub3-canonical-export-validation.md), [issue #93](https://github.com/KeyserDSoze/BookWriter/issues/93).

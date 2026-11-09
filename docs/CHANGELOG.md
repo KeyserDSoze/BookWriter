@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.59 — 2026-11-09 (main, issue #95, epic #4)
+
+**DOCX controllabile come ZIP OPC, WordprocessingML XML-safe e prosa solo canonica**
+
+- `infrastructure/export-book.ts` introduce `buildDocx(book): Promise<Uint8Array>` senza download e mantiene `exportDocx` come wrapper locale con MIME e file `.docx` invariati. `Packer.toBlob` genera il package Word, il builder lo rende ispezionabile dai test.
+- Libro, titoli capitoli, titoli scene e paragrafi passano attraverso la stessa sanitizzazione XML 1.0 dell'EPUB **prima** di entrare in `docx`, rimuovendo controlli illeciti e sostituendo surrogati UTF-16 isolati senza perdere accenti o emoji. Il serializer Word gestisce l'escaping di `&<>"'`; i dati AI sono testo, non markup.
+- Contenuto ammesso: solo capitoli con scene `canon` e testo non vuoto, con titoli e prosa in ordine. Nessun testo `draft/planned`, `brief`, memoria, credenziale o log nell'edizione. Libro privo di canon ⇒ errore italiano, nessun download.
+- Vitest apre il package DOCX con `fflate.unzipSync`, controlla `[Content_Types].xml`, `_rels/.rels`, `word/document.xml`, `docProps/core.xml`, ordine, privacy e input XML avversari. Playwright desktop/mobile scarica un DOCX vero da Archivio e sottopone i documenti XML al parser Chromium, confrontando i paragrafi canonici.
+- ADR 0091, guida export, README, AGENTS, features, changelog e package/lock 0.11.59 aggiornati, senza nuove dipendenze né chiamate remote. **Non** equivale a test Word/LibreOffice su dispositivo, certificazione accessibilità, tipografia completa, correzione Unicode PDF o restore ZIP avanzato; #4 resta aperta.
+
 ## 0.11.58 — 2026-11-09 (main, issue #94, epic #4)
 
 **Indice EPUB 3 navigabile per singole scene canoniche, con ancore XHTML semantiche**

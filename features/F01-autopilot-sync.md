@@ -2,6 +2,7 @@
 
 ## Progresso versionato
 
+- [x] v0.11.59 (issue #95): DOCX ZIP OPC generato da builder testabile, contenuto canonico XML-safe, download e parsing WordprocessingML in test desktop/mobile (ADR 0091); epic #4 ancora aperta.
 - [x] v0.11.58 (issue #94): indice EPUB per capitoli e scene canoniche con ancore XHTML stabili, semantica `aria-labelledby` e test ZIP/XML reali desktop/mobile (ADR 0090); epic #4 ancora aperta.
 - [x] PR #1: UI local-first, idea/review/autopilot prototipale, routing modelli, log e checkpoint.
 - [x] PR #1: esportazioni ZIP e EPUB/PDF/DOCX, test iniziali.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
 import { newBook, type BookProject, type Chapter, type Scene } from "../domain/types";
-import { buildEpub } from "./export-book";
+import { buildDocx, buildEpub } from "./export-book";
 
 const modified = new Date("2026-11-09T13:42:15.000Z");
 function scene(number: number, status: Scene["status"], text: string, title = "Scena"): Scene {
@@ -26,7 +26,7 @@ function manuscript(): BookProject {
 }
 function decode(files: Record<string, Uint8Array>, path: string): string {
   const entry = files[path];
-  if (!entry) throw new Error("Missing EPUB entry: " + path);
+  if (!entry) throw new Error("Missing package entry: " + path);
   return strFromU8(entry);
 }
 
@@ -137,5 +137,60 @@ describe("EPUB 3 portable canon export", () => {
     expect(() => buildEpub(book, modified)).toThrow(/almeno una scena canonizzata/);
     expect(() => buildEpub(newBook("Idea", "Vuoto", "", ""), modified))
       .toThrow(/almeno una scena canonizzata/);
+  });
+});
+
+describe("DOCX canonico, OPC e WordprocessingML", () => {
+  it("genera uno ZIP DOCX ispezionabile con capitoli/scena in ordine ed esclude contenuti privati", async () => {
+    const files = unzipSync(await buildDocx(manuscript()));
+    for (const path of ["[Content_Types].xml", "_rels/.rels", "word/document.xml", "docProps/core.xml"])
+      expect(files[path], path).toBeDefined();
+    expect(decode(files, "[Content_Types].xml")).toContain("wordprocessingml.document.main+xml");
+    const body = decode(files, "word/document.xml");
+    const core = decode(files, "docProps/core.xml");
+    expect(body).toContain("Capitolo 1");
+    expect(body).toContain("Capitolo 3");
+    expect(body).toContain("Prima");
+    expect(body).toContain("Conclusione");
+    expect(body).toContain("La città è viva. 🎭");
+    expect(body).toContain("E poi tutto finì. ✨");
+    expect(core).toContain("BookWriter");
+    expect(body.indexOf("Capitolo 1")).toBeLessThan(body.indexOf("Prima"));
+    expect(body.indexOf("Prima")).toBeLessThan(body.indexOf("Capitolo 3"));
+    expect(body.indexOf("Capitolo 3")).toBeLessThan(body.indexOf("Conclusione"));
+    const allXml = Object.entries(files).filter(([name]) => name.endsWith(".xml") || name.endsWith(".rels"))
+      .map(([, bytes]) => strFromU8(bytes)).join("\n");
+    for (const forbidden of [
+      "PROSA-DRAFT-MAI-ESPORTARE", "PROSA-PLANNED-MAI-ESPORTARE",
+      "SEGRETO-NON-ESPORTARE", "BRIEF-SUPER-PRIVATO",
+      "Capitolo solo draft", "NON-CANON",
+    ]) expect(allXml).not.toContain(forbidden);
+  });
+
+  it("sanitizza controlli e surrogate isolate in titolo, intestazioni e prosa DOCX", async () => {
+    const book = manuscript();
+    book.title = "Titolo\u0000 & <sicuro> 🪶 \uD800";
+    book.chapters[0]!.title = "Luogo\u0001 & \uDC00";
+    book.chapters[0]!.scenes[0]!.title = "Scena\u0002 <uno>";
+    book.chapters[0]!.scenes[0]!.text = "Ciao\u0003 mondo 😃 & <ombra>\n\nUn'eco \uD800 avanti.";
+    const files = unzipSync(await buildDocx(book));
+    const word = decode(files, "word/document.xml");
+    const core = decode(files, "docProps/core.xml");
+    expect(word + core).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/u);
+    expect(word).toContain("😃");
+    expect(word).toContain("🪶");
+    expect(word).toContain("�");
+    expect(word).toContain("Ciao mondo");
+    expect(word).toContain("&amp;");
+    expect(word).toContain("&lt;ombra&gt;");
+    expect(core).toContain("&lt;sicuro&gt;");
+  });
+
+  it("rifiuta un libro privo di scene canoniche", async () => {
+    await expect(buildDocx(newBook("Idea", "Vuoto", "", "")))
+      .rejects.toThrow(/almeno una scena canonizzata/);
+    const book = manuscript();
+    book.chapters.forEach(ch => ch.scenes.forEach(sc => { sc.status = "draft"; }));
+    await expect(buildDocx(book)).rejects.toThrow(/almeno una scena canonizzata/);
   });
 });
