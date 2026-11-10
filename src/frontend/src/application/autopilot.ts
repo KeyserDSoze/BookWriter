@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import { callModel } from "../infrastructure/ai";
-import { keepObservedUsageOnEmptyReply } from "../infrastructure/ai-provider-error";
+import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
@@ -558,10 +558,10 @@ export class AutopilotRunner {
           await saveBookAndActivity(latest, started);
           await onUpdate();
         } catch (error) {
-          // HTTP 200 + valid JSON can report usage while carrying empty text.
-          // Keep the observed counters even though callModel throws, without
-          // accepting a report, chapter or remediation as valid.
-          keepObservedUsageOnEmptyReply(started, error);
+          // HTTP 200 + valid JSON can report usage with empty or malformed
+          // content. Keep the observed counters on failure, without approving
+          // a report, chapter or remediation.
+          keepObservedUsageOnRejectedReply(started, error);
           const leaseFailure = guard.failure();
           const budgetStop = error instanceof AiBudgetStop;
           const aborted = !leaseFailure && (signal.aborted || error instanceof DOMException && error.name === "AbortError");

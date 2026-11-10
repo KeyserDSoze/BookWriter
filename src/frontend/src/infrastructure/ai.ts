@@ -2,7 +2,7 @@ import type { AppSettings, BookProject, TaskKind } from "../domain/types";
 import { routeFor } from "../domain/types";
 import { decryptLocal } from "./crypto";
 import { validTokenCount } from "../domain/ai-usage";
-import { EmptyProviderContentError } from "./ai-provider-error";
+import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
 
 export type ModelAnswer = {
   text: string;
@@ -29,6 +29,24 @@ function friendlyApiError(status: number): string {
     case 429: return "Limite richieste o credito insufficiente (HTTP 429).";
     default: return `Errore del provider AI (HTTP ${status}). Verifica disponibilità e configurazione.`;
   }
+}
+
+/** Accept only plain text or a fully text-only array of OpenAI-compatible
+ * content parts. Reject mixed/malformed parts instead of implicitly coercing
+ * objects/numbers into prose or partially accepting a response.
+ * Undefined denotes an invalid shape; whitespace remains an empty response. */
+function responseTextContent(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return undefined;
+  const texts: string[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object" || Array.isArray(part)) return undefined;
+    const candidate = part as { type?: unknown; text?: unknown };
+    if (candidate.type !== undefined && candidate.type !== "text") return undefined;
+    if (typeof candidate.text !== "string") return undefined;
+    texts.push(candidate.text);
+  }
+  return texts.join("\n");
 }
 
 export async function callModel(
@@ -76,11 +94,24 @@ export async function callModel(
   catch { throw new Error("Il provider AI non ha restituito JSON valido."); }
   if (!payload || typeof payload !== "object") throw new Error("Risposta AI non valida.");
   const data = payload as {
-    choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
+    choices?: unknown;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
   };
-  const content = data.choices?.[0]?.message?.content;
-  const text = typeof content === "string" ? content : Array.isArray(content) ? content.map(x => x.text ?? "").join("\n") : "";
+  const invalid = () => new MalformedProviderContentError(
+    endpoint.id, assignment.modelId, data.usage);
+  // A 2xx JSON envelope is not evidence of text. Validate every part before
+  // returning a ModelAnswer; invalid text still carries provider usage into
+  // the failed Activity, without exposing the raw response.
+  if (!Array.isArray(data.choices) || !data.choices.length) throw invalid();
+  const first: unknown = data.choices[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) throw invalid();
+  const message: unknown = (first as {message?: unknown}).message;
+  if (!message || typeof message !== "object" || Array.isArray(message)) throw invalid();
+  const content: unknown = (message as {content?: unknown}).content;
+  if (content === null || content === undefined) throw new EmptyProviderContentError(
+    endpoint.id, assignment.modelId, data.usage);
+  const text = responseTextContent(content);
+  if (text === undefined) throw invalid();
   if (!text.trim()) throw new EmptyProviderContentError(
     endpoint.id, assignment.modelId, data.usage);
   return {

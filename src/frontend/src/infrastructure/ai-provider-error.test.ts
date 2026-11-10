@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings } from "../domain/types";
-import { EmptyProviderContentError, keepObservedUsageOnEmptyReply } from "./ai-provider-error";
+import { EmptyProviderContentError, MalformedProviderContentError,
+  keepObservedUsageOnRejectedReply } from "./ai-provider-error";
 
 vi.mock("./crypto", () => ({ decryptLocal: vi.fn().mockResolvedValue("sk-test-local-only") }));
 import { callModel } from "./ai";
@@ -39,6 +40,63 @@ describe("HTTP 200: usage osservato ma testo non utilizzabile", () => {
     expect(JSON.stringify(e)).not.toContain("sk-test");
     expect(JSON.stringify(e)).not.toContain("System");
   });
+  it("accetta una lista completamente testuale senza cambiare il testo originale",async()=>{
+    const {book,settings}=fixture();
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(providerResponse([
+      {type:"text",text:"Prima parte"},
+      {text:"Seconda parte"},
+    ],{prompt_tokens:234,completion_tokens:45})));
+    const answer=await callModel("chapterAudit","System","Prompt",settings,book,new AbortController().signal);
+    expect(answer).toEqual({text:"Prima parte\\nSeconda parte".replace("\\\\n","\\n"),
+      endpointId:"openai",modelId:"mock-reviewed",inputTokens:234,outputTokens:45});
+  });
+  it("rifiuta tutte le parti malformate, non canonizza oggetti o testo parziale e conserva usage",async()=>{
+    const {book,settings}=fixture();
+    const invalidContent=[
+      [null], [42], [true], ["testo"],
+      [{type:"text",text:42}], [{text:{value:"PROMPT PRIVATO"}}],
+      [{type:"text",text:"Testo benigno"},{type:"image_url",image_url:"https://example.invalid"}],
+      [{type:"refusal",text:"PROMPT PRIVATO"}],
+      {text:"PROMPT PRIVATO"},
+    ];
+    for(const content of invalidContent){
+      vi.stubGlobal("fetch",vi.fn().mockResolvedValue(providerResponse(content,{
+        prompt_tokens:243,completion_tokens:72,
+      })));
+      let error:unknown;
+      try{await callModel("chapterAudit","System","Prompt",settings,book,new AbortController().signal);}
+      catch(failure){error=failure;}
+      expect(error).toBeInstanceOf(MalformedProviderContentError);
+      const failure=error as MalformedProviderContentError;
+      expect(failure).toMatchObject({endpointId:"openai",modelId:"mock-reviewed",
+        inputTokens:243,outputTokens:72});
+      expect(JSON.stringify(failure)).not.toMatch(/PROMPT PRIVATO|sk-test-local-only|Testo benigno/);
+      const attempt={} as Activity;
+      keepObservedUsageOnRejectedReply(attempt,failure);
+      expect(attempt).toMatchObject({inputTokens:243,outputTokens:72});
+    }
+  });
+  it("rifiuta envelope con choices mancanti senza perdere usage dichiarato",async()=>{
+    const {book,settings}=fixture();
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices:null,usage:{prompt_tokens:17,completion_tokens:5},
+    }),{status:200})));
+    await expect(callModel("chapterAudit","System","Prompt",settings,book,
+      new AbortController().signal)).rejects.toMatchObject({
+        name:"MalformedProviderContentError",inputTokens:17,outputTokens:5,
+      });
+  });
+  it("mantiene fail-closed la spesa se usage su contenuto malformato è parziale o invalido",async()=>{
+    const {book,settings}=fixture();
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(providerResponse([null],{
+      prompt_tokens:350,completion_tokens:"72",
+    })));
+    await expect(callModel("chapterAudit","System","Prompt",settings,book,
+      new AbortController().signal)).rejects.toMatchObject({
+        name:"MalformedProviderContentError",inputTokens:350,outputTokens:undefined,
+      });
+  });
+
   it("conserva uso parziale ma non inventa conteggi negativi/non interi/stringa", async () => {
     const {book,settings} = fixture();
     for(const usage of [
@@ -54,7 +112,7 @@ describe("HTTP 200: usage osservato ma testo non utilizzabile", () => {
       {prompt_tokens:450,completion_tokens:null});
     const activity = { endpointId:"old",modelId:"old",
       inputTokens:undefined,outputTokens:undefined } as Activity;
-    keepObservedUsageOnEmptyReply(activity,p);
+    keepObservedUsageOnRejectedReply(activity,p);
     expect(activity).toMatchObject({endpointId:"openai",modelId:"mock-reviewed",inputTokens:450});
     expect(activity.outputTokens).toBeUndefined();
     const invalid = new EmptyProviderContentError("openai","mock-reviewed",
@@ -73,7 +131,7 @@ describe("HTTP 200: usage osservato ma testo non utilizzabile", () => {
     await expect(callModel("chapterAudit","System","Prompt",settings,book,new AbortController().signal))
       .rejects.toThrow(/JSON valido/);
     const activity={inputTokens:undefined} as Activity;
-    keepObservedUsageOnEmptyReply(activity,new Error("HTTP 429"));
+    keepObservedUsageOnRejectedReply(activity,new Error("HTTP 429"));
     expect(activity.inputTokens).toBeUndefined();
     expect(activity.endpointId).toBeUndefined();
   });

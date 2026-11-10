@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-for (const caseName of ["report malformato", "HTTP 200 con testo vuoto"] as const) {
+for (const caseName of ["report malformato", "HTTP 200 con testo vuoto",
+  "HTTP 200 con parti non testuali"] as const) {
 test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mobile)", async ({page}) => {
   test.setTimeout(90_000);
   let providerCalls=0;
@@ -18,7 +19,9 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
       "access-control-allow-headers":"authorization,content-type",
     },body:JSON.stringify({
       choices:[{message:{content:caseName === "HTTP 200 con testo vuoto" ? "   " :
-        "Questo non è JSON valido per un report editoriale."}}],
+        caseName === "HTTP 200 con parti non testuali"
+          ? [{type:"text",text:"TESTO PRIVATO NON DA APPLICARE"},null]
+          : "Questo non è JSON valido per un report editoriale."}}],
       usage:{prompt_tokens:243,completion_tokens:72},
     })});
   });
@@ -98,6 +101,11 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   expect(providerCalls).toBe(1);
   expect(saved.reports).toBe(0);
   expect(saved.scene).toBe("Mara incontra il guardiano davanti al portone del castello.");
+  if (caseName === "HTTP 200 con parti non testuali") {
+    expect(saved.error).toContain("non testuale o malformato");
+    expect(saved.error).not.toContain("TESTO PRIVATO NON DA APPLICARE");
+    expect(saved.error).not.toContain("sk-test");
+  }
   expect(saved.activities).toHaveLength(1);
   expect(saved.activities[0]).toMatchObject({status:"failed",aiRequested:true,
     modelId:"mock-usage-review",inputTokens:243,outputTokens:72,

@@ -899,3 +899,10 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 
 - `App.tsx` deve caricare le `Activity` non solo quando cambia libro ma **anche quando cambia pagina**: `generateSceneMergeDraft` salva attività e bozza senza modificare il record `BookProject`, quindi la Dashboard altrimenti riusa un array di consumi obsoleto e mostra 0,00 € dopo una chiamata fatturabile. Proteggere il risultato delle letture IndexedDB asincrone da cambi di pagina/libro avvenuti nel frattempo, evitando leak tra libri.
 - Test Playwright desktop/mobile di fusione AI: `Activity` succeeded con quote, navigare da Archivio a Dashboard **senza reload**, importo corretto visibile, poi cambio tariffa 10× e reload con importo invariato. Nessuna chiamata AI extra, canone e sync immutati.
+
+
+## Provider content array malformati v0.11.78 — ADR 0110 / issue #115
+
+- `infrastructure/ai.ts#callModel` NON deve fare `String(x.text)` o `content.map(x => x.text ?? "")` su contenuto untrusted del provider: accetta solo stringa utilizzabile o array completo di parti oggetto con `text:string` e `type` assente/`"text"`. `null`, numeri, immagini, parts misti o envelope `choices/message` non valido devono fallire **come blocco intero** senza testo canonico.
+- Dopo HTTP 2xx con JSON decodificato, errori tipizzati `EmptyProviderContentError` e `MalformedProviderContentError` condividono `ProviderContentError` con solo endpoint/modello e contatori `validTokenCount`; nessun payload, prompt, errore remoto o secret nei campi/log. I catch di autopilot e merge usano `keepObservedUsageOnRejectedReply` per salvare usage noto su `Activity.failed/cancelled`. Non fare retry automatico né approvazione parziale; usage assente/parziale resta budget fail-closed. HTTP errore, rete o JSON invalido non autorizzano contatori fittizi.
+- Test Vitest `callModel` su parti sane, `null`, mixed/non-testuali, oggetti coercibili, envelope incompleto e usage parziale; runner/fusione su canone/bozza intatti; Playwright desktop/mobile con content malformato, usage 243/72, stima post-reload e nessuna AI supplementare. Nessun cambiamento di schema, permessi o consenso.

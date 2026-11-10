@@ -61,3 +61,7 @@ Ogni nuova chiamata AI salva nell'Activity una copia del listino manuale valido 
 ## v0.11.77 — audit della bozza AI riuscita
 
 L'Activity conclusiva di una fusione AI riuscita conserva ora il listino storico copiato prima del provider, oltre a modello e token osservati: la bozza rimane `proposed` e non viene approvata. Il record non viene duplicato e il costo precedente non cambia modificando la tariffa futura. Le proposte manuali non dichiarano consumi AI. [Guida](ai-merge-price-audit.md) · [ADR 0109](../ADR/0109-successful-ai-merge-price-audit.md).
+
+## v0.11.78 — output contenente parti non testuali
+
+L'usage completo riportato da un provider HTTP 2xx con JSON valido può essere stimato anche quando `content` è un array malformato e l'output viene scartato. I dati parziali o mancanti restano incerti e la policy conservativa blocca i prossimi tentativi; non viene canonizzato alcun testo non testuale. [Guida](ai-provider-content-validation.md) · [ADR 0110](../ADR/0110-provider-mixed-content-rejection-usage.md).

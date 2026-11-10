@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.78 — 2026-11-10 (main, issue #115, epic #17/#6/#20)
+
+**Parser testo provider rigoroso: niente prosa ricavata da parti non testuali, usage dichiarato preservato**
+
+- `callModel` accetta soltanto `choices[0].message.content` stringa o array interamente di parti `text:string` e `type` assente/`text`. Rifiuta senza output arrays con `null`, immagini, `text` numerico/oggetto, mixed parts o message/choices malformati; prima potevano generare `TypeError`, perdere token o costruire prosa con coercizione JS.
+- `MalformedProviderContentError` si affianca a `EmptyProviderContentError`: entrambi trasportano solo endpoint, modello e usage provider numerico valido, **mai corpo/prosa/credenziali**. Runner e fusione salvano il ledger `failed/cancelled` prima di fermarsi; nessun report, canon o bozza non valida viene approvato. Usage incompleto resta budget fail-closed.
+- Vitest su parti testuali, payload null/misto/malformato, usage completo/parziale e nessun addebito inventato per HTTP/JSON non valido; integrazione autopilot/merge e Playwright desktop/mobile su risposta con parte null e usage dichiarato, una sola Activity failed, zero prosa applicata e costo persistente dopo reload.
+- ADR 0110, guida, README/AGENTS e package/lock 0.11.78, nessuna dipendenza o migrazione.
+
+
 ## 0.11.77 — 2026-11-10 (main, issue #114, epic #17/#15/#6)
 
 **La fusione AI riuscita mantiene lo snapshot tariffario anche nell'audit finale**

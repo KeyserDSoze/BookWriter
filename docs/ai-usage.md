@@ -57,3 +57,7 @@ Un endpoint può completare con HTTP 200 e JSON valido ma nessun contenuto testu
 ## v0.11.76 — snapshot del listino al momento della chiamata
 
 Per le richieste nuove con listino manuale valido, il prezzo di input/output per endpoint/modello è congelato in `Activity.priceRateSnapshot`: modificare il listino non ricalcola la stima dei consumi passati con snapshot. Le attività legacy prive del campo rimangono stimabili a tariffa corrente, ma l'interfaccia segnala esplicitamente questa limitazione. [Guida](ai-budget-price-snapshots.md) · [ADR 0108](../ADR/0108-price-snapshot-ai-budget.md).
+
+## v0.11.78 — parti provider non testuali o malformate
+
+HTTP 200 può includere `usage` valido ma un array `choices[0].message.content` con `null`, immagini, numeri o oggetti non testuali. BookWriter **rifiuta tutto il contenuto** senza coercizioni o approvazioni parziali, ma conserva i token sanitizzati riportati dal provider nell'Activity fallita; le tariffe pre-fetch rimangono valide e i token mancanti restano incerti. [Guida](ai-provider-content-validation.md) · [ADR 0110](../ADR/0110-provider-mixed-content-rejection-usage.md).
