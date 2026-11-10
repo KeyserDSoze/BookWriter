@@ -1,5 +1,5 @@
 import type { Activity, BookProject } from "../domain/types";
-import { acceptedRepairs, assertEditorialReviewCoverage, assertSavedEditorialJudgmentIntegrity, createEditorialCycle, repairPrompt } from "../domain/editorial-board";
+import { acceptedRepairs, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertSavedEditorialJudgmentIntegrity, createEditorialCycle, repairPrompt } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { getBook, getDb } from "../infrastructure/db";
@@ -117,6 +117,8 @@ export function editorialRecoveryProblem(book: BookProject): string | undefined 
       repairPrompt(book, cycle, nextSceneId);
     } else {
       assertEditorialReviewCoverage(book, cycle, cycle.stage !== "review");
+      if (cycle.stage === "summary")
+        assertSavedEditorialFreezeJudgmentIntegrity(book, cycle);
     }
     return;
   } catch (error) {

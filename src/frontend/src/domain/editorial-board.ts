@@ -1313,6 +1313,46 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
     "repair" : "freeze", createdAt: new Date().toISOString() };
 }
 
+/** Revalidate a saved FREEZE decision before even starting a summary, and
+ * again at the atomic commit boundary. A persisted verdict is not authority:
+ * re-run the very same judge validator against the current chapter, earlier
+ * narrative witnesses, documentary sources and recommendation conflicts.
+ * This protects the last gate of the editorial round; it cannot certify that
+ * the AI's literary interpretation is correct. */
+export function assertSavedEditorialFreezeJudgmentIntegrity(
+  book: BookProject, cycle: ChapterEditorialCycle,
+): void {
+  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
+  const judgment = cycle.judgment;
+  if (!chapter || !judgment || judgment.verdict !== "freeze" ||
+      typeof judgment.createdAt !== "string" ||
+      !Number.isFinite(Date.parse(judgment.createdAt)))
+    throw new Error("Checkpoint di congelamento: giudizio freeze salvato mancante o non valido.");
+  const parsed = judgmentSchema.safeParse(judgment);
+  if (!parsed.success)
+    throw new Error("Checkpoint di congelamento: schema del giudizio salvato non valido.");
+  const segments = chapterSegments(chapter);
+  const cursor = cycle.summaryCursor;
+  if (!Number.isSafeInteger(cursor) || cursor === undefined || cursor < 0 ||
+      cursor >= segments.length)
+    throw new Error("Checkpoint di congelamento: cursore delle sinossi mancante o fuori intervallo.");
+  if (cursor > 0) {
+    const validSummary = (value: unknown, maximum: number) =>
+      typeof value === "string" && value.length >= 25 &&
+      value.length <= maximum && value.trim().length >= 25;
+    if (!validSummary(cycle.runningChapterSummary, 6000) ||
+        !validSummary(cycle.runningBookSummary, 9000))
+      throw new Error("Checkpoint di congelamento: sinossi progressive mancanti o non valide.");
+  }
+  // Do not reimplement a weaker 1:1 check: validateJudgment already checks
+  // every finding, required critical assessments, historical conflicts and
+  // live narrative/knowledge witnesses. Derive verdict independently of the
+  // persisted value. This function must not mutate the saved judgment.
+  const derived = validateJudgment(cycle, JSON.stringify(parsed.data), chapter, book);
+  if (derived.verdict !== "freeze" || parsed.data.decisions.some(d => d.action === "accept"))
+    throw new Error("Checkpoint di congelamento: verdetto freeze incoerente con le correzioni approvate.");
+}
+
 /** Validate a persisted judge's full decision matrix without re-evaluating
  * already repaired prose. A resumed repair may have changed earlier scenes,
  * so the current pending scene is the only one whose narrative anchors must

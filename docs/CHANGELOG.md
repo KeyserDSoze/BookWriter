@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.79 — 2026-11-10 (main, issue #116, epic #20/#6)
+
+**Giudizio freeze importato/ripreso: rivalidazione integrale prima delle sinossi e del congelamento**
+
+- Nuovo gate `assertSavedEditorialFreezeJudgmentIntegrity` per `chapterReview/summary`: il verdict salvato `freeze` non basta. La fase richiede schema e data validi, matrice esatta di una decisione per ogni finding, nessun `accept` incompatibile col freeze e validità attuale dei controlli critici del direttore (riconciliazioni, fonti e percorsi narrativi).
+- Il gate usa `validateJudgment` anziché un controllo duplicato più debole, dopo la copertura completa 12×N, e viene eseguito **prima della chiamata AI** e nuovamente **al commit** della sintesi. Cursori di summary fuori intervallo e riprese parziali senza riassunti progressivi validi sono respinti.
+- `editorialRecoveryProblem` individua i checkpoint di sintesi incoerenti e offre recupero #105 con consenso e archivio integrale senza cambiare prosa/canon, senza AI automatica. Nessun retry o revisore supplementare per checkpoint sani.
+- Vitest su due segmenti, giudizi sani/mancanti/duplicati/inventati, falsi freeze, timestamp e cursor; E2E Playwright desktop/mobile con 12 rapporti correnti, giudizio incompleto e recupero supervisionato. ADR 0111, guida, README/AGENTS e package/lock 0.11.79.
+
+
 ## 0.11.78 — 2026-11-10 (main, issue #115, epic #17/#6/#20)
 
 **Parser testo provider rigoroso: niente prosa ricavata da parti non testuali, usage dichiarato preservato**

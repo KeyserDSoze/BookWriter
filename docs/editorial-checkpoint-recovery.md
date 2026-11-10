@@ -24,3 +24,7 @@ Il recupero richiede Web Locks su libro/outbox, controllo ottimistico `updatedAt
 ## Estensione v0.11.71
 
 La fase `repair` non è più esclusa **quando la prossima correzione non può essere applicata in sicurezza**; una remediation sana continua. Le scene già riscritte sono preservate e la nuova review non è un rollback. [Guida dedicata](editorial-repair-recovery.md) e [ADR 0103](../ADR/0103-supervised-stale-repair-recovery.md).
+
+## Estensione v0.11.79 — giudizio di congelamento non affidabile
+
+In `stage=summary` un campo `verdict=freeze` privo della matrice completa delle decisioni non autorizza alcuna nuova sinossi o un `frozenAt`. Il controllo locale usa il medesimo validatore del direttore, la copertura 12×N corrente e un cursore di sintesi bounded; il pannello propone recupero **solo** quando il checkpoint non è riprendibile. L'archivio conserva l'intero giudizio precedente senza rollback di prosa, nessuna AI parte prima di Riprendi. [Guida](editorial-saved-freeze-judgment.md) · [ADR 0111](../ADR/0111-saved-freeze-judgment-and-summary-gate.md).

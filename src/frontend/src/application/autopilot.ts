@@ -5,7 +5,7 @@ import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, assertEditorialReviewCoverage, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
@@ -323,10 +323,11 @@ function nextWork(book: BookProject): Work | null {
       }
       if (cycle.stage === "summary") {
         assertEditorialReviewCoverage(book, cycle, true);
-        if (!cycle.judgment || cycle.judgment.verdict !== "freeze")
-          throw new Error("Non è consentito congelare un capitolo senza giudizio favorevole.");
+        // Restored/imported freeze verdicts cannot skip the judge's complete
+        // 1:1 decision matrix, rejected findings or independent live critiques.
+        assertSavedEditorialFreezeJudgmentIntegrity(book, cycle);
         const segments = chapterSegments(chapter);
-        const index = cycle.summaryCursor ?? 0;
+        const index = cycle.summaryCursor!;
         const segment = segments[index];
         if (!segment) throw new Error("Segmento di riassunto mancante.");
         return {
@@ -348,9 +349,12 @@ function nextWork(book: BookProject): Work | null {
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             if (!current || !ch) throw new Error("Sessione di sintesi non valida.");
             assertEditorialReviewCoverage(b, current, true);
+            // Check once more on the exact book revision being committed;
+            // a judge/scene/summary cursor could change during the AI call.
+            assertSavedEditorialFreezeJudgmentIntegrity(b, current);
             current.runningChapterSummary = data.chapterSummary;
             current.runningBookSummary = data.bookSummary;
-            current.summaryCursor = (current.summaryCursor ?? 0) + 1;
+            current.summaryCursor = current.summaryCursor! + 1;
             if (current.summaryCursor >= segments.length) {
               assertPriorChaptersFrozen(b, ch);
               const freezeTime = new Date().toISOString();
