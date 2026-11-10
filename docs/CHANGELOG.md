@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.80 — 2026-11-10 (main, issue #117, epic #20/#6)
+
+**Nessun congelamento su sinossi bianche: testo minimo reale e segmento AI vincolato**
+
+- Il modello può produrre JSON formalmente valido ma contenente soltanto spazi/tab/newline: la vecchia verifica `z.string().min(25)` lo accettava fino a `frozenAt`, lasciando sinossi di capitolo/libro vuote. Ora entrambi i campi richiedono **25 caratteri dopo trim**, oltre ai massimi originali di 6.000/9.000, senza troncare prosa né inventare copertura narrativa.
+- Al commit ogni risposta `summarize` viene collegata allo **stesso stage, capitolo e `summaryCursor`** per cui era stato creato il prompt, prima di rilegare giudizio freeze e matrice 12×N sul libro corrente. Nessun avanzamento di un altro segmento in checkpoint mutato.
+- Una sinossi rifiutata lascia il vecchio `bookSummary`, le scene e `frozenAt` invariati; l'Activity fallita conserva uso osservato, nessun retry automatico. Integrazione Vitest con 12 rapporti e freeze valido, test positivo già esistente e nuovi casi di cursor mismatch; Playwright desktop/mobile con provider HTTP 200 e summary whitespace, una sola chiamata e zero freeze.
+- ADR 0112, guida, AGENTS, README, package/lock 0.11.80; nessuna nuova dipendenza o migrazione.
+
+
 ## 0.11.79 — 2026-11-10 (main, issue #116, epic #20/#6)
 
 **Giudizio freeze importato/ripreso: rivalidazione integrale prima delle sinossi e del congelamento**

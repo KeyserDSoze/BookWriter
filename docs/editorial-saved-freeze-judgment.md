@@ -19,3 +19,7 @@ Il pannello **Redazione multi-agente** mostra il motivo e offre **Recupera check
 La verifica non certifica la **verità letteraria** del giudizio: un direttore può respingere formalmente ogni rilievo ed essere comunque nel torto sul significato della storia. Il controllo assicura che una decisione non sia stata saltata, persa o trasformata implicitamente in un freeze.
 
 [ADR 0111](../ADR/0111-saved-freeze-judgment-and-summary-gate.md) · [Issue #116](https://github.com/KeyserDSoze/BookWriter/issues/116) · [Epic #20](https://github.com/KeyserDSoze/BookWriter/issues/20).
+
+## Estensione v0.11.80 — sinossi senza contenuto e posizione del passo
+
+Anche un giudizio `freeze` corretto non basta se il modello restituisce due sinossi composte soltanto di spazi. I campi devono avere almeno 25 caratteri effettivi dopo `trim`, prima di diventare un `chapter.summary` o `bookSummaryAtFreeze`. L'apply verifica inoltre stage, capitolo e segmento di sintesi contro il checkpoint originario della richiesta AI: non avanza un altro cursore. Usage valido della risposta rifiutata rimane nel ledger, nessun retry automatico e `frozenAt` non viene scritto. [Guida](editorial-synopsis-nonblank.md) · [ADR 0112](../ADR/0112-nonblank-editorial-synopsis-and-step-fence.md).

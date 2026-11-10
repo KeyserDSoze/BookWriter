@@ -92,7 +92,7 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(saved.status).toBe("error");
     expect(saved.editorialCycle).toMatchObject({
       stage:"summary",summaryCursor:0,
-      judgment:{verdict:"freeze"},reports:expect.arrayContaining([]),
+      judgment:{verdict:"freeze"},
     });
     expect(saved.editorialCycle?.reports).toHaveLength(12);
     expect(saved.chapters[0]!.frozenAt).toBeUndefined();
@@ -102,14 +102,12 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(saved.bookSummary).toBe("Il libro non è ancora stato consolidato.");
     expect(responses.filter(x=>x==="summarize")).toHaveLength(1);
     expect(responses).toHaveLength(14);
-    const failed=(await listActivities(source.id)).filter(x=>x.kind==="summarize");
-    // Activity uses phase+title, not a separate taskKind field.
-    expect((await listActivities(source.id)).filter(x=>x.title.includes("Sinossi")))
-      .toMatchObject([{
-        status:"failed",aiRequested:true,
-        inputTokens:243,outputTokens:72,
-      }]);
-    expect(failed).toHaveLength(0);
+    const history=(await listActivities(source.id));
+    expect(history.filter(x=>x.title.includes("Sinossi"))).toMatchObject([{
+      status:"failed",aiRequested:true,
+      inputTokens:243,outputTokens:72,
+    }]);
+    expect(history).toHaveLength(14);
   });
   it("accetta un rilievo motivato, corregge la scena, aggiorna memoria e riesegue i 12 controlli",async()=>{
     const source=book();await saveBook(source,false);
