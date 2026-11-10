@@ -47,7 +47,7 @@ describe("HTTP 200: usage osservato ma testo non utilizzabile", () => {
       {text:"Seconda parte"},
     ],{prompt_tokens:234,completion_tokens:45})));
     const answer=await callModel("chapterAudit","System","Prompt",settings,book,new AbortController().signal);
-    expect(answer).toEqual({text:"Prima parte\\nSeconda parte".replace("\\\\n","\\n"),
+    expect(answer).toEqual({text:["Prima parte","Seconda parte"].join("\n"),
       endpointId:"openai",modelId:"mock-reviewed",inputTokens:234,outputTokens:45});
   });
   it("rifiuta tutte le parti malformate, non canonizza oggetti o testo parziale e conserva usage",async()=>{
