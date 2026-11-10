@@ -6,7 +6,8 @@
 
 - Corretto `persistDraft`: l'Activity `succeeded` sostituisce il tentativo con lo stesso ID e preserva ora anche una copia del suo `priceRateSnapshot`. Prima il salvataggio della proposta scartava il prezzo storico e rendeva rivalutabile la spesa se cambiava il listino.
 - Non sono creati duplicati di Activity né chiamate AI supplementari. Bozze AI sempre `proposed`, canone non alterato, nessun push GitHub; bozze manuali sempre `aiRequested=false` senza tariffa AI.
-- Nuovi Vitest su stima persistente 321/48 al prezzo 3/9 dopo variazione a 30/90, nuovo preflight alla tariffa corrente e Activity unica; Playwright desktop/mobile con mock GitHub/provider, consenso, prezzo dopo reload e proposta non approvata.
+- La Dashboard rilegge anche il registro attività quando si torna da Archivio: una fusione AI non modifica il libro e in precedenza il budget poteva mostrare ancora 0,00 € fino al reload. La rilettura ignora risposte asincrone appartenenti a una pagina o a un libro non più selezionati.
+- Nuovi Vitest su stima persistente 321/48 al prezzo 3/9 dopo variazione a 30/90, nuovo preflight alla tariffa corrente e Activity unica; Playwright desktop/mobile con mock GitHub/provider, consenso, importo visibile subito, prezzo dopo reload e proposta non approvata.
 - ADR 0109, guida, README/AGENTS e package/lock 0.11.77, senza dipendenze o migrazioni.
 
 

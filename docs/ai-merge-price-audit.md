@@ -10,7 +10,7 @@ Prima della correzione, quando la bozza veniva salvata, l'audit perdeva la tarif
 
 ## Cosa aspettarsi
 
-- L'Activity di una fusione AI riuscita registra i token osservati, il modello, lo stato `succeeded` e la tariffa manuale storicizzata. Un cambio di prezzo aggiorna soltanto il preventivo delle **nuove** richieste.
+- L'Activity di una fusione AI riuscita registra i token osservati, il modello, lo stato `succeeded` e la tariffa manuale storicizzata. Un cambio di prezzo aggiorna soltanto il preventivo delle **nuove** richieste. Tornando alla Dashboard da Archivio, la stima rilegge subito le attività salvate, senza richiedere un reload manuale.
 - Una bozza **manuale** non contiene prezzi AI e non conta come richiesta a pagamento.
 - Una bozza AI salvata rimane `proposed`: non cambia il canone, non approva automaticamente la fusione e non fa un push GitHub.
 - I record vecchi **senza** uno snapshot tariffario restano segnalati come stime legacy basate sul listino corrente; non si inventano prezzi passati.

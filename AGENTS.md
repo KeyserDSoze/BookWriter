@@ -893,3 +893,9 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - `application/scene-merge.ts#persistDraft` sovrascrive il tentativo con un audit `succeeded` dello **stesso ID**: deve conservare `attempted.priceRateSnapshot` da v0.11.76 insieme a `aiRequested`, endpoint/modello e token osservati, senza introdurre una seconda Activity.
 - Le bozze di fusione manuale non devono dichiarare chiamate AI né tariffa; gli audit di errore/abort mantengono il tentativo originario. Successo di fusione = **solo draft `proposed`**, mai canone, sync GitHub o approvazione autonoma.
 - Verificare Vitest + E2E desktop/mobile: bozza AI riuscita con budget, snapshot 3/9, usage 321/48, modifica rate 30/90, dopo reload il costo storico non cambia e `legacyPricedCount=0`. Nessuna ricostruzione retroattiva dei prezzi per record precedenti privi di snapshot.
+
+
+## Refresh del ledger navigando da Archivio a Dashboard (integrazione v0.11.77)
+
+- `App.tsx` deve caricare le `Activity` non solo quando cambia libro ma **anche quando cambia pagina**: `generateSceneMergeDraft` salva attività e bozza senza modificare il record `BookProject`, quindi la Dashboard altrimenti riusa un array di consumi obsoleto e mostra 0,00 € dopo una chiamata fatturabile. Proteggere il risultato delle letture IndexedDB asincrone da cambi di pagina/libro avvenuti nel frattempo, evitando leak tra libri.
+- Test Playwright desktop/mobile di fusione AI: `Activity` succeeded con quote, navigare da Archivio a Dashboard **senza reload**, importo corretto visibile, poi cambio tariffa 10× e reload con importo invariato. Nessuna chiamata AI extra, canone e sync immutati.

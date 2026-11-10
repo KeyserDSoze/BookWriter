@@ -103,9 +103,17 @@ export default function App() {
     })();
   }, [refresh]);
   useEffect(() => {
-    if (selectedId) void listActivities(selectedId).then(setActivities).catch(() => setActivities([]));
+    // The scene-merge workspace can commit an Activity without changing the
+    // book revision. Re-read the ledger when returning to the Dashboard, not
+    // only when books/selectedId change, or the budget shows stale zero spend.
+    // Ignore responses from older selections or page transitions.
+    let current = true;
+    if (selectedId) void listActivities(selectedId)
+      .then(rows => { if (current) setActivities(rows); })
+      .catch(() => { if (current) setActivities([]); });
     else setActivities([]);
-  }, [selectedId, books]);
+    return () => { current = false; };
+  }, [selectedId, books, page]);
   useEffect(() => {
     // Recover the durable outbox on reload, network recovery and while the tab stays open.
     // Never claim that scheduled browser work runs when the page is closed.
