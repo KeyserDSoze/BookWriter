@@ -5,7 +5,7 @@ import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
@@ -30,7 +30,15 @@ const memorySchema = z.object({
   timeline: z.array(z.string()),
   currentState: z.string(),
 });
-const editorialSummarySchema = z.object({ chapterSummary: z.string().min(25).max(6000), bookSummary: z.string().min(25).max(9000) });
+// A non-empty JSON string can still contain only whitespace. Do not let
+// apparent length from spaces/newlines become a frozen, unusable synopsis.
+const meaningfulSummary = (maximum: number) => z.string().max(maximum)
+  .refine(value => value.trim().length >= 25,
+    "La sinossi deve contenere almeno 25 caratteri significativi.");
+const editorialSummarySchema = z.object({
+  chapterSummary: meaningfulSummary(6000),
+  bookSummary: meaningfulSummary(9000),
+});
 const impactSchema = z.object({
   rationale: z.string(),
   affectedSceneIds: z.array(z.string()),
@@ -344,10 +352,12 @@ function nextWork(book: BookProject): Work | null {
             "Il riassunto del libro deve descrivere quanto è stato realmente raccontato ai lettori.",
           ].join("\n\n"),
           apply: (b, text) => {
-            const data = editorialSummarySchema.parse(parseJson(text));
-            const current = b.editorialCycle;
+            // Guard the EXACT stage/chapter/segment associated with this reply
+            // before parsing or writing any summary fields.
+            const current = assertCurrentEditorialSummaryStep(b,cycle.chapterId,index);
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
-            if (!current || !ch) throw new Error("Sessione di sintesi non valida.");
+            if (!ch) throw new Error("Sessione di sintesi non valida: capitolo assente.");
+            const data = editorialSummarySchema.parse(parseJson(text));
             assertEditorialReviewCoverage(b, current, true);
             // Check once more on the exact book revision being committed;
             // a judge/scene/summary cursor could change during the AI call.

@@ -72,6 +72,45 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
       x.prompt.includes("passaggio segreto"))).toBe(true);
     expect((await listActivities(source.id)).filter(a=>a.phase==="chapterReview")).toHaveLength(14);
   });
+  it("rifiuta sinossi solo-spazi anche con 12 report e freeze valido, senza perdere usage o canon",async()=>{
+    const source=book();
+    source.bookSummary="Il libro non è ancora stato consolidato.";
+    await saveBook(source,false);
+    const responses:string[]=[];
+    modelCall.mockImplementation(async (kind:string)=>{
+      responses.push(kind);
+      const text=kind==="chapterJudge"?judgment(false):
+        kind==="summarize"?JSON.stringify({
+          chapterSummary:" ".repeat(45),
+          bookSummary:"  \n\t".repeat(28),
+        }):report(false);
+      return {text,endpointId:"openai",modelId:"review-model",
+        inputTokens:243,outputTokens:72};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const saved=(await getBook(source.id))!;
+    expect(saved.status).toBe("error");
+    expect(saved.editorialCycle).toMatchObject({
+      stage:"summary",summaryCursor:0,
+      judgment:{verdict:"freeze"},reports:expect.arrayContaining([]),
+    });
+    expect(saved.editorialCycle?.reports).toHaveLength(12);
+    expect(saved.chapters[0]!.frozenAt).toBeUndefined();
+    expect(saved.chapters[0]!.summary).toBeUndefined();
+    expect(saved.chapters[0]!.bookSummaryAtFreeze).toBeUndefined();
+    expect(saved.chapters[0]!.scenes).toEqual(source.chapters[0]!.scenes);
+    expect(saved.bookSummary).toBe("Il libro non è ancora stato consolidato.");
+    expect(responses.filter(x=>x==="summarize")).toHaveLength(1);
+    expect(responses).toHaveLength(14);
+    const failed=(await listActivities(source.id)).filter(x=>x.kind==="summarize");
+    // Activity uses phase+title, not a separate taskKind field.
+    expect((await listActivities(source.id)).filter(x=>x.title.includes("Sinossi")))
+      .toMatchObject([{
+        status:"failed",aiRequested:true,
+        inputTokens:243,outputTokens:72,
+      }]);
+    expect(failed).toHaveLength(0);
+  });
   it("accetta un rilievo motivato, corregge la scena, aggiorna memoria e riesegue i 12 controlli",async()=>{
     const source=book();await saveBook(source,false);
     let round=1;const tasks:string[]=[];

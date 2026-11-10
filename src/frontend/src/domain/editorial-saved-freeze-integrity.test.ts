@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { newBook, type BookProject } from "./types";
 import {
-  EDITORIAL_ROLES, assertEditorialReviewCoverage,
+  EDITORIAL_ROLES, assertCurrentEditorialSummaryStep, assertEditorialReviewCoverage,
   assertSavedEditorialFreezeJudgmentIntegrity, chapterSegments,
   createEditorialCycle, validateJudgment, validateReport,
   type ChapterEditorialCycle,
@@ -56,6 +56,18 @@ describe("Guardia sul giudizio freeze salvato prima del summary",()=>{
     expect(()=>assertSavedEditorialFreezeJudgmentIntegrity(book,cycle)).not.toThrow();
     expect(editorialRecoveryProblem(book)).toBeUndefined();
     expect(cycle).toEqual(before);
+  });
+  it("un risultato di sintesi non può avanzare il cursore di un altro segmento o capitolo",()=>{
+    const {book,cycle}=fixture(true);
+    expect(assertCurrentEditorialSummaryStep(book,cycle.chapterId,0)).toBe(cycle);
+    cycle.summaryCursor=1;
+    expect(()=>assertCurrentEditorialSummaryStep(book,cycle.chapterId,0))
+      .toThrow(/Checkpoint di sintesi cambiato/);
+    expect(()=>assertCurrentEditorialSummaryStep(book,"c2",1))
+      .toThrow(/Checkpoint di sintesi cambiato/);
+    cycle.stage="review";
+    expect(()=>assertCurrentEditorialSummaryStep(book,cycle.chapterId,1))
+      .toThrow(/Checkpoint di sintesi cambiato/);
   });
   it("blocca decisioni assenti, duplicate e inventate nonostante il verdetto freeze",()=>{
     const {book,cycle,id}=fixture();

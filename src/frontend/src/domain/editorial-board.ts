@@ -1313,6 +1313,21 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
     "repair" : "freeze", createdAt: new Date().toISOString() };
 }
 
+/** An AI summary belongs to one exact checkpoint position, not merely the
+ * same book phase. Never advance a different chapter or segment if a restored
+ * or externally edited checkpoint changed while the request was in flight. */
+export function assertCurrentEditorialSummaryStep(
+  book: BookProject, expectedChapterId: string, expectedCursor: number,
+): ChapterEditorialCycle {
+  const cycle = book.editorialCycle;
+  if (!cycle || cycle.stage !== "summary" ||
+      cycle.chapterId !== expectedChapterId ||
+      !Number.isSafeInteger(expectedCursor) ||
+      cycle.summaryCursor !== expectedCursor)
+    throw new Error("Checkpoint di sintesi cambiato durante la chiamata AI: risposta scartata.");
+  return cycle;
+}
+
 /** Revalidate a saved FREEZE decision before even starting a summary, and
  * again at the atomic commit boundary. A persisted verdict is not authority:
  * re-run the very same judge validator against the current chapter, earlier
