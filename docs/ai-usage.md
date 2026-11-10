@@ -53,3 +53,7 @@ Un errore nel JSON editoriale, nella freschezza del checkpoint o nella validazio
 ## v0.11.75 — output vuoto con usage provider
 
 Un endpoint può completare con HTTP 200 e JSON valido ma nessun contenuto testuale utilizzabile. La richiesta editoriale fallisce e non scrive canone, ma `usage` riportato viene conservato nel registro delle attività se i numeri sono interi non negativi. Manca un conteggio? Rimane incerto e il budget non inventa token. [Guida](ai-empty-provider-usage.md) · [ADR 0107](../ADR/0107-empty-provider-response-usage.md).
+
+## v0.11.76 — snapshot del listino al momento della chiamata
+
+Per le richieste nuove con listino manuale valido, il prezzo di input/output per endpoint/modello è congelato in `Activity.priceRateSnapshot`: modificare il listino non ricalcola la stima dei consumi passati con snapshot. Le attività legacy prive del campo rimangono stimabili a tariffa corrente, ma l'interfaccia segnala esplicitamente questa limitazione. [Guida](ai-budget-price-snapshots.md) · [ADR 0108](../ADR/0108-price-snapshot-ai-budget.md).

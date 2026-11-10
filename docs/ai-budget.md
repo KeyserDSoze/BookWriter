@@ -53,3 +53,7 @@ Se il provider restituisce conteggi `usage` validi ma la revisione editoriale o 
 ## v0.11.75 — HTTP 200 senza testo ma con usage
 
 Quando un endpoint invia HTTP 200 con JSON decodificabile ma risposta testuale vuota, il testo viene **rifiutato** come prima. Se include `usage` valido, i token osservati rimangono nella Activity fallita e nella stima del budget. Se il provider non invia tutti i conteggi validi, il blocco conservativo resta attivo. [Guida](ai-empty-provider-usage.md) · [ADR 0107](../ADR/0107-empty-provider-response-usage.md).
+
+## v0.11.76 — tariffa per tentativo e modifiche prezzi non retroattive
+
+Ogni nuova chiamata AI salva nell'Activity una copia del listino manuale valido prima del fetch. La stima dei consumi con snapshot **non cambia** se in seguito modifichi prezzi: la tariffa aggiornata vale per le nuove richieste. I vecchi registri senza prezzo storicizzato restano stimati col listino corrente per compatibilità, con contatore e avviso in Dashboard; non si attribuiscono prezzi storici ipotetici. Uno snapshot presente ma malformato o di un altro modello produce `unpriced` e blocco conservativo. [Guida](ai-budget-price-snapshots.md) · [ADR 0108](../ADR/0108-price-snapshot-ai-budget.md).

@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.76 — 2026-11-10 (main, issue #113, epic #17/#6)
+
+**La stima AI usa la tariffa salvata all'epoca della singola richiesta**
+
+- Nuova `Activity.priceRateSnapshot` opzionale: autopilot e fusione scena fotografano il **listino manuale validato per endpoint e modello** prima del provider; il record resta anche con errore, uso parziale, risposta vuota o prosa scartata. Nessuna chiave API nel ledger.
+- `accountBookAiBudget` usa la tariffa storica per le chiamate che la possiedono; i nuovi prezzi modificano solo i preventivi successivi. Snapshot storici malformati o incompatibili con route = `unpriced`, stop conservativo senza fallback.
+- Log legacy senza snapshot: resta il vecchio comportamento di stima col listino corrente, ora segnalato con `legacyPricedCount` e avviso Dashboard (repricing possibile). ZIP content-only/full con schema del campo opzionale, senza rotture per ZIP preesistenti.
+- Vitest su isolamento rate, tariffe alterate, ledger di output rifiutati, fusione, backup; Playwright desktop/mobile con cambio prezzo 10×, costo precedente costante dopo reload. ADR 0108, guida e bump package/lock; nessuna dipendenza o migrazione.
+
+
 ## 0.11.75 — 2026-11-10 (main, issue #112, epic #17/#6)
 
 **Usage AI conservato anche su HTTP 200 con JSON valido e risposta senza testo**
