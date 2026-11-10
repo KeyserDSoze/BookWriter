@@ -57,3 +57,7 @@ Quando un endpoint invia HTTP 200 con JSON decodificabile ma risposta testuale v
 ## v0.11.76 — tariffa per tentativo e modifiche prezzi non retroattive
 
 Ogni nuova chiamata AI salva nell'Activity una copia del listino manuale valido prima del fetch. La stima dei consumi con snapshot **non cambia** se in seguito modifichi prezzi: la tariffa aggiornata vale per le nuove richieste. I vecchi registri senza prezzo storicizzato restano stimati col listino corrente per compatibilità, con contatore e avviso in Dashboard; non si attribuiscono prezzi storici ipotetici. Uno snapshot presente ma malformato o di un altro modello produce `unpriced` e blocco conservativo. [Guida](ai-budget-price-snapshots.md) · [ADR 0108](../ADR/0108-price-snapshot-ai-budget.md).
+
+## v0.11.77 — audit della bozza AI riuscita
+
+L'Activity conclusiva di una fusione AI riuscita conserva ora il listino storico copiato prima del provider, oltre a modello e token osservati: la bozza rimane `proposed` e non viene approvata. Il record non viene duplicato e il costo precedente non cambia modificando la tariffa futura. Le proposte manuali non dichiarano consumi AI. [Guida](ai-merge-price-audit.md) · [ADR 0109](../ADR/0109-successful-ai-merge-price-audit.md).

@@ -141,6 +141,18 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await page.getByLabel("API key").fill("sk-test-merge-provider-not-real");
   await page.getByRole("textbox", { name: "Modello predefinito" }).fill("demo-merge-model");
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
+  // Wait for WebCrypto + IndexedDB; clicking does not await the async handler.
+  await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
+  await nav.getByRole("button", { name: "Dashboard" }).click();
+  const budget = page.getByRole("region", { name: "Budget AI" });
+  await budget.getByRole("spinbutton", { name: "Prezzo input per milione" }).fill("3");
+  await budget.getByRole("spinbutton", { name: "Prezzo output per milione" }).fill("9");
+  await budget.getByRole("button", { name: "Salva tariffa del modello" }).click();
+  await expect(budget.getByText(/Tariffa salvata localmente/)).toBeVisible();
+  await budget.getByRole("spinbutton", { name: "Soglia budget in euro" }).fill("5");
+  await budget.getByRole("checkbox", { name: "Attiva limite stimato" }).check();
+  await budget.getByRole("button", { name: "Salva budget del libro" }).click();
+  await expect(budget.getByText(/Budget stimato attivo/)).toBeVisible();
 
   await nav.getByRole("button", { name: "Archivio", exact: true }).click();
   await page.getByLabel("PAT GitHub").fill("github_pat_ai_merge_test_not_real_2026");
@@ -165,6 +177,47 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await expect(page.getByText(/Input 321 token/)).toBeVisible();
   await expect(page.getByRole("textbox", { name: /Testo bozza fusione/ }))
     .toHaveValue(/misterioso indizio/);
+  // Successful merge writes one final Activity, not a second billable call.
+  const audit = await page.evaluate(() => new Promise<Array<{
+    status:string;aiRequested?:boolean;inputTokens?:number;outputTokens?:number;
+    priceRateSnapshot?:{endpointId:string;modelId:string;
+      inputEurPerMillion:number;outputEurPerMillion:number};
+  }>>((resolve,reject)=>{
+    const open=indexedDB.open("bookwriter");
+    open.onerror=()=>reject(open.error);
+    open.onsuccess=()=>{
+      const db=open.result;
+      const req=db.transaction("activities","readonly").objectStore("activities").getAll();
+      req.onerror=()=>reject(req.error);
+      req.onsuccess=()=>{resolve(req.result.filter((x:{aiRequested?:boolean})=>
+        x.aiRequested===true));db.close();};
+    };
+  }));
+  expect(audit).toHaveLength(1);
+  expect(audit[0]).toMatchObject({status:"succeeded",aiRequested:true,
+    inputTokens:321,outputTokens:48,
+    priceRateSnapshot:{endpointId:"openai",modelId:"demo-merge-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}});
+  await nav.getByRole("button", { name: "Dashboard" }).click();
+  const ledger=page.getByRole("region",{name:"Budget AI"});
+  await expect(ledger.getByText(/Spesa stimata da usage noto:/).locator(".."))
+    .toContainText("0,0014");
+  await expect(ledger.getByText(/chiamate precedenti senza tariffa storicizzata/))
+    .toHaveCount(0);
+  // Updating today's tariff tenfold must not reprice the historical draft.
+  await ledger.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("30");
+  await ledger.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("90");
+  await ledger.getByRole("button",{name:"Salva tariffa del modello"}).click();
+  await expect(ledger.getByText(/Tariffa salvata localmente/)).toBeVisible();
+  await page.reload();
+  const restored=page.getByRole("region",{name:"Budget AI"});
+  await expect(restored.getByText(/Spesa stimata da usage noto:/).locator(".."))
+    .toContainText("0,0014");
+  await expect(restored.getByRole("spinbutton",{name:"Prezzo input per milione"}))
+    .toHaveValue("30");
+  await expect(restored.getByRole("spinbutton",{name:"Prezzo output per milione"}))
+    .toHaveValue("90");
+  await expect(restored.getByText(/Consumi incerti/)).toHaveCount(0);
 
   await nav.getByRole("button", { name: "Libro" }).click();
   await expect(page.getByText(/lascia dietro di sé la traccia/)).toBeVisible();

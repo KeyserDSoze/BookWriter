@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.77 — 2026-11-10 (main, issue #114, epic #17/#15/#6)
+
+**La fusione AI riuscita mantiene lo snapshot tariffario anche nell'audit finale**
+
+- Corretto `persistDraft`: l'Activity `succeeded` sostituisce il tentativo con lo stesso ID e preserva ora anche una copia del suo `priceRateSnapshot`. Prima il salvataggio della proposta scartava il prezzo storico e rendeva rivalutabile la spesa se cambiava il listino.
+- Non sono creati duplicati di Activity né chiamate AI supplementari. Bozze AI sempre `proposed`, canone non alterato, nessun push GitHub; bozze manuali sempre `aiRequested=false` senza tariffa AI.
+- Nuovi Vitest su stima persistente 321/48 al prezzo 3/9 dopo variazione a 30/90, nuovo preflight alla tariffa corrente e Activity unica; Playwright desktop/mobile con mock GitHub/provider, consenso, prezzo dopo reload e proposta non approvata.
+- ADR 0109, guida, README/AGENTS e package/lock 0.11.77, senza dipendenze o migrazioni.
+
+
 ## 0.11.76 — 2026-11-10 (main, issue #113, epic #17/#6)
 
 **La stima AI usa la tariffa salvata all'epoca della singola richiesta**

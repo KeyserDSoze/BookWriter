@@ -92,6 +92,53 @@ describe("Laboratorio di fusione senza canonizzazione automatica", () => {
     expect(callMock.mock.calls[0]?.[0]).toBe("merge");
   });
 
+  it("una fusione AI riuscita mantiene lo snapshot tariffario nell'audit finale senza duplicare l'attività", async () => {
+    const review = await fixture();
+    const book = (await getBook(review.bookId))!;
+    book.aiBudget = { enabled:true, enabledAt:new Date(Date.now()-5000).toISOString(),
+      limitEur:5, maxOutputTokens:8192 };
+    await saveBook(book, false);
+    review.localUpdatedAt = book.updatedAt;
+    review.local = structuredClone(book);
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId = "merge-model";
+    settings.aiPriceRates = [{endpointId:"openai",modelId:"merge-model",
+      inputEurPerMillion:3,outputEurPerMillion:9}];
+    await saveSettings(settings);
+    callMock.mockResolvedValue({text:"Una scena proposta che mantiene tutti gli indizi.",
+      endpointId:"openai",modelId:"merge-model",inputTokens:321,outputTokens:48});
+    const draft = await generateSceneMergeDraft(review,"chapter-1","scene-1","",
+      new AbortController());
+    expect(draft.status).toBe("proposed");
+    expect(draft.source).toBe("ai");
+    const rows = await listActivities(book.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      status:"succeeded",aiRequested:true,
+      endpointId:"openai",modelId:"merge-model",
+      inputTokens:321,outputTokens:48,
+      priceRateSnapshot:{endpointId:"openai",modelId:"merge-model",
+        inputEurPerMillion:3,outputEurPerMillion:9},
+    });
+    const before = accountBookAiBudget(rows,settings,book.aiBudget!);
+    expect(before.incompleteCount).toBe(0);
+    expect(before.unpricedCount).toBe(0);
+    expect(before.legacyPricedCount).toBe(0);
+    expect(before.estimatedSpentEur).toBeCloseTo((321*3+48*9)/1_000_000);
+    const afterSettings=structuredClone(settings);
+    afterSettings.aiPriceRates = [{endpointId:"openai",modelId:"merge-model",
+      inputEurPerMillion:30,outputEurPerMillion:90}];
+    const after=accountBookAiBudget(await listActivities(book.id),afterSettings,book.aiBudget!);
+    expect(after.estimatedSpentEur).toBeCloseTo(before.estimatedSpentEur);
+    expect(after.legacyPricedCount).toBe(0);
+    expect(preflightBookAiBudget(book,afterSettings,rows,"merge","System","Prompt")!
+      .estimatedNextEur).toBeGreaterThan(
+        preflightBookAiBudget(book,settings,rows,"merge","System","Prompt")!.estimatedNextEur);
+    expect((await getBook(book.id))?.chapters).toEqual(book.chapters);
+    expect(await listSceneMergeDrafts(review,"chapter-1","scene-1")).toHaveLength(1);
+    expect(await getOutbox(book.id)).toBeUndefined();
+  });
+
   it("blocca la fusione AI prima del provider quando il budget non copre la riserva", async () => {
     const review = await fixture();
     const book = (await getBook(review.bookId))!;
@@ -241,6 +288,9 @@ describe("Laboratorio di fusione senza canonizzazione automatica", () => {
       review, "chapter-1", "scene-1", "Un testo combinato manualmente.",
     );
     expect(draft.source).toBe("manual");
+    const manualAudit = (await listActivities(review.bookId))[0]!;
+    expect(manualAudit.aiRequested).toBe(false);
+    expect(manualAudit.priceRateSnapshot).toBeUndefined();
     await rejectSceneMergeDraft(draft.id);
     expect((await listSceneMergeDrafts(review, "chapter-1", "scene-1"))[0]?.status).toBe("rejected");
     expect(callMock).not.toHaveBeenCalled();

@@ -886,3 +886,10 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 - Prima di persistere `Activity.aiRequested=true` e inviare `callModel`, autopilot e `generateSceneMergeDraft` devono salvare **una copia** validata di `AppSettings.aiPriceRates` nella `Activity.priceRateSnapshot` quando disponibile. Non riutilizzare oggetti live dei settings, non salvare API key e non inferire tariffe non configurate; aggiornare la tariffa deve influenzare soltanto le richieste nuove.
 - `accountBookAiBudget` deve calcolare una chiamata provvista di snapshot **solo** al prezzo congelato, rifiutare snapshot malformed/out-of-route (`unpricedCount`, fail-closed) e non ripiegare su rate nuove. Le Activity legacy senza snapshot conservano compatibilità col listino corrente ma incrementano `legacyPricedCount`, mostrato esplicitamente nella Dashboard. Non fingere che siano tariffe storiche autentiche.
 - Il campo opzionale è convalidato nel backup ZIP content-only/full, e il legacy senza campo resta leggibile senza migrazioni. Test Vitest su accounting, runner, merge, backup, E2E desktop/mobile su cambio listino dopo chiamata e prezzo immutato dopo reload. Rimane una **stima** da listino inserito dall'autore, non fattura provider.
+
+
+## Snapshot tariffa su fusione AI riuscita v0.11.77 — ADR 0109 / issue #114
+
+- `application/scene-merge.ts#persistDraft` sovrascrive il tentativo con un audit `succeeded` dello **stesso ID**: deve conservare `attempted.priceRateSnapshot` da v0.11.76 insieme a `aiRequested`, endpoint/modello e token osservati, senza introdurre una seconda Activity.
+- Le bozze di fusione manuale non devono dichiarare chiamate AI né tariffa; gli audit di errore/abort mantengono il tentativo originario. Successo di fusione = **solo draft `proposed`**, mai canone, sync GitHub o approvazione autonoma.
+- Verificare Vitest + E2E desktop/mobile: bozza AI riuscita con budget, snapshot 3/9, usage 321/48, modifica rate 30/90, dopo reload il costo storico non cambia e `legacyPricedCount=0`. Nessuna ricostruzione retroattiva dei prezzi per record precedenti privi di snapshot.

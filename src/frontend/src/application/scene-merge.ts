@@ -63,6 +63,11 @@ async function persistDraft(review: ConflictReview, draft: SceneMergeDraft, atte
     summary: "Bozza " + draft.id.slice(0, 8) + " salvata solo localmente; nessuna modifica al canon.",
     modelId: draft.modelId, endpointId: draft.endpointId,
     inputTokens: draft.inputTokens, outputTokens: draft.outputTokens,
+    // The succeeded audit overwrites the pre-fetch Activity with the SAME ID.
+    // Preserve its verified historical quote: otherwise successful AI merges
+    // silently become legacy rows repriced with today's Settings tariff.
+    ...(draft.source === "ai" && attempted?.priceRateSnapshot
+      ? { priceRateSnapshot: { ...attempted.priceRateSnapshot } } : {}),
     aiRequested: draft.source === "ai" ? attempted?.aiRequested : false,
     createdAt: attempted?.createdAt ?? now, endedAt: now,
   };
