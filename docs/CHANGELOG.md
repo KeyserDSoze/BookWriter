@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #118 (main)
+
+**Scoperta modelli AI: cataloghi esterni limitati e non distruttivi**
+
+- `GET /models` riceve un timeout di 12 s, un limite di 256.000 byte sullo stream e sulle dimensioni dichiarate, senza cookie/referrer o redirect e senza mostrare contenuti o chiavi negli errori.
+- Soltanto un array non vuoto di 1–2.000 modelli validi viene accettato: ID stringa bounded, niente righe null, oggetti, controlli o spazi ai bordi, deduplica e ordinamento. Un HTTP 200 vuoto/malformato non svuota i modelli impostati dall'autore; resta l'inserimento manuale.
+- Test Vitest con payload validi, falsi, sovradimensionati e streaming; [guida](ai-model-inventory.md). Nessun cambiamento di canone, routing già persistito o formato ZIP.
+
 ## 0.11.80 — 2026-11-10 (main, issue #117, epic #20/#6)
 
 **Nessun congelamento su sinossi bianche: testo minimo reale e segmento AI vincolato**

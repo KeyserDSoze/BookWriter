@@ -121,17 +121,109 @@ export async function callModel(
   };
 }
 
+const MAX_MODEL_CATALOG_BYTES = 256_000;
+const MAX_MODEL_CATALOG_ITEMS = 2_000;
+const MAX_MODEL_ID_LENGTH = 256;
+const MODEL_CATALOG_TIMEOUT_MS = 12_000;
+
+class ModelCatalogError extends Error {
+  constructor(message: string) { super(message); this.name = "ModelCatalogError"; }
+}
+function invalidModelCatalog(): ModelCatalogError {
+  return new ModelCatalogError(
+    "Catalogo modelli non valido: conserva i modelli precedenti o inserisci manualmente il nome.");
+}
+
+/** A provider response is untrusted even with HTTP 200. Never buffer an
+ * unbounded model catalogue, trust Content-Length alone or log its body. */
+async function boundedModelCatalog(response: Response): Promise<unknown> {
+  const mime = response.headers.get("content-type") ?? "";
+  if (mime && !/\/json(?:\s*;|$)|\+json(?:\s*;|$)/i.test(mime))
+    throw invalidModelCatalog();
+  const declared = Number(response.headers.get("content-length") ?? "0");
+  if (!Number.isFinite(declared) || declared > MAX_MODEL_CATALOG_BYTES)
+    throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
+  const reader = response.body?.getReader();
+  if (!reader) throw invalidModelCatalog();
+  let size = 0;
+  const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > MAX_MODEL_CATALOG_BYTES) {
+        await reader.cancel();
+        throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
+      }
+      chunks.push(chunk.value);
+    }
+  } catch (error) {
+    if (error instanceof ModelCatalogError) throw error;
+    throw invalidModelCatalog();
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+  } catch {
+    throw invalidModelCatalog();
+  }
+}
+
+/** GET /models is advisory. Malformed/empty responses must never replace an
+ * existing catalogue with incomplete or non-string entries. */
 export async function fetchModels(
   endpointUrl: string,
   secret: string,
   signal?: AbortSignal,
 ): Promise<string[]> {
   const base = normalizeEndpoint(endpointUrl);
-  const response = await fetch(`${base}/models`, {
-    headers: { Authorization: `Bearer ${secret}` }, redirect: "error", signal,
-  });
-  if (!response.ok) throw new Error(friendlyApiError(response.status));
-  const parsed = await response.json() as { data?: Array<{ id?: string }> };
-  if (!Array.isArray(parsed.data)) throw new Error("Il provider non espone un elenco modelli standard.");
-  return parsed.data.map(x => x.id).filter((x): x is string => !!x).sort();
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  const timeout = setTimeout(() => controller.abort(), MODEL_CATALOG_TIMEOUT_MS);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    if (signal?.aborted) throw new DOMException("Richiesta annullata.", "AbortError");
+    let response: Response;
+    try {
+      response = await fetch(base + "/models", {
+        method: "GET", mode: "cors", credentials: "omit",
+        referrerPolicy: "no-referrer", cache: "no-store", redirect: "error",
+        headers: { Authorization: "Bearer " + secret },
+        signal: controller.signal,
+      });
+    } catch {
+      throw new Error("Impossibile contattare il catalogo modelli: verifica rete, URL e CORS.");
+    }
+    if (!response.ok) throw new Error(friendlyApiError(response.status));
+    const parsed = await boundedModelCatalog(response);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      throw invalidModelCatalog();
+    const data = (parsed as { data?: unknown }).data;
+    if (!Array.isArray(data) || data.length === 0 || data.length > MAX_MODEL_CATALOG_ITEMS)
+      throw invalidModelCatalog();
+    const ids = new Set<string>();
+    for (const entry of data) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry))
+        throw invalidModelCatalog();
+      const id: unknown = (entry as { id?: unknown }).id;
+      if (typeof id !== "string" || !id || id !== id.trim() ||
+          id.length > MAX_MODEL_ID_LENGTH || /[\u0000-\u001f\u007f-\u009f]/u.test(id))
+        throw invalidModelCatalog();
+      ids.add(id);
+    }
+    return [...ids].sort();
+  } catch (error) {
+    if (signal?.aborted) throw new DOMException("Richiesta annullata.", "AbortError");
+    if (controller.signal.aborted)
+      throw new ModelCatalogError("Timeout del catalogo modelli: usa l'inserimento manuale.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
