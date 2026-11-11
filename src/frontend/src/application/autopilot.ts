@@ -573,13 +573,27 @@ export class AutopilotRunner {
           started.summary = shortSummary(result.text); started.output = result.text;
           // One more fencing check before canonizing output in IndexedDB.
           await guard.assertActive();
-          await saveBookAndActivity(latest, started);
+          // The revision checked after the provider call must still be
+          // current inside the SAME IndexedDB transaction as canon + audit.
+          // A non-cooperating writer can update after getBook above.
+          await saveBookAndActivity(latest, started, book.updatedAt);
           await onUpdate();
         } catch (error) {
           // HTTP 200 + valid JSON can report usage with empty or malformed
           // content. Keep the observed counters on failure, without approving
           // a report, chapter or remediation.
           keepObservedUsageOnRejectedReply(started, error);
+          if (error instanceof BookRevisionConflict) {
+            // A competing writer committed after the post-model read. The
+            // attempted request may still have cost tokens, but we must not
+            // overwrite the competing book (even just to mark it paused).
+            started.status = "cancelled";
+            started.error = "Il libro è cambiato durante il salvataggio AI: risultato non applicato. Ricarica prima di riprendere.";
+            started.endedAt = new Date().toISOString();
+            await saveActivity(started);
+            await onUpdate();
+            break;
+          }
           const leaseFailure = guard.failure();
           const budgetStop = error instanceof AiBudgetStop;
           const aborted = !leaseFailure && (signal.aborted || error instanceof DOMException && error.name === "AbortError");
