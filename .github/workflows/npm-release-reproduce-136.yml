@@ -68,9 +68,9 @@ jobs:
           const fs=require("node:fs");
           const path="../../docs/CHANGELOG.md";
           let s=fs.readFileSync(path,"utf8");
-          const anchor="## Non rilasciato — issue #135 (epic #17/#6)";
+          const anchor="## Non rilasciato — issues #135/#137/#138 (epic #17/#6)";
           if(s.split(anchor).length!==2)throw Error("Unexpected changelog anchor");
-          s=s.replace(anchor,"## 0.11.87 — 2026-11-11 (main, issue #135, epic #17/#6)");
+          s=s.replace(anchor,"## 0.11.87 — 2026-11-11 (main, issues #135/#137/#138, epic #17/#6)");
           fs.writeFileSync(path,s);
           NODE
       - name: Fresh npm ci plus typecheck tests smoke build round 1
