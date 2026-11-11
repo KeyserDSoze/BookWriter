@@ -70,10 +70,8 @@ jobs:
           const second = "## Non rilasciato — issue #123 (epic #6/#17/#20)";
           if (text.split(from).length !== 2 || text.split(second).length !== 2)
             throw Error("Unexpected pending release sections");
-          text = text.replace(from, "## 0.11.82 — 2026-11-11 (main, issues #123/#124)\\n\\n### Timeout degli header AI — #124");
+          text = text.replace(from, "## 0.11.82 — 2026-11-11 (main, issues #123/#124)");
           text = text.replace(second, "### Lettura limitata delle risposte AI — #123");
-          // Replace escaped line markers in the literal heading conversion.
-          text = text.replace("issues #123/#124)\\n\\n###", "issues #123/#124)\n\n###");
           fs.writeFileSync(p, text);
           NODE
       - name: Clean install and checks round one
