@@ -22,6 +22,16 @@ export function normalizeEndpoint(raw: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
+/** A missing API key is explicitly allowed only for literal loopback hostnames. */
+export function endpointAuthMode(value: unknown, endpointUrl: string): "api_key" | "none" {
+  if (value === undefined || value === "api_key") return "api_key";
+  if (value !== "none") throw new Error("Modalità autenticazione AI non valida.");
+  const url = new URL(normalizeEndpoint(endpointUrl));
+  if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1")
+    throw new Error("Senza API key è consentito solo un endpoint localhost o 127.0.0.1.");
+  return "none";
+}
+
 function friendlyApiError(status: number): string {
   switch (status) {
     case 401: return "Autenticazione API non valida (HTTP 401): controlla la chiave.";
@@ -74,7 +84,6 @@ export async function callModel(
   const endpoint = settings.endpoints.find(p => p.id === assignment.endpointId);
   if (!endpoint) throw new Error(`Endpoint non configurato per ${kind}.`);
   if (!assignment.modelId.trim()) throw new Error(`Seleziona il modello per l'attività ${kind} nelle Impostazioni.`);
-  if (!endpoint.secret) throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
   // Fail closed on malformed local/imported settings before decrypting or POST.
   const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
   if (options?.maxOutputTokens !== undefined &&
@@ -83,7 +92,12 @@ export async function callModel(
     throw new Error("Limite output AI non valido: usa un intero tra 1 e 32768 token.");
   }
   const base = normalizeEndpoint(endpoint.baseUrl);
-  const apiKey = await decryptLocal(endpoint.secret);
+  const authMode = endpointAuthMode(endpoint.authMode, base);
+  if (authMode === "api_key" && !endpoint.secret)
+    throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
+  const apiKey = authMode === "api_key" ? await decryptLocal(endpoint.secret!) : null;
+  if (authMode === "api_key" && !apiKey)
+    throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
   if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
 
   let response: Response;
@@ -94,7 +108,7 @@ export async function callModel(
       redirect: "error",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        ...(apiKey === null ? {} : { Authorization: `Bearer ${apiKey}` }),
       },
       body: JSON.stringify({
         model: assignment.modelId,
@@ -253,10 +267,12 @@ async function boundedModelCatalog(response: Response, signal: AbortSignal): Pro
  * existing catalogue with incomplete or non-string entries. */
 export async function fetchModels(
   endpointUrl: string,
-  secret: string,
+  secret: string | null,
   signal?: AbortSignal,
 ): Promise<string[]> {
   const base = normalizeEndpoint(endpointUrl);
+  endpointAuthMode(secret === null ? "none" : "api_key", base);
+  if (secret !== null && !secret) throw new Error("Inserisci prima la chiave API.");
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   const timeout = setTimeout(() => controller.abort(), MODEL_CATALOG_TIMEOUT_MS);
@@ -277,7 +293,7 @@ export async function fetchModels(
       const pendingHeaders = fetch(base + "/models", {
         method: "GET", mode: "cors", credentials: "omit",
         referrerPolicy: "no-referrer", cache: "no-store", redirect: "error",
-        headers: { Authorization: "Bearer " + secret },
+        headers: secret === null ? {} : { Authorization: "Bearer " + secret },
         signal: controller.signal,
       }).then(late => {
         if (!waitingForHeaders) {

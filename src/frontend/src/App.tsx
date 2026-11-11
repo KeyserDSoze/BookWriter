@@ -9,7 +9,7 @@ import { AutopilotRunner, requestRevision } from "./application/autopilot";
 import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind } from "./domain/types";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
-import { fetchModels, normalizeEndpoint } from "./infrastructure/ai";
+import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
 import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./infrastructure/ai-header-timeout";
 import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
@@ -246,9 +246,11 @@ export default function App() {
       setNotice("Catalogo ignorato: endpoint, chiave o modelli modificati durante la ricerca. Premi di nuovo Leggi /models.");
     };
     try {
-      const secret = startingDraft || (endpoint.secret ? await decryptLocal(endpoint.secret) : "");
+      const authMode = endpointAuthMode(endpoint.authMode, endpoint.baseUrl);
+      const secret = authMode === "none" ? null :
+        startingDraft || (endpoint.secret ? await decryptLocal(endpoint.secret) : "");
       if (!current()) { discardStale(); return; }
-      if (!secret) throw new Error("Inserisci prima la chiave API.");
+      if (authMode === "api_key" && !secret) throw new Error("Inserisci prima la chiave API.");
       const models = await fetchModels(endpoint.baseUrl, secret);
       if (!current()) { discardStale(); return; }
       // Synchronous ref-based commit: there is no async gap after the guard
@@ -570,13 +572,28 @@ export default function App() {
       </div>}
 
       {page === "settings" && <div className="space-y-4">
-        <Section title="Endpoint OpenAI-compatible" description="Configura più servizi. Le chiavi vengono cifrate localmente in IndexedDB; restano utilizzabili dal JavaScript dell'app, non sono protette da un backend.">
+        <Section title="Endpoint OpenAI-compatible" description="Configura servizi con chiavi cifrate in IndexedDB, oppure senza autenticazione per localhost. Il browser parla direttamente con l'endpoint, senza backend proxy.">
           <div className="space-y-4">
             {settings.endpoints.map(endpoint => <div key={endpoint.id} className="space-y-3 rounded-lg border border-slate-300 p-4 dark:border-slate-700">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Nome endpoint"><input className="field" value={endpoint.name} onChange={e => updateEndpoint(endpoint.id, { name: e.target.value })} /></Field>
                 <Field label="Base URL"><input className="field" inputMode="url" value={endpoint.baseUrl} onChange={e => updateEndpoint(endpoint.id, { baseUrl: e.target.value })} /></Field>
-                <Field label={endpoint.secret ? "Nuova API key (opzionale; già salvata)" : "API key"}>
+                <Field label="Autenticazione AI">
+                  <select className="field" value={endpoint.authMode ?? "api_key"}
+                    onChange={e => {
+                      const authMode = e.target.value as "api_key" | "none";
+                      updateEndpoint(endpoint.id, { authMode });
+                      if (authMode === "none") setKeyDrafts(old => {
+                        const next = { ...old };
+                        delete next[endpoint.id];
+                        return next;
+                      });
+                    }}>
+                    <option value="api_key">API key (Bearer)</option>
+                    <option value="none">Nessuna autenticazione (solo localhost)</option>
+                  </select>
+                </Field>
+                {endpoint.authMode !== "none" && <Field label={endpoint.secret ? "Nuova API key (opzionale; già salvata)" : "API key"}>
                   <input type="password" className="field" autoComplete="off" value={keyDrafts[endpoint.id] ?? ""} onChange={e => setKeyDrafts(old => ({ ...old, [endpoint.id]: e.target.value }))} placeholder={endpoint.secret ? "••••••••••" : "Inserisci la chiave"} />
                 </Field>
                 <Field label="Modelli rilevati / manuali">
@@ -598,7 +615,7 @@ export default function App() {
                     onChange={e => updateEndpoint(endpoint.id, { headerTimeoutSeconds: Number(e.target.value) })} />
                 </Field>
               </div>
-              <p className="muted text-xs">Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s; un timeout non esclude addebiti.</p>
+              <p className="muted text-xs">Per LM Studio imposta http://localhost:1234/v1 e «Nessuna autenticazione» (solo localhost/127.0.0.1). Questa modalità elimina la chiave precedente al salvataggio e omette Authorization. Abilita CORS nel server locale per il browser; non esporre un server senza autenticazione in rete. Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s; un timeout non esclude addebiti.</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => void discoverModels(endpoint.id)}><RefreshCw size={16} /> Leggi /models</Button>
                 {settings.endpoints.length > 1 && <Button variant="destructive" onClick={() => setSettings(s => ({...s, endpoints:s.endpoints.filter(x => x.id !== endpoint.id)}))}>Rimuovi</Button>}

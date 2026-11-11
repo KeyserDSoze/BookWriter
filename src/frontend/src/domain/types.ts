@@ -28,6 +28,8 @@ export interface EndpointProfile {
   baseUrl: string;
   secret: EncryptedSecret | null;
   models: string[];
+  /** Opt out of Bearer only for literal loopback hostnames; legacy requires api_key. */
+  authMode?: "api_key" | "none";
   /** Max time awaiting POST /chat/completions headers (60–1800 s); default 300. */
   headerTimeoutSeconds?: number;
   /** OpenAI-compatible Chat Completions output cap parameter, legacy max_tokens. */
