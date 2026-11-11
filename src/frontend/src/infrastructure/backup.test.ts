@@ -17,6 +17,7 @@ beforeAll(async () => {
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.endpoints[0]!.secret = await encryptLocal(API_SECRET);
   settings.defaultRoute.modelId = "test-model";
+  settings.endpoints[0]!.headerTimeoutSeconds = 420;
   settings.aiPriceRates = [{endpointId:"openai",modelId:"test-model",inputEurPerMillion:3,outputEurPerMillion:9}];
   await saveSettings(settings);
   const book = newBook("Una trama avvincente e dettagliata.", "Il primo manoscritto", "Narrativo", "Adulti");
@@ -54,6 +55,7 @@ describe("Backup portabile BookWriter", () => {
     const parsed = await readBackup(zip as File, passphrase);
     expect(parsed.kind).toBe("full");
     expect(parsed.settings?.endpoints[0]?.apiKey).toBe(API_SECRET);
+    expect(parsed.settings?.endpoints[0]?.headerTimeoutSeconds).toBe(420);
     expect(parsed.settings?.aiPriceRates?.[0]?.inputEurPerMillion).toBe(3);
     expect(parsed.settings?.aiPriceRates?.[0]?.outputEurPerMillion).toBe(9);
   });
