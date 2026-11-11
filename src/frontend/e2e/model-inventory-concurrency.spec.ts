@@ -14,6 +14,16 @@ async function interceptCatalog(page: Page) {
   let calls = 0;
   const pending = new Map<number, Pending>();
   await page.route("https://api.openai.com/v1/models", async route => {
+    // Authorization makes this a CORS preflight in Chromium; only the GET
+    // is a catalogue request and should consume a deferred response.
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({status:204,headers:{
+        "access-control-allow-origin":"*",
+        "access-control-allow-headers":"authorization,content-type",
+        "access-control-allow-methods":"GET,OPTIONS",
+      }});
+      return;
+    }
     const index = ++calls;
     await new Promise<void>(resolve => pending.set(index, {
       release: resolve, model: "catalog-" + index,
