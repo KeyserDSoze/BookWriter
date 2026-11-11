@@ -8,6 +8,7 @@ import { Button } from "./components/ui/button";
 import { AutopilotRunner, requestRevision } from "./application/autopilot";
 import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind } from "./domain/types";
+import { declaredModelCapabilities } from "./domain/model-capabilities";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
 import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./infrastructure/ai-header-timeout";
@@ -19,6 +20,7 @@ import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
 import { AiBudgetPanel } from "./components/AiBudgetPanel";
+import { ModelCapabilitiesPanel } from "./components/ModelCapabilitiesPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 import { updateBookModelRoute } from "./application/book-settings";
@@ -625,12 +627,22 @@ export default function App() {
             <Button variant="outline" onClick={() => setSettings(s => ({ ...s, endpoints:[...s.endpoints, {id:crypto.randomUUID(),name:"Nuovo endpoint",baseUrl:"https://api.openai.com/v1",secret:null,models:[]}] }))}><Plus size={16}/> Aggiungi endpoint</Button>
           </div>
         </Section>
-        <Section title="Router dei modelli" description="Un modello generico e un override per ogni tipo di attività. Lascia vuoto per usare il modello predefinito.">
+        <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
+        <Section title="Router dei modelli" description="Predefinito Chat / scrittura per l'autopilot, più override per ogni attività. Modelli embedding/voce non vengono richiamati dall'autopilot.">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Endpoint predefinito"><select className="field" value={settings.defaultRoute.endpointId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,endpointId:e.target.value}}))}>
               {settings.endpoints.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
             </select></Field>
-            <Field label="Modello predefinito"><input className="field" value={settings.defaultRoute.modelId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,modelId:e.target.value}}))} placeholder="ID modello da /models" /></Field>
+            <Field label="Modello predefinito"><input className="field" list="chat-default-model-list" value={settings.defaultRoute.modelId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,modelId:e.target.value}}))} placeholder="Seleziona o digita un ID modello Chat" />
+              <datalist id="chat-default-model-list">
+                {settings.endpoints.find(endpoint => endpoint.id === settings.defaultRoute.endpointId)?.models
+                  .filter(modelId => {
+                    const endpoint = settings.endpoints.find(e => e.id === settings.defaultRoute.endpointId)!;
+                    const roles = declaredModelCapabilities(endpoint, modelId);
+                    return roles.length === 0 || roles.includes("chat");
+                  }).map(modelId => <option key={modelId} value={modelId} />)}
+              </datalist>
+            </Field>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {TASK_KINDS.map(kind => {
