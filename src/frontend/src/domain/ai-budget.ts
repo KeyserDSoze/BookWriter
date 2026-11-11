@@ -56,9 +56,45 @@ export function snapshotPriceRate(
 function pricedCost(input: number, output: number, rate: AiPriceRate): number {
   return (input * rate.inputEurPerMillion + output * rate.outputEurPerMillion) / 1_000_000;
 }
-function isBillableAttempt(activity: Activity): boolean {
+export function isBillableAttempt(activity: Activity): boolean {
   return activity.aiRequested === true ||
     (activity.aiRequested !== false && !!(activity.endpointId || activity.modelId));
+}
+
+export type AiUsageCoverage = "completo" | "parziale" | "mancante" | "in_corso";
+export type AiRateOrigin = "snapshot" | "listino_corrente" | "snapshot_non_valido" | "tariffa_assente";
+export interface AiCostAssessment {
+  /** Only provider-reported non-negative safe integers are admitted. */
+  inputTokens?: number;
+  outputTokens?: number;
+  usageCoverage: AiUsageCoverage;
+  rateOrigin: AiRateOrigin;
+  rate?: AiPriceRate;
+  /** Never present when usage is incomplete/in-flight or the rate is absent/invalid. */
+  estimatedEur?: number;
+}
+
+/** Shared pricing decision for budget guard and local export: no invoice is known. */
+export function assessAiCostAttempt(activity: Activity, settings: AppSettings): AiCostAssessment {
+  const inputTokens = validTokenCount(activity.inputTokens);
+  const outputTokens = validTokenCount(activity.outputTokens);
+  const usageCoverage: AiUsageCoverage = activity.status === "running" ? "in_corso" :
+    inputTokens !== undefined && outputTokens !== undefined ? "completo" :
+    inputTokens === undefined && outputTokens === undefined ? "mancante" : "parziale";
+  const quote = activity.priceRateSnapshot;
+  const invalidSnapshot = quote !== undefined && (!isPriceRate(quote) ||
+    quote.endpointId !== activity.endpointId || quote.modelId !== activity.modelId);
+  const rate = invalidSnapshot ? undefined : quote === undefined
+    ? lookupRate(settings, activity.endpointId ?? "", activity.modelId ?? "")
+    : quote;
+  const rateOrigin: AiRateOrigin = invalidSnapshot ? "snapshot_non_valido" :
+    !rate ? "tariffa_assente" : quote === undefined ? "listino_corrente" : "snapshot";
+  return {
+    inputTokens, outputTokens, usageCoverage, rateOrigin, rate,
+    ...(usageCoverage === "completo" && rate ? {
+      estimatedEur: pricedCost(inputTokens!, outputTokens!, rate),
+    } : {}),
+  };
 }
 export function accountBookAiBudget(
   activities: readonly Activity[], settings: AppSettings, budget: BookAiBudget,
@@ -72,30 +108,17 @@ export function accountBookAiBudget(
   for (const activity of activities) {
     if (Date.parse(activity.createdAt) < enabledSince || !isBillableAttempt(activity)) continue;
     result.countedCalls++;
-    const input = validTokenCount(activity.inputTokens);
-    const output = validTokenCount(activity.outputTokens);
-    if (input === undefined || output === undefined || activity.status === "running") {
+    const assessment = assessAiCostAttempt(activity, settings);
+    if (assessment.usageCoverage !== "completo") {
       result.incompleteCount++;
       continue;
     }
-    const quoted = activity.priceRateSnapshot;
-    // Never fall back to today's rate when a supplied quote is corrupt
-    // or names another route: fail closed instead of understating the bill.
-    if (quoted !== undefined && (!isPriceRate(quoted) ||
-      quoted.endpointId !== activity.endpointId ||
-      quoted.modelId !== activity.modelId)) {
+    if (assessment.estimatedEur === undefined) {
       result.unpricedCount++;
       continue;
     }
-    // No historical quote is available for pre-0.11.76 records: retain
-    // prior compatibility but expose this repricing risk in the dashboard.
-    const rate = quoted ?? lookupRate(settings, activity.endpointId ?? "", activity.modelId ?? "");
-    if (!rate) {
-      result.unpricedCount++;
-      continue;
-    }
-    if (quoted === undefined) result.legacyPricedCount++;
-    result.estimatedSpentEur += pricedCost(input, output, rate);
+    if (assessment.rateOrigin === "listino_corrente") result.legacyPricedCount++;
+    result.estimatedSpentEur += assessment.estimatedEur;
   }
   return result;
 }
