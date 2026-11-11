@@ -110,7 +110,14 @@ export async function callModel(
     throw new Error("Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.");
   }
   if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
-  if (!response.ok) throw new Error(friendlyApiError(response.status));
+  if (!response.ok) {
+    const reason = friendlyApiError(response.status);
+    // A rejected request may have been billed; never inspect provider body or retry.
+    if ((response.status === 400 || response.status === 422) && options?.maxOutputTokens !== undefined) {
+      throw new Error(`${reason} Controlla anche il parametro limite output API nelle Impostazioni e la documentazione del provider prima di riprovare manualmente.`);
+    }
+    throw new Error(reason);
+  }
 
   const payload = await readChatCompletionJson(response, signal);
   if (!payload || typeof payload !== "object") throw new Error("Risposta AI non valida.");
