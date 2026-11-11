@@ -1,24 +1,29 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issues #135/#137/#138/#139 (epic #17/#6)
+## 0.11.87 — 2026-11-11 (main, issues #135/#137/#138/#139, epic #17/#6)
+
+**Release npm riproducibile — issue #136**
+
+- [Runner ufficiale #43060633990](https://github.com/KeyserDSoze/BookWriter/actions/runs/43060633990) completato con successo, Node 22/npm 10 e registry npm ufficiale: `npm version 0.11.87 --no-git-tag-version --ignore-scripts` e `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`. Lockfile v3, **235** voci, dipendenze transitive, URL `resolved` e `integrity` invariati. **Due `npm ci` puliti**, ciascuno con typecheck, **818 Vitest (131 file)**, smoke e build superati.
+- I file originali npm provengono dai log indicizzati e dall'artifact del runner, verificati byte per byte: SHA-256 manifest `9ef5f00d0ec1d6e303e11e263712718253c62a088284309c74ab28407e3ca5c3`, lockfile `9a2ce508319ca1d08a44f1a482a623856d058d6fc8a879bcc87b789197c7ee2b`. Il workflow temporaneo è rimosso atomicamente con la release. Frontend CI (Playwright desktop/mobile, EPUBCheck), Pages e cleanup sulla **HEAD finale** devono ancora essere attestati prima di chiudere #136 e le issue funzionali; nessuna fattura reale del provider è verificata.
 
 **Deadline effettiva per l'inventario /models — #139**
 
-- La ricerca modelli GET ha una deadline complessiva di 12 secondi, valida anche se `fetch` resta bloccato prima degli header o il body dopo gli header; una risposta arrivata tardi viene scartata. Un abort dell'autore prevale sul timeout; anche i corpi di HTTP non-2xx e dei 2xx con MIME/`Content-Length` invalido vengono scartati senza lettura; i reader bloccati danno errori generici senza dettagli privati, senza nascondere lo status; stream cancellati best-effort e nessun catalogo parziale, retry, testo o chiavi esposti. Test su lettura sospesa, deadline, cancellazione difettosa e limiti del catalogo. [ADR 0123](../ADR/0123-model-catalog-total-deadline.md) e [guida](ai-model-inventory.md). Versione npm invariata, release #136 separata.
+- La ricerca modelli GET ha una deadline complessiva di 12 secondi, valida anche se `fetch` resta bloccato prima degli header o il body dopo gli header; una risposta arrivata tardi viene scartata. Un abort dell'autore prevale sul timeout; anche i corpi di HTTP non-2xx e dei 2xx con MIME/`Content-Length` invalido vengono scartati senza lettura; i reader bloccati danno errori generici senza dettagli privati, senza nascondere lo status; stream cancellati best-effort e nessun catalogo parziale, retry, testo o chiavi esposti. Test su lettura sospesa, deadline, cancellazione difettosa e limiti del catalogo. [ADR 0123](../ADR/0123-model-catalog-total-deadline.md) e [guida](ai-model-inventory.md). Incluso nella release npm #136.
 
 **Cleanup sicuro delle risposte HTTP 2xx — #138**
 
-- Se la lettura del JSON del provider fallisce per timeout, interruzione o formato, il cleanup dello stream non può più sostituire l'errore originale quando `reader.cancel()` lancia sincronicamente. Rimangono la cancellazione best-effort, la deadline, il limite 2 MB, la privacy, il singolo POST e l'uso token ignoto. Test di regressione per cancellazione sincrona/asincrona, abort e timeout. Versione npm invariata in attesa della release #136.
+- Se la lettura del JSON del provider fallisce per timeout, interruzione o formato, il cleanup dello stream non può più sostituire l'errore originale quando `reader.cancel()` lancia sincronicamente. Rimangono la cancellazione best-effort, la deadline, il limite 2 MB, la privacy, il singolo POST e l'uso token ignoto. Test di regressione per cancellazione sincrona/asincrona, abort e timeout. Incluso nella release npm #136.
 
 **Diagnostica prudente dei rifiuti Chat Completions — #137**
 
-- Con cap preventivo inviato e risposta HTTP 400/422, il messaggio invita a verificare anche la scelta del parametro output nelle Impostazioni, senza asserire che sia la causa. Nessun suggerimento sul parametro quando il cap non è inviato o su HTTP 429; nessun retry automatico, lettura del corpo errore, credenziale o prompt nei messaggi. Il corpo della risposta rifiutata viene scartato con cancellazione best-effort dello stream, senza sostituire l'errore HTTP neppure se la cancellazione fallisce sincronicamente o in modo asincrono. Test di regressione con un solo POST per scenario. La release npm resta separata nella #136.
+- Con cap preventivo inviato e risposta HTTP 400/422, il messaggio invita a verificare anche la scelta del parametro output nelle Impostazioni, senza asserire che sia la causa. Nessun suggerimento sul parametro quando il cap non è inviato o su HTTP 429; nessun retry automatico, lettura del corpo errore, credenziale o prompt nei messaggi. Il corpo della risposta rifiutata viene scartato con cancellazione best-effort dello stream, senza sostituire l'errore HTTP neppure se la cancellazione fallisce sincronicamente o in modo asincrono. Test di regressione con un solo POST per scenario. Incluso nella release npm #136.
 
 **Parametro output Chat Completions configurabile per endpoint**
 
 - In **Impostazioni → Endpoint OpenAI-compatible**, ogni endpoint può selezionare `max_tokens` (default legacy) o `max_completion_tokens` per il cap output generato dal budget preventivo. Il POST `/chat/completions` invia **una sola** delle due chiavi quando il preflight fornisce il cap, nessuna quando il budget è disattivato. La configurazione è esplicita e validata prima della rete; nessun riconoscimento automatico dal nome del modello.
 - Salvataggio protetto da snapshot/concorrenza, con validazione di ogni profilo prima di cifrare; full ZIP conserva la scelta e rifiuta valori non previsti, content-only non esporta endpoint/chiavi e archivi legacy restano leggibili. Su HTTP 400/422/429 o timeout non avvengono retry di compatibilità, per non creare potenziali addebiti doppi. L'usage mancante resta ignoto.
-- Vitest su payload, route, default, errori e input ostili; ZIP full/legacy; Playwright desktop/mobile su salvataggio, reload, POST mock e nessun retry. [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md), [guida](ai-output-token-parameter.md), #135. **Versione npm 0.11.86 invariata** fino a release numerica separata.
+- Vitest su payload, route, default, errori e input ostili; ZIP full/legacy; Playwright desktop/mobile su salvataggio, reload, POST mock e nessun retry. [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md), [guida](ai-output-token-parameter.md), #135. **Incluso nella versione npm 0.11.87** (#136).
 
 ## 0.11.86 — 2026-11-11 (main, issues #132/#134, epic #17/#6)
 

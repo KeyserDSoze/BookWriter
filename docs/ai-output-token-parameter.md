@@ -17,3 +17,7 @@ I provider possono rifiutare la richiesta se il modello non supporta il parametr
 La scelta è una proprietà locale dell'endpoint salvata insieme alle impostazioni cifrate in IndexedDB. Lo ZIP **full** (da proteggere con password) include la scelta e la chiave come già previsto; gli ZIP **content-only** non esportano né impostazioni endpoint né credenziali. Gli archivi legacy senza questo campo restano compatibili. Le importazioni full che contengono valori inventati o di un'altra API vengono respinte.
 
 [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md) · [Guida budget](ai-budget.md) · [Epic #17](https://github.com/KeyserDSoze/BookWriter/issues/17) · [Documentazione API ufficiale](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+
+## Release npm
+
+Questa funzionalità è inclusa nella versione **0.11.87** (#136), insieme alla diagnostica prudente degli errori HTTP (#137). Verificare comunque la compatibilità del modello/provider; nessun retry automatico.

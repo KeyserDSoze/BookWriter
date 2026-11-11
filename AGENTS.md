@@ -4,15 +4,20 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release v0.11.87 — issue #136 e hardening AI #135/#137/#138/#139
+
+- Il frontend usa manifest e lockfile npm **0.11.87**, generati con Node 22/npm 10 e registry ufficiale. Run [#43060633990](https://github.com/KeyserDSoze/BookWriter/actions/runs/43060633990) `completed/success`: albero di **235** voci invariato, due `npm ci` puliti, ognuno seguito da typecheck, **818 Vitest in 131 file**, smoke e build. SHA-256 e file npm verificati contro artifact e log; nessun editing manuale delle dipendenze.
+- Il workflow temporaneo `npm-release-reproduce-136.yml` è eliminato nello **stesso commit atomico** di versione, lockfile e documentazione. La CI Frontend con Playwright desktop/mobile e EPUBCheck su 4 EPUB, Pages e cleanup devono essere `completed/success` sulla HEAD definitiva prima della chiusura delle issue #136/#137/#138/#139. Non confondere commit, deploy e fatture AI reali; nessun branch, PR o force.
+
 ### Deadline totale del catalogo modelli GET /models — issue #139 / ADR 0123
 
-- Il timeout di **12 secondi** di `fetchModels` copre fetch e corpo: sia il `fetch` iniziale sia `boundedModelCatalog` devono interrompere rispettivamente `fetch` e `reader.read()` sospesi anche se ignorano abort, scartando risposte tardive e preservando la priorità della cancellazione dell'autore. Nessun catalogo parziale o retry; su GET non-2xx, scartare il corpo senza leggerlo né divulgare dati, cancellando best-effort lo stream e preservando lo status HTTP; cancel e releaseLock best-effort senza mascherare errori. Su MIME o `Content-Length` invalidi, scarta il body *prima della lettura* con cancel best-effort; se `getReader()` fallisce (stream già locked) usa un errore generico, mai l'eccezione remota. Mantieni 256 KB, 2.000 ID, validazione JSON/UTF-8 e fencing #119; test Vitest stalled read/abort/deadline/cleanup. [ADR 0123](ADR/0123-model-catalog-total-deadline.md). Numero npm invariato fino a #136.
+- Il timeout di **12 secondi** di `fetchModels` copre fetch e corpo: sia il `fetch` iniziale sia `boundedModelCatalog` devono interrompere rispettivamente `fetch` e `reader.read()` sospesi anche se ignorano abort, scartando risposte tardive e preservando la priorità della cancellazione dell'autore. Nessun catalogo parziale o retry; su GET non-2xx, scartare il corpo senza leggerlo né divulgare dati, cancellando best-effort lo stream e preservando lo status HTTP; cancel e releaseLock best-effort senza mascherare errori. Su MIME o `Content-Length` invalidi, scarta il body *prima della lettura* con cancel best-effort; se `getReader()` fallisce (stream già locked) usa un errore generico, mai l'eccezione remota. Mantieni 256 KB, 2.000 ID, validazione JSON/UTF-8 e fencing #119; test Vitest stalled read/abort/deadline/cleanup. [ADR 0123](ADR/0123-model-catalog-total-deadline.md). Incluso nella release npm 0.11.87 (#136).
 
 ## Obiettivo
 
 ### Cleanup reader delle risposte HTTP 2xx — issue #138 / ADR 0116
 
-- Il `finally` di `readChatCompletionJson` deve preservare `AbortError`, timeout e errori di validazione/lettura anche se `reader.cancel()` lancia sincronicamente o restituisce una Promise rifiutata. Non attendere uno stream remoto bloccato; `releaseLock` rimane best-effort. Non introdurre retry, seconda POST, dati privati negli errori o usage fittizio. Test Vitest dedicati e release numerica soltanto tramite #136.
+- Il `finally` di `readChatCompletionJson` deve preservare `AbortError`, timeout e errori di validazione/lettura anche se `reader.cancel()` lancia sincronicamente o restituisce una Promise rifiutata. Non attendere uno stream remoto bloccato; `releaseLock` rimane best-effort. Non introdurre retry, seconda POST, dati privati negli errori o usage fittizio. Test Vitest dedicati e incluso nella versione npm 0.11.87 (#136).
 
 ## Obiettivo
 
@@ -20,12 +25,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 - `EndpointProfile.outputTokenParameter?` accetta soltanto `"max_tokens"` o `"max_completion_tokens"`; il campo mancante conserva **max_tokens** per compatibilità legacy. La scelta è esplicita nella pagina Impostazioni per endpoint e non deve essere indovinata dal nome del modello, dall'URL o da un 400. Verificare gli endpoint/modelli reali sulla documentazione ufficiale del provider.
 - `callModel` deve produrre **una sola** delle due chiavi JSON quando il preflight fornisce `maxOutputTokens`, nessuna senza cap, e validare prima della rete scelta e numero di token. **Mai retry automatico** al variare del campo dopo HTTP 400/422/429, timeout o abort: una richiesta senza usage può essere fatturata. Preflight libro/sessione, writer guard e Activity/uso incerto rimangono invariati; il limite è stimato, non un tetto finanziario remoto.
-- `EndpointSettingsSaveCoordinator` valida tutti gli endpoint **prima** della cifratura dei draft e conserva CAS/snapshot; ZIP full esporta la scelta e la valida con enum stretta in import, content-only non include endpoint/chiavi, ZIP legacy senza campo accettati. Test Vitest per payload/route/errori/ZIP e Playwright desktop/mobile su impostazioni e POST una sola volta, senza chiave nei log. [ADR 0122](ADR/0122-chat-completions-output-cap-parameter.md), [guida](docs/ai-output-token-parameter.md). Il numero npm **0.11.86 rimane invariato** fino al prossimo bump npm ufficiale senza editing manuale lockfile.
+- `EndpointSettingsSaveCoordinator` valida tutti gli endpoint **prima** della cifratura dei draft e conserva CAS/snapshot; ZIP full esporta la scelta e la valida con enum stretta in import, content-only non include endpoint/chiavi, ZIP legacy senza campo accettati. Test Vitest per payload/route/errori/ZIP e Playwright desktop/mobile su impostazioni e POST una sola volta, senza chiave nei log. [ADR 0122](ADR/0122-chat-completions-output-cap-parameter.md), [guida](docs/ai-output-token-parameter.md). La modifica è inclusa nella versione npm **0.11.87**, con manifest e lockfile rigenerati ufficialmente senza editing manuale.
 
 ### Diagnostica dei rifiuti HTTP 400/422 — issue #137
 
 - Solo quando il POST Chat Completions include un cap e il provider restituisce HTTP 400/422, il messaggio può suggerire di controllare **anche** la scelta esplicita del parametro output nelle Impostazioni; non affermare che sia necessariamente la causa. Con cap assente o HTTP 429 non aggiungere quel suggerimento.
-- Non leggere mai il corpo di errore provider: cancellare best-effort lo stream senza nascondere lo stato HTTP anche quando `cancel()` genera un'eccezione sincrona o una Promise rifiutata; nessun retry, doppio POST, prompt, URL sensibili o chiavi nei messaggi. Test per codice HTTP/con e senza cap, una sola richiesta e cancellazione dello stream. Il lockfile npm resta sotto la issue release #136.
+- Non leggere mai il corpo di errore provider: cancellare best-effort lo stream senza nascondere lo stato HTTP anche quando `cancel()` genera un'eccezione sincrona o una Promise rifiutata; nessun retry, doppio POST, prompt, URL sensibili o chiavi nei messaggi. Test per codice HTTP/con e senza cap, una sola richiesta e cancellazione dello stream. Il lockfile è stato rigenerato via npm per la release #136.
 
 ## Obiettivo
 

@@ -23,3 +23,7 @@ Due ricerche contemporanee sul medesimo endpoint sono autorizzate soltanto in or
 Il pulsante **Salva impostazioni** cifra localmente le nuove chiavi tramite Web Crypto. Se nel frattempo modifichi URL, nome, modelli, router, chiave draft oppure rimuovi un endpoint, il salvataggio basato sulla vecchia configurazione viene rifiutato; i campi che stai modificando restano intatti e un messaggio invita a verificare la scelta e premere di nuovo **Salva impostazioni**. Anche un doppio click è protetto: solo la richiesta più recente può completare l'aggiornamento UI.
 
 Questa è una garanzia **intra-tab**. Una transazione IndexedDB già inviata non può essere cancellata retroattivamente: gli edit successivi sono volutamente non salvati finché l'autore non ripete il salvataggio. Non vengono inviate chiavi ad altri servizi, non si avvia l'autopilot né si introduce un vault E2EE. [ADR 0114](../ADR/0114-endpoint-settings-save-fencing.md) · [issue #121](https://github.com/KeyserDSoze/BookWriter/issues/121).
+
+## Release npm
+
+La deadline totale e il cleanup degli stream per il catalogo modelli (#139, ADR 0123) sono inclusi nella versione **0.11.87** (#136). CORS e capacità effettive del provider restano da verificare caso per caso.

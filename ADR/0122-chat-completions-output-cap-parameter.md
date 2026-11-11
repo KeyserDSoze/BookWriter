@@ -1,6 +1,6 @@
 # ADR 0122 — Parametro limite output Chat Completions esplicito per endpoint
 
-- **Stato:** implementato su `main`, non ancora in release npm numerica successiva a 0.11.86
+- **Stato:** implementato su `main`, incluso nella release npm 0.11.87 (issue #136)
 - **Data:** 2026-11-11
 - **Issue:** [#135](https://github.com/KeyserDSoze/BookWriter/issues/135), epic [#17](https://github.com/KeyserDSoze/BookWriter/issues/17), autopilot [#6](https://github.com/KeyserDSoze/BookWriter/issues/6)
 - **Riferimenti:** [ADR 0012](0012-book-ai-budget-guardrails.md), [ADR 0120](0120-session-ai-budget.md), [guida](../docs/ai-output-token-parameter.md), [OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
@@ -22,4 +22,4 @@ Il preflight preventivo dell'autopilot e delle proposte di fusione AI calcola un
 
 Vitest: default legacy, opt-in, JSON mutuamente esclusivo, route per endpoint, chiamata senza cap, input invalidi e limite non intero, errori HTTP senza retry, aborto prima della rete, commit cifrato e validazione pre-encrypt, ZIP full/legacy/ostile. Playwright Chromium desktop/mobile: selezione, salvataggio, reload, attivazione budget, singolo POST 400 mock con `max_completion_tokens` e Activity fallita senza usage, nessun retry, segreto assente dal corpo e viewport senza overflow.
 
-CI, EPUBCheck, Pages e cleanup vanno verificati sulla stessa HEAD prima di chiudere #135. La release npm numerica è separata; `package.json` e lockfile restano 0.11.86 finché non rigenerati ufficialmente da npm.
+La tranche #135 è stata chiusa dopo CI/EPUBCheck/Pages/cleanup sulla sua HEAD. La release numerica 0.11.87 (#136) include il parametro output; manifest e lockfile npm sono stati generati con il registry ufficiale. CI e deploy della release devono essere verificati sulla nuova HEAD prima di chiudere #136.

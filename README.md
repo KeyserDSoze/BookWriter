@@ -6,7 +6,9 @@
 
 ## Funzionalità disponibili
 
-- **Compatibilità cap output per provider (#135, non ancora in release numerica):** impostazione esplicita per endpoint fra `max_tokens` (legacy) e `max_completion_tokens` per le chiamate Chat Completions con budget attivo. Una sola chiave nel POST e nessun retry automatico in caso di rifiuto: provider e modelli non hanno tutti lo stesso contratto. ZIP full preserva l'opzione, legacy compatibili. [Guida](docs/ai-output-token-parameter.md) · [ADR 0122](ADR/0122-chat-completions-output-cap-parameter.md). Nessun nuovo backend, fattura provider reale o dipendenza.
+- **Release v0.11.87 (#136):** comprende #135 (limite output per endpoint), #137 (diagnostica HTTP), #138 (cleanup JSON) e #139 (deadline totale e sicurezza di GET /models). File npm prodotti dal runner ufficiale con doppio `npm ci`; la CI completa e Pages della release richiedono verifica sulla HEAD definitiva.
+
+- **Compatibilità cap output per provider (#135, v0.11.87):** impostazione esplicita per endpoint fra `max_tokens` (legacy) e `max_completion_tokens` per le chiamate Chat Completions con budget attivo. Una sola chiave nel POST e nessun retry automatico in caso di rifiuto: provider e modelli non hanno tutti lo stesso contratto. ZIP full preserva l'opzione, legacy compatibili. [Guida](docs/ai-output-token-parameter.md) · [ADR 0122](ADR/0122-chat-completions-output-cap-parameter.md). Nessun nuovo backend, fattura provider reale o dipendenza.
 ## Funzionalità disponibili
 
 - **Release v0.11.86 (#133):** inclusi gli avvisi anticipati del budget AI per libro e sessione (#132) e l'hardening di CI Chromium headless (#134) senza `apt`. La soglia dell'80% è soltanto informativa; richieste con usage o tariffa incerti nascondono il margine conosciuto e il preflight resta l'unico gate preventivo. Manifest e lockfile riprodotti con npm ufficiale Node 22/npm 10 e doppio `npm ci`; [changelog](docs/CHANGELOG.md), [guida budget](docs/ai-budget.md), [runbook release](docs/npm-lockfile-releases.md). Nessuna dipendenza, archivio ZIP, fattura reale o canone modificati.
