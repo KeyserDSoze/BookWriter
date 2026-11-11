@@ -126,6 +126,29 @@ describe("Parametro limite token POST Chat Completions", () => {
     }
   });
 
+  it("conserva HTTP 400/422 anche se la cancellazione stream fallisce", async () => {
+    for (const status of [400, 422]) {
+      for (const failure of ["throw", "reject"] as const) {
+        const {settings,book}=fixture();
+        settings.endpoints[0]!.outputTokenParameter="max_completion_tokens";
+        const rejected=new Response("errore remoto privato", {status});
+        const cancel=vi.spyOn(rejected.body!, "cancel");
+        if (failure==="throw") {
+          cancel.mockImplementation(() => { throw new Error("cancellazione fallita"); });
+        } else {
+          cancel.mockRejectedValue(new Error("cancellazione fallita"));
+        }
+        const request=vi.fn().mockResolvedValue(rejected);
+        vi.stubGlobal("fetch",request);
+        await expect(callModel("chapterAudit","Sistema","Prompt",settings,book,
+          new AbortController().signal,{maxOutputTokens:1024}))
+          .rejects.toThrow("HTTP "+status);
+        expect(request).toHaveBeenCalledTimes(1);
+        expect(cancel).toHaveBeenCalledTimes(1);
+      }
+    }
+  });
+
   it("valori estranei dal profilo o limite invalido si fermano prima della rete", async () => {
     const {settings,book}=fixture();
     const request=vi.fn();
