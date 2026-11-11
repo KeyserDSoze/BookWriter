@@ -2,6 +2,10 @@
 
 La redazione multi-agente usa almeno **12 chiamate per segmento**, oltre a giudice, correzioni e sinossi. Per limitare il rischio di spesa, dalla Dashboard del libro apri **Budget AI del libro**. È una protezione **facoltativa**: non cambia retroattivamente i progetti esistenti.
 
+## Parametro di limite output per endpoint — issue #135
+
+In **Impostazioni → Endpoint OpenAI-compatible** puoi scegliere per ciascun endpoint **Parametro limite output API**: `max_tokens` (default legacy) oppure `max_completion_tokens` (modelli che lo richiedono). BookWriter invia una sola chiave nel POST quando il budget richiede un limite di token output, senza retry automatici in caso di errore provider. `max_completion_tokens` può includere ragionamento non visibile, non garantisce il costo fatturato né sostituisce `max_output_tokens` della Responses API. Se la compatibilità del provider è incerta, consulta la documentazione del suo modello e riprova **esplicitamente** dopo aver corretto le impostazioni; consumi di una richiesta fallita senza usage non sono zero. [Guida completa](ai-output-token-parameter.md) · [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md).
+
 ## Prima configurazione
 
 1. In **Impostazioni → Router dei modelli**, imposta i provider e modelli che vuoi usare per brainstorming, prosa, revisori di capitolo, cinque lettori, giudice, remediation e sinossi.

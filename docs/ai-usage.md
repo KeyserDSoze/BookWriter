@@ -2,6 +2,10 @@
 
 La sezione **Dashboard → Consumi AI registrati** mostra i token dichiarati dagli endpoint AI nei log del libro attivo. Non genera nuove chiamate ai modelli e non richiede credenziali aggiuntive.
 
+## Compatibilità dei limiti output Chat Completions — issue #135
+
+Quando il budget AI abilita il cap output, il client usa una sola chiave per endpoint: `max_tokens` (default per i vecchi profili) oppure `max_completion_tokens`. Il secondo può includere token di ragionamento non visibili: i token `completion_tokens` effettivamente riportati dal provider restano il dato osservato, senza inferenze sul costo reale. In caso di rifiuto o timeout non avviene alcun retry automatico con l'altro parametro: un uso mancante resta incerto e può attivare lo stop conservativo. [Guida](ai-output-token-parameter.md) · [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md).
+
 ## Come leggere i numeri
 
 | Misura | Significato |

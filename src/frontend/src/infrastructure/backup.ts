@@ -313,6 +313,7 @@ const backupSchema = z.object({
       models: z.array(z.string()), apiKey: z.string().nullable(),
       headerTimeoutSeconds: z.number().int().min(MIN_CHAT_HEADER_TIMEOUT_SECONDS)
         .max(MAX_CHAT_HEADER_TIMEOUT_SECONDS).optional(),
+      outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
     })).max(30),
     defaultRoute: routeSchema,
     taskRoutes: z.record(z.string(), routeSchema),
@@ -333,7 +334,8 @@ type BackupData = {
   mergeDrafts?: SceneMergeDraft[];
   settings?: {
     theme: AppSettings["theme"];
-    endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number }>;
+    endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number;
+      outputTokenParameter?: "max_tokens" | "max_completion_tokens" }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
     aiPriceRates?: AppSettings["aiPriceRates"];
@@ -447,6 +449,7 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
         id: endpoint.id, name: endpoint.name, baseUrl: endpoint.baseUrl,
         models: endpoint.models,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
+        outputTokenParameter: endpoint.outputTokenParameter,
         apiKey: endpoint.secret ? await decryptLocal(endpoint.secret) : null,
       }))),
     };
@@ -601,6 +604,7 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
         id: endpoint.id, name: endpoint.name, baseUrl: normalizeEndpoint(endpoint.baseUrl),
         models: endpoint.models,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
+        outputTokenParameter: endpoint.outputTokenParameter,
         secret: endpoint.apiKey ? await encryptLocal(endpoint.apiKey) : null,
       }))),
     };

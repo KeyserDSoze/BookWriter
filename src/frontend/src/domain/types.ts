@@ -30,6 +30,8 @@ export interface EndpointProfile {
   models: string[];
   /** Max time awaiting POST /chat/completions headers (60–1800 s); default 300. */
   headerTimeoutSeconds?: number;
+  /** OpenAI-compatible Chat Completions output cap parameter, legacy max_tokens. */
+  outputTokenParameter?: "max_tokens" | "max_completion_tokens";
 }
 export interface ModelRoute { endpointId: string; modelId: string; }
 /** User-entered tariff (not verified against provider invoices). */
@@ -45,7 +47,7 @@ export interface BookAiBudget {
   /** Budget for future requests in the period beginning at enabledAt, in EUR. */
   limitEur: number;
   enabledAt: string;
-  /** Requests max_tokens; actual provider behavior and charges can differ. */
+  /** Requests endpoint-selected output cap field; provider billing may differ. */
   maxOutputTokens: number;
   /** Optional estimated EUR ceiling for one runId (one Avvia/Riprendi invocation). */
   sessionLimitEur?: number;

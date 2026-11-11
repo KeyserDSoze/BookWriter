@@ -98,6 +98,36 @@ describe("Salvataggio impostazioni endpoint protetto da snapshot",()=>{
     expect(committed).toBe(false);expect(saved).toBe(false);
     expect(Object.values(f.get().drafts)).toEqual(["changed"]);
   });
+  it("salva la scelta max_completion_tokens nel profilo cifrato e la mantiene dopo Save", async () => {
+    const f=fixture(),db=storage(),coordinator=new EndpointSettingsSaveCoordinator();
+    const endpoints=f.get().settings.endpoints.map(e=>({
+      ...e,outputTokenParameter:"max_completion_tokens" as const,
+    }));
+    f.update({settings:{...f.get().settings,endpoints}});
+    const snapshot=f.read();
+    await coordinator.save(snapshot,f.read,async value=>encrypted(value),
+      db.persist,next=>f.update({settings:next,drafts:{}}));
+    expect(db.writes).toHaveLength(1);
+    expect(db.writes[0]!.endpoints[0]!.outputTokenParameter).toBe("max_completion_tokens");
+    expect(db.writes[0]!.endpoints[0]!.secret).toEqual(encrypted("new-private-key"));
+    expect(JSON.stringify(db.writes)).not.toContain("new-private-key");
+  });
+
+  it("rifiuta ogni valore sconosciuto prima di cifrare qualunque chiave o scrivere IndexedDB",async()=>{
+    for (const bad of [null,"","max_output_tokens","MAX_TOKENS",{},34]) {
+      const f=fixture(),db=storage(),coordinator=new EndpointSettingsSaveCoordinator();
+      const endpoints=[
+        {...f.get().settings.endpoints[0]!,id:"other-endpoint"},
+        {...f.get().settings.endpoints[0]!,id:"corrupt",outputTokenParameter:bad as "max_tokens"},
+      ];
+      f.update({settings:{...f.get().settings,endpoints}});
+      const encrypt=async (_key:string):Promise<EncryptedSecret>=>{throw new Error("NON CIFRARE");};
+      await expect(coordinator.save(f.read(),f.read,encrypt,db.persist,()=>{throw Error("NON SALVARE");}))
+        .rejects.toThrow(/Parametro limite output AI/);
+      expect(db.writes).toHaveLength(0);
+    }
+  });
+
   it("un errore WebCrypto non salva le impostazioni",async()=>{
     const f=fixture(),db=storage(),coordinator=new EndpointSettingsSaveCoordinator();
     await expect(coordinator.save(f.snapshot,f.read,async()=>{throw Error("Cifratura non disponibile");},

@@ -141,3 +141,8 @@ La verifica **manuale** di un `ManualPushIntent` sospeso può attraversare un DA
 ## Plafond di sessione stimato — issue #130
 
 Con budget del libro attivo, un limite facoltativo per sessione può fermare il ciclo corrente **prima della prossima chiamata AI** anche se la soglia complessiva ha ancora margine. Una sessione è il singolo `runId` creato a ogni Avvia/Riprendi; la ripresa assegna un nuovo ID, **senza cancellare** il costo globale o i consumi incerti del libro. Una bozza AI di fusione scena è una sessione autonoma di una richiesta, sempre sotto il limite globale. Nessun tetto contrattuale remoto o prenotazione fra dispositivi è garantito. [Guida budget](ai-budget.md) · [ADR 0120](../ADR/0120-session-ai-budget.md).
+
+
+## Scelta esplicita del parametro output — issue #135
+
+Il guard preventivo resta attivo per libro e sessione: quando riserva i token di output, `callModel` invia una sola delle chiavi Chat Completions `max_tokens` (default legacy) o `max_completion_tokens` scelta dall'autore in Impostazioni per l'endpoint. Non si fanno retry automatici modificando il parametro dopo una risposta HTTP non riuscita, un abort o un timeout; i consumi privi di usage restano ignoti. Il modello e il provider possono richiedere altre API o parametri non supportati: verificare la compatibilità prima dell'avvio. [Guida](ai-output-token-parameter.md), [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md).

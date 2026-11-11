@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #135 (epic #17/#6)
+
+**Parametro output Chat Completions configurabile per endpoint**
+
+- In **Impostazioni → Endpoint OpenAI-compatible**, ogni endpoint può selezionare `max_tokens` (default legacy) o `max_completion_tokens` per il cap output generato dal budget preventivo. Il POST `/chat/completions` invia **una sola** delle due chiavi quando il preflight fornisce il cap, nessuna quando il budget è disattivato. La configurazione è esplicita e validata prima della rete; nessun riconoscimento automatico dal nome del modello.
+- Salvataggio protetto da snapshot/concorrenza, con validazione di ogni profilo prima di cifrare; full ZIP conserva la scelta e rifiuta valori non previsti, content-only non esporta endpoint/chiavi e archivi legacy restano leggibili. Su HTTP 400/422/429 o timeout non avvengono retry di compatibilità, per non creare potenziali addebiti doppi. L'usage mancante resta ignoto.
+- Vitest su payload, route, default, errori e input ostili; ZIP full/legacy; Playwright desktop/mobile su salvataggio, reload, POST mock e nessun retry. [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md), [guida](ai-output-token-parameter.md), #135. **Versione npm 0.11.86 invariata** fino a release numerica separata.
+
 ## 0.11.86 — 2026-11-11 (main, issues #132/#134, epic #17/#6)
 
 - **Hardening CI Playwright #134:** sui runner `ubuntu-latest` l'installazione di Chromium per i due progetti headless usa `npx playwright install --only-shell chromium`, senza `apt` che è fallito a causa del DNS degli archivi Ubuntu. La suite E2E **non viene disabilitata**; se il browser non si avvia la CI fallisce. Nessun cambio di dipendenze o versione npm. [Guida](ci-playwright-headless-shell.md).

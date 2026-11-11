@@ -51,6 +51,16 @@ function responseTextContent(content: unknown): string | undefined {
   return texts.join("\n");
 }
 
+/** Select only explicitly supported Chat Completions output parameter.
+ * Legacy endpoints retain max_tokens; no automatic retry with another field
+ * because the first request may already have consumed billable tokens.
+ */
+export function chatOutputTokenParameter(value: unknown): "max_tokens" | "max_completion_tokens" {
+  if (value === undefined || value === "max_tokens") return "max_tokens";
+  if (value === "max_completion_tokens") return "max_completion_tokens";
+  throw new Error("Parametro limite output AI non valido: scegli max_tokens oppure max_completion_tokens nelle Impostazioni.");
+}
+
 export async function callModel(
   kind: TaskKind,
   system: string,
@@ -65,6 +75,13 @@ export async function callModel(
   if (!endpoint) throw new Error(`Endpoint non configurato per ${kind}.`);
   if (!assignment.modelId.trim()) throw new Error(`Seleziona il modello per l'attività ${kind} nelle Impostazioni.`);
   if (!endpoint.secret) throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
+  // Fail closed on malformed local/imported settings before decrypting or POST.
+  const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
+  if (options?.maxOutputTokens !== undefined &&
+      (!Number.isSafeInteger(options.maxOutputTokens) ||
+        options.maxOutputTokens < 1 || options.maxOutputTokens > 32_768)) {
+    throw new Error("Limite output AI non valido: usa un intero tra 1 e 32768 token.");
+  }
   const base = normalizeEndpoint(endpoint.baseUrl);
   const apiKey = await decryptLocal(endpoint.secret);
   if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
@@ -82,7 +99,7 @@ export async function callModel(
       body: JSON.stringify({
         model: assignment.modelId,
         messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
-        ...(options?.maxOutputTokens ? { max_tokens: options.maxOutputTokens } : {}),
+        ...(options?.maxOutputTokens !== undefined ? { [outputField]: options.maxOutputTokens } : {}),
       }),
       credentials: "omit",
       referrerPolicy: "no-referrer",

@@ -4,6 +4,14 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Parametro output Chat Completions per endpoint — issue #135 / ADR 0122
+
+- `EndpointProfile.outputTokenParameter?` accetta soltanto `"max_tokens"` o `"max_completion_tokens"`; il campo mancante conserva **max_tokens** per compatibilità legacy. La scelta è esplicita nella pagina Impostazioni per endpoint e non deve essere indovinata dal nome del modello, dall'URL o da un 400. Verificare gli endpoint/modelli reali sulla documentazione ufficiale del provider.
+- `callModel` deve produrre **una sola** delle due chiavi JSON quando il preflight fornisce `maxOutputTokens`, nessuna senza cap, e validare prima della rete scelta e numero di token. **Mai retry automatico** al variare del campo dopo HTTP 400/422/429, timeout o abort: una richiesta senza usage può essere fatturata. Preflight libro/sessione, writer guard e Activity/uso incerto rimangono invariati; il limite è stimato, non un tetto finanziario remoto.
+- `EndpointSettingsSaveCoordinator` valida tutti gli endpoint **prima** della cifratura dei draft e conserva CAS/snapshot; ZIP full esporta la scelta e la valida con enum stretta in import, content-only non include endpoint/chiavi, ZIP legacy senza campo accettati. Test Vitest per payload/route/errori/ZIP e Playwright desktop/mobile su impostazioni e POST una sola volta, senza chiave nei log. [ADR 0122](ADR/0122-chat-completions-output-cap-parameter.md), [guida](docs/ai-output-token-parameter.md). Il numero npm **0.11.86 rimane invariato** fino al prossimo bump npm ufficiale senza editing manuale lockfile.
+
+## Obiettivo
+
 ### Release v0.11.86 — issue #133, avvisi budget #132 e CI Chromium #134
 
 - `src/frontend/package.json` e `package-lock.json` sono portati a **0.11.86** solamente con Node 22/npm 10 e il registro npm ufficiale, senza editing manuale o variazioni nascoste di `resolved`, `integrity` o dipendenze. Il runner temporaneo read-only `.github/workflows/npm-release-reproduce-133.yml` verifica **due `npm ci` puliti**, ciascuno con TypeScript, Vitest, smoke e build, e produce i file esatti da ricostruire con checksum.

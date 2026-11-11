@@ -582,6 +582,15 @@ export default function App() {
                 <Field label="Modelli rilevati / manuali">
                   <input className="field" value={endpoint.models.join(", ")} onChange={e => updateEndpoint(endpoint.id, { models: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })} placeholder="es. model-a, model-b" />
                 </Field>
+                <Field label="Parametro limite output API">
+                  <select className="field" value={endpoint.outputTokenParameter ?? "max_tokens"}
+                    onChange={e => updateEndpoint(endpoint.id, {
+                      outputTokenParameter: e.target.value as "max_tokens" | "max_completion_tokens",
+                    })}>
+                    <option value="max_tokens">max_tokens (compatibilità precedente)</option>
+                    <option value="max_completion_tokens">max_completion_tokens (modelli compatibili)</option>
+                  </select>
+                </Field>
                 <Field label="Attesa massima header AI (secondi)">
                   <input className="field" type="number" min={MIN_CHAT_HEADER_TIMEOUT_SECONDS}
                     max={MAX_CHAT_HEADER_TIMEOUT_SECONDS} step={60}
@@ -589,7 +598,7 @@ export default function App() {
                     onChange={e => updateEndpoint(endpoint.id, { headerTimeoutSeconds: Number(e.target.value) })} />
                 </Field>
               </div>
-              <p className="muted text-xs">Il limite riguarda solo l'attesa degli header dopo POST: predefinito 300 s (5 minuti), da 60 a 1800 s. La lettura del corpo JSON ha un limite distinto di 60 s. Una scadenza non prova che il provider non abbia addebitato token.</p>
+              <p className="muted text-xs">Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s; un timeout non esclude addebiti.</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => void discoverModels(endpoint.id)}><RefreshCw size={16} /> Leggi /models</Button>
                 {settings.endpoints.length > 1 && <Button variant="destructive" onClick={() => setSettings(s => ({...s, endpoints:s.endpoints.filter(x => x.id !== endpoint.id)}))}>Rimuovi</Button>}

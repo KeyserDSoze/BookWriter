@@ -1,5 +1,5 @@
 import type { AppSettings, EncryptedSecret } from "../domain/types";
-import { normalizeEndpoint } from "../infrastructure/ai";
+import { chatOutputTokenParameter, normalizeEndpoint } from "../infrastructure/ai";
 import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
 
 export interface EndpointSettingsSnapshot {
@@ -43,9 +43,14 @@ export class EndpointSettingsSaveCoordinator {
       if (!isCurrent()) throw new StaleEndpointSettingsSave(attempt !== this.latest);
     };
     try {
-      const endpoints = await Promise.all(snapshot.settings.endpoints.map(async profile => {
+      // Validate all endpoint profiles before starting any encryption.
+      const verified = snapshot.settings.endpoints.map(profile => {
         const baseUrl = normalizeEndpoint(profile.baseUrl);
         chatHeaderTimeoutSeconds(profile.headerTimeoutSeconds);
+        chatOutputTokenParameter(profile.outputTokenParameter);
+        return { profile, baseUrl };
+      });
+      const endpoints = await Promise.all(verified.map(async ({ profile, baseUrl }) => {
         const draft = snapshot.keyDrafts[profile.id];
         return { ...profile, baseUrl, secret: draft ? await encrypt(draft) : profile.secret };
       }));
