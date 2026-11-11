@@ -2,7 +2,7 @@
 
 ## Non rilasciato — issue #135 (epic #17/#6)
 
-**Parametro output Chat Completions configurabile per endpoint**
+**Diagnostica prudente dei rifiuti Chat Completions — #137**\n\n- Con cap preventivo inviato e risposta HTTP 400/422, il messaggio invita a verificare anche la scelta del parametro output nelle Impostazioni, senza asserire che sia la causa. Nessun suggerimento sul parametro quando il cap non è inviato o su HTTP 429; nessun retry automatico, lettura del corpo errore, credenziale o prompt nei messaggi. Test di regressione con un solo POST per scenario. La release npm resta separata nella #136.\n\n**Parametro output Chat Completions configurabile per endpoint**
 
 - In **Impostazioni → Endpoint OpenAI-compatible**, ogni endpoint può selezionare `max_tokens` (default legacy) o `max_completion_tokens` per il cap output generato dal budget preventivo. Il POST `/chat/completions` invia **una sola** delle due chiavi quando il preflight fornisce il cap, nessuna quando il budget è disattivato. La configurazione è esplicita e validata prima della rete; nessun riconoscimento automatico dal nome del modello.
 - Salvataggio protetto da snapshot/concorrenza, con validazione di ogni profilo prima di cifrare; full ZIP conserva la scelta e rifiuta valori non previsti, content-only non esporta endpoint/chiavi e archivi legacy restano leggibili. Su HTTP 400/422/429 o timeout non avvengono retry di compatibilità, per non creare potenziali addebiti doppi. L'usage mancante resta ignoto.
