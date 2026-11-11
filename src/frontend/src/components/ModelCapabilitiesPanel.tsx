@@ -133,7 +133,7 @@ export function ModelCapabilitiesPanel({ settings, updateSettings }: Props) {
               value={current ? routeValue(current) : ""}
               onChange={e => updateAuxiliaryRoute(role, e.target.value)}>
               <option value="">Nessuno</option>
-              {stale && <option value={routeValue(current)}>Non disponibile: {current.modelId}</option>}
+              {stale && current && <option value={routeValue(current)}>Non disponibile: {current.modelId}</option>}
               {choices.map(model => <option key={routeValue(model.route)} value={routeValue(model.route)}>
                 {model.endpointName}: {model.modelId}
               </option>)}
