@@ -113,6 +113,54 @@ describe("POST /chat/completions — limiti e sicurezza dello stream",()=>{
     }
   });
 
+  it("il cleanup non sostituisce gli errori originali se reader.cancel fallisce", async()=>{
+    for (const failure of ["throw", "reject"] as const) {
+      const cancel=vi.fn();
+      if (failure==="throw") {
+        cancel.mockImplementation(()=>{throw new Error("errore privato del cleanup");});
+      } else {
+        cancel.mockRejectedValue(new Error("errore privato del cleanup"));
+      }
+      const releaseLock=vi.fn();
+      const reader={
+        read:vi.fn().mockRejectedValue(new Error("errore privato del reader")),
+        cancel,releaseLock,
+      };
+      const res=new Response(null);
+      Object.defineProperty(res,"body",{value:{getReader:()=>reader}});
+      await expect(readChatCompletionJson(res,controller().signal))
+        .rejects.toThrow("Impossibile leggere la risposta del provider AI");
+      expect(reader.read).toHaveBeenCalledTimes(1);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(releaseLock).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("mantiene AbortError e timeout anche con cancel sincrono che fallisce",async()=>{
+    for (const mode of ["abort", "timeout"] as const) {
+      const cancel=vi.fn().mockImplementation(()=>{
+        throw new Error("errore privato del cleanup");
+      });
+      const reader={
+        read:vi.fn().mockImplementation(()=>new Promise(()=>{})),
+        cancel,releaseLock:vi.fn(),
+      };
+      const res=new Response(null);
+      Object.defineProperty(res,"body",{value:{getReader:()=>reader}});
+      const c=controller();
+      const task=readChatCompletionJson(res,c.signal,20);
+      if (mode==="abort") c.abort();
+      if (mode==="abort") {
+        await expect(task).rejects.toMatchObject({name:"AbortError"});
+      } else {
+        await expect(task).rejects.toThrow("Tempo scaduto durante la lettura");
+      }
+      expect(reader.read).toHaveBeenCalledTimes(1);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(reader.releaseLock).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("un payload bloccato non inventa usage per l'Activity e non registra segreti",async()=>{
     const {book,settings}=fixture();
     vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response(
