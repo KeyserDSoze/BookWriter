@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Cleanup reader delle risposte HTTP 2xx — issue #138 / ADR 0116
+
+- Il `finally` di `readChatCompletionJson` deve preservare `AbortError`, timeout e errori di validazione/lettura anche se `reader.cancel()` lancia sincronicamente o restituisce una Promise rifiutata. Non attendere uno stream remoto bloccato; `releaseLock` rimane best-effort. Non introdurre retry, seconda POST, dati privati negli errori o usage fittizio. Test Vitest dedicati e release numerica soltanto tramite #136.
+
+## Obiettivo
+
 ### Parametro output Chat Completions per endpoint — issue #135 / ADR 0122
 
 - `EndpointProfile.outputTokenParameter?` accetta soltanto `"max_tokens"` o `"max_completion_tokens"`; il campo mancante conserva **max_tokens** per compatibilità legacy. La scelta è esplicita nella pagina Impostazioni per endpoint e non deve essere indovinata dal nome del modello, dall'URL o da un 400. Verificare gli endpoint/modelli reali sulla documentazione ufficiale del provider.
