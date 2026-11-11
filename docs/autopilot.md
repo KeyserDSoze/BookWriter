@@ -1,5 +1,13 @@
 # Motore autopilot e human-in-the-loop
 
+## Nessuna canonizzazione AI dopo una scrittura concorrente (#142)
+
+Una risposta del provider può arrivare dopo che l'autore o un'altra scheda/import ha aggiornato il romanzo. L'autopilot controlla il libro prima di approvare il risultato e **verifica di nuovo la revisione dentro la transazione IndexedDB** che salva insieme prosa/canon e Activity. La transazione non può sovrascrivere il canone più recente se nel frattempo è avvenuta una modifica, anche nel piccolo intervallo tra il controllo applicativo e il commit.
+
+Se la revisione cambia, il risultato AI viene **scartato**. Lo stato, le scene e i segreti del libro modificato rimangono intatti; BookWriter registra soltanto l'attività come interrotta, conservando i conteggi di token **effettivamente riportati dal provider**, perché una richiesta già inviata può avere costo anche senza testo applicato. Nessun retry, doppio POST, falso successo o sincronizzazione del testo rifiutato. Dopo un conflitto occorre ricaricare il libro prima di riprendere.
+
+Questo controllo protegge la concorrenza **locale**; non sostituisce il writer lease GitHub, non certifica un import malformato con timestamp riciclato né garantisce la correttezza narrativa. [ADR 0125](../ADR/0125-autopilot-ai-commit-cas.md) · [issue #142](https://github.com/KeyserDSoze/BookWriter/issues/142).
+
 ## State machine
 
 `idle -> planning -> running -> pause-requested -> paused -> running`
