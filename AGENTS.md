@@ -4,11 +4,17 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release v0.11.85 — issue #131, limite AI per sessione #130
+
+- `src/frontend/package.json` e `src/frontend/package-lock.json` versione **0.11.85** sono rigenerati con npm 10/Node 22 dal registro npm ufficiale, senza edit manuali o modifica di `resolved`/`integrity`; preservare le 235 voci del dependency tree. Due `npm ci` puliti e due cicli typecheck, Vitest, smoke e build precedono il commit. La UI deriva la versione dal manifest.
+- Eliminare il runner temporaneo read-only `.github/workflows/npm-release-reproduce-131.yml` **nello stesso commit atomico** del manifest, lockfile, changelog e documentazione; lasciare soltanto i workflow CI, Pages e cleanup. Verificare i 3 workflow su SHA identica, con Playwright desktop/mobile ed EPUBCheck su quattro EPUB sintetici prima di chiudere #131.
+- La #130 rimane un **guard stimato, locale, per runId**; non abilita una prenotazione finanziaria multi-dispositivo o una verifica delle fatture provider. Le epic #17/#6/#20 rimangono aperte. Ulteriori release seguono `docs/npm-lockfile-releases.md`.
+
 ### Budget AI per run/sessione — issue #130, ADR 0120, epic #17
 
 - `BookAiBudget.sessionLimitEur?` è un limite locale **stimato** opzionale (0,01–100.000 €), efficace solo con budget libro attivo. Ogni Avvia/Riprendi assegna un `runId` diverso a tutte le Activity del suo ciclo; ogni bozza AI di fusione usa lo stesso runId in preflight e Activity. Riprendere azzera soltanto la sessione, **mai** il totale del libro.
 - Il preflight verifica **entrambi** i limiti con la stessa riserva di input+output, `accountSessionAiBudget` filtra `bookId`/`runId`/`enabledAt` e non scambia uso incompleto, missing o `running` per zero. Se `runId` manca col cap attivo, interrompere senza contattare il provider. Il writer guard/lease resta obbligatorio, nessuna prenotazione finanziaria distribuita né saldi provider inventati.
-- Il pannello mostra cap e ultima sessione osservata; ZIP content/full valida il campo opzionale ma conserva gli archivi legacy. Test Vitest/Playwright desktop-mobile/backup; versione npm **0.11.84 invariata** fino a release ufficiale con lockfile npm. [ADR](ADR/0120-session-ai-budget.md) · [Guida](docs/ai-budget.md).
+- Il pannello mostra cap e ultima sessione osservata; ZIP content/full valida il campo opzionale ma conserva gli archivi legacy. Test Vitest/Playwright desktop-mobile/backup; rilasciato nella **0.11.85**, il futuro bump npm richiede manifest/lockfile generati ufficialmente e verificati. [ADR](ADR/0120-session-ai-budget.md) · [Guida](docs/ai-budget.md).
 
 ### Release 0.11.84 — issue #129, storico dei costi per task #128
 

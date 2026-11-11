@@ -1,4 +1,4 @@
-# Budget AI preventivo — BookWriter v0.8.1
+# Budget AI preventivo e per sessione — BookWriter v0.11.85
 
 La redazione multi-agente usa almeno **12 chiamate per segmento**, oltre a giudice, correzioni e sinossi. Per limitare il rischio di spesa, dalla Dashboard del libro apri **Budget AI del libro**. È una protezione **facoltativa**: non cambia retroattivamente i progetti esistenti.
 

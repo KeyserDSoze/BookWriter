@@ -1,6 +1,6 @@
 # ADR 0120 — Limite AI per sessione autopilot con identità runId e budget globale invariato
 
-- **Stato:** implementato su `main`, in attesa di release numerica successiva a 0.11.84
+- **Stato:** accettato, rilasciato su `main` in v0.11.85 (issue #131)
 - **Data:** 2026-11-11
 - **Issue:** [#130](https://github.com/KeyserDSoze/BookWriter/issues/130), epic [#17](https://github.com/KeyserDSoze/BookWriter/issues/17) e [#6](https://github.com/KeyserDSoze/BookWriter/issues/6)
 - **Precedenti:** [ADR 0012](0012-book-ai-budget-guardrails.md), [ADR 0108](0108-price-snapshot-ai-budget.md), [ADR 0118](0118-local-ai-cost-ledger-csv.md), [ADR 0119](0119-task-ai-cost-history.md)
