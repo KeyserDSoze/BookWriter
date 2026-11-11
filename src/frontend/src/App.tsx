@@ -21,6 +21,8 @@ import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
 import { AiBudgetPanel } from "./components/AiBudgetPanel";
 import { ModelCapabilitiesPanel } from "./components/ModelCapabilitiesPanel";
+import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
+import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 import { updateBookModelRoute } from "./application/book-settings";
@@ -491,12 +493,17 @@ export default function App() {
           </details>)}</div>}
       </Section>}
 
-      {page === "reader" && <Section title="Il libro" description="Anteprima della prosa canonizzata. EPUB, DOCX e PDF saranno disponibili nella sezione Export.">
+      {page === "reader" && <div className="space-y-4">
+        {current && <>
+          <VoiceReaderPanel book={current} settings={settings} />
+          <SemanticSearchPanel book={current} settings={settings} />
+        </>}
+        <Section title="Il libro" description="Anteprima della prosa canonizzata. EPUB, DOCX e PDF saranno disponibili nella sezione Export.">
         {!current?.chapters.length ? <Empty>Non c'è ancora un piano capitoli. Avvia l'autopilot.</Empty>
           : current.chapters.map(ch => <article key={ch.id} className="mb-8">
             <h3 className="mb-3 border-b border-slate-300 pb-2 text-xl font-bold dark:border-slate-700">Capitolo {ch.number} — {ch.title}</h3>
             <p className="muted mb-4 text-sm">{ch.purpose}</p>
-            {ch.scenes.map(s => <section key={s.id} className="mb-6">
+            {ch.scenes.map(s => <section key={s.id} id={`book-scene-${s.id}`} className="mb-6 scroll-mt-24">
               <h4 className="mb-2 font-semibold">{s.number}. {s.title} <span className="muted text-xs">({s.status})</span></h4>
               {s.text ? <p className="whitespace-pre-wrap break-words text-[1rem] leading-8">{s.text}</p> : <p className="muted text-sm">Scena non ancora scritta.</p>}
               {current.editorialReviewSceneIds?.includes(s.id) && <div className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3">
@@ -508,7 +515,8 @@ export default function App() {
               </div>}
             </section>)}
           </article>)}
-      </Section>}
+        </Section>
+      </div>}
 
       {page === "atlas" && <div className="grid gap-4 lg:grid-cols-2">
         {(["characters", "locations", "factions", "items", "secrets"] as const).map(kind => <Section key={kind} title={{characters:"Personaggi",locations:"Luoghi",factions:"Fazioni",items:"Oggetti",secrets:"Segreti (solo autore)"}[kind]}>
