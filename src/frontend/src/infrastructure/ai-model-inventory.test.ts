@@ -178,14 +178,17 @@ describe("Inventario modelli AI non attendibile", () => {
   });
 
   it("gestisce HTTP 429 e interruzione del chiamante senza divulgare chiavi o body", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
-      "sk-local-secret-not-in-errors", { status: 429 },
-    )));
+    const rejected=new Response("sk-local-secret-not-in-errors", { status: 429 });
+    const cancel=vi.spyOn(rejected.body!, "cancel");
+    const requestError=vi.fn().mockResolvedValue(rejected);
+    vi.stubGlobal("fetch", requestError);
     let failure: unknown;
     try { await fetchModels(url, key); } catch (error) { failure = error; }
     expect(failure).toBeInstanceOf(Error);
     expect((failure as Error).message).toMatch(/429/);
     expect(JSON.stringify(failure)).not.toContain(key);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(requestError).toHaveBeenCalledTimes(1);
     const controller = new AbortController();
     controller.abort();
     const request = vi.fn();
