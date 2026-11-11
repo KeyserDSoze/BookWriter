@@ -1,5 +1,13 @@
 # Redazione multi-agente di BookWriter — v0.11.69
 
+## Riconciliazione del canone dopo remediation: risposta legata al checkpoint (#140)
+
+Dopo che il direttore approva una remediation, l'agente incaricato della **riconciliazione della memoria narrativa** riceve un preciso segmento corretto e lo stato corrente del canone. BookWriter ora controlla **prima della chiamata AI e prima di applicare la risposta** che fase, capitolo, cursore e segmentazione siano ancora validi e che scene e memoria non siano cambiate rispetto al prompt.
+
+Se nel frattempo vengono modificati testo, ordine o stato delle scene, canone, segreti o checkpoint, l'output ricevuto viene **rifiutato senza sovrascrivere la memoria, aggiornare scene o avanzare il cursore**. I checkpoint vecchi senza cursore non vengono interpretati automaticamente come segmento iniziale: occorre un recupero supervisionato. Le snapshot di confronto rimangono in memoria nella singola richiesta, non vengono persistite né inviate al provider oltre ai dati già necessari al prompt.
+
+Il gate controlla la **freschezza del contesto**, non certifica la qualità letteraria della risposta AI. Dopo ogni riconciliazione resta obbligatoria una nuova review a 12 ruoli e il giudice critico prima del freeze. [ADR 0124](../ADR/0124-editorial-reconcile-checkpoint-fence.md) · [issue #140](https://github.com/KeyserDSoze/BookWriter/issues/140).
+
 ## Fonti storiche correnti fino alla remediation (v0.11.69)
 
 La conformità della prosa non basta: un rapporto storico può citare una revisione Wikipedia, una trascrizione o un estratto che l'autore ha nel frattempo disattivato, sostituito o rettificato. BookWriter ricontrolla **l'origine, l'attivazione e la citazione letterale** sul dossier del capitolo corrente prima del prossimo revisore, prima del giudice e del freeze, e anche prima delle remediation già approvate che vengano riprese da checkpoint precedenti. Se una fonte non è più valida, la review si blocca **senza ulteriore costo AI** e il recupero supervisionato può archiviare i vecchi report.
