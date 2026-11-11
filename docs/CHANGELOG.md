@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #121 (epic #6/#10)
+
+**Salvataggio delle impostazioni AI protetto durante la cifratura delle chiavi**
+
+- `Salva impostazioni` cattura la revisione di endpoint/router e delle chiavi draft al click; edit durante WebCrypto o l'apertura di IndexedDB invalidano il tentativo, senza ripristinare vecchie impostazioni o cancellare nuove credenziali digitabili.
+- Ogni tentativo ha una generazione per scheda: i salvataggi precedenti non possono essere applicati dopo uno nuovo né sovrascriverne l'avviso. `saveSettings` ricontrolla il fence dopo `getDb` e appena prima della richiesta di scrittura; l'autore deve riprovare esplicitamente dopo un conflitto.
+- Vitest su cifratura, apertura DB, rimozione e due click; Playwright desktop/mobile con cifratura ritardata. [ADR 0114](../ADR/0114-endpoint-settings-save-fencing.md) e [guida](ai-model-inventory.md). Nessuna dipendenza o modifica canone/ZIP.
+
 ## Non rilasciato — issue #119 (epic #6)
 
 **Il catalogo /models non sovrascrive configurazioni cambiate durante la richiesta**

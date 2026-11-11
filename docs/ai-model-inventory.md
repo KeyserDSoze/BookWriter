@@ -17,3 +17,9 @@ Quando premi **Leggi /models**, BookWriter associa la richiesta all'esatto profi
 Due ricerche contemporanee sul medesimo endpoint sono autorizzate soltanto in ordine di esito: **può applicarsi solo l'ultima richiesta esplicita**, purché il profilo non sia stato modificato. L'identità viene verificata in memoria; la chiave API non viene inserita in log o nella documentazione di audit. Questa protezione vale per la scheda attiva, non pretende di coordinare impostazioni modificate da un secondo dispositivo né certifica la disponibilità del provider.
 
 [ADR 0113](../ADR/0113-stale-model-inventory-response-fence.md) · [Issue #119](https://github.com/KeyserDSoze/BookWriter/issues/119).
+
+## Salvataggio delle impostazioni durante la cifratura — issue #121
+
+Il pulsante **Salva impostazioni** cifra localmente le nuove chiavi tramite Web Crypto. Se nel frattempo modifichi URL, nome, modelli, router, chiave draft oppure rimuovi un endpoint, il salvataggio basato sulla vecchia configurazione viene rifiutato; i campi che stai modificando restano intatti e un messaggio invita a verificare la scelta e premere di nuovo **Salva impostazioni**. Anche un doppio click è protetto: solo la richiesta più recente può completare l'aggiornamento UI.
+
+Questa è una garanzia **intra-tab**. Una transazione IndexedDB già inviata non può essere cancellata retroattivamente: gli edit successivi sono volutamente non salvati finché l'autore non ripete il salvataggio. Non vengono inviate chiavi ad altri servizi, non si avvia l'autopilot né si introduce un vault E2EE. [ADR 0114](../ADR/0114-endpoint-settings-save-fencing.md) · [issue #121](https://github.com/KeyserDSoze/BookWriter/issues/121).
