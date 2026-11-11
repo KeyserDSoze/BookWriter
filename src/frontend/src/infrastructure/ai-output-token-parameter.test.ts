@@ -110,7 +110,7 @@ describe("Parametro limite token POST Chat Completions", () => {
         vi.stubGlobal("fetch",request);
         const call=callModel("chapterAudit","Sistema privato","Prompt privato",settings,book,
           new AbortController().signal,withCap ? {maxOutputTokens:1024} : undefined);
-        const error=await call.catch(e=>e as Error);
+        const error=await call.then(() => { throw new Error("Risposta inattesa"); }, e=>e as Error);
         expect(error).toBeInstanceOf(Error);
         expect(error.message).toContain("HTTP "+status);
         expect(error.message.includes("Controlla anche il parametro limite output API"))
