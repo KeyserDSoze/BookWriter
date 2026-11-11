@@ -174,12 +174,14 @@ function invalidModelCatalog(): ModelCatalogError {
  * unbounded model catalogue, trust Content-Length alone or log its body. */
 async function boundedModelCatalog(response: Response, signal: AbortSignal): Promise<unknown> {
   const mime = response.headers.get("content-type") ?? "";
-  if (mime && !/\\/json(?:\\s*;|$)|\\+json(?:\\s*;|$)/i.test(mime))
+  if (mime && !/\/json(?:\s*;|$)|\+json(?:\s*;|$)/i.test(mime))
     throw invalidModelCatalog();
   const rawLength = response.headers.get("content-length");
-  if (rawLength !== null && (!/^\\d+$/.test(rawLength.trim()) ||
-      Number(rawLength) > MAX_MODEL_CATALOG_BYTES))
-    throw invalidModelCatalog();
+  if (rawLength !== null) {
+    if (!/^\d+$/.test(rawLength.trim())) throw invalidModelCatalog();
+    if (Number(rawLength) > MAX_MODEL_CATALOG_BYTES)
+      throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
+  }
   const reader = response.body?.getReader();
   if (!reader) throw invalidModelCatalog();
   let onAbort: (() => void) | undefined;
