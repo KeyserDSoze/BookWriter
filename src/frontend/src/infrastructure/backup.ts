@@ -6,6 +6,7 @@ import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchem
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { normalizeEndpoint } from "./ai";
+import { MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./ai-header-timeout";
 import {MAX_TRANSFER_SHARE_DECISIONS,type NarrativeTransferShareDecision}
   from "../domain/narrative-transfer-sharing";
 import {MAX_EDITORIAL_VERIFICATION_CHOICES,type EditorialVerificationChoice}
@@ -301,6 +302,8 @@ const backupSchema = z.object({
     endpoints: z.array(z.object({
       id: z.string(), name: z.string(), baseUrl: z.string(),
       models: z.array(z.string()), apiKey: z.string().nullable(),
+      headerTimeoutSeconds: z.number().int().min(MIN_CHAT_HEADER_TIMEOUT_SECONDS)
+        .max(MAX_CHAT_HEADER_TIMEOUT_SECONDS).optional(),
     })).max(30),
     defaultRoute: routeSchema,
     taskRoutes: z.record(z.string(), routeSchema),
@@ -321,7 +324,7 @@ type BackupData = {
   mergeDrafts?: SceneMergeDraft[];
   settings?: {
     theme: AppSettings["theme"];
-    endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null }>;
+    endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
     aiPriceRates?: AppSettings["aiPriceRates"];
@@ -434,6 +437,7 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
       endpoints: await Promise.all(settings.endpoints.map(async endpoint => ({
         id: endpoint.id, name: endpoint.name, baseUrl: endpoint.baseUrl,
         models: endpoint.models,
+        headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         apiKey: endpoint.secret ? await decryptLocal(endpoint.secret) : null,
       }))),
     };
@@ -587,6 +591,7 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
       endpoints: await Promise.all(data.settings.endpoints.map(async endpoint => ({
         id: endpoint.id, name: endpoint.name, baseUrl: normalizeEndpoint(endpoint.baseUrl),
         models: endpoint.models,
+        headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         secret: endpoint.apiKey ? await encryptLocal(endpoint.apiKey) : null,
       }))),
     };
