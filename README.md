@@ -6,6 +6,7 @@
 
 ## Funzionalità disponibili
 
+- **Risposte AI limitate (#123):** le generazioni OpenAI-compatible non possono più impegnare memoria indefinita con JSON enormi o stream che non terminano: limite 2 MB sull'envelope e timeout di lettura 60 s dopo gli header, con cancel/abort e nessuna prosa parziale. [Guida](docs/ai-completion-response.md), [ADR 0116](ADR/0116-bounded-ai-completion-response.md).
 - **Release v0.11.81 (issue #120):** consolidati #118, #119, #121 e #122: inventario AI validato, protezione dalle risposte obsolete e dai salvataggi concorrenti, inizializzazione atomica della chiave WebCrypto fra schede. Manifest e lockfile rigenerati con npm 10/Node 22 e doppio `npm ci` pulito; [changelog](docs/CHANGELOG.md) e [guida release](docs/npm-lockfile-releases.md). Nessuna nuova dipendenza né modifica del canone.
 - **Chiave locale WebCrypto atomica (#122):** quando due cifrature iniziano contemporaneamente, anche da schede differenti, IndexedDB sceglie una sola chiave AES-GCM non esportabile; i cifrati restano decifrabili dopo reload. [ADR 0115](ADR/0115-atomic-local-device-key-initialization.md), [guida](docs/local-crypto-device-key.md).
 - **Salvataggi impostazioni AI protetti (#121):** se un endpoint, modello o chiave cambia mentre l'app cifra e salva, la vecchia richiesta viene rifiutata senza cancellare i draft dell'autore. [Guida](docs/ai-model-inventory.md), [ADR 0114](ADR/0114-endpoint-settings-save-fencing.md).

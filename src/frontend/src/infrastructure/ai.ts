@@ -3,6 +3,7 @@ import { routeFor } from "../domain/types";
 import { decryptLocal } from "./crypto";
 import { validTokenCount } from "../domain/ai-usage";
 import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
+import { readChatCompletionJson } from "./ai-completion-response";
 
 export type ModelAnswer = {
   text: string;
@@ -65,6 +66,7 @@ export async function callModel(
   if (!endpoint.secret) throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
   const base = normalizeEndpoint(endpoint.baseUrl);
   const apiKey = await decryptLocal(endpoint.secret);
+  if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
 
   let response: Response;
   try {
@@ -87,11 +89,10 @@ export async function callModel(
     if (signal.aborted) throw new DOMException("Interrotto", "AbortError");
     throw new Error("Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.");
   }
+  if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
   if (!response.ok) throw new Error(friendlyApiError(response.status));
 
-  let payload: unknown;
-  try { payload = await response.json(); }
-  catch { throw new Error("Il provider AI non ha restituito JSON valido."); }
+  const payload = await readChatCompletionJson(response, signal);
   if (!payload || typeof payload !== "object") throw new Error("Risposta AI non valida.");
   const data = payload as {
     choices?: unknown;

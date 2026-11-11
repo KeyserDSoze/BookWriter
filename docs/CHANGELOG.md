@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #123 (epic #6/#17/#20)
+
+**Risposte di generazione AI limitate e annullabili prima di applicare prosa o uso token**
+
+- `POST /chat/completions` non invoca più `response.json()` su un corpo arbitrariamente grande: lettura a chunk con massimo **2.000.000 byte UTF-8** per l'intero envelope JSON, verifica Content-Length dichiarato e misurazione reale, MIME JSON, decoding UTF-8 rigoroso e nessuna prosa troncata. Un provider non conforme fallisce senza canonizzazione.
+- Timer **60 secondi dalla ricezione degli header** per completare la lettura, distinto dai tempi di generazione precedenti; `AbortSignal` dell'autore interrompe anche reader in attesa, cancellazione best effort dello stream senza attenderla. Errori italiani redatti per oversize, timeout, stream/JSON malformati.
+- Usage contato **solo da un JSON completo valido**; risposta scartata pre-parsing non ha token inventati né Activity riuscita, e il budget registra consumo ignoto in modo conservativo. Mantiene la validazione stringhe/parti testuali #115 e i conteggi su contenuto malformato ma JSON valido #111. [ADR 0116](../ADR/0116-bounded-ai-completion-response.md), [guida](ai-completion-response.md), #123. Nessuna dipendenza, modifica al canone o update del numero versione in attesa del prossimo ciclo npm.
+
 ## 0.11.81 — 2026-11-11 (main, issues #118/#119/#121/#122)
 
 ### Chiave WebCrypto atomica — #122
