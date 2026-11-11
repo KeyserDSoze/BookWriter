@@ -109,7 +109,7 @@ describe("Esportazione ledger economico locale per il solo libro", () => {
       }),
     ], settings());
     expect(csv).toContain('"\'  =1+1"');
-    expect(csv).toContain('"\' +CMD  next"');
+    expect(csv).toContain('"\'+CMD  next"');
     expect(csv).toContain('"\'@HYPERLINK(""https://example.invalid"";""click"")"');
     expect(lines(csv)).toHaveLength(2);
     expect(csv).not.toContain("\r\nnext");
