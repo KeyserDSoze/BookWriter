@@ -119,6 +119,45 @@ describe("Inventario modelli AI non attendibile", () => {
     }
   });
 
+  it("la deadline interrompe anche un fetch che ignora abort prima degli header", async () => {
+    vi.useFakeTimers();
+    try {
+      const request=vi.fn().mockImplementation(()=>new Promise<Response>(()=>{}));
+      vi.stubGlobal("fetch",request);
+      const pending=fetchModels(url,key);
+      const failure=expect(pending).rejects.toThrow(/Timeout del catalogo modelli/);
+      await vi.advanceTimersByTimeAsync(12_001);
+      await failure;
+      expect(request).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("non usa la risposta tardiva dopo timeout e ne cancella lo stream", async () => {
+    vi.useFakeTimers();
+    try {
+      let finishFetch!: (res:Response)=>void;
+      const request=vi.fn().mockImplementation(()=>new Promise<Response>(
+        resolve=>{finishFetch=resolve;},
+      ));
+      vi.stubGlobal("fetch",request);
+      const pending=fetchModels(url,key);
+      const failure=expect(pending).rejects.toThrow(/Timeout del catalogo modelli/);
+      await vi.advanceTimersByTimeAsync(12_001);
+      await failure;
+      let cancelled=false;
+      const stream=new ReadableStream<Uint8Array>({cancel(){cancelled=true;}});
+      finishFetch(new Response(stream,{headers:{"content-type":"application/json"}}));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(cancelled).toBe(true);
+      expect(request).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("conserva gli errori di catalogo quando cancel fallisce sincronicamente", async () => {
     for (const failure of ["throw","reject"] as const) {
       const cancel=vi.fn();
