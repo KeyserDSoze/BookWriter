@@ -97,6 +97,18 @@ test("budget desktop/mobile: prevent provider spend and stop after missing usage
   expect((await state()).attempts).toBe(0);
 
   await panel.getByRole("spinbutton",{name:"Soglia budget in euro"}).fill("2");
+  await panel.getByRole("spinbutton",{name:"Limite sessione AI in euro"}).fill("0.01");
+  await panel.getByRole("button",{name:"Salva budget del libro"}).click();
+  await expect(panel.getByText(/Limite stimato per sessione/)).toBeVisible();
+  await page.getByRole("button",{name:"Riprendi"}).click();
+  await expect.poll(async()=>(await state()).error??"",{timeout:25_000})
+    .toContain("Budget di sessione stimato raggiunto");
+  expect(networkCalls).toBe(0);
+  expect((await state()).attempts).toBe(0);
+
+  // A conscious limit increase allows one request; missing usage still blocks
+  // the next call despite a fresh runId or the unspent session ceiling.
+  await panel.getByRole("spinbutton",{name:"Limite sessione AI in euro"}).fill("1");
   await panel.getByRole("button",{name:"Salva budget del libro"}).click();
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect.poll(async()=>(await state()).error??"",{timeout:25_000})

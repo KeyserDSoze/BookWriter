@@ -21,7 +21,7 @@ beforeAll(async () => {
   settings.aiPriceRates = [{endpointId:"openai",modelId:"test-model",inputEurPerMillion:3,outputEurPerMillion:9}];
   await saveSettings(settings);
   const book = newBook("Una trama avvincente e dettagliata.", "Il primo manoscritto", "Narrativo", "Adulti");
-  book.aiBudget = { enabled:true, enabledAt:"2026-11-05T00:00:00.000Z", limitEur:10,maxOutputTokens:8192 };
+  book.aiBudget = { enabled:true, enabledAt:"2026-11-05T00:00:00.000Z", limitEur:10,maxOutputTokens:8192,sessionLimitEur:0.4 };
   await saveBook(book);
   await saveActivity({
     id: crypto.randomUUID(), bookId: book.id, runId: crypto.randomUUID(),
@@ -40,9 +40,35 @@ describe("Backup portabile BookWriter", () => {
     expect(parsed.settings).toBeUndefined();
     expect(parsed.books).toHaveLength(1);
     expect(parsed.books[0]?.aiBudget?.limitEur).toBe(10);
+    expect(parsed.books[0]?.aiBudget?.sessionLimitEur).toBe(0.4);
     expect(JSON.stringify(parsed)).not.toContain("inputEurPerMillion");
     expect(parsed.activities).toHaveLength(1);
     expect(JSON.stringify(parsed)).not.toContain(API_SECRET);
+  });
+
+  it("ZIP content-only: conserva il limite sessione; legacy senza limite resta leggibile", async () => {
+    const zip=await createBackup("content");
+    const parsed=await readBackup(zip as File);
+    expect(parsed.books[0]?.aiBudget?.sessionLimitEur).toBe(0.4);
+    const originalEntries=unzipSync(new Uint8Array(await zip.arrayBuffer()));
+    const change=(value: unknown, legacy=false)=>{
+      const content=JSON.parse(strFromU8(originalEntries["content.json"]!));
+      const book=content.books.find((b:{title:string})=>b.title==="Il primo manoscritto");
+      if(!book?.aiBudget)throw new Error("Budget fixture mancante");
+      if(legacy)delete book.aiBudget.sessionLimitEur;
+      else book.aiBudget.sessionLimitEur=value;
+      const encoded=zipSync({
+        "manifest.json":originalEntries["manifest.json"]!,
+        "content.json":strToU8(JSON.stringify(content)),
+      },{level:6});
+      return new Blob([new Uint8Array(encoded)]) as File;
+    };
+    const legacy=(await readBackup(change(undefined,true))).books.find(b=>b.title==="Il primo manoscritto");
+    expect(legacy?.aiBudget?.limitEur).toBe(10);
+    expect(legacy?.aiBudget?.sessionLimitEur).toBeUndefined();
+    for(const invalid of [0,-1,0.001,100001,"0.4",null]) {
+      await expect(readBackup(change(invalid))).rejects.toThrow(/Schema backup non valido/);
+    }
   });
 
   it("rifiuta il backup completo non protetto senza consenso esplicito", async () => {

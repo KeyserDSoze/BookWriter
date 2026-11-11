@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings } from "./types";
-import { accountBookAiBudget, AiBudgetStop, isBudgetValid, preflightBookAiBudget, snapshotPriceRate } from "./ai-budget";
+import { accountBookAiBudget, accountSessionAiBudget, AiBudgetStop, isBudgetValid, preflightBookAiBudget, snapshotPriceRate } from "./ai-budget";
 
 function fixture(){
   const book = newBook("Premessa","Romanzo","Stile","Adulti");
@@ -128,6 +128,92 @@ describe("Budget AI basato su tariffe inserite dall'autore",()=>{
     expect(a.estimatedSpentEur).toBe(0);
     expect(()=>preflightBookAiBudget(book,settings,rows,"chapterReaders","S","P"))
       .toThrow(/prive di un listino/);
+  });
+  it("applica il plafond di sessione prima della rete senza disattivare quello del libro",()=>{
+    const {book,settings}=fixture();
+    book.aiBudget!.sessionLimitEur=0.01;
+    expect(()=>preflightBookAiBudget(book,settings,[],"chapterReaders","Sistema","Prompt","run-a"))
+      .toThrow(/Budget di sessione stimato raggiunto/);
+    book.aiBudget!.sessionLimitEur=1;
+    expect(preflightBookAiBudget(book,settings,[],"chapterReaders","Sistema","Prompt","run-a")?.sessionCountedCalls)
+      .toBe(0);
+    book.aiBudget!.limitEur=0.01;
+    expect(()=>preflightBookAiBudget(book,settings,[],"chapterReaders","Sistema","Prompt","run-a"))
+      .toThrow(/Budget stimato raggiunto/);
+  });
+  it("rifiuta la mancanza di runId se il plafond sessione è attivo",()=>{
+    const {book,settings}=fixture();
+    book.aiBudget!.sessionLimitEur=1;
+    expect(()=>preflightBookAiBudget(book,settings,[],"chapterReaders","Sistema","Prompt"))
+      .toThrow(/identificativo della sessione assente/);
+    book.aiBudget!.sessionLimitEur=undefined;
+    expect(preflightBookAiBudget(book,settings,[],"chapterReaders","Sistema","Prompt"))
+      .toBeDefined();
+  });
+  it("accumula soltanto il runId della stessa sessione: resume riparte ma budget libro no",()=>{
+    const {book,settings}=fixture();
+    const runId="run-123";
+    const quote=snapshotPriceRate(settings,"openai","review-model")!;
+    const activity=item({bookId:book.id,runId,priceRateSnapshot:quote});
+    const cost=(500*3+1000*9)/1e6;
+    const reserved=preflightBookAiBudget(book,settings,[],"chapterJudge","S","P",runId)!.estimatedNextEur;
+    book.aiBudget!.sessionLimitEur=reserved + cost * 1.5;
+    const one=preflightBookAiBudget(book,settings,[activity],"chapterJudge","S","P",runId);
+    expect(one?.sessionSpentEur).toBeCloseTo(cost);
+    expect(one?.sessionCountedCalls).toBe(1);
+    const second={...activity,id:crypto.randomUUID(),createdAt:"2026-11-05T12:01:00.000Z"};
+    expect(()=>preflightBookAiBudget(book,settings,[activity,second],"chapterJudge","S","P",runId))
+      .toThrow(/Budget di sessione stimato raggiunto/);
+    const resumed=preflightBookAiBudget(book,settings,[activity,second],"chapterJudge","S","P","new-run-id");
+    expect(resumed?.sessionSpentEur).toBe(0);
+    expect(resumed?.sessionCountedCalls).toBe(0);
+    expect(resumed?.estimatedSpentEur).toBeCloseTo(cost*2);
+    book.aiBudget!.limitEur=reserved + cost*1.5;
+    expect(()=>preflightBookAiBudget(book,settings,[activity,second],"chapterJudge","S","P","new-run-id"))
+      .toThrow(/Budget stimato raggiunto/);
+  });
+  it("la sessione isola bookId, runId e data: preflight e manuali esclusi",()=>{
+    const {book,settings}=fixture();
+    const runId="run-focus";
+    const entries=[
+      item({bookId:book.id,runId}),
+      item({bookId:book.id,runId,createdAt:"2026-10-01T00:00:00.000Z"}),
+      item({bookId:book.id,runId:"run-other"}),
+      item({bookId:"book-else",runId}),
+      item({bookId:book.id,runId,aiRequested:false,inputTokens:undefined,outputTokens:undefined}),
+      item({bookId:book.id,runId,endpointId:undefined,modelId:undefined,
+        aiRequested:undefined,inputTokens:undefined,outputTokens:undefined}),
+    ];
+    const result=accountSessionAiBudget(entries,settings,book.aiBudget!,book.id,runId);
+    expect(result.countedCalls).toBe(1);
+    expect(result.incompleteCount).toBe(0);
+    expect(result.estimatedSpentEur).toBeCloseTo(0.0105);
+  });
+  it("conta usage incompleto e snapshot invalidi nella sessione senza spacciarli per zero",()=>{
+    const {book,settings}=fixture();
+    const runId="run-unknown";
+    const a=item({bookId:book.id,runId,inputTokens:0,outputTokens:undefined});
+    const b=item({bookId:book.id,runId,priceRateSnapshot:{
+      endpointId:"other",modelId:"review-model",inputEurPerMillion:3,outputEurPerMillion:9,
+    }});
+    const v=accountSessionAiBudget([a,b],settings,book.aiBudget!,book.id,runId);
+    expect(v.incompleteCount).toBe(1);
+    expect(v.unpricedCount).toBe(1);
+    expect(v.estimatedSpentEur).toBe(0);
+    book.aiBudget!.sessionLimitEur=1;
+    expect(()=>preflightBookAiBudget(book,settings,[a,b],"chapterJudge","S","P",runId))
+      .toThrow(/senza usage completo/);
+  });
+  it("rifiuta limite sessione malformato, e valida zero non ammesso",()=>{
+    const {book}=fixture();
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:0.01})).toBe(true);
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:0})).toBe(false);
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:0.009})).toBe(false);
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:100001})).toBe(false);
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:Infinity})).toBe(false);
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:NaN})).toBe(false);
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:"1" as unknown as number})).toBe(false);
+    expect(isBudgetValid({...book.aiBudget!,sessionLimitEur:null as unknown as number})).toBe(false);
   });
   it("non accetta numeri NaN, negativi, output insensati o date invalide",()=>{
     const {book}=fixture();

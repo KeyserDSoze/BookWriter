@@ -22,6 +22,10 @@ export interface BudgetPreflight extends AiBudgetAccounting {
   reservedOutputTokens: number;
   limitEur: number;
   remainingEur: number;
+  /** Optional per-run estimate. The global book guard always applies as well. */
+  sessionLimitEur?: number;
+  sessionSpentEur?: number;
+  sessionCountedCalls?: number;
 }
 export function isPriceRate(rate: unknown): rate is AiPriceRate {
   // ZIP/IndexedDB may contain untrusted or legacy values.
@@ -38,6 +42,10 @@ export function isBudgetValid(budget: BookAiBudget): boolean {
   return Number.isFinite(budget.limitEur) && budget.limitEur > 0 &&
     budget.limitEur <= 100_000 && Number.isSafeInteger(budget.maxOutputTokens) &&
     budget.maxOutputTokens >= 256 && budget.maxOutputTokens <= 32_768 &&
+    (budget.sessionLimitEur === undefined ||
+      typeof budget.sessionLimitEur === "number" &&
+      Number.isFinite(budget.sessionLimitEur) && budget.sessionLimitEur >= 0.01 &&
+      budget.sessionLimitEur <= 100_000) &&
     !Number.isNaN(Date.parse(budget.enabledAt));
 }
 export function lookupRate(settings: AppSettings, endpointId: string, modelId: string): AiPriceRate | undefined {
@@ -123,6 +131,20 @@ export function accountBookAiBudget(
   return result;
 }
 
+/** An explicit Avvia/Riprendi runId is one *local* session; never a remote reservation.
+ * The caller may provide mixed books (e.g. imported activity logs), so scope
+ * both bookId and runId before applying exactly the book accounting rules.
+ */
+export function accountSessionAiBudget(
+  activities: readonly Activity[], settings: AppSettings, budget: BookAiBudget,
+  bookId: string, runId: string,
+): AiBudgetAccounting {
+  return accountBookAiBudget(
+    activities.filter(activity => activity.bookId === bookId && activity.runId === runId),
+    settings, budget,
+  );
+}
+
 /** A soft guard; it cannot promise a hard financial cap for remote billing.
  * Reserves for an entire response before the request, based on input UTF-8
  * bytes plus protocol overhead and an explicit max_tokens request.
@@ -130,7 +152,7 @@ export function accountBookAiBudget(
  */
 export function preflightBookAiBudget(
   book: BookProject, settings: AppSettings, activities: readonly Activity[],
-  kind: TaskKind, system: string, prompt: string,
+  kind: TaskKind, system: string, prompt: string, runId?: string,
 ): BudgetPreflight | undefined {
   const budget = book.aiBudget;
   if (!budget?.enabled) return;
@@ -163,8 +185,36 @@ export function preflightBookAiBudget(
       " €). Aumenta consapevolmente la soglia o interrompi la redazione.",
     );
   }
+  // A separate, opt-in ceiling for one continuous Avvia/Riprendi session.
+  // Every resume intentionally starts a new runId, but NEVER resets the book guard.
+  let sessionAccounting: AiBudgetAccounting | undefined;
+  if (budget.sessionLimitEur !== undefined) {
+    if (!runId?.trim()) throw new AiBudgetStop(
+      "Budget di sessione attivo: identificativo della sessione assente. Richiesta AI bloccata.",
+    );
+    sessionAccounting = accountSessionAiBudget(activities, settings, budget, book.id, runId);
+    if (sessionAccounting.incompleteCount || sessionAccounting.unpricedCount) {
+      throw new AiBudgetStop(
+        "Budget di sessione sospeso: " + sessionAccounting.incompleteCount +
+        " chiamate senza usage completo e " + sessionAccounting.unpricedCount +
+        " senza tariffa valida. Non trattare consumi ignoti come zero.",
+      );
+    }
+    if (sessionAccounting.estimatedSpentEur + estimatedNextEur >= budget.sessionLimitEur - 1e-9) {
+      throw new AiBudgetStop(
+        "Budget di sessione stimato raggiunto o insufficiente per la prossima chiamata (" +
+        (sessionAccounting.estimatedSpentEur + estimatedNextEur).toFixed(4) + " € / " +
+        budget.sessionLimitEur.toFixed(2) + " €). La richiesta non è stata inviata.",
+      );
+    }
+  }
   return {
     ...accounting, estimatedNextEur, reservedInputTokens, reservedOutputTokens,
     limitEur: budget.limitEur, remainingEur: budget.limitEur - accounting.estimatedSpentEur,
+    ...(sessionAccounting ? {
+      sessionLimitEur: budget.sessionLimitEur,
+      sessionSpentEur: sessionAccounting.estimatedSpentEur,
+      sessionCountedCalls: sessionAccounting.countedCalls,
+    } : {}),
   };
 }

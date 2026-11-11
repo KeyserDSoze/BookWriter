@@ -83,21 +83,22 @@ export async function generateSceneMergeDraft(
 ): Promise<SceneMergeDraft> {
   const prompt = buildSceneMergePrompt(review, chapterId, sceneId, instruction);
   await assertReviewFresh(review);
-  return withWriterGuard(review.bookId, crypto.randomUUID(), controller, async guard => {
+  const runId = crypto.randomUUID(); // One voluntary AI merge draft is one session.
+  return withWriterGuard(review.bookId, runId, controller, async guard => {
     await guard.assertActive();
     const current = await assertReviewFresh(review);
     if (!current.remote) throw new RemoteConflict("Repository non configurata.");
     await confirmGitHubHead(current.remote, review.headSha);
     const settings = await loadSettings();
     const preflight = preflightBookAiBudget(
-      current, settings, await listActivities(current.id), "merge", prompt.system, prompt.prompt,
+      current, settings, await listActivities(current.id), "merge", prompt.system, prompt.prompt, runId,
     );
     await guard.assertActive();
     if (controller.signal.aborted) throw new DOMException("Interrotto prima del provider.", "AbortError");
     const route = routeFor("merge", settings, current);
     const quote = snapshotPriceRate(settings, route.endpointId, route.modelId);
     const attempted: Activity = {
-      id: crypto.randomUUID(), bookId: review.bookId, runId: crypto.randomUUID(),
+      id: crypto.randomUUID(), bookId: review.bookId, runId,
       phase: "revision", title: "Bozza AI di fusione scena",
       status: "running", reason: "Confronto facoltativo di due versioni della scena.",
       nextStep: "Valuta la proposta prima dell'applicazione al canon.",

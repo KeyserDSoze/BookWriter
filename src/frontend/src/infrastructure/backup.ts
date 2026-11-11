@@ -258,6 +258,15 @@ const bookSchema = z.object({
   editorialVerificationChoices: z.array(editorialVerificationChoiceSchema).max(160).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),
+  // Legacy books omit aiBudget. If present, untrusted ZIPs must not supply
+  // malformed session limits that could silently bypass the local guard.
+  aiBudget: z.object({
+    enabled: z.boolean(),
+    enabledAt: z.string(),
+    limitEur: z.number().finite().min(0.01).max(100_000),
+    maxOutputTokens: z.number().int().min(256).max(32_768),
+    sessionLimitEur: z.number().finite().min(0.01).max(100_000).optional(),
+  }).passthrough().optional(),
   memory: memorySchema,
   currentSceneId: z.string().optional(),
   revision: z.object({

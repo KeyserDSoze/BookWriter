@@ -537,7 +537,7 @@ export class AutopilotRunner {
           await guard.assertActive(); // Do not charge credits without verified ownership.
           const systemPrompt = work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.";
           const preflight = preflightBookAiBudget(
-            book, settings, await listActivities(bookId), work.kind, systemPrompt, work.prompt,
+            book, settings, await listActivities(bookId), work.kind, systemPrompt, work.prompt, runId,
           );
           await guard.assertActive();
           if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");

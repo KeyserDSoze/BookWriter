@@ -16,6 +16,10 @@ La sezione **Dashboard → Consumi AI registrati** mostra i token dichiarati dag
 
 Sono mostrate le attività registrate **soltanto per il libro selezionato**. Gli interventi manuali che non invocano l'AI non vengono sommati come chiamate a pagamento.
 
+## Limite di stima per ogni sessione AI — issue #130
+
+L'autore può impostare `sessionLimitEur` facoltativo sul budget del libro. Ogni Avvia/Riprendi crea un nuovo `runId`; il preflight confronta **l'uso osservato di questa sessione + riserva della nuova richiesta** con il suo plafond, oltre a far rispettare il limite globale di libro. Usage mancante, parziale, `running` o tariffe invalide **non** equivalgono a costo zero. Una nuova sessione non cancella le richieste e le spese precedenti dal libro, e non dimostra fatture ufficiali. [Guida](ai-budget.md) · [ADR 0120](../ADR/0120-session-ai-budget.md).
+
 ## Storico dei costi per task — issue #128
 
 Nella Dashboard → Budget AI del libro, **Storico dei costi per task AI** mostra fino a dieci tentativi recenti, con espansione esplicita e filtro **Solo tentativi senza stima**. Ogni tentativo mantiene distinti token osservati, tariffa snapshot/legacy, stato ed euro soltanto stimati; dati mancanti o `running` non sono spesa zero. La vista usa solo Activity locali del libro e resta disponibile a budget disattivato. Non visualizza il saldo o la fattura vera. [Guida](ai-cost-history.md) · [ADR 0119](../ADR/0119-task-ai-cost-history.md).

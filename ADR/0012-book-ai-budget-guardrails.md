@@ -55,3 +55,8 @@ Non è possibile garantire un limite **rigido** delle fatture di un provider est
 - Supporto per alternative `max_completion_tokens` e per le diverse APIs di output dei provider, conservando il fail-closed.
 - Consultazione del saldo provider reale soltanto se esistono API ufficiali appropriate e permessi espliciti.
 - Visualizzazione di conti reali separati da stime, con avvisi sul credito prima della pubblicazione.
+
+
+## Estensione del budget di sessione — issue #130, ADR 0120
+
+Il precedente limite di periodo del libro rimane il gate principale. L'opzione `BookAiBudget.sessionLimitEur?` aggiunge un tetto **stimato** per il `runId` del singolo Avvia/Riprendi, con la stessa riserva di input/output. La ripresa crea un nuovo runId ma non azzera la spesa di libro né l'incertezza di usage/provider. Le proposte AI di fusione applicano il limite a ciascuna bozza. Backup ZIP content/full valida il campo e accetta libri legacy senza campo; nessuna prenotazione finanziaria o fattura viene generata. Dettagli in [ADR 0120](0120-session-ai-budget.md).

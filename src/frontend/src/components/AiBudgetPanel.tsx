@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ShieldAlert, Wallet } from "lucide-react";
 import type { Activity, AiPriceRate, AppSettings, BookProject, ModelRoute } from "../domain/types";
-import { accountBookAiBudget, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid, isPriceRate } from "../domain/ai-budget";
+import { accountBookAiBudget, accountSessionAiBudget, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid, isPriceRate } from "../domain/ai-budget";
 import { getBook, saveBook } from "../infrastructure/db";
 import { exportAiCostLedgerCsv } from "../infrastructure/ai-ledger-export";
 import { isBillableAttempt } from "../domain/ai-budget";
@@ -26,6 +26,7 @@ export function AiBudgetPanel({
 }) {
   const [limit, setLimit] = useState(String(book.aiBudget?.limitEur ?? 5));
   const [outputMax, setOutputMax] = useState(String(book.aiBudget?.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS));
+  const [sessionLimit, setSessionLimit] = useState(String(book.aiBudget?.sessionLimitEur ?? ""));
   const [enabled, setEnabled] = useState(book.aiBudget?.enabled ?? false);
   const routes = uniqueRoutes(book, settings);
   const [selected, setSelected] = useState(JSON.stringify([
@@ -45,6 +46,16 @@ export function AiBudgetPanel({
   const [busy, setBusy] = useState(false);
   const snapshot = book.aiBudget?.enabled
     ? accountBookAiBudget(activities, settings, book.aiBudget) : undefined;
+  const sessionBudget = book.aiBudget?.enabled && book.aiBudget.sessionLimitEur !== undefined
+    ? book.aiBudget : undefined;
+  const recentSession = sessionBudget
+    ? activities.filter(a => a.bookId === book.id && isBillableAttempt(a) &&
+      Date.parse(a.createdAt) >= Date.parse(sessionBudget.enabledAt))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0]
+    : undefined;
+  const sessionAccounting = sessionBudget && recentSession?.runId
+    ? accountSessionAiBudget(activities, settings, sessionBudget, book.id, recentSession.runId)
+    : undefined;
   const rateIn = editingPrice ? draftInput : String(savedRate?.inputEurPerMillion ?? "");
   const rateOut = editingPrice ? draftOutput : String(savedRate?.outputEurPerMillion ?? "");
 
@@ -75,12 +86,13 @@ export function AiBudgetPanel({
   async function saveBudget() {
     const requested = {
       enabled, limitEur: Number(limit), maxOutputTokens: Number(outputMax),
+      ...(sessionLimit.trim() ? { sessionLimitEur: Number(sessionLimit) } : {}),
       // A fresh opt-in starts a new accounting period; increasing a limit does not.
       enabledAt: book.aiBudget?.enabled && enabled
         ? book.aiBudget.enabledAt : new Date().toISOString(),
     };
     if (!isBudgetValid(requested)) {
-      setMessage("Limite non valido: 0–100.000 € e massimo output tra 256 e 32.768 token."); return;
+      setMessage("Limiti non validi: soglia libro/sessione 0,01–100.000 €, massimo output 256–32.768 token."); return;
     }
     setBusy(true);
     try {
@@ -115,6 +127,16 @@ export function AiBudgetPanel({
           min="256" max="32768" step="1" value={outputMax} onChange={e => setOutputMax(e.target.value)}/>
       </label>
     </div>
+    <label className="mt-3 block text-sm font-semibold">Limite aggiuntivo per sessione AI (€), facoltativo
+      <input aria-label="Limite sessione AI in euro" className="field mt-1" type="number"
+        min="0.01" max="100000" step="0.01" placeholder="Nessun limite per sessione"
+        value={sessionLimit} onChange={e => setSessionLimit(e.target.value)}/>
+      <span className="muted mt-1 block text-xs font-normal">
+        Si applica a ogni Avvia/Riprendi e alle singole bozze AI di fusione; al nuovo
+        avvio il limite di sessione riparte, ma il budget globale del libro non si azzera.
+        Lascia vuoto per usare soltanto il budget del libro.
+      </span>
+    </label>
     <label className="mt-3 flex items-start gap-2 text-sm">
       <input aria-label="Attiva limite stimato" className="mt-1" type="checkbox"
         checked={enabled} onChange={e => setEnabled(e.target.checked)}/>
@@ -135,6 +157,20 @@ export function AiBudgetPanel({
         stima ricalcolata con il listino corrente. Le nuove chiamate conservano
         la tariffa valida al momento della richiesta.
       </p>}
+    </div>}
+    {sessionBudget && <div className="mt-3 space-y-1 rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
+      <p><b>Limite stimato per sessione:</b> {money(sessionBudget.sessionLimitEur!)}</p>
+      {sessionAccounting ? <>
+        <p><b>Ultima sessione AI registrata:</b> {money(sessionAccounting.estimatedSpentEur)} di stima nota ·
+          {" "}{sessionAccounting.countedCalls} tentativi.</p>
+        {sessionAccounting.incompleteCount + sessionAccounting.unpricedCount > 0 &&
+          <p role="note" className="text-xs text-amber-700 dark:text-amber-300">
+            {sessionAccounting.incompleteCount} tentativi senza usage completo ·
+            {" "}{sessionAccounting.unpricedCount} senza tariffa valida. Non sono costi zero.
+          </p>}
+      </> : <p className="muted text-xs">Nessun tentativo AI nel periodo del libro.</p>}
+      <p className="muted text-xs">Sessione = un singolo Avvia/Riprendi (oppure una bozza AI di fusione).
+        Non è un tetto garantito alla fattura e non è condiviso tra dispositivi.</p>
     </div>}
     <div className="mt-4 space-y-2 border-t border-slate-300 pt-3 dark:border-slate-700">
       <h3 className="text-sm font-semibold">Esporta il registro dei consumi</h3>

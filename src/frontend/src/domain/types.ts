@@ -47,6 +47,8 @@ export interface BookAiBudget {
   enabledAt: string;
   /** Requests max_tokens; actual provider behavior and charges can differ. */
   maxOutputTokens: number;
+  /** Optional estimated EUR ceiling for one runId (one Avvia/Riprendi invocation). */
+  sessionLimitEur?: number;
 }
 export interface GitHubRemote {
   owner: string;

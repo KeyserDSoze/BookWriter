@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #130 (epic #17/#6)
+
+**Limite preventivo stimato per singola sessione AI**
+
+- La Dashboard permette di configurare `Limite aggiuntivo per sessione AI (€)`: per ogni Avvia/Riprendi, il runner controlla la spesa stimata dei tentativi del medesimo `runId` e riserva input/output prima di chiamare il provider. Se raggiunge la soglia, ferma il task prima dell'invio anche quando il limite globale del libro ha ancora margine; una ripresa crea un nuovo `runId`, ma **non azzera la spesa globale né i consumi ignoti**.
+- Le bozze AI di fusione scena hanno un runId unico fra preflight e Activity (una bozza = una sessione di una chiamata). Conteggi e prezzi riutilizzano l'accountant del budget: snapshot tariffa validi, listino legacy dichiarato, nessun uso incerto contato come zero. Nessuna prenotazione remota o fattura ufficiale attribuita.
+- Backup ZIP content/full conserva il campo opzionale positivo/finito e rifiuta valori importati invalidi; vecchi libri senza campo rimangono compatibili. Vitest, backup test e Playwright desktop/mobile. [ADR 0120](../ADR/0120-session-ai-budget.md), [guida](ai-budget.md), #130. Versione npm ancora **0.11.84**, prossima release numerica separata.
+
 ## 0.11.84 — 2026-11-11 (main, issue #128, epic #17/#6)
 
 **Storico locale dei costi AI per ogni task nella Dashboard**

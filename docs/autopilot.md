@@ -136,3 +136,8 @@ La riconciliazione **esplicita dell'autore**, distinta dal push del writer AI, p
 ## v0.11.56 — riconciliazione separata dal writer anche con merge Git
 
 La verifica **manuale** di un `ManualPushIntent` sospeso può attraversare un DAG bounded di massimo 32 commit Git (inclusi merge con due parent), prima di riconoscere il commit originario e il suo marker allo SHA corretto. Non crea nuove chiamate LLM, non esegue push o merge di canone, non sblocca outbox; acquisisce i Web Locks writer/outbox e applica CAS `books+meta` come nelle versioni precedenti. Il push automatico continua a usare solo HEAD esatta per l'ACK. [ADR 0088](../ADR/0088-bounded-merge-history-manual-reconciliation.md), [issue #92](https://github.com/KeyserDSoze/BookWriter/issues/92).
+
+
+## Plafond di sessione stimato — issue #130
+
+Con budget del libro attivo, un limite facoltativo per sessione può fermare il ciclo corrente **prima della prossima chiamata AI** anche se la soglia complessiva ha ancora margine. Una sessione è il singolo `runId` creato a ogni Avvia/Riprendi; la ripresa assegna un nuovo ID, **senza cancellare** il costo globale o i consumi incerti del libro. Una bozza AI di fusione scena è una sessione autonoma di una richiesta, sempre sotto il limite globale. Nessun tetto contrattuale remoto o prenotazione fra dispositivi è garantito. [Guida budget](ai-budget.md) · [ADR 0120](../ADR/0120-session-ai-budget.md).

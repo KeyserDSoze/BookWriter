@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Budget AI per run/sessione — issue #130, ADR 0120, epic #17
+
+- `BookAiBudget.sessionLimitEur?` è un limite locale **stimato** opzionale (0,01–100.000 €), efficace solo con budget libro attivo. Ogni Avvia/Riprendi assegna un `runId` diverso a tutte le Activity del suo ciclo; ogni bozza AI di fusione usa lo stesso runId in preflight e Activity. Riprendere azzera soltanto la sessione, **mai** il totale del libro.
+- Il preflight verifica **entrambi** i limiti con la stessa riserva di input+output, `accountSessionAiBudget` filtra `bookId`/`runId`/`enabledAt` e non scambia uso incompleto, missing o `running` per zero. Se `runId` manca col cap attivo, interrompere senza contattare il provider. Il writer guard/lease resta obbligatorio, nessuna prenotazione finanziaria distribuita né saldi provider inventati.
+- Il pannello mostra cap e ultima sessione osservata; ZIP content/full valida il campo opzionale ma conserva gli archivi legacy. Test Vitest/Playwright desktop-mobile/backup; versione npm **0.11.84 invariata** fino a release ufficiale con lockfile npm. [ADR](ADR/0120-session-ai-budget.md) · [Guida](docs/ai-budget.md).
+
 ### Release 0.11.84 — issue #129, storico dei costi per task #128
 
 - Nuova versione `src/frontend/package.json` e `package-lock.json` **0.11.84**, generata soltanto con npm 10/Node 22 dal registro npm ufficiale e riproduzione read-only temporanea. Conservare dipendenze, `resolved` HTTPS e checksum `integrity`; verifica con due `npm ci` puliti e due suite TypeScript, Vitest, smoke e build. **Mai** modificare manualmente il lockfile.

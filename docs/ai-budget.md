@@ -12,6 +12,14 @@ La redazione multi-agente usa almeno **12 chiamate per segmento**, oltre a giudi
 
 La protezione si applica anche alle proposte AI facoltative di fusione delle scene. Le fusioni manuali e le operazioni locali non richiedono credito AI.
 
+## Limite aggiuntivo per singola sessione AI — issue #130
+
+Nella Dashboard, oltre alla soglia globale per libro, puoi configurare il **Limite aggiuntivo per sessione AI (€)**, facoltativo (0,01–100.000 €). Lascia il campo vuoto per utilizzare soltanto il budget del libro. Quando è abilitato, per ogni richiesta il runner somma le stime dei tentativi del `runId` corrente e riserva il massimo stimato di input/output: se raggiunge il limite di sessione, la nuova chiamata **non viene inviata**, anche con plafond globale ancora disponibile.
+
+Una **sessione** coincide con un solo **Avvia/Riprendi**; tutti i task di quell'esecuzione condividono l'ID. Una ripresa crea una **nuova sessione**, quindi la stima di quella sessione ricomincia da zero, **ma i costi già osservati e i tentativi senza usage continuano a pesare sul budget del libro**. Una richiesta AI per fondere scene è una sessione autonoma di una singola bozza; le fusioni manuali non hanno un costo AI.
+
+Il pannello mostra anche la **ultima sessione AI registrata nel periodo**, distinta dalla spesa globale del libro, con avviso su usage e tariffe ignote. Non è necessariamente la sessione attiva in questo istante. Le fatture, i saldi e i limiti provider non sono noti; il plafond non è transazionale né condiviso fra dispositivi. Il campo è conservato nei backup ZIP content/full, ma solo il full include le tariffe globali. [ADR 0120](../ADR/0120-session-ai-budget.md).
+
 ## Storico dei costi per ogni task — issue #128
 
 Sotto **Esporta ledger CSV** puoi consultare lo **storico locale dei tentativi AI** anche con budget non attivo. Il pannello mostra i task dal più recente, i token input/output dichiarati, l'origine del listino manuale e la **stima** quando calcolabile. Con **Solo tentativi senza stima** trovi uso mancante, `running` e tariffe non valide: non sono costi zero. Le prime dieci righe si possono estendere con un pulsante; per tutte le righe resta il CSV. Nessuna fattura provider è letta automaticamente. [Guida](ai-cost-history.md) · [ADR 0119](../ADR/0119-task-ai-cost-history.md).
