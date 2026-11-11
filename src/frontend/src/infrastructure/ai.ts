@@ -4,6 +4,7 @@ import { decryptLocal } from "./crypto";
 import { validTokenCount } from "../domain/ai-usage";
 import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
+import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
 
 export type ModelAnswer = {
   text: string;
@@ -70,7 +71,7 @@ export async function callModel(
 
   let response: Response;
   try {
-    response = await fetch(`${base}/chat/completions`, {
+    response = await fetchChatCompletionHeaders(`${base}/chat/completions`, {
       method: "POST",
       mode: "cors",
       redirect: "error",
@@ -83,10 +84,12 @@ export async function callModel(
         messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
         ...(options?.maxOutputTokens ? { max_tokens: options.maxOutputTokens } : {}),
       }),
-      signal,
-    });
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+    }, signal, endpoint.headerTimeoutSeconds);
   } catch (e) {
     if (signal.aborted) throw new DOMException("Interrotto", "AbortError");
+    if (e instanceof ProviderHeaderTimeoutError) throw e;
     throw new Error("Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.");
   }
   if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
