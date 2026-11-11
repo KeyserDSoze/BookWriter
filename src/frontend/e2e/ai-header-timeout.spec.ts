@@ -76,9 +76,6 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
   await budget.getByRole("button",{name:"Salva tariffa del modello"}).click();
   await expect(budget.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await budget.getByRole("spinbutton",{name:"Soglia budget in euro"}).fill("5");
-  await budget.getByRole("checkbox",{name:"Attiva limite stimato"}).check();
-  await budget.getByRole("button",{name:"Salva budget del libro"}).click();
-  await expect(budget.getByText(/Budget stimato attivo/)).toBeVisible();
 
   const state=()=>page.evaluate(()=>new Promise<{
     status:string;error?:string;reports:number;scene:string;frozen:boolean;
@@ -113,6 +110,11 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
   await expect.poll(async()=>(await state()).status,{timeout:15_000}).toBe("paused");
   expect((await state()).activities[0]!.status).toBe("cancelled");
   expect(await page.evaluate(()=>(window as HeaderMockWindow).headerMockCalls)).toBe(1);
+  // This author opt-in starts the budget period AFTER the cancelled attempt.
+  // We never permit a retry past an active guard with unknown usage.
+  await budget.getByRole("checkbox",{name:"Attiva limite stimato"}).check();
+  await budget.getByRole("button",{name:"Salva budget del libro"}).click();
+  await expect(budget.getByText(/Budget stimato attivo/)).toBeVisible();
   await page.evaluate(()=>(window as HeaderMockWindow).fastHeaderDeadline=true);
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect.poll(async()=>(await state()).status,{timeout:30_000}).toBe("error");
