@@ -125,7 +125,12 @@ export async function readChatCompletionJson(
     if (!complete) {
       // Do not await cancel(): the remote stream may ignore cancellation.
       // The rejection/timeout must be observable even in that situation.
-      void reader.cancel().catch(() => { /* network may already be aborted */ });
+      try {
+        void reader.cancel().catch(() => { /* network may already be aborted */ });
+      } catch {
+        // Non-compliant readers can throw synchronously: keep the original
+        // AbortError, timeout or validation failure instead of masking it.
+      }
     }
     try { reader.releaseLock(); } catch { /* pending read is being cancelled */ }
   }
