@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release v0.11.86 — issue #133, avvisi budget #132 e CI Chromium #134
+
+- `src/frontend/package.json` e `package-lock.json` sono portati a **0.11.86** solamente con Node 22/npm 10 e il registro npm ufficiale, senza editing manuale o variazioni nascoste di `resolved`, `integrity` o dipendenze. Il runner temporaneo read-only `.github/workflows/npm-release-reproduce-133.yml` verifica **due `npm ci` puliti**, ciascuno con TypeScript, Vitest, smoke e build, e produce i file esatti da ricostruire con checksum.
+- Il workflow temporaneo deve essere **eliminato nel medesimo commit atomico** di manifest, lockfile e documentazione. La CI definitiva deve usare `npx playwright install --only-shell chromium` e completare Playwright Chromium desktop/mobile, EPUBCheck su quattro EPUB, Pages e cleanup `completed/success` sulla **stessa HEAD** prima di chiudere #133. Nessuna PR, branch aggiuntivo o force push.
+- Gli avvisi dell'80% (#132) rimangono informativi; il budget per sessione e del libro non sono addebiti finanziari verificati né prenotazioni transazionali multi-device. I test e la protezione per usage ignoto sono invariati. [ADR 0121](ADR/0121-early-ai-budget-headroom-warnings.md) · [CI headless](docs/ci-playwright-headless-shell.md) · [runbook](docs/npm-lockfile-releases.md).
+
 ### CI Chromium headless senza dipendenze apt — #134, per #132
 
 - Su runner GitHub-hosted `ubuntu-latest`, la CI deve eseguire `npx playwright install --only-shell chromium` (Playwright vincolato da npm lockfile) e **tutti i test** `desktop-chromium` e `mobile-chromium`. Evitare `--with-deps` sul runner standard: invoca `apt` e il DNS degli archivi Ubuntu 26.04 è fallito su #43035024633, impedendo di arrivare ai test E2E pur con 795 Vitest e build verdi.
@@ -14,7 +20,7 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 - Sia il periodo del libro sia l'**ultima sessione AI del solo libro** mostrano stato puro da `assessAiBudgetHeadroom` calcolato su `accountBookAiBudget`/`accountSessionAiBudget`. **Dall'80% incluso** del consumo stimato noto, mostrare un warning accessibile, distinto dallo stop alla soglia completa. Evitare un avviso per sessioni inesistenti o quando budget disattivato, isolare rigorosamente libro e `runId`.
 - Quando usage o tariffa di un tentativo AI sono incompleti/invalidi, il livello è `incerto`: **nascondere il margine stimato apparentemente disponibile**, e non affermare zero addebiti. Solo se complete, indicare `max(0, limite - spesa stimata da usage noto)` come margine stimato, non saldo provider, fattura, riserva per nuovo prompt o tetto multi-device.
-- L'80% è **solo informazione**: non modificare preflight, Activity, stato dell'autopilot, writer lease, canone, backup ZIP o numero versione. Test unitari confini 0/80/100/unknown e Playwright desktop/mobile su due sessioni, incremento dei limiti e isolamento dei libri. Lasciare npm `0.11.85` fino al successivo bump generato con npm ufficiale. [ADR 0121](ADR/0121-early-ai-budget-headroom-warnings.md), [guida](docs/ai-budget.md).
+- L'80% è **solo informazione**: non modificare preflight, Activity, stato dell'autopilot, writer lease, canone, backup ZIP o numero versione. Test unitari confini 0/80/100/unknown e Playwright desktop/mobile su due sessioni, incremento dei limiti e isolamento dei libri. La funzionalità è rilasciata in **0.11.86**; eventuali bump futuri devono essere generati con npm ufficiale, mai editando a mano il lockfile. [ADR 0121](ADR/0121-early-ai-budget-headroom-warnings.md), [guida](docs/ai-budget.md).
 
 ### Release v0.11.85 — issue #131, limite AI per sessione #130
 

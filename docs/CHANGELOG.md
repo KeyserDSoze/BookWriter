@@ -1,6 +1,6 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issue #132 (epic #17/#6)
+## 0.11.86 — 2026-11-11 (main, issues #132/#134, epic #17/#6)
 
 - **Hardening CI Playwright #134:** sui runner `ubuntu-latest` l'installazione di Chromium per i due progetti headless usa `npx playwright install --only-shell chromium`, senza `apt` che è fallito a causa del DNS degli archivi Ubuntu. La suite E2E **non viene disabilitata**; se il browser non si avvia la CI fallisce. Nessun cambio di dipendenze o versione npm. [Guida](ci-playwright-headless-shell.md).
 
@@ -9,7 +9,7 @@
 
 - Nel pannello Budget AI, la stima di uso osservato attiva un avviso informativo **dall'80%** della soglia del libro e separatamente del plafond dell'ultima sessione AI registrata, con stato di limite raggiunto dal 100%. Viene mostrato il `margine stimato noto` soltanto se tutti i tentativi potenzialmente fatturabili del periodo hanno usage e tariffa completi e validi.
 - Consumo **incerto** (usage incompleto/in corso o tariffa invalida) prevale sugli avvisi percentuali e **nasconde il margine apparente**; nessun saldo finanziario o fattura provider inventati. I warning **non cambiano** preflight, writer guard, Activity, periodo, canon o riserve per la prossima chiamata. Budget disattivato e libro senza sessione non mostrano avvisi.
-- Nuovi Vitest su soglie e priorità dell'incertezza e Playwright desktop/mobile su 80% libro/sessione, cambio consapevole dei limiti, usage ignoto e isolamento dei libri. [ADR 0121](../ADR/0121-early-ai-budget-headroom-warnings.md) · [guida](ai-budget.md) · #132. **Versione npm ancora 0.11.85**; release numerica successiva separata.
+- Nuovi Vitest su soglie e priorità dell'incertezza e Playwright desktop/mobile su 80% libro/sessione, cambio consapevole dei limiti, usage ignoto e isolamento dei libri. [ADR 0121](../ADR/0121-early-ai-budget-headroom-warnings.md) · [guida](ai-budget.md) · #132. **Incluso nella release npm 0.11.86** (#133), con manifest e lockfile generati tramite npm, due installazioni pulite e CI/Pages/cleanup sulla stessa HEAD.
 
 ## 0.11.85 — 2026-11-11 (main, issue #130, epic #17/#6)
 

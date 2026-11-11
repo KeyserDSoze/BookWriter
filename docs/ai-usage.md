@@ -77,3 +77,8 @@ Per le richieste nuove con listino manuale valido, il prezzo di input/output per
 ## v0.11.78 — parti provider non testuali o malformate
 
 HTTP 200 può includere `usage` valido ma un array `choices[0].message.content` con `null`, immagini, numeri o oggetti non testuali. BookWriter **rifiuta tutto il contenuto** senza coercizioni o approvazioni parziali, ma conserva i token sanitizzati riportati dal provider nell'Activity fallita; le tariffe pre-fetch rimangono valide e i token mancanti restano incerti. [Guida](ai-provider-content-validation.md) · [ADR 0110](../ADR/0110-provider-mixed-content-rejection-usage.md).
+
+
+## Rilascio degli avvisi preventivi — v0.11.86, issues #132/#133
+
+Le notifiche budget all'80% del consumo stimato conosciuto, separate fra libro e ultimo `runId`, sono incluse in BookWriter **0.11.86**. L'uso incerto sopprime il margine apparentemente spendibile e il warning non cancella né riavvia il budget, non sospende automaticamente la richiesta e non misura il saldo remoto. [ADR 0121](../ADR/0121-early-ai-budget-headroom-warnings.md) · [guida budget](ai-budget.md).

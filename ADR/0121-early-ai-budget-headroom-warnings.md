@@ -1,6 +1,6 @@
 # ADR 0121 — Avvisi anticipati sul margine stimato del budget AI locale
 
-- **Stato:** implementato su `main`, non ancora in release npm numerica successiva a 0.11.85
+- **Stato:** accettato, incluso nella release npm v0.11.86 (#133) su `main`
 - **Data:** 2026-11-11
 - **Issue:** [#132](https://github.com/KeyserDSoze/BookWriter/issues/132); epic [#17](https://github.com/KeyserDSoze/BookWriter/issues/17) e [#6](https://github.com/KeyserDSoze/BookWriter/issues/6)
 - **Predecessori:** [ADR 0012](0012-book-ai-budget-guardrails.md), [ADR 0108](0108-price-snapshot-ai-budget.md), [ADR 0118](0118-local-ai-cost-ledger-csv.md), [ADR 0120](0120-session-ai-budget.md)
@@ -22,4 +22,4 @@ Il guard preventivo verifica la riserva stimata per ogni chiamata AI e blocca il
 - Vitest sui confini 0%, appena sotto 80%, esattamente 80%, 100% e oltre; priorità dell'incertezza, input non finiti e isolamento del runId/libro/periodo.
 - Playwright Chromium desktop/mobile: due sessioni con tariffe storiche sintetiche, avvisi libro+sessione, aggiornamento della soglia senza azzerare i dati, nuova attività senza usage, cambio libro, assenza di overflow.
 - Non può prevedere l'importo della **prossima** chiamata perché la Dashboard non conosce ancora il prompt reale: il warning mostra soltanto il consumo già osservato; può rimanere assente anche se la prossima riserva farà scattare lo stop. Né il warning né il budget garantiscono un tetto finanziario remoto o una prenotazione cross-device.
-- Nessuna nuova dipendenza, campo ZIP, persistenza o API. CI, Pages, cleanup ed EPUBCheck da verificare sulla medesima HEAD prima di chiudere #132; numero npm 0.11.85 invariato fino a una release separata.
+- Nessuna nuova dipendenza, campo ZIP, persistenza o API. CI, Pages, cleanup ed EPUBCheck da verificare sulla medesima HEAD prima di chiudere #132; release npm 0.11.86 consolidata separatamente nella issue #133.

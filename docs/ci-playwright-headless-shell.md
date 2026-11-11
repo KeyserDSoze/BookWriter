@@ -24,3 +24,8 @@ npm run test:e2e
 - Resta necessario verificare **Frontend CI**, il job EPUBCheck sui quattro EPUB reali sintetici, **Pages** e **cleanup** tutti `completed/success` sulla stessa SHA finale prima di chiudere #134 e #132.
 
 [Issue #134](https://github.com/KeyserDSoze/BookWriter/issues/134) · [Runbook npm](npm-lockfile-releases.md) · [Issue #132](https://github.com/KeyserDSoze/BookWriter/issues/132).
+
+
+## Conferma nella release 0.11.86 — issue #133
+
+La release consolida l'installazione `npx playwright install --only-shell chromium` già verificata dalla [CI #43037369721](https://github.com/KeyserDSoze/BookWriter/actions/runs/43037369721), con **146 test Playwright desktop/mobile realmente eseguiti** e EPUBCheck verde. Il cambio di versione npm **non** riporta `--with-deps` o la necessità di `apt`; la verifica definitiva della release #133 richiede nuovamente CI completa, Pages e cleanup sulla stessa SHA. [Runbook](npm-lockfile-releases.md).
