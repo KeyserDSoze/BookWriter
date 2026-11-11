@@ -6,6 +6,7 @@ const { modelCall, writerGuard } = vi.hoisted(() => ({ modelCall: vi.fn(), write
 vi.mock("../infrastructure/ai", () => ({ callModel: modelCall }));
 vi.mock("./writer-guard", () => ({ withWriterGuard: writerGuard }));
 import { createEditorialCycle } from "../domain/editorial-board";
+import type { ChapterHistoricalDossier } from "../domain/historical-research";
 import { AutopilotRunner } from "./autopilot";
 
 function book(): BookProject {
@@ -24,6 +25,17 @@ const report=(issues=false) => JSON.stringify({
     evidence:"Mara saluta il guardiano",
     reason:"Il guardiano non ha una ragione credibile per aprire la porta.",
     remediation:"Inserire una motivazione plausibile nel dialogo della scena."}]:[],
+});
+const historicalDossier=():ChapterHistoricalDossier=>({
+  queries:["Telegrafo elettrico nel 1848"],
+  sources:[{
+    id:"itwiki:42:210",provider:"it.wikipedia.org",pageId:42,revisionId:210,
+    title:"Telegrafo",url:"https://it.wikipedia.org/wiki/Telegrafo",
+    excerpt:"La cronaca originale racconta il telegrafo in una città nel 1848.",
+    query:"Telegrafo elettrico nel 1848",retrievedAt:"2026-11-11T18:00:00.000Z",
+  }],
+  activeSourceIds:["itwiki:42:210"],searchedAt:"2026-11-11T18:00:00.000Z",
+  unansweredQueries:[],
 });
 const judgment=(accept:boolean, round=1) => JSON.stringify({
   reasoning:"Il direttore ha valutato le dodici letture e la fondatezza di ciascun rilievo della redazione.",
@@ -141,6 +153,79 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(tasks.filter(x=>x==="chapterRepair")).toHaveLength(1);
     expect(tasks.filter(x=>x==="consolidate")).toHaveLength(1);
   });
+  it("scarta il report dello storico quando un restore cambia l'estratto senza cambiare updatedAt",async()=>{
+    const source=book();
+    source.phase="chapterReview";
+    source.editorialCycle=createEditorialCycle("ch-1");
+    source.chapters[0]!.historicalDossier=historicalDossier();
+    await saveBook(source,false);
+    modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
+      if(prompt.includes("FONTI STORICHE ESPLICITAMENTE RICERCATE DALL'AUTORE")){
+        expect(kind).toBe("chapterAudit");
+        expect(prompt).toContain("cronaca originale");
+        const changed=(await getBook(source.id))!;
+        const timestamp=changed.updatedAt;
+        changed.chapters[0]!.historicalDossier!.sources[0]!.excerpt=
+          "NUOVO ESTRATTO RISERVATO: la fonte ora descrive un'altra epoca.";
+        await (await getDb()).put("books",changed,changed.id);
+        expect((await getBook(source.id))!.updatedAt).toBe(timestamp);
+      }
+      return {text:report(false),endpointId:"test",modelId:"Storico",
+        inputTokens:72,outputTokens:25};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const saved=(await getBook(source.id))!;
+    expect(modelCall).toHaveBeenCalledTimes(4);
+    expect(saved.status).toBe("error");
+    expect(saved.previousError).toMatch(/Fonti storiche cambiate/);
+    expect(saved.previousError).not.toContain("NUOVO ESTRATTO RISERVATO");
+    expect(saved.chapters[0]!.historicalDossier!.sources[0]!.excerpt)
+      .toContain("NUOVO ESTRATTO RISERVATO");
+    expect(saved.editorialCycle).toMatchObject({stage:"review"});
+    expect(saved.editorialCycle!.reports).toHaveLength(3);
+    expect(saved.chapters[0]!.frozenAt).toBeUndefined();
+    const attempts=(await listActivities(source.id)).filter(a=>a.aiRequested);
+    expect(attempts).toHaveLength(4);
+    expect(attempts.at(-1)).toMatchObject({status:"failed",
+      inputTokens:72,outputTokens:25});
+  });
+
+  it("scarta il giudizio se cambia il dossier dopo le 12 review senza bump updatedAt",async()=>{
+    const source=book();
+    source.phase="chapterReview";
+    source.editorialCycle=createEditorialCycle("ch-1");
+    source.chapters[0]!.historicalDossier=historicalDossier();
+    await saveBook(source,false);
+    modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
+      if(kind==="chapterJudge"){
+        expect(prompt).toContain("cronaca originale");
+        const changed=(await getBook(source.id))!;
+        const timestamp=changed.updatedAt;
+        changed.chapters[0]!.historicalDossier!.activeSourceIds=[];
+        await (await getDb()).put("books",changed,changed.id);
+        expect((await getBook(source.id))!.updatedAt).toBe(timestamp);
+        return {text:judgment(false),endpointId:"test",modelId:"Giudice",
+          inputTokens:144,outputTokens:45};
+      }
+      return {text:report(false),endpointId:"test",modelId:"Revisore",
+        inputTokens:62,outputTokens:18};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const saved=(await getBook(source.id))!;
+    expect(modelCall).toHaveBeenCalledTimes(13);
+    expect(saved.status).toBe("error");
+    expect(saved.previousError).toMatch(/Fonti storiche cambiate/);
+    expect(saved.chapters[0]!.historicalDossier!.activeSourceIds).toEqual([]);
+    expect(saved.editorialCycle).toMatchObject({stage:"adjudicate"});
+    expect(saved.editorialCycle!.reports).toHaveLength(12);
+    expect(saved.editorialCycle!.judgment).toBeUndefined();
+    expect(saved.chapters[0]!.frozenAt).toBeUndefined();
+    const attempts=(await listActivities(source.id)).filter(a=>a.aiRequested);
+    expect(attempts).toHaveLength(13);
+    expect(attempts.at(-1)).toMatchObject({status:"failed",
+      inputTokens:144,outputTokens:45});
+  });
+
   it("non sovrascrive il canone se la memoria cambia durante reconcile senza bump updatedAt",async()=>{
     const source=book();
     source.phase="chapterReview";
