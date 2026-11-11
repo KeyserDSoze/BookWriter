@@ -57,6 +57,7 @@ jobs:
           }
           console.log("BOOKWRITER136|VERIFIED|version=0.11.87;tree=unchanged;registry=official;packages="+Object.keys(lock.packages).length);
           NODE
+          sha256sum package.json > "$RUNNER_TEMP/npm136-package.sha256"
           sha256sum package-lock.json > "$RUNNER_TEMP/npm136-lock.sha256"
           git diff --stat -- package.json package-lock.json
           git diff -- package.json package-lock.json | head -n 60
@@ -77,6 +78,7 @@ jobs:
           set -euo pipefail
           rm -rf node_modules
           npm ci --no-audit --no-fund --registry=https://registry.npmjs.org
+          sha256sum --check "$RUNNER_TEMP/npm136-package.sha256"
           sha256sum --check "$RUNNER_TEMP/npm136-lock.sha256"
           npm run typecheck
           npm run test
@@ -87,11 +89,16 @@ jobs:
           set -euo pipefail
           rm -rf node_modules
           npm ci --no-audit --no-fund --registry=https://registry.npmjs.org
+          sha256sum --check "$RUNNER_TEMP/npm136-package.sha256"
           sha256sum --check "$RUNNER_TEMP/npm136-lock.sha256"
           npm run typecheck
           npm run test
           npm run smoke
           npm run build
+      - name: Assert both generated files unchanged after two clean installs
+        run: |
+          sha256sum --check "$RUNNER_TEMP/npm136-package.sha256"
+          sha256sum --check "$RUNNER_TEMP/npm136-lock.sha256"
       - name: Emit exact npm-generated package files as indexed hashed chunks
         run: |
           set -euo pipefail
