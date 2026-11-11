@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #146 (epic #6)
+
+**LM Studio/localhost senza API key — #146**
+
+- Opzione esplicita `authMode: none` per soli hostname letterali `localhost` e `127.0.0.1`, senza Authorization su `GET /models` e `POST /chat/completions`. Profilo legacy `api_key` invariato; host remoti o valori corrotti bloccati prima della rete.
+- Salvataggio IndexedDB senza cifrare la vecchia chiave (rimossa), backup ZIP full preserva la scelta, ZIP content resta senza endpoint; import full rifiuta autenticazione incoerente o remota e accetta legacy. Test Vitest e Playwright mock. [ADR 0127](../ADR/0127-local-ai-unauthenticated-loopback.md) · [guida](ai-local-endpoints.md). **Versione npm 0.11.89 invariata**; CI/prova con LM Studio reale da verificare.
+
 ## Non rilasciato — issue #144 (epic #23/#20)
 
 **Rifiuto di risposte AI basate su dossier storici cambiati — #144**

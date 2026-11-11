@@ -6,6 +6,8 @@
 
 ## Funzionalità disponibili
 
+- **LM Studio e modelli locali senza API key (#146, non ancora in release npm):** in Impostazioni → Endpoint OpenAI-compatible si può scegliere «Nessuna autenticazione (solo localhost)» e usare `http://localhost:1234/v1`. Le chiamate `/models` e `/chat/completions` omettono Authorization. [Guida](docs/ai-local-endpoints.md) · [ADR 0127](ADR/0127-local-ai-unauthenticated-loopback.md).
+
 - **Fact-check storico resistente a restore concorrenti (#144, non ancora in release npm):** il revisore storico e il giudice possono approvare la propria risposta AI solo se il dossier delle fonti del capitolo è ancora identico a quello letto nel prompt, anche senza variazione del timestamp. [Guida](docs/editorial-historical-source-freshness.md) · [ADR 0126](ADR/0126-historical-dossier-prompt-freshness.md).
 
 - **Release npm v0.11.89 (#143):** consolida il CAS atomico dell'autopilot (#142). File npm generati con [runner #43079099716](https://github.com/KeyserDSoze/BookWriter/actions/runs/43079099716), due `npm ci` e **826 Vitest per ciclo**, typecheck, smoke e build riusciti; lockfile senza aggiornamenti transitivi. CI/Pages/cleanup sulla HEAD finale da verificare.

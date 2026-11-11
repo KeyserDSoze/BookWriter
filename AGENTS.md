@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Endpoint AI locali senza API key — issue #146 / ADR 0127
+
+- `EndpointProfile.authMode?` è `api_key` (legacy/default) o `none`; `none` solo per hostname letterali `localhost` e `127.0.0.1` dopo `normalizeEndpoint`. Il nome LM Studio, la chiave vuota o DNS alias non attivano automaticamente no-auth.
+- `callModel` e `fetchModels` senza chiave omettono `Authorization` e non decifrano il vault; le route con `api_key` richiedono Bearer. Verificare URL/modo nel Save prima della cifratura, nel runtime prima della rete e nello ZIP full prima dell'import; la modalità none cancella il segreto precedentemente persistito.
+- SPA local-first senza proxy: CORS configurato nel server locale, browser su altro dispositivo non raggiunge il PC tramite localhost. Non esporre LM Studio no-auth sulla LAN, no retry o modifica a gate/usage. Test unitari, backup full/content/legacy, Playwright desktop/mobile; nessun bump manuale npm. [Guida](docs/ai-local-endpoints.md) · [ADR 0127](ADR/0127-local-ai-unauthenticated-loopback.md).
+
+
 ### Dossier storico esatto durante le chiamate AI — issue #144 / ADR 0126
 
 - Nella redazione, il **revisore storico e il giudice** devono catturare prima del prompt una snapshot effimera dell'intero `historicalDossier` del capitolo, insieme a fase/stage/round/prefisso report. `assertCurrentHistoricalPromptDossier` confronta i dati con il libro live **prima** di accettare report o verdetto anche quando un restore conserva `updatedAt`. Non inviare questo snapshot agli altri undici revisori e non salvarlo in Activity, backup o outbox.

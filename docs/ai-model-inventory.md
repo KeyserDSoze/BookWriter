@@ -1,6 +1,6 @@
 # Catalogo modelli AI — lettura controllata (issue #118)
 
-Nelle **Impostazioni → Router dei modelli**, il pulsante di ricerca consulta `GET /models` dell'endpoint OpenAI-compatible configurato. La chiamata richiede una chiave inserita dall'autore ed è **soltanto un aiuto alla scelta**: non avvia scrittura o revisione, non consulta canone/segreti e non conferma che il modello sarà accessibile o fatturato al prezzo inserito.
+Nelle **Impostazioni → Router dei modelli**, il pulsante di ricerca consulta `GET /models` dell'endpoint OpenAI-compatible configurato. La chiamata richiede una chiave sugli endpoint standard; i profili localhost possono utilizzare la modalità esplicita «Nessuna autenticazione» ed è **soltanto un aiuto alla scelta**: non avvia scrittura o revisione, non consulta canone/segreti e non conferma che il modello sarà accessibile o fatturato al prezzo inserito.
 
 Il browser usa lo schema `https://` (HTTP ammesso soltanto su localhost), nessun cookie o referrer, `redirect: error`, una richiesta per azione e timeout **totale** di 12 secondi, inclusa la lettura del corpo dopo gli header. Se un provider non termina il fetch iniziale o lascia lo stream aperto dopo gli header, la ricerca termina anche se l'operazione non rispetta l'abort; una risposta tardiva viene scartata e lo stream cancellato best-effort senza attendere la rete. Non riporta nel messaggio di errore il corpo del provider né la chiave. Su HTTP non riuscito scarta il corpo senza leggerlo, cancellando lo stream best-effort senza nascondere il codice di errore. Il JSON è letto in streaming fino a **256.000 byte**, con controllo separato del `Content-Length` (che può essere falso); senza streaming limitabile la risposta viene rifiutata. Anche quando MIME o `Content-Length` sono invalidi **prima di iniziare a leggere**, BookWriter tenta di cancellare il corpo senza visualizzarlo; un body già bloccato viene rifiutato con un errore generico invece di divulgare dettagli di implementazione.
 
@@ -23,6 +23,8 @@ Due ricerche contemporanee sul medesimo endpoint sono autorizzate soltanto in or
 Il pulsante **Salva impostazioni** cifra localmente le nuove chiavi tramite Web Crypto. Se nel frattempo modifichi URL, nome, modelli, router, chiave draft oppure rimuovi un endpoint, il salvataggio basato sulla vecchia configurazione viene rifiutato; i campi che stai modificando restano intatti e un messaggio invita a verificare la scelta e premere di nuovo **Salva impostazioni**. Anche un doppio click è protetto: solo la richiesta più recente può completare l'aggiornamento UI.
 
 Questa è una garanzia **intra-tab**. Una transazione IndexedDB già inviata non può essere cancellata retroattivamente: gli edit successivi sono volutamente non salvati finché l'autore non ripete il salvataggio. Non vengono inviate chiavi ad altri servizi, non si avvia l'autopilot né si introduce un vault E2EE. [ADR 0114](../ADR/0114-endpoint-settings-save-fencing.md) · [issue #121](https://github.com/KeyserDSoze/BookWriter/issues/121).
+
+Per il server locale LM Studio consulta [Modelli locali senza API key](ai-local-endpoints.md). No-auth non è ammesso per URL remoti e omette l'header Authorization; la preferenza è salvata in IndexedDB e nel backup ZIP full.
 
 ## Release npm
 
