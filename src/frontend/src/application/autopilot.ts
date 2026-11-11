@@ -5,7 +5,7 @@ import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
@@ -295,35 +295,39 @@ function nextWork(book: BookProject): Work | null {
         };
       }
       if (cycle.stage === "reconcile") {
-        const segments = chapterSegments(chapter);
-        const index = cycle.reconcileCursor ?? 0;
-        const segment = segments[index];
-        if (!segment) throw new Error("Riconciliazione della memoria senza segmento.");
+        // Capture exactly the chapter and canon memory that the model reads.
+        // Imported or incomplete cursors must fail before the provider call.
+        const checkpoint = captureEditorialReconcileStep(book);
+        const segment = chapterSegments(chapter)[checkpoint.cursor]!;
         return {
           phase: "chapterReview", kind: "consolidate",
-          title: "Riconciliazione canone dopo remediation " + (index + 1) + "/" + segments.length,
+          title: "Riconciliazione canone dopo remediation " + (checkpoint.cursor + 1) +
+            "/" + checkpoint.segmentCount,
           reason: "Aggiornare timeline, segreti e personaggi dopo la modifica prima della nuova tornata di review.",
           nextStep: "Prossimo segmento di memoria oppure nuova votazione della redazione",
           prompt: [
             "Aggiorna il canone dopo una correzione editoriale. Mantieni i fatti precedenti ancora veri; non inventare.",
             "Rispondi SOLO JSON valido con campi characters,locations,factions,items,secrets,timeline,currentState.",
-            "MEMORIA PRECEDENTE: " + JSON.stringify(book.memory),
-            "SCENA " + segment.sceneId + ", SEGMENTO " + (index+1) + "/" + segments.length + ":\n" + segment.text,
+            "MEMORIA PRECEDENTE: " + checkpoint.memoryJson,
+            "SCENA " + segment.sceneId + ", SEGMENTO " + (checkpoint.cursor + 1) +
+              "/" + checkpoint.segmentCount + ":\n" + segment.text,
           ].join("\n\n"),
           apply: (b, text) => {
-            b.memory = memorySchema.parse(parseJson(text)) as NarrativeMemory;
-            const current = b.editorialCycle;
-            if (!current) throw new Error("Sessione mancante.");
-            current.reconcileCursor = (current.reconcileCursor ?? 0) + 1;
-            if (current.reconcileCursor >= segments.length) {
-              for (const scene of chapter.scenes) {
-                const updated = b.chapters.find(ch => ch.id === chapter.id)?.scenes.find(s => s.id === scene.id);
-                if (updated?.status === "draft") updated.status = "canon";
+            // The preflight/IndexedDB revision gate is not a substitute for
+            // validating the exact checkpoint used by this editorial agent.
+            const current = assertCurrentEditorialReconcileStep(b, checkpoint);
+            const memory = memorySchema.parse(parseJson(text)) as NarrativeMemory;
+            b.memory = memory;
+            current.cycle.reconcileCursor = checkpoint.cursor + 1;
+            if (current.cycle.reconcileCursor >= checkpoint.segmentCount) {
+              // Never re-use a scene object captured before the AI request.
+              for (const scene of current.chapter.scenes) {
+                if (scene.status === "draft") scene.status = "canon";
               }
-              beginNextRound(current);
-              if (current.stage === "blocked") {
+              beginNextRound(current.cycle);
+              if (current.cycle.stage === "blocked") {
                 b.status = "paused";
-                b.previousError = current.blockedReason;
+                b.previousError = current.cycle.blockedReason;
               }
             }
           },
