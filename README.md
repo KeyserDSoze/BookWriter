@@ -6,7 +6,9 @@
 
 ## Funzionalità disponibili
 
-- **Riconciliazione canonica protetta dopo la remediation (#140, non ancora in release npm):** il risultato AI può aggiornare memoria, timeline e segreti soltanto se **capitolo, segmento, cursore, scene e memoria** coincidono ancora con quelli letti nel prompt. Nessuna applicazione parziale, retry o riscrittura del canone se la fonte è cambiata. [Guida](docs/editorial-board.md) · [ADR 0124](ADR/0124-editorial-reconcile-checkpoint-fence.md).
+- **Release npm v0.11.88 (#141):** include il gate di freschezza della riconciliazione editoriale (#140) con snapshot effimere e rifiuto dell'output stale. Manifest e lockfile generati da Node 22/npm 10 e registry ufficiale, senza modifiche a dipendenze transitive; [runner di riproduzione #43068203147](https://github.com/KeyserDSoze/BookWriter/actions/runs/43068203147) con due `npm ci` e **825 Vitest per ciclo**, smoke/typecheck/build verificati. La CI browser completa, Pages e cleanup della nuova HEAD di release devono ancora essere attestati.
+
+- **Riconciliazione canonica protetta dopo la remediation (#140, v0.11.88):** il risultato AI può aggiornare memoria, timeline e segreti soltanto se **capitolo, segmento, cursore, scene e memoria** coincidono ancora con quelli letti nel prompt. Nessuna applicazione parziale, retry o riscrittura del canone se la fonte è cambiata. [Guida](docs/editorial-board.md) · [ADR 0124](ADR/0124-editorial-reconcile-checkpoint-fence.md).
 
 - **Release v0.11.87 (#136):** comprende #135 (limite output per endpoint), #137 (diagnostica HTTP), #138 (cleanup JSON) e #139 (deadline totale e sicurezza di GET /models). File npm prodotti dal runner ufficiale con doppio `npm ci`; CI completa (818 Vitest, 148 Playwright desktop/mobile, EPUBCheck quattro EPUB), Pages e cleanup verificati sulla stessa HEAD `43ef48fa`.
 

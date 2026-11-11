@@ -1,6 +1,6 @@
-# Redazione multi-agente di BookWriter — v0.11.69
+# Redazione multi-agente di BookWriter — v0.11.88
 
-## Riconciliazione del canone dopo remediation: risposta legata al checkpoint (#140)
+## Riconciliazione del canone dopo remediation: risposta legata al checkpoint (#140, v0.11.88)
 
 Dopo che il direttore approva una remediation, l'agente incaricato della **riconciliazione della memoria narrativa** riceve un preciso segmento corretto e lo stato corrente del canone. BookWriter ora controlla **prima della chiamata AI e prima di applicare la risposta** che fase, capitolo, cursore e segmentazione siano ancora validi e che scene e memoria non siano cambiate rispetto al prompt.
 

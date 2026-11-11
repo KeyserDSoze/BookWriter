@@ -4,10 +4,15 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release npm v0.11.88 — issue #141, riconciliazione canone #140
+
+- Node 22/npm 10 e registry npm ufficiale: manifest e lockfile **0.11.88** prodotti e verificati con [runner #43068203147](https://github.com/KeyserDSoze/BookWriter/actions/runs/43068203147) `completed/success`: albero npm con **235 voci** e transitive `resolved`/`integrity` invariati, due `npm ci` puliti, entrambi seguiti da typecheck, **825 Vitest su 132 file**, 9 smoke e build. SHA-256 file npm e artifact verificati, nessun editing manuale del lockfile.
+- Rimuovere il workflow temporaneo `npm-release-reproduce-141.yml` nello **stesso commit atomico** su `main` con manifest, lockfile e documenti. Chiudere #141 solo se Frontend CI (Playwright Chromium desktop/mobile, EPUBCheck 5.4.0 su 4 EPUB), Pages e cleanup risultano `completed/success` tutti sulla **HEAD finale**; un run npm da solo non certifica deploy. Epic #20/#6 ancora aperte.
+
 ### Riconciliazione canone AI post-remediation — issue #140 / ADR 0124
 
 - Nel passaggio `chapterReview/reconcile`, il runner deve creare una snapshot effimera del **capitolo, cursore, segmento esatto, insieme delle scene e memoria narrativa** inviati al provider. `captureEditorialReconcileStep` rifiuta in preflight fase, capitolo, stage o cursore assenti/non validi; `assertCurrentEditorialReconcileStep` confronta tutto sul libro live prima di validare/applicare il JSON di memoria. Nessuna copia di prosa/segreti della snapshot in Activity, ZIP, storage o log.
-- Non scrivere memoria, avanzare `reconcileCursor` o marcare scene canoniche su risposta AI stale; in chiusura usa solo le scene del **capitolo live**, mai un `chapter` della closure precedente. Preservare ulteriori 12 review e giudice, CAS IndexedDB, lease writer, uso token incerto e no retry. Test Vitest su scene, status, memoria, stage/cursore, segmenti lunghi e checkpoint legacy; regressione integrata di un restore IndexedDB con `updatedAt` invariato durante la chiamata AI, che deve preservare la memoria recente e i token usage osservati senza canonizzare una scena obsoleta. [ADR 0124](ADR/0124-editorial-reconcile-checkpoint-fence.md). Versione npm invariata fino a release separata.
+- Non scrivere memoria, avanzare `reconcileCursor` o marcare scene canoniche su risposta AI stale; in chiusura usa solo le scene del **capitolo live**, mai un `chapter` della closure precedente. Preservare ulteriori 12 review e giudice, CAS IndexedDB, lease writer, uso token incerto e no retry. Test Vitest su scene, status, memoria, stage/cursore, segmenti lunghi e checkpoint legacy; regressione integrata di un restore IndexedDB con `updatedAt` invariato durante la chiamata AI, che deve preservare la memoria recente e i token usage osservati senza canonizzare una scena obsoleta. [ADR 0124](ADR/0124-editorial-reconcile-checkpoint-fence.md). Incluso nella release npm 0.11.88 (#141).
 
 ### Release v0.11.87 — issue #136 e hardening AI #135/#137/#138/#139
 

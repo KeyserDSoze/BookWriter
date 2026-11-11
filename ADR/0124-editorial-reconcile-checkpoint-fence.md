@@ -1,6 +1,6 @@
 # ADR 0124 — Fencing della riconciliazione del canone dopo remediation
 
-- **Stato:** implementazione su `main` (CI finale da verificare)
+- **Stato:** accettato e incluso nella release npm 0.11.88 (issue #141); CI finale della release da verificare
 - **Data:** 2026-11-11
 - **Issue:** [#140](https://github.com/KeyserDSoze/BookWriter/issues/140), epic [#20](https://github.com/KeyserDSoze/BookWriter/issues/20) e [#6](https://github.com/KeyserDSoze/BookWriter/issues/6)
 - **Predecessori:** [ADR 0011](0011-independent-editorial-board-and-chapter-freeze.md), [ADR 0111](0111-saved-freeze-judgment-and-summary-gate.md)
@@ -24,3 +24,7 @@ Una risposta tardiva non deve sovrascrivere memoria, timeline e segreti dopo una
 Vitest: checkpoint immutato, varianti di scena/ordine/status e memoria privata, fase/stage/capitolo/cursore mutati, cursore legacy mancante, scena congelata e segmenti multipli. Test d'integrazione del runner: restore concorrente della memoria direttamente in IndexedDB con **updatedAt invariato** durante il provider mock; anche quando il CAS generico non rileva la variazione, la riconciliazione viene rifiutata senza sovrascrivere il segreto aggiornato, senza canonizzare la scena, mantenendo nel ledger i token restituiti dal provider. Il runner conserva le protezioni di lease writer e CAS IndexedDB indipendenti dal gate. Frontend CI con Playwright desktop/mobile, EPUBCheck su quattro EPUB, Pages e cleanup devono essere verificati sulla **stessa HEAD** prima di chiudere #140.
 
 La comparazione locale garantisce solo che la **risposta appartiene al prompt preparato**, non che la riconciliazione del modello sia vera, esaustiva o semanticamente corretta. L'uso reale di crediti resta soggetto al ledger e al budget AI.
+
+## Integrazione nella release npm 0.11.88 (#141)
+
+La correzione #140 è stata validata sulla propria HEAD con [Frontend CI #43066383932](https://github.com/KeyserDSoze/BookWriter/actions/runs/43066383932) (**825 Vitest, 148 Playwright desktop/mobile, EPUBCheck quattro EPUB**), [Pages #43066384038](https://github.com/KeyserDSoze/BookWriter/actions/runs/43066384038) e [cleanup #43066383920](https://github.com/KeyserDSoze/BookWriter/actions/runs/43066383920) `completed/success`. La release npm successiva è generata con npm ufficiale nel [run #43068203147](https://github.com/KeyserDSoze/BookWriter/actions/runs/43068203147), con due `npm ci` e test ripetuti; la CI browser e il deploy sulla HEAD definitiva della release vanno verificati separatamente prima di chiudere #141. Nessun uso di provider reali, fatture o prove semantiche automatiche è implicito.

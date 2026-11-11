@@ -1,11 +1,16 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issue #140 (epic #20/#6)
+## 0.11.88 — 2026-11-11 (main, issue #140, epic #20/#6)
+
+**Release npm riproducibile — issue #141**
+
+- [Run ufficiale #43068203147](https://github.com/KeyserDSoze/BookWriter/actions/runs/43068203147) `completed/success`: Node 22/npm 10, registry npm ufficiale, bump root-only `0.11.87 → 0.11.88`, lockfile v3 con **235** voci e dipendenze transitive, URL `resolved` e `integrity` invariati.
+- **Due `npm ci` puliti** con typecheck, **825 Vitest in 132 file**, 9 smoke e build superati per ciclo. File npm estratti dall'artifact originale, confrontati con log indicizzati e SHA-256: manifest `8c30a3d964f3c733e81d1c844661966f8f19fe3a47c14d8b22c5a37bd0aa909f`, lockfile `1c2084acd378eb5570c4b727ed7dbd609fd08e7d2476ff157ee5c82d2a9d74d0`. Workflow temporaneo eliminato atomicamente con versione, lockfile e documenti. Prima di chiudere #141 attendere Frontend CI completa (Playwright desktop/mobile, EPUBCheck 4 EPUB), Pages e cleanup `completed/success` sulla nuova HEAD finale.
 
 **Riconciliazione del canone dopo remediation protetta da snapshot live — #140**
 
 - La riconciliazione del capitolo, successiva alle correzioni accettate dal giudice, associa l'output AI **all'esatto cursore, segmento, stato completo delle scene e memoria narrativa** usati nel prompt. Una risposta obsoleta non modifica canone, scene o checkpoint; vecchi cursori mancanti sono rifiutati prima della chiamata.
-- Test Vitest per mutazioni di fase/stage/capitolo/cursore, scena/status/ordine e segreti, incluso capitolo multi-segmento; integrazione autopilot con modifica IndexedDB **senza cambio timestamp**, rifiuto dell'output stale e preservazione di usage osservato. Snapshot effimere e locali, senza nuovi campi persistiti, chiamate o retry. [ADR 0124](../ADR/0124-editorial-reconcile-checkpoint-fence.md) · [guida](editorial-board.md). **Versione npm 0.11.87 invariata** fino a release dedicata.
+- Test Vitest per mutazioni di fase/stage/capitolo/cursore, scena/status/ordine e segreti, incluso capitolo multi-segmento; integrazione autopilot con modifica IndexedDB **senza cambio timestamp**, rifiuto dell'output stale e preservazione di usage osservato. Snapshot effimere e locali, senza nuovi campi persistiti, chiamate o retry. [ADR 0124](../ADR/0124-editorial-reconcile-checkpoint-fence.md) · [guida](editorial-board.md). **Disponibile nella release npm 0.11.88** (#141).
 
 ## 0.11.87 — 2026-11-11 (main, issues #135/#137/#138/#139, epic #17/#6)
 
