@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #126 (epic #17)
+
+**Ledger economico AI esportabile in CSV locale per singolo libro**
+
+- La Dashboard consente di scaricare un CSV UTF-8 con una riga per tentativo AI del **solo libro attivo**, anche quando il budget non è abilitato. Attività manuali e preflight che hanno bloccato la richiesta prima dell'invio non entrano nell'esportazione.
+- Nuovo valutatore condiviso fra contabilità del budget ed esportazione: token osservati, coverage completo/parziale/mancante/in corso, tariffe snapshot o legacy a listino corrente, snapshot alterati senza fallback e stima EUR solo se dati completi; fattura reale sempre vuota e dichiarata non disponibile.
+- CSV con delimitatori protetti, quoting e neutralizzazione di prefissi formula provenienti da Activity/ZIP; non esporta prompt, prosa, errori o chiavi. Vitest e Playwright desktop/mobile per download, isolamento libri e privacy. [ADR 0118](../ADR/0118-local-ai-cost-ledger-csv.md), [guida](ai-cost-ledger.md), #126. Nessuna dipendenza o modifica al canone; **versione npm ancora 0.11.82**, release numerica da pianificare separatamente.
+
 ## 0.11.82 — 2026-11-11 (main, issues #123/#124)
 
 ### Timeout prima degli header AI — #124

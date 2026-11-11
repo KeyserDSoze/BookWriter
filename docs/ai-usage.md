@@ -16,6 +16,10 @@ La sezione **Dashboard → Consumi AI registrati** mostra i token dichiarati dag
 
 Sono mostrate le attività registrate **soltanto per il libro selezionato**. Gli interventi manuali che non invocano l'AI non vengono sommati come chiamate a pagamento.
 
+## Esportazione CSV del ledger AI — issue #126
+
+Nel pannello **Budget AI del libro** puoi scaricare il **registro CSV dei singoli tentativi AI** del solo libro selezionato, anche senza avere attivato il budget. Oltre ai token realmente osservati, il file separa le stime monetarie basate sui prezzi manuali e una colonna fattura provider **vuota**, mai simulata. Non include testo, prompt, errori o credenziali; gli identificatori importati vengono protetti da formule CSV. [Guida](ai-cost-ledger.md) · [ADR 0118](../ADR/0118-local-ai-cost-ledger-csv.md).
+
 ## Quando il totale noto è inferiore alla spesa reale
 
 Una chiamata può essere fatturata anche quando il browser viene chiuso, quando premi Pausa, quando la rete cade o quando il provider risponde con errore **senza** un oggetto usage. Alcuni endpoint OpenAI-compatible non restituiscono sempre `prompt_tokens` e `completion_tokens`.

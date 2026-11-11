@@ -14,6 +14,10 @@ I vecchi registri **senza tariffa storicizzata** non consentono di sapere quale 
 
 Un record che presenta uno snapshot malformato, negativo o riferito a un altro endpoint/modello viene classificato come **senza tariffa valida**: con budget attivo le nuove richieste si fermano per sicurezza, senza applicare di nascosto il prezzo attuale. Lo stesso blocco conservativo rimane per token mancanti o parziali.
 
+## Registro CSV per richiesta — issue #126
+
+L'esportazione locale in **Dashboard → Budget AI del libro → Esporta ledger CSV** riutilizza esattamente la stessa decisione di prezzo dello stop preventivo: `snapshot` per le nuove richieste, `listino_corrente` esplicito per attività legacy e `snapshot_non_valido` senza fallback per prezzi corrotti. Token incompleti o attività in corso non diventano costo zero. La fattura del provider resta **sconosciuta**. [Guida](ai-cost-ledger.md) · [ADR 0118](../ADR/0118-local-ai-cost-ledger-csv.md).
+
 ## Backup e limiti
 
 Le tariffe per singola Activity sono salvate negli ZIP **content-only** e **full**, senza esportare credenziali API. I vecchi ZIP restano compatibili; un listino storico inserito in un archivio malevolo e invalido viene rifiutato. Un file ZIP modificato non è automaticamente autenticato: importare solo archivi affidabili.

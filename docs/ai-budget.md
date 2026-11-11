@@ -12,6 +12,10 @@ La redazione multi-agente usa almeno **12 chiamate per segmento**, oltre a giudi
 
 La protezione si applica anche alle proposte AI facoltative di fusione delle scene. Le fusioni manuali e le operazioni locali non richiedono credito AI.
 
+## Esporta il ledger per la riconciliazione — issue #126
+
+Nel pannello **Budget AI del libro** puoi usare **Esporta ledger CSV** anche con il budget disattivato. Il file locale contiene ogni tentativo AI del solo libro attivo, con token dichiarati, tariffa per richiesta e **stima** (solo se completa); non esporta prosa, prompt o credenziali. Le fatture provider **non sono disponibili** e la relativa colonna resta vuota. Le stime legacy senza snapshot vengono esplicitamente ricalcolate al listino corrente. [Guida CSV](ai-cost-ledger.md) · [ADR 0118](../ADR/0118-local-ai-cost-ledger-csv.md).
+
 ## Come BookWriter decide se può fare la prossima chiamata
 
 Per ogni richiesta AI gestita, il guard calcola:

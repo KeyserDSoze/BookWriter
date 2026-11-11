@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Ledger dei consumi AI in CSV (#126, non ancora in release numerica):** dalla Dashboard puoi esportare i tentativi AI del solo libro attivo, con token comunicati, tariffe manuali al tentativo o listino corrente dichiarato per record legacy e spesa stimata; la colonna fattura provider resta vuota. Download locale, senza prompt, prosa, errori o credenziali, con difesa dalle formule CSV. [Guida](docs/ai-cost-ledger.md), [ADR 0118](ADR/0118-local-ai-cost-ledger-csv.md).
+## Funzionalità disponibili
+
 - **Release v0.11.82 (issue #125):** consolidati i limiti del corpo JSON (#123) e dell'attesa degli header POST (#124), senza retry impliciti, token inventati o approvazioni editoriali parziali. Manifest e lockfile prodotti con npm 10/Node 22 sul registro ufficiale e verificati con due `npm ci` puliti. [Changelog](docs/CHANGELOG.md) e [guida release](docs/npm-lockfile-releases.md). Nessuna nuova dipendenza, modifica del canone o provider AI reale simulato come prova.
 - **Deadline header AI configurabile (#124):** l'attesa di `POST /chat/completions` prima degli header è limitata a 5 minuti per default, regolabile per endpoint fra 1 e 30 minuti. Timeout, pausa autore e limite body sono separati; il costo effettivo può restare ignoto. [Guida](docs/ai-completion-response.md), [ADR 0117](ADR/0117-ai-header-deadline.md).
 - **Risposte AI limitate (#123):** le generazioni OpenAI-compatible non possono più impegnare memoria indefinita con JSON enormi o stream che non terminano: limite 2 MB sull'envelope e timeout di lettura 60 s dopo gli header, con cancel/abort e nessuna prosa parziale. [Guida](docs/ai-completion-response.md), [ADR 0116](ADR/0116-bounded-ai-completion-response.md).

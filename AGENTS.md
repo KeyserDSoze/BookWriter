@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Ledger economico CSV locale — issue #126, ADR 0118, epic #17
+
+- Esportare unicamente Activity AI del libro selezionato tramite `buildAiCostLedgerCsv(bookId, activities, settings)`; non includere tentativi `aiRequested=false`, log manuali, prompt, prosa, titoli, errori, chiavi né dati degli altri libri. Download locale senza rete, anche con budget disattivo.
+- `assessAiCostAttempt` è condiviso con `accountBookAiBudget`: ignorare i token mancanti/invalidi e i record `running` per ogni stima; 0 osservato può valere 0 solo con **entrambi** i contatori e prezzo valido. Snapshot tariffa malformato/off-route fallisce chiuso; legacy senza snapshot usa il listino corrente soltanto se dichiarato `listino_corrente`.
+- La colonna `fattura_provider_eur` deve rimanere **sempre vuota** e `stato_fattura` deve dichiarare `non_disponibile`: BookWriter non legge i conti dei provider. Sanitizzare separatori, quote, CR/LF e prefissi formula CSV non fidati, evitare filename con path importato. Test Vitest ed E2E desktop/mobile per privacy, isolamento e download.
+- Numero npm 0.11.82 invariato: cambiare manifest/lockfile solo con release npm ufficiale, non con patch manuali. [Guida](docs/ai-cost-ledger.md), [ADR 0118](ADR/0118-local-ai-cost-ledger-csv.md).
+
 ### Release 0.11.82 — issue #125
 
 - Rilasciate congiuntamente #123 e #124: preservare **sempre** la distinzione fra attesa degli header HTTP (300 s default, 60–1800 configurabili) e lettura del corpo (60 s, 2 MB). `AbortError` dell'autore prevale e il ledger non può attribuire token zero a un tentativo incerto.
