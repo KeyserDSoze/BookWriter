@@ -126,8 +126,7 @@ jobs:
           retention-days: 7
 
   report:
-    if: ${{ always() }}
-    needs: [generate]
+    # Independent job: expose the run ID before the two npm ci rounds finish.
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -136,8 +135,7 @@ jobs:
       - name: Record run ID on issue 136 for reproducibility verification
         env:
           GH_TOKEN: ${{ github.token }}
-          GENERATE_RESULT: ${{ needs.generate.result }}
         run: |
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/issues/136/comments" \
-            -f "body=BOOKWRITER136|RUN|$GITHUB_RUN_ID|$GITHUB_SHA|$GENERATE_RESULT. Provenance job has contents:read; issue reporter has issues:write only. Not a published release."
+            -f "body=BOOKWRITER136|RUN|$GITHUB_RUN_ID|$GITHUB_SHA|started. Provenance job has contents:read; issue reporter has issues:write only. Inspect actual generate job for conclusion, not a published release."
