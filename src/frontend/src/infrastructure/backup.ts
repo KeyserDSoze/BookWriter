@@ -5,7 +5,7 @@ import type { SceneMergeDraft } from "../domain/scene-merge";
 import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema, knowledgeReviewSchema, informationTransferReviewSchema, authorTransferCritiqueSchema, recommendationReconciliationSchema } from "../domain/editorial-board";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
-import { normalizeEndpoint } from "./ai";
+import { endpointAuthMode, normalizeEndpoint } from "./ai";
 import { MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./ai-header-timeout";
 import {MAX_TRANSFER_SHARE_DECISIONS,type NarrativeTransferShareDecision}
   from "../domain/narrative-transfer-sharing";
@@ -314,7 +314,13 @@ const backupSchema = z.object({
       headerTimeoutSeconds: z.number().int().min(MIN_CHAT_HEADER_TIMEOUT_SECONDS)
         .max(MAX_CHAT_HEADER_TIMEOUT_SECONDS).optional(),
       outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
-    })).max(30),
+      authMode: z.enum(["api_key", "none"]).optional(),
+    }).refine(profile => {
+      try {
+        endpointAuthMode(profile.authMode, profile.baseUrl);
+        return profile.authMode !== "none" || profile.apiKey === null;
+      } catch { return false; }
+    }, "Autenticazione senza chiave consentita solo su localhost.")).max(30),
     defaultRoute: routeSchema,
     taskRoutes: z.record(z.string(), routeSchema),
     aiPriceRates: z.array(z.object({
@@ -335,7 +341,7 @@ type BackupData = {
   settings?: {
     theme: AppSettings["theme"];
     endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number;
-      outputTokenParameter?: "max_tokens" | "max_completion_tokens" }>;
+      outputTokenParameter?: "max_tokens" | "max_completion_tokens"; authMode?: "api_key" | "none" }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
     aiPriceRates?: AppSettings["aiPriceRates"];
@@ -450,7 +456,10 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
         models: endpoint.models,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
-        apiKey: endpoint.secret ? await decryptLocal(endpoint.secret) : null,
+
+        authMode: endpoint.authMode,
+        apiKey: endpoint.authMode === "none" ? null :
+          endpoint.secret ? await decryptLocal(endpoint.secret) : null,
       }))),
     };
   }
@@ -605,7 +614,10 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
         models: endpoint.models,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
-        secret: endpoint.apiKey ? await encryptLocal(endpoint.apiKey) : null,
+
+        authMode: endpoint.authMode,
+        secret: endpoint.authMode === "none" ? null :
+          endpoint.apiKey ? await encryptLocal(endpoint.apiKey) : null,
       }))),
     };
   }
