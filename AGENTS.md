@@ -4,6 +4,11 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Riconciliazione canone AI post-remediation — issue #140 / ADR 0124
+
+- Nel passaggio `chapterReview/reconcile`, il runner deve creare una snapshot effimera del **capitolo, cursore, segmento esatto, insieme delle scene e memoria narrativa** inviati al provider. `captureEditorialReconcileStep` rifiuta in preflight fase, capitolo, stage o cursore assenti/non validi; `assertCurrentEditorialReconcileStep` confronta tutto sul libro live prima di validare/applicare il JSON di memoria. Nessuna copia di prosa/segreti della snapshot in Activity, ZIP, storage o log.
+- Non scrivere memoria, avanzare `reconcileCursor` o marcare scene canoniche su risposta AI stale; in chiusura usa solo le scene del **capitolo live**, mai un `chapter` della closure precedente. Preservare ulteriori 12 review e giudice, CAS IndexedDB, lease writer, uso token incerto e no retry. Test Vitest su scene, status, memoria, stage/cursore, segmenti lunghi e checkpoint legacy. [ADR 0124](ADR/0124-editorial-reconcile-checkpoint-fence.md). Versione npm invariata fino a release separata.
+
 ### Release v0.11.87 — issue #136 e hardening AI #135/#137/#138/#139
 
 - Il frontend usa manifest e lockfile npm **0.11.87**, generati con Node 22/npm 10 e registry ufficiale. Run [#43060633990](https://github.com/KeyserDSoze/BookWriter/actions/runs/43060633990) `completed/success`: albero di **235** voci invariato, due `npm ci` puliti, ognuno seguito da typecheck, **818 Vitest in 131 file**, smoke e build. SHA-256 e file npm verificati contro artifact e log; nessun editing manuale delle dipendenze.
