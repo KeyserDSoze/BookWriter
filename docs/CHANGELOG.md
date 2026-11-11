@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #144 (epic #23/#20)
+
+**Rifiuto di risposte AI basate su dossier storici cambiati — #144**
+
+- Il revisore storico e il giudice legano ogni risposta all'esatto `historicalDossier` del prompt, oltre a capitolo, fase, tornata e prefisso dei report. Un restore concorrente che sostituisce fonti, revisioni, estratti, relazioni, attivi o bibliografia (anche con `updatedAt` invariato) invalida la risposta **prima** di approvare report o verdetto; nessun freeze o canone derivato da fonti stale.
+- Snapshot solo in memoria, nessuna chiamata esterna o dato nuovo persistito, errori italiani generici senza contenuti delle fonti. Test del dominio e integrazione autopilot per revisore e giudice; [ADR 0126](../ADR/0126-historical-dossier-prompt-freshness.md) · [guida](editorial-historical-source-freshness.md). **Versione npm 0.11.89 invariata** fino a release dedicata.
+
 ## 0.11.89 — 2026-11-11 (main, issue #142, epic #6/#20)
 
 **Release npm riproducibile — issue #143**
