@@ -13,7 +13,7 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 ### Diagnostica dei rifiuti HTTP 400/422 — issue #137
 
 - Solo quando il POST Chat Completions include un cap e il provider restituisce HTTP 400/422, il messaggio può suggerire di controllare **anche** la scelta esplicita del parametro output nelle Impostazioni; non affermare che sia necessariamente la causa. Con cap assente o HTTP 429 non aggiungere quel suggerimento.
-- Non leggere mai il corpo di errore provider: cancellare best-effort lo stream senza nascondere lo stato HTTP; nessun retry, doppio POST, prompt, URL sensibili o chiavi nei messaggi. Test per codice HTTP/con e senza cap, una sola richiesta e cancellazione dello stream. Il lockfile npm resta sotto la issue release #136.
+- Non leggere mai il corpo di errore provider: cancellare best-effort lo stream senza nascondere lo stato HTTP anche quando `cancel()` genera un'eccezione sincrona o una Promise rifiutata; nessun retry, doppio POST, prompt, URL sensibili o chiavi nei messaggi. Test per codice HTTP/con e senza cap, una sola richiesta e cancellazione dello stream. Il lockfile npm resta sotto la issue release #136.
 
 ## Obiettivo
 
