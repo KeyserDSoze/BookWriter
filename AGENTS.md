@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Deadline degli header AI — issue #124, ADR 0117
+
+- Le richieste `POST /chat/completions` hanno due deadline **distinte**: header configurabili per endpoint (default 300 s, intervallo 60–1800 s) e lettura JSON dopo HTTP 2xx (60 s, limite 2 MB, #123). Una inferenza lenta non autorizza un retry implicito.
+- `fetchChatCompletionHeaders` deve vincere anche su `fetch` mai risolto, usare AbortController, scartare/cancellare best effort una Response arrivata dopo scadenza e preservare `AbortError` sulla cancellazione dell'autore. Niente raw error/provider body/URL con credenziali, chiavi o prompt negli audit.
+- Il timeout non dichiara costo zero: Activity `failed`, usage ignoto e budget prudente, nessun canone, report o freeze. `EndpointProfile.headerTimeoutSeconds?` è opzionale per compatibilità IndexedDB e backup ZIP completo, validato prima del salvataggio; gli archivi precedenti usano 300 s. Test Vitest e Playwright desktop/mobile con fetch bloccato, annullamento e ripresa supervisionata.
+
 Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente ideazione, pianificazione, scrittura e revisione di un libro sotto supervisione dell'autore. Deploy statico su GitHub Pages. Non introdurre un backend senza motivazione e relativo ADR.
 
 ## Struttura obbligatoria
