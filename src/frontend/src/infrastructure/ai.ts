@@ -274,7 +274,13 @@ export async function fetchModels(
       waitingForHeaders = false;
       if (onDeadline) controller.signal.removeEventListener("abort", onDeadline);
     }
-    if (!response.ok) throw new Error(friendlyApiError(response.status));
+    if (!response.ok) {
+      // HTTP errors do not contain usable catalogue data. Never read the
+      // provider's untrusted body or allow cleanup to hide the HTTP status.
+      try { void response.body?.cancel().catch(() => {}); }
+      catch { /* custom streams can throw synchronously */ }
+      throw new Error(friendlyApiError(response.status));
+    }
     const parsed = await boundedModelCatalog(response, controller.signal);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
       throw invalidModelCatalog();
