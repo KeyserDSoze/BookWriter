@@ -4,7 +4,7 @@
 
 **Diagnostica prudente dei rifiuti Chat Completions — #137**
 
-- Con cap preventivo inviato e risposta HTTP 400/422, il messaggio invita a verificare anche la scelta del parametro output nelle Impostazioni, senza asserire che sia la causa. Nessun suggerimento sul parametro quando il cap non è inviato o su HTTP 429; nessun retry automatico, lettura del corpo errore, credenziale o prompt nei messaggi. Test di regressione con un solo POST per scenario. La release npm resta separata nella #136.
+- Con cap preventivo inviato e risposta HTTP 400/422, il messaggio invita a verificare anche la scelta del parametro output nelle Impostazioni, senza asserire che sia la causa. Nessun suggerimento sul parametro quando il cap non è inviato o su HTTP 429; nessun retry automatico, lettura del corpo errore, credenziale o prompt nei messaggi. Il corpo della risposta rifiutata viene scartato con cancellazione best-effort dello stream, senza sostituire l'errore HTTP. Test di regressione con un solo POST per scenario. La release npm resta separata nella #136.
 
 **Parametro output Chat Completions configurabile per endpoint**
 
