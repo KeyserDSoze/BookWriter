@@ -31,10 +31,10 @@ jobs:
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -euo pipefail
-          state="$(gh api "repos/$GITHUB_REPOSITORY/issues/141" --jq '.state')"
+          state="$(gh api "repos/$GITHUB_REPOSITORY/issues/142" --jq '.state')"
           if [ "$state" != "open" ]; then
-            echo "Release tracking issue #141 is closed; no comment needed."
+            echo "Release tracking issue #142 is closed; no comment needed."
             exit 0
           fi
-          gh api "repos/$GITHUB_REPOSITORY/issues/141/comments" \
-            -f "body=BOOKWRITER141|CI|$RUN_ID|$RUN_SHA|$RUN_NAME|$RUN_CONCLUSION. Automated run index; inspect jobs and logs before closing issues."
+          gh api "repos/$GITHUB_REPOSITORY/issues/142/comments" \
+            -f "body=BOOKWRITER142|CI|$RUN_ID|$RUN_SHA|$RUN_NAME|$RUN_CONCLUSION. Automated run index; inspect jobs and logs before closing issues."
