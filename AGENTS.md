@@ -4,6 +4,11 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Dossier storico esatto durante le chiamate AI — issue #144 / ADR 0126
+
+- Nella redazione, il **revisore storico e il giudice** devono catturare prima del prompt una snapshot effimera dell'intero `historicalDossier` del capitolo, insieme a fase/stage/round/prefisso report. `assertCurrentHistoricalPromptDossier` confronta i dati con il libro live **prima** di accettare report o verdetto anche quando un restore conserva `updatedAt`. Non inviare questo snapshot agli altri undici revisori e non salvarlo in Activity, backup o outbox.
+- Se fonti, revisioni, stato attivo, relazioni, OCR, bibliografia o checkpoint sono mutati, rifiutare il risultato AI senza approvare report, judge o freeze, con errore generico senza testo, URL o segreti. Nessuna ricerca automatica, retry, secondo POST o perdita di usage osservato. Conservare validazione letterale, giudice critico, CAS e isolamento ruoli. Test Vitest + integrazione restore concorrente sullo storico e giudice. [ADR 0126](ADR/0126-historical-dossier-prompt-freshness.md). npm resta 0.11.89 fino a release separata.
+
 ### Release npm v0.11.89 — issue #143, autopilot CAS #142
 
 - Manifest/lockfile npm 0.11.89 rigenerati con Node 22/npm 10 e registro ufficiale nel [runner #43079099716](https://github.com/KeyserDSoze/BookWriter/actions/runs/43079099716) `completed/success`. Lockfile v3 con **235 voci**, dipendenze transitive, URL `resolved` e `integrity` invariati. Due `npm ci` puliti: per ciascuno typecheck, **826 Vitest in 133 file**, 9 smoke e build. File originali verificati tramite artifact e SHA-256; nessun editing manuale.
