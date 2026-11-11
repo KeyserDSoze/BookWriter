@@ -6,7 +6,7 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ### Deadline totale del catalogo modelli GET /models — issue #139 / ADR 0123
 
-- Il timeout di **12 secondi** di `fetchModels` copre fetch e corpo: `boundedModelCatalog` deve interrompere `reader.read()` sospeso anche se ignora abort, preservando la priorità della cancellazione dell'autore. Nessun catalogo parziale o retry; cancel e releaseLock best-effort senza mascherare errori. Mantieni 256 KB, 2.000 ID, validazione JSON/UTF-8 e fencing #119; test Vitest stalled read/abort/deadline/cleanup. [ADR 0123](ADR/0123-model-catalog-total-deadline.md). Numero npm invariato fino a #136.
+- Il timeout di **12 secondi** di `fetchModels` copre fetch e corpo: sia il `fetch` iniziale sia `boundedModelCatalog` devono interrompere rispettivamente `fetch` e `reader.read()` sospesi anche se ignorano abort, scartando risposte tardive e preservando la priorità della cancellazione dell'autore. Nessun catalogo parziale o retry; cancel e releaseLock best-effort senza mascherare errori. Mantieni 256 KB, 2.000 ID, validazione JSON/UTF-8 e fencing #119; test Vitest stalled read/abort/deadline/cleanup. [ADR 0123](ADR/0123-model-catalog-total-deadline.md). Numero npm invariato fino a #136.
 
 ## Obiettivo
 
