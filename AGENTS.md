@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Deadline totale del catalogo modelli GET /models — issue #139 / ADR 0123
+
+- Il timeout di **12 secondi** di `fetchModels` copre fetch e corpo: `boundedModelCatalog` deve interrompere `reader.read()` sospeso anche se ignora abort, preservando la priorità della cancellazione dell'autore. Nessun catalogo parziale o retry; cancel e releaseLock best-effort senza mascherare errori. Mantieni 256 KB, 2.000 ID, validazione JSON/UTF-8 e fencing #119; test Vitest stalled read/abort/deadline/cleanup. [ADR 0123](ADR/0123-model-catalog-total-deadline.md). Numero npm invariato fino a #136.
+
+## Obiettivo
+
 ### Cleanup reader delle risposte HTTP 2xx — issue #138 / ADR 0116
 
 - Il `finally` di `readChatCompletionJson` deve preservare `AbortError`, timeout e errori di validazione/lettura anche se `reader.cancel()` lancia sincronicamente o restituisce una Promise rifiutata. Non attendere uno stream remoto bloccato; `releaseLock` rimane best-effort. Non introdurre retry, seconda POST, dati privati negli errori o usage fittizio. Test Vitest dedicati e release numerica soltanto tramite #136.
