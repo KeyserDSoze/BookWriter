@@ -2,6 +2,10 @@
 
 La Dashboard del libro contiene il pannello **Budget AI del libro** con il pulsante **Esporta ledger CSV**. Il pulsante è disponibile appena il libro selezionato ha registrato un tentativo AI; funziona anche con il budget **disattivato**. L'esportazione avviene interamente nel browser e non contatta provider, servizi analytics o GitHub.
 
+## Storico consultabile nella Dashboard — issue #128
+
+Sotto il download CSV, lo **Storico dei costi per task AI** mostra i tentativi del libro in ordine dal più recente, in blocchi di dieci: titolo del task, fase, stato, modello/endpoint, token osservati e stima in euro quando calcolabile. Il filtro **Solo tentativi senza stima** individua report incomplete, richieste in corso e tariffe non valide; l'assenza di stima non è una fattura zero. Il pannello visualizza solo metadata locali (il titolo task può includere riferimenti sensibili), non prompt, prosa o errori grezzi. Il **CSV rimane l'esportazione completa** e non contiene i titoli dei task. [Guida](ai-cost-history.md) · [ADR 0119](../ADR/0119-task-ai-cost-history.md).
+
 ## Che cosa c'è nel file
 
 Un file `bookwriter-ledger-<id-libro>.csv` con codifica **UTF-8**, BOM e separatore `;` (compatibile con i fogli di calcolo italiani). Ciascuna riga riguarda **una sola Activity AI** del libro selezionato, ordinata per data e ID.

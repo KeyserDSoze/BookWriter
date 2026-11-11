@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Storico costi per task AI — issue #128, ADR 0119, epic #17
+
+- Lo storico della Dashboard deve limitarsi alle Activity del libro selezionato, usando `listBookAiCostHistory(bookId, activities, settings)` condiviso con il ledger CSV #126 e la stessa `assessAiCostAttempt` del budget. Escludere manuali e preflight `aiRequested=false`; conservare la distinzione fra zero valido, usage parziale, `running`, tariffe snapshot, legacy e snapshot corrotti. Nessuna fattura provider dimostrata.
+- Visualizzare al massimo dieci tentativi alla volta, più recenti prima, con estensione esplicita e filtro dei record senza stima; non caricare tutto il canone narrativo in UI e non aggiungere chiamate a provider. Il titolo Activity è metadata locale potenzialmente sensibile; React deve renderlo come testo senza HTML, mai aggiungere prompt, output, errori grezzi o chiavi nel pannello o nel CSV.
+- Mantenere layout mobile senza overflow e gestione di identificatori lunghi/importati, test Vitest di isolamento/prezzi e Playwright desktop/mobile di filtri/espansione/cambio libro. Numero npm 0.11.83 invariato finché non viene eseguita una release npm+lockfile separata. [Guida](docs/ai-cost-history.md), [ADR 0119](ADR/0119-task-ai-cost-history.md).
+
 ### Release v0.11.83 — issue #127, ledger CSV #126
 
 - `src/frontend/package.json` e `package-lock.json` riportano entrambi 0.11.83, rigenerati dal runner read-only Node 22/npm 10 sul registro ufficiale; non modificare manualmente il lockfile. Conservare le 235 voci del tree delle dipendenze; due `npm ci` puliti e due cicli typecheck, Vitest, smoke e build prima del commit.

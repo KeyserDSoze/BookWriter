@@ -5,6 +5,7 @@ import { accountBookAiBudget, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid, isPriceR
 import { getBook, saveBook } from "../infrastructure/db";
 import { exportAiCostLedgerCsv } from "../infrastructure/ai-ledger-export";
 import { isBillableAttempt } from "../domain/ai-budget";
+import { AiCostHistoryPanel } from "./AiCostHistoryPanel";
 import { Button } from "./ui/button";
 
 const money = (value: number) => new Intl.NumberFormat("it-IT", {
@@ -155,6 +156,7 @@ export function AiBudgetPanel({
         }}>Esporta ledger CSV</Button>
       <p className="muted text-xs">I costi ignoti non sono zero: lasciare vuota la stima significa che non è calcolabile.</p>
     </div>
+    <AiCostHistoryPanel bookId={book.id} activities={activities} settings={settings}/>
     <div className="mt-4 space-y-2 border-t border-slate-300 pt-3 dark:border-slate-700">
       <h3 className="text-sm font-semibold">Tariffe configurate dall'autore (€/milione di token)</h3>
       <p className="muted text-xs">Ogni modello e provider necessita di una tariffa input e output; non vengono precompilate tariffe commerciali. Cambiare il prezzo vale solo per le nuove richieste che salvano la tariffa al momento del tentativo.</p>

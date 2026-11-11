@@ -6,6 +6,7 @@
 
 ## Funzionalità disponibili
 
+- **Storico dei costi AI per task (#128, non ancora in release numerica):** nella Dashboard, elenco degli ultimi tentativi AI con token dichiarati, prezzo snapshot o listino legacy, importo stimato se completo e stato delle risposte incerte. Filtro dei tentativi senza stima e visualizzazione di dieci record alla volta, anche a budget disattivato. [Guida](docs/ai-cost-history.md), [ADR 0119](ADR/0119-task-ai-cost-history.md). Nessuna fattura reale inventata o nuova richiesta al provider.
 - **Release v0.11.83 (#127):** incluso il ledger CSV del libro (#126) con token riportati dal provider, listini manuali snapshot/legacy, stime solo con usage completo e fattura reale non disponibile. Node 22/npm 10, registry ufficiale, manifest/lockfile prodotti con npm e due `npm ci` puliti. [Changelog](docs/CHANGELOG.md), [guida](docs/ai-cost-ledger.md), [procedura release](docs/npm-lockfile-releases.md). Nessuna nuova dipendenza, modifica del canone o delle credenziali.
 - **Ledger dei consumi AI in CSV (#126, v0.11.83):** dalla Dashboard puoi esportare i tentativi AI del solo libro attivo, con token comunicati, tariffe manuali al tentativo o listino corrente dichiarato per record legacy e spesa stimata; la colonna fattura provider resta vuota. Download locale, senza prompt, prosa, errori o credenziali, con difesa dalle formule CSV. [Guida](docs/ai-cost-ledger.md), [ADR 0118](ADR/0118-local-ai-cost-ledger-csv.md).
 ## Funzionalità disponibili

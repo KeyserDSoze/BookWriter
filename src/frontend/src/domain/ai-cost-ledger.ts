@@ -1,4 +1,5 @@
 import type { Activity, AppSettings } from "./types";
+import type { AiCostAssessment } from "./ai-budget";
 import { assessAiCostAttempt, isBillableAttempt } from "./ai-budget";
 
 /** A local reconciliation export, never a provider invoice or real credit balance. */
@@ -17,6 +18,39 @@ function csvField(value: string | number | undefined): string {
   return '"' + protectedText.replaceAll('"', '""') + '"';
 }
 
+/** Minimal, local task-level view: no prose, prompt, body or raw provider error. */
+export interface AiCostHistoryRow {
+  id: string;
+  createdAt: string;
+  status: Activity["status"];
+  phase: Activity["phase"];
+  taskTitle: string;
+  endpointId?: string;
+  modelId?: string;
+  endedAt?: string;
+  assessment: AiCostAssessment;
+}
+
+/** Shared source for CSV and visible history, sorted by creation date ascending. */
+export function listBookAiCostHistory(
+  bookId: string, activities: readonly Activity[], settings: AppSettings,
+): AiCostHistoryRow[] {
+  return activities.filter(activity =>
+    activity.bookId === bookId && isBillableAttempt(activity))
+    .map(activity => ({
+      id: activity.id,
+      createdAt: activity.createdAt,
+      status: activity.status,
+      phase: activity.phase,
+      taskTitle: activity.title,
+      endpointId: activity.endpointId,
+      modelId: activity.modelId,
+      endedAt: activity.endedAt,
+      assessment: assessAiCostAttempt(activity, settings),
+    }))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
 /**
  * Semicolon-delimited UTF-8 CSV for Italian spreadsheet locales.
  * Only machine-readable activity metadata is exported; no prompt, prose,
@@ -27,14 +61,11 @@ function csvField(value: string | number | undefined): string {
 export function buildAiCostLedgerCsv(
   bookId: string, activities: readonly Activity[], settings: AppSettings,
 ): string {
-  const rows = activities.filter(activity =>
-    activity.bookId === bookId && isBillableAttempt(activity))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
-  const data = rows.map(activity => {
-    const estimate = assessAiCostAttempt(activity, settings);
+  const data = listBookAiCostHistory(bookId, activities, settings).map(row => {
+    const estimate = row.assessment;
     const fields: Array<string | number | undefined> = [
-      activity.id, activity.createdAt, activity.endedAt, activity.status,
-      activity.endpointId, activity.modelId,
+      row.id, row.createdAt, row.endedAt, row.status,
+      row.endpointId, row.modelId,
       estimate.inputTokens, estimate.outputTokens, estimate.usageCoverage,
       estimate.rateOrigin, estimate.rate?.inputEurPerMillion,
       estimate.rate?.outputEurPerMillion, estimate.estimatedEur,

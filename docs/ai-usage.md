@@ -16,6 +16,10 @@ La sezione **Dashboard → Consumi AI registrati** mostra i token dichiarati dag
 
 Sono mostrate le attività registrate **soltanto per il libro selezionato**. Gli interventi manuali che non invocano l'AI non vengono sommati come chiamate a pagamento.
 
+## Storico dei costi per task — issue #128
+
+Nella Dashboard → Budget AI del libro, **Storico dei costi per task AI** mostra fino a dieci tentativi recenti, con espansione esplicita e filtro **Solo tentativi senza stima**. Ogni tentativo mantiene distinti token osservati, tariffa snapshot/legacy, stato ed euro soltanto stimati; dati mancanti o `running` non sono spesa zero. La vista usa solo Activity locali del libro e resta disponibile a budget disattivato. Non visualizza il saldo o la fattura vera. [Guida](ai-cost-history.md) · [ADR 0119](../ADR/0119-task-ai-cost-history.md).
+
 ## Esportazione CSV del ledger AI — issue #126
 
 Nel pannello **Budget AI del libro** puoi scaricare il **registro CSV dei singoli tentativi AI** del solo libro selezionato, anche senza avere attivato il budget. Oltre ai token realmente osservati, il file separa le stime monetarie basate sui prezzi manuali e una colonna fattura provider **vuota**, mai simulata. Non include testo, prompt, errori o credenziali; gli identificatori importati vengono protetti da formule CSV. [Guida](ai-cost-ledger.md) · [ADR 0118](../ADR/0118-local-ai-cost-ledger-csv.md).

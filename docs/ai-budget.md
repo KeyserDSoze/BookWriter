@@ -12,6 +12,10 @@ La redazione multi-agente usa almeno **12 chiamate per segmento**, oltre a giudi
 
 La protezione si applica anche alle proposte AI facoltative di fusione delle scene. Le fusioni manuali e le operazioni locali non richiedono credito AI.
 
+## Storico dei costi per ogni task — issue #128
+
+Sotto **Esporta ledger CSV** puoi consultare lo **storico locale dei tentativi AI** anche con budget non attivo. Il pannello mostra i task dal più recente, i token input/output dichiarati, l'origine del listino manuale e la **stima** quando calcolabile. Con **Solo tentativi senza stima** trovi uso mancante, `running` e tariffe non valide: non sono costi zero. Le prime dieci righe si possono estendere con un pulsante; per tutte le righe resta il CSV. Nessuna fattura provider è letta automaticamente. [Guida](ai-cost-history.md) · [ADR 0119](../ADR/0119-task-ai-cost-history.md).
+
 ## Esporta il ledger per la riconciliazione — issue #126
 
 Nel pannello **Budget AI del libro** puoi usare **Esporta ledger CSV** anche con il budget disattivato. Il file locale contiene ogni tentativo AI del solo libro attivo, con token dichiarati, tariffa per richiesta e **stima** (solo se completa); non esporta prosa, prompt o credenziali. Le fatture provider **non sono disponibili** e la relativa colonna resta vuota. Le stime legacy senza snapshot vengono esplicitamente ricalcolate al listino corrente. [Guida CSV](ai-cost-ledger.md) · [ADR 0118](../ADR/0118-local-ai-cost-ledger-csv.md).

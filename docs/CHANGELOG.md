@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #128 (epic #17/#6)
+
+**Storico locale dei costi AI per ogni task nella Dashboard**
+
+- Nel pannello Budget AI, anche con limite disattivato, lo storico visualizza i tentativi AI del solo libro corrente per data decrescente, con titolo del task, fase, stato, modello/endpoint, token osservati e costo in euro **solo come stima**. Mostra dieci righe iniziali, `Mostra altri 10 tentativi` e filtro `Solo tentativi senza stima`, con layout accessibile su mobile.
+- `listBookAiCostHistory` è la proiezione read-only condivisa con l'esportazione CSV #126; riusa `assessAiCostAttempt` del budget: snapshot delle tariffe non rivalutati, legacy dichiarati al listino corrente, snapshot corrotti senza fallback, `running` e token mancanti senza costo fittizio. Esclusi interventi manuali, preflight e Activity di altri libri.
+- Non mostra prompt, prosa o errori del provider; soltanto metadati locali del task (il titolo può essere sensibile). Nessun cambio a canone, ZIP, chiamate AI, persistenza o dipendenze. Test Vitest e Playwright Chromium desktop/mobile. [ADR 0119](../ADR/0119-task-ai-cost-history.md), [guida](ai-cost-history.md), #128. Versione npm invariata 0.11.83 fino alla prossima release npm.
+
 ## 0.11.83 — 2026-11-11 (main, issue #126, epic #17)
 
 **Ledger economico AI esportabile in CSV locale per singolo libro**
