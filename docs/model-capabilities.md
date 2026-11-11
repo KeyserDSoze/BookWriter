@@ -17,6 +17,10 @@ Il predefinito **Chat / scrittura** continua a usare `AppSettings.defaultRoute` 
 
 Se un modello possiede tag espliciti ma **non** il tag Chat, BookWriter interrompe una richiesta Chat Completions indirizzata a quel modello **prima di inviare il prompt**. Un modello legacy senza tag mantiene il comportamento precedente. Rimuovere il tag da un modello predefinito annulla la scelta di quel ruolo senza riscrivere altri predefiniti.
 
+## Funzioni editoriali effettive (prime integrazioni)
+
+Dalla pagina **Libro** è disponibile la [lettura a voce di scene canoniche e la ricerca semantica locale](semantic-voice-workspace.md). La seconda usa davvero l'API `POST /embeddings` di LM Studio sul loopback e richiede il predefinito embedding; la prima sfrutta Web Speech API e **non** richiama il modello vocale configurato. L'uso di un modello per la sintesi audio resta una integrazione distinta.
+
 ## Persistenza, backup e sicurezza
 
 Le configurazioni e i tag sono persistiti localmente in IndexedDB mediante **Salva impostazioni**, con la stessa protezione da salvataggi obsoleti. Il backup ZIP **full** include etichette e predefiniti, ma lo ZIP **content** non include impostazioni/chiavi; gli archivi legacy senza i nuovi campi restano validi. Import ZIP full con tag malformati o predefiniti incoerenti fallisce chiuso. Un inventario aggiornato `/models` non cambia automaticamente i tag dichiarati e non deve sovrascrivere modifiche recenti durante la chiamata.

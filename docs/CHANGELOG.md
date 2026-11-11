@@ -1,5 +1,14 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #148 e #149 (epic #6)
+
+**Prime funzionalità reali per embedding e ascolto della prosa — #148/#149**
+
+- Nel lettore del libro, **Ascolta il manoscritto** usa Web Speech API per leggere le sole scene canoniche, con selezione scena/voce e controlli play, pausa, riprendi e stop. Nessun audio viene generato da LM Studio né attribuito al modello Voce configurato; il browser potrebbe usare voci del sistema che richiedono rete.
+- **Ricerca semantica** a richiesta mediante modello embedding locale selezionato: batch `POST /v1/embeddings`, prefissi Nomic, ranking coseno e collegamento alle scene. Limitazione a 80 scene canoniche e 1.400 caratteri per scena; nessuna indicizzazione automatica, draft/memoria riservata esclusi, nessun endpoint remoto, vettori conservati solo in RAM fino a cambio pagina o del libro. Dimensioni, timeout e payload esterni limitati.
+- Test Vitest e Playwright desktop/mobile, documentazione [guida](semantic-voice-workspace.md) · [ADR 0129](../ADR/0129-opt-in-editorial-voice-semantic-workspace.md). Nessuna nuova dipendenza o versione npm anticipata. Il futuro collegamento del vero modello TTS e l'eventuale indicizzazione completa/persistente rimangono lavoro separato.
+
+
 ## Non rilasciato — issue #147 (epic #6)
 
 **Modelli configurabili per capacità e default distinti — #147**

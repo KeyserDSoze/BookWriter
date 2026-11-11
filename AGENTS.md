@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Lettura ad alta voce e ricerca semantica delle scene — issue #148/#149 / ADR 0129
+
+- Nel lettore del libro `VoiceReaderPanel` usa **Web Speech API** per leggere **solo scene canoniche**, con play/pause/riprendi/stop, voce e velocità selezionate; la sintesi del browser può usare il sistema operativo o una voce online. Non attribuire al modello `voice` configurato chiamate TTS: LM Studio OpenAI compatibility non documenta `/v1/audio/speech`, e in questa fase BookWriter non invia il testo a tale modello.
+- `SemanticSearchPanel` si attiva **solo con clic esplicito** e richiede `AppSettings.capabilityRoutes.embedding` con tag embedding su host **letterale localhost/127.0.0.1**. Invia solo estratti troncati di scene `status:canon`, max 80 scene e max 1.400 caratteri ciascuna, lotti da 8, mediante `POST /v1/embeddings`. Query separate; prefissi `search_document` e `search_query` per Nomic Embed Text. Nessuna scansione automatica, draft/secret/memoria privata esclusi, vettori in RAM della pagina senza IndexedDB, ZIP, GitHub o attività di background; reindicizzare dopo un cambio del libro.
+- Validare risposta modello embedding (JSON con size/deadline, indici unici, vettori finiti coerenti) prima dell'uso, rifiutare endpoint remoti prima di richiesta e decrittazione, disabilitare redirect/credenziali, nessun retry automatico o stima fittizia. UI accessibile e mobile; nessun cambiamento a canone, budget o prompt dell'autopilot. [Guida](docs/semantic-voice-workspace.md) · [ADR 0129](ADR/0129-opt-in-editorial-voice-semantic-workspace.md).
+
+
 ### Tag manuali e default dei modelli — issue #147 / ADR 0128
 
 - `GET /models` elenca soltanto ID, **mai** attribuire automaticamente capacità dal nome del modello o dal provider. `EndpointProfile.modelCapabilities?` mappa ogni ID a uno o più tag letterali `chat/tools/embedding/voice`, scelta esplicita dell'autore; metadata, non certificazione di compatibilità.

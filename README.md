@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Laboratorio editoriale con voce e ricerca semantica (#148/#149, non ancora in release npm):** nella scheda Libro puoi ascoltare singole scene canoniche con Web Speech API, interrompere/riprendere e regolare la voce; la ricerca semantica indicizza su comando fino a 80 scene canoniche con il modello embedding locale e ordina i risultati per similitudine coseno. I vettori restano in RAM, nessuna richiesta automatica a provider remoti. Il modello TTS configurato **non** viene chiamato finché manca un adapter audio supportato dal server LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0129](ADR/0129-opt-in-editorial-voice-semantic-workspace.md).
+
+
 - **Catalogo dei modelli con tag manuali (#147, non ancora in release npm):** dopo `GET /models` puoi contrassegnare i modelli con Chat/scrittura, Tool calling, Embedding o Voce (anche più tag insieme), cercarli e scegliere predefiniti distinti. Solo Chat Completions è già operativa: i tag voce/embedding/tools preparano la configurazione, non attivano i corrispondenti adapter. [Guida](docs/model-capabilities.md) · [ADR 0128](ADR/0128-model-capability-tags.md).
 
 
