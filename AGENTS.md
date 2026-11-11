@@ -10,6 +10,11 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 - `callModel` deve produrre **una sola** delle due chiavi JSON quando il preflight fornisce `maxOutputTokens`, nessuna senza cap, e validare prima della rete scelta e numero di token. **Mai retry automatico** al variare del campo dopo HTTP 400/422/429, timeout o abort: una richiesta senza usage può essere fatturata. Preflight libro/sessione, writer guard e Activity/uso incerto rimangono invariati; il limite è stimato, non un tetto finanziario remoto.
 - `EndpointSettingsSaveCoordinator` valida tutti gli endpoint **prima** della cifratura dei draft e conserva CAS/snapshot; ZIP full esporta la scelta e la valida con enum stretta in import, content-only non include endpoint/chiavi, ZIP legacy senza campo accettati. Test Vitest per payload/route/errori/ZIP e Playwright desktop/mobile su impostazioni e POST una sola volta, senza chiave nei log. [ADR 0122](ADR/0122-chat-completions-output-cap-parameter.md), [guida](docs/ai-output-token-parameter.md). Il numero npm **0.11.86 rimane invariato** fino al prossimo bump npm ufficiale senza editing manuale lockfile.
 
+### Diagnostica dei rifiuti HTTP 400/422 — issue #137
+
+- Solo quando il POST Chat Completions include un cap e il provider restituisce HTTP 400/422, il messaggio può suggerire di controllare **anche** la scelta esplicita del parametro output nelle Impostazioni; non affermare che sia necessariamente la causa. Con cap assente o HTTP 429 non aggiungere quel suggerimento.
+- Non leggere mai il corpo di errore provider: cancellare best-effort lo stream senza nascondere lo stato HTTP; nessun retry, doppio POST, prompt, URL sensibili o chiavi nei messaggi. Test per codice HTTP/con e senza cap, una sola richiesta e cancellazione dello stream. Il lockfile npm resta sotto la issue release #136.
+
 ## Obiettivo
 
 ### Release v0.11.86 — issue #133, avvisi budget #132 e CI Chromium #134
