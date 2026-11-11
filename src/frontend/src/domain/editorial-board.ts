@@ -1313,6 +1313,63 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
     "repair" : "freeze", createdAt: new Date().toISOString() };
 }
 
+/** Only the source state actually shown to the reconciliation agent may
+ * authorize a new canon memory. Kept ephemeral: never write private prose or
+ * memory snapshots into saved checkpoints, Activity logs or GitHub. */
+export interface EditorialReconcileSnapshot {
+  chapterId: string;
+  cursor: number;
+  segmentCount: number;
+  sceneId: string;
+  segmentText: string;
+  /** Exact chapter scene state; detects a rewritten/reordered/deleted scene. */
+  chapterScenesJson: string;
+  /** Exact canon memory supplied to the model; no partial stale merge. */
+  memoryJson: string;
+}
+
+export function captureEditorialReconcileStep(book: BookProject): EditorialReconcileSnapshot {
+  const cycle = book.editorialCycle;
+  if (book.phase !== "chapterReview" || !cycle || cycle.stage !== "reconcile" ||
+      !Number.isSafeInteger(cycle.reconcileCursor) ||
+      cycle.reconcileCursor === undefined || cycle.reconcileCursor < 0)
+    throw new Error("Checkpoint di riconciliazione non valido: fase o cursore cambiati.");
+  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
+  if (!chapter || chapter.frozenAt)
+    throw new Error("Checkpoint di riconciliazione non valido: capitolo non disponibile.");
+  const segments = chapterSegments(chapter);
+  const segment = segments[cycle.reconcileCursor];
+  if (!segment)
+    throw new Error("Checkpoint di riconciliazione non valido: segmento fuori intervallo.");
+  return {
+    chapterId: chapter.id,
+    cursor: cycle.reconcileCursor,
+    segmentCount: segments.length,
+    sceneId: segment.sceneId,
+    segmentText: segment.text,
+    chapterScenesJson: JSON.stringify(chapter.scenes),
+    memoryJson: JSON.stringify(book.memory),
+  };
+}
+
+/** Recheck before applying an AI response to the LIVE BookProject, not the
+ * planning snapshot. A successful compare proves freshness, not truth. */
+export function assertCurrentEditorialReconcileStep(
+  book: BookProject, expected: EditorialReconcileSnapshot,
+): { cycle: ChapterEditorialCycle; chapter: Chapter } {
+  const current = captureEditorialReconcileStep(book);
+  if (current.chapterId !== expected.chapterId ||
+      current.cursor !== expected.cursor ||
+      current.segmentCount !== expected.segmentCount ||
+      current.sceneId !== expected.sceneId ||
+      current.segmentText !== expected.segmentText ||
+      current.chapterScenesJson !== expected.chapterScenesJson ||
+      current.memoryJson !== expected.memoryJson)
+    throw new Error("Riconciliazione obsoleta: capitolo, prosa o memoria cambiati. Ripeti il passaggio senza applicare l'output AI.");
+  const chapter = book.chapters.find(ch => ch.id === current.chapterId)!;
+  return { cycle: book.editorialCycle!, chapter };
+}
+
 /** An AI summary belongs to one exact checkpoint position, not merely the
  * same book phase. Never advance a different chapter or segment if a restored
  * or externally edited checkpoint changed while the request was in flight. */
