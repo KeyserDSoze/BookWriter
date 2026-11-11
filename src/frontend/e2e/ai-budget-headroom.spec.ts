@@ -48,8 +48,8 @@ test("avvisi preventivi 80% per libro e sessione, costi incerti e isolamento lib
   }));
   await page.reload();
   const panel = page.getByRole("region",{name:"Budget AI"});
-  await expect(panel.getByRole("alert",{name:/Avviso preventivo libro/})).toBeVisible();
-  await expect(panel.getByRole("alert",{name:/Avviso preventivo sessione/})).toBeVisible();
+  await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo libro/})).toBeVisible();
+  await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo sessione/})).toBeVisible();
   await expect(panel.locator("p").filter({hasText:"Margine stimato noto del libro:"})).toContainText("2,00");
   await expect(panel.locator("p").filter({hasText:"Margine stimato noto della sessione:"})).toContainText("0,20");
   await expect(panel.locator("p").filter({hasText:"Ultima sessione AI registrata:"})).toContainText("0,80");
@@ -57,11 +57,11 @@ test("avvisi preventivi 80% per libro e sessione, costi incerti e isolamento lib
   // Raising the global limit must not reset the latest session warning.
   await panel.getByRole("spinbutton",{name:"Soglia budget in euro"}).fill("20");
   await panel.getByRole("button",{name:"Salva budget del libro"}).click();
-  await expect(panel.getByRole("alert",{name:/Avviso preventivo libro/})).toHaveCount(0);
-  await expect(panel.getByRole("alert",{name:/Avviso preventivo sessione/})).toBeVisible();
+  await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo libro/})).toHaveCount(0);
+  await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo sessione/})).toBeVisible();
   await panel.getByRole("spinbutton",{name:"Limite sessione AI in euro"}).fill("2");
   await panel.getByRole("button",{name:"Salva budget del libro"}).click();
-  await expect(panel.getByRole("alert",{name:/Avviso preventivo sessione/})).toHaveCount(0);
+  await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo sessione/})).toHaveCount(0);
 
   // Unknown usage outranks reassuring numeric headroom and must hide it.
   await page.evaluate(async() => new Promise<void>((resolve,reject) => {
@@ -86,11 +86,11 @@ test("avvisi preventivi 80% per libro e sessione, costi incerti e isolamento lib
     };
   }));
   await page.reload();
-  await expect(panel.getByRole("alert",{name:/Consumi incerti del libro/})).toBeVisible();
-  await expect(panel.getByRole("alert",{name:/Consumi incerti della sessione/})).toBeVisible();
+  await expect(panel.getByRole("alert").filter({hasText:/Consumi incerti del libro/})).toBeVisible();
+  await expect(panel.getByRole("alert").filter({hasText:/Consumi incerti della sessione/})).toBeVisible();
   await expect(panel.locator("p").filter({hasText:"Margine stimato noto del libro:"})).toHaveCount(0);
   await expect(panel.locator("p").filter({hasText:"Margine stimato noto della sessione:"})).toHaveCount(0);
-  await expect(panel.getByRole("alert",{name:/Avviso preventivo/})).toHaveCount(0);
+  await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo/})).toHaveCount(0);
 
   // Another book cannot inherit warning messages or recorded spending.
   await page.locator("#book-select").selectOption("");
