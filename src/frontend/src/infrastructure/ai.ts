@@ -172,41 +172,59 @@ function invalidModelCatalog(): ModelCatalogError {
 
 /** A provider response is untrusted even with HTTP 200. Never buffer an
  * unbounded model catalogue, trust Content-Length alone or log its body. */
-async function boundedModelCatalog(response: Response): Promise<unknown> {
+async function boundedModelCatalog(response: Response, signal: AbortSignal): Promise<unknown> {
   const mime = response.headers.get("content-type") ?? "";
-  if (mime && !/\/json(?:\s*;|$)|\+json(?:\s*;|$)/i.test(mime))
+  if (mime && !/\\/json(?:\\s*;|$)|\\+json(?:\\s*;|$)/i.test(mime))
     throw invalidModelCatalog();
-  const declared = Number(response.headers.get("content-length") ?? "0");
-  if (!Number.isFinite(declared) || declared > MAX_MODEL_CATALOG_BYTES)
-    throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
+  const rawLength = response.headers.get("content-length");
+  if (rawLength !== null && (!/^\\d+$/.test(rawLength.trim()) ||
+      Number(rawLength) > MAX_MODEL_CATALOG_BYTES))
+    throw invalidModelCatalog();
   const reader = response.body?.getReader();
   if (!reader) throw invalidModelCatalog();
-  let size = 0;
-  const chunks: Uint8Array[] = [];
+  let onAbort: (() => void) | undefined;
+  const interrupted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(invalidModelCatalog());
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  let complete = false;
   try {
+    let size = 0;
+    const chunks: Uint8Array[] = [];
     while (true) {
-      const chunk = await reader.read();
+      // The 12 s request deadline also covers a provider that never finishes
+      // its response body even if reader.read() ignores AbortController.
+      const chunk = await Promise.race([reader.read(), interrupted]);
+      if (signal.aborted) throw invalidModelCatalog();
       if (chunk.done) break;
       size += chunk.value.byteLength;
-      if (size > MAX_MODEL_CATALOG_BYTES) {
-        await reader.cancel();
+      if (size > MAX_MODEL_CATALOG_BYTES)
         throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
-      }
       chunks.push(chunk.value);
     }
+    if (signal.aborted) throw invalidModelCatalog();
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+    } catch {
+      throw invalidModelCatalog();
+    }
+    if (signal.aborted) throw invalidModelCatalog();
+    complete = true;
+    return parsed;
   } catch (error) {
     if (error instanceof ModelCatalogError) throw error;
     throw invalidModelCatalog();
   } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
-  } catch {
-    throw invalidModelCatalog();
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+    try {
+      if (!complete) void reader.cancel().catch(() => { /* already closed */ });
+    } catch { /* broken reader cannot override the original error */ }
+    try { reader.releaseLock(); } catch { /* pending read may be active */ }
   }
 }
 
@@ -236,7 +254,7 @@ export async function fetchModels(
       throw new Error("Impossibile contattare il catalogo modelli: verifica rete, URL e CORS.");
     }
     if (!response.ok) throw new Error(friendlyApiError(response.status));
-    const parsed = await boundedModelCatalog(response);
+    const parsed = await boundedModelCatalog(response, controller.signal);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
       throw invalidModelCatalog();
     const data = (parsed as { data?: unknown }).data;
