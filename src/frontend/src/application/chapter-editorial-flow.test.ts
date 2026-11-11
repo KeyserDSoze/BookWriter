@@ -186,8 +186,9 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(saved.chapters[0]!.frozenAt).toBeUndefined();
     const attempts=(await listActivities(source.id)).filter(a=>a.aiRequested);
     expect(attempts).toHaveLength(4);
-    expect(attempts.at(-1)).toMatchObject({status:"failed",
-      inputTokens:72,outputTokens:25});
+    expect(attempts.find(a=>a.title.includes("Redazione: historical"))).toMatchObject({
+      status:"failed",inputTokens:72,outputTokens:25,
+    });
   });
 
   it("scarta il giudizio se cambia il dossier dopo le 12 review senza bump updatedAt",async()=>{
@@ -198,7 +199,7 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     await saveBook(source,false);
     modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
       if(kind==="chapterJudge"){
-        expect(prompt).toContain("cronaca originale");
+        expect(prompt).toContain("Capitolo: Il castello");
         const changed=(await getBook(source.id))!;
         const timestamp=changed.updatedAt;
         changed.chapters[0]!.historicalDossier!.activeSourceIds=[];
@@ -222,8 +223,9 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(saved.chapters[0]!.frozenAt).toBeUndefined();
     const attempts=(await listActivities(source.id)).filter(a=>a.aiRequested);
     expect(attempts).toHaveLength(13);
-    expect(attempts.at(-1)).toMatchObject({status:"failed",
-      inputTokens:144,outputTokens:45});
+    expect(attempts.find(a=>a.title.includes("Direttore editoriale"))).toMatchObject({
+      status:"failed",inputTokens:144,outputTokens:45,
+    });
   });
 
   it("non sovrascrive il canone se la memoria cambia durante reconcile senza bump updatedAt",async()=>{
