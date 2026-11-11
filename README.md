@@ -6,6 +6,8 @@
 
 ## Funzionalità disponibili
 
+- **Fact-check storico resistente a restore concorrenti (#144, non ancora in release npm):** il revisore storico e il giudice possono approvare la propria risposta AI solo se il dossier delle fonti del capitolo è ancora identico a quello letto nel prompt, anche senza variazione del timestamp. [Guida](docs/editorial-historical-source-freshness.md) · [ADR 0126](ADR/0126-historical-dossier-prompt-freshness.md).
+
 - **Release npm v0.11.89 (#143):** consolida il CAS atomico dell'autopilot (#142). File npm generati con [runner #43079099716](https://github.com/KeyserDSoze/BookWriter/actions/runs/43079099716), due `npm ci` e **826 Vitest per ciclo**, typecheck, smoke e build riusciti; lockfile senza aggiornamenti transitivi. CI/Pages/cleanup sulla HEAD finale da verificare.
 
 - **Commit AI sicuro rispetto alle modifiche concorrenti (#142, v0.11.89):** la transazione atomica confronta la revisione del libro prima di approvare prosa, canone e audit; se un altro writer ha aggiornato il libro, la risposta AI viene scartata preservando lo stato e i token usage osservati. [ADR 0125](ADR/0125-autopilot-ai-commit-cas.md) · [Guida](docs/autopilot.md).
