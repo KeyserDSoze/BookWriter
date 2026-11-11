@@ -3,6 +3,8 @@ import { ShieldAlert, Wallet } from "lucide-react";
 import type { Activity, AiPriceRate, AppSettings, BookProject, ModelRoute } from "../domain/types";
 import { accountBookAiBudget, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid, isPriceRate } from "../domain/ai-budget";
 import { getBook, saveBook } from "../infrastructure/db";
+import { exportAiCostLedgerCsv } from "../infrastructure/ai-ledger-export";
+import { isBillableAttempt } from "../domain/ai-budget";
 import { Button } from "./ui/button";
 
 const money = (value: number) => new Intl.NumberFormat("it-IT", {
@@ -133,6 +135,26 @@ export function AiBudgetPanel({
         la tariffa valida al momento della richiesta.
       </p>}
     </div>}
+    <div className="mt-4 space-y-2 border-t border-slate-300 pt-3 dark:border-slate-700">
+      <h3 className="text-sm font-semibold">Esporta il registro dei consumi</h3>
+      <p className="muted text-xs">
+        CSV locale del solo libro selezionato: token dichiarati, prezzo manuale al tentativo
+        (o listino corrente per i record precedenti) e costo stimato se calcolabile.
+        La colonna fattura provider resta vuota: BookWriter non conosce gli addebiti reali.
+        Non esporta prosa, prompt, chiavi o messaggi di errore.
+      </p>
+      <Button size="sm" variant="outline"
+        disabled={!activities.some(isBillableAttempt)}
+        onClick={() => {
+          try {
+            exportAiCostLedgerCsv(book.id, activities, settings);
+            setMessage("CSV del ledger preparato localmente. Confrontalo con le fatture del provider.");
+          } catch {
+            setMessage("Esportazione del ledger non riuscita. Nessun dato è stato inviato.");
+          }
+        }}>Esporta ledger CSV</Button>
+      <p className="muted text-xs">I costi ignoti non sono zero: lasciare vuota la stima significa che non è calcolabile.</p>
+    </div>
     <div className="mt-4 space-y-2 border-t border-slate-300 pt-3 dark:border-slate-700">
       <h3 className="text-sm font-semibold">Tariffe configurate dall'autore (€/milione di token)</h3>
       <p className="muted text-xs">Ogni modello e provider necessita di una tariffa input e output; non vengono precompilate tariffe commerciali. Cambiare il prezzo vale solo per le nuove richieste che salvano la tariffa al momento del tentativo.</p>
