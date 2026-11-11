@@ -145,7 +145,10 @@ test("POST AI " + caseName + ": nessun canone e usage sconosciuto (desktop/mobil
   await page.reload();
   const ledger=page.getByRole("region",{name:"Budget AI"});
   await expect(ledger.getByText(/Consumi incerti/)).toBeVisible();
+  // The UI formats an exactly-zero *known* spend as 0,00 €, unlike
+  // fractional nonzero estimates. The unknown provider cost remains
+  // separately visible as "Consumi incerti", never folded into this value.
   await expect(ledger.getByText(/Spesa stimata da usage noto:/).locator(".."))
-    .toContainText("0,0000");
+    .toContainText("0,00");
 });
 }
