@@ -52,6 +52,25 @@ jobs:
           NODE
           git diff --stat -- package.json package-lock.json
           git diff -- package.json package-lock.json | head -n 90
+      - name: Prepare Italian changelog from the four completed fixes
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const target = "../../docs/CHANGELOG.md";
+          let data = fs.readFileSync(target, "utf8");
+          const headings = [
+            ["## Non rilasciato — issue #122 (epic #6/#10)", "## 0.11.81 — 2026-11-11 (main, issues #118/#119/#121/#122)\n\n### Chiave WebCrypto atomica — #122"],
+            ["## Non rilasciato — issue #121 (epic #6/#10)", "### Salvataggio sicuro delle impostazioni AI — #121"],
+            ["## Non rilasciato — issue #119 (epic #6)", "### Cataloghi /models non obsoleti — #119"],
+            ["## Non rilasciato — issue #118 (main)", "### Validazione del catalogo modelli — #118"],
+          ];
+          for (const [from, to] of headings) {
+            if (data.split(from).length !== 2) throw Error("Missing or duplicate changelog heading: " + from);
+            data = data.replace(from, to);
+          }
+          fs.writeFileSync(target, data);
+          NODE
       - name: Clean install and checks round one
         run: |
           set -euo pipefail
@@ -75,7 +94,7 @@ jobs:
           node - <<'NODE'
           const fs = require("node:fs");
           const crypto = require("node:crypto");
-          for (const file of ["package.json", "package-lock.json"]) {
+          for (const file of ["package.json", "package-lock.json", "../../docs/CHANGELOG.md"]) {
             const raw = fs.readFileSync(file, "utf8");
             const size = 3000;
             const chunks = Math.ceil(raw.length / size);
