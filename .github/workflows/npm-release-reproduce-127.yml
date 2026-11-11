@@ -57,6 +57,7 @@ jobs:
           }
           console.log("BOOKWRITER127|VERIFIED|version=0.11.83;tree=unchanged;registry=official;packages=" + Object.keys(lock.packages).length);
           NODE
+          sha256sum package-lock.json > "$RUNNER_TEMP/npm127-lock.sha256"
           git diff --stat -- package.json package-lock.json
           git diff -- package.json package-lock.json | head -n 60
       - name: Prepare exact release changelog for smoke checks
@@ -76,7 +77,7 @@ jobs:
           set -euo pipefail
           rm -rf node_modules
           npm ci --no-audit --no-fund --registry=https://registry.npmjs.org
-          git diff --exit-code -- package-lock.json
+          sha256sum --check "$RUNNER_TEMP/npm127-lock.sha256"
           npm run typecheck
           npm run test
           npm run smoke
@@ -86,7 +87,7 @@ jobs:
           set -euo pipefail
           rm -rf node_modules
           npm ci --no-audit --no-fund --registry=https://registry.npmjs.org
-          git diff --exit-code -- package-lock.json
+          sha256sum --check "$RUNNER_TEMP/npm127-lock.sha256"
           npm run typecheck
           npm run test
           npm run smoke
