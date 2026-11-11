@@ -1,6 +1,10 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issue #135 (epic #17/#6)
+## Non rilasciato — issues #135/#137/#138 (epic #17/#6)
+
+**Cleanup sicuro delle risposte HTTP 2xx — #138**
+
+- Se la lettura del JSON del provider fallisce per timeout, interruzione o formato, il cleanup dello stream non può più sostituire l'errore originale quando `reader.cancel()` lancia sincronicamente. Rimangono la cancellazione best-effort, la deadline, il limite 2 MB, la privacy, il singolo POST e l'uso token ignoto. Test di regressione per cancellazione sincrona/asincrona, abort e timeout. Versione npm invariata in attesa della release #136.
 
 **Diagnostica prudente dei rifiuti Chat Completions — #137**
 
