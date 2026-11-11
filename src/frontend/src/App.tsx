@@ -10,6 +10,7 @@ import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind } from "./domain/types";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { fetchModels, normalizeEndpoint } from "./infrastructure/ai";
+import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./infrastructure/ai-header-timeout";
 import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
@@ -581,7 +582,14 @@ export default function App() {
                 <Field label="Modelli rilevati / manuali">
                   <input className="field" value={endpoint.models.join(", ")} onChange={e => updateEndpoint(endpoint.id, { models: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })} placeholder="es. model-a, model-b" />
                 </Field>
+                <Field label="Attesa massima header AI (secondi)">
+                  <input className="field" type="number" min={MIN_CHAT_HEADER_TIMEOUT_SECONDS}
+                    max={MAX_CHAT_HEADER_TIMEOUT_SECONDS} step={60}
+                    value={endpoint.headerTimeoutSeconds ?? DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS}
+                    onChange={e => updateEndpoint(endpoint.id, { headerTimeoutSeconds: Number(e.target.value) })} />
+                </Field>
               </div>
+              <p className="muted text-xs">Il limite riguarda solo l'attesa degli header dopo POST: predefinito 300 s (5 minuti), da 60 a 1800 s. La lettura del corpo JSON ha un limite distinto di 60 s. Una scadenza non prova che il provider non abbia addebitato token.</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => void discoverModels(endpoint.id)}><RefreshCw size={16} /> Leggi /models</Button>
                 {settings.endpoints.length > 1 && <Button variant="destructive" onClick={() => setSettings(s => ({...s, endpoints:s.endpoints.filter(x => x.id !== endpoint.id)}))}>Rimuovi</Button>}
