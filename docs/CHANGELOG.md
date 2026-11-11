@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #124 (epic #6/#17/#20)
+
+**Timeout separato dell'attesa degli header per il provider AI**
+
+- Per ogni endpoint l'autore può scegliere fra 60 e 1800 s (default 300 s); import/export ZIP completo conserva il limite, gli archivi precedenti restano compatibili. La richiesta POST non può restare in attesa indefinita anche se `fetch` ignora AbortController. La cancellazione dell'autore rimane `AbortError`, non timeout.
+- Gli errori di deadline sono sanitizzati, non inventano consumi né approvano scene/rapporti/freeze; non scattano retry. Il limite del corpo JSON di 2 MB/60 s dopo gli header della #123 non cambia. [ADR 0117](../ADR/0117-ai-header-deadline.md), [guida](ai-completion-response.md), #124. Numero release invariato in attesa del prossimo `npm` release.
+
 ## Non rilasciato — issue #123 (epic #6/#17/#20)
 
 **Risposte di generazione AI limitate e annullabili prima di applicare prosa o uso token**
