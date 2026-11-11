@@ -6,6 +6,7 @@ import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchem
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "./ai";
+import { assertModelCapabilitySettings } from "../domain/model-capabilities";
 import { MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./ai-header-timeout";
 import {MAX_TRANSFER_SHARE_DECISIONS,type NarrativeTransferShareDecision}
   from "../domain/narrative-transfer-sharing";
@@ -315,6 +316,9 @@ const backupSchema = z.object({
         .max(MAX_CHAT_HEADER_TIMEOUT_SECONDS).optional(),
       outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
       authMode: z.enum(["api_key", "none"]).optional(),
+      modelCapabilities: z.record(z.string(), z.array(
+        z.enum(["chat", "tools", "embedding", "voice"]),
+      ).min(1).max(4)).optional(),
     }).refine(profile => {
       try {
         endpointAuthMode(profile.authMode, profile.baseUrl);
@@ -323,12 +327,25 @@ const backupSchema = z.object({
     }, "Autenticazione senza chiave consentita solo su localhost.")).max(30),
     defaultRoute: routeSchema,
     taskRoutes: z.record(z.string(), routeSchema),
+    capabilityRoutes: z.object({
+      tools: routeSchema.optional(),
+      embedding: routeSchema.optional(),
+      voice: routeSchema.optional(),
+    }).strict().optional(),
     aiPriceRates: z.array(z.object({
       endpointId: z.string(), modelId: z.string(),
       inputEurPerMillion: z.number().finite().min(0).max(10_000),
       outputEurPerMillion: z.number().finite().min(0).max(10_000),
     })).max(200).optional(),
-  }).optional(),
+  }).refine(settings => {
+    try {
+      assertModelCapabilitySettings({
+        ...settings, taskRoutes: settings.taskRoutes as AppSettings["taskRoutes"],
+        endpoints: settings.endpoints.map(endpoint => ({ ...endpoint, secret: null })),
+      });
+      return true;
+    } catch { return false; }
+  }, "Tag o predefiniti dei modelli non validi.").optional(),
 }).refine(x => (x.kind === "full") === !!x.settings, "Contenuto e credenziali incoerenti.");
 
 type BackupData = {
@@ -341,9 +358,11 @@ type BackupData = {
   settings?: {
     theme: AppSettings["theme"];
     endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number;
-      outputTokenParameter?: "max_tokens" | "max_completion_tokens"; authMode?: "api_key" | "none" }>;
+      outputTokenParameter?: "max_tokens" | "max_completion_tokens"; authMode?: "api_key" | "none";
+      modelCapabilities?: AppSettings["endpoints"][number]["modelCapabilities"] }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
+    capabilityRoutes?: AppSettings["capabilityRoutes"];
     aiPriceRates?: AppSettings["aiPriceRates"];
   };
 };
@@ -450,10 +469,12 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
     data.settings = {
       theme: settings.theme, defaultRoute: settings.defaultRoute,
       taskRoutes: settings.taskRoutes,
+      capabilityRoutes: settings.capabilityRoutes,
       aiPriceRates: settings.aiPriceRates,
       endpoints: await Promise.all(settings.endpoints.map(async endpoint => ({
         id: endpoint.id, name: endpoint.name, baseUrl: endpoint.baseUrl,
         models: endpoint.models,
+        modelCapabilities: endpoint.modelCapabilities,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
 
@@ -608,10 +629,12 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     importedSettings = {
       theme: data.settings.theme, defaultRoute: data.settings.defaultRoute,
       taskRoutes: data.settings.taskRoutes as AppSettings["taskRoutes"],
+      capabilityRoutes: data.settings.capabilityRoutes,
       aiPriceRates: data.settings.aiPriceRates,
       endpoints: await Promise.all(data.settings.endpoints.map(async endpoint => ({
         id: endpoint.id, name: endpoint.name, baseUrl: normalizeEndpoint(endpoint.baseUrl),
         models: endpoint.models,
+        modelCapabilities: endpoint.modelCapabilities,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
 
