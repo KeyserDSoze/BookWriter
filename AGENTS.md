@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release v0.11.83 — issue #127, ledger CSV #126
+
+- `src/frontend/package.json` e `package-lock.json` riportano entrambi 0.11.83, rigenerati dal runner read-only Node 22/npm 10 sul registro ufficiale; non modificare manualmente il lockfile. Conservare le 235 voci del tree delle dipendenze; due `npm ci` puliti e due cicli typecheck, Vitest, smoke e build prima del commit.
+- Consolidare #126 nel changelog `0.11.83`; la UI deriva la versione dal `package.json`. Eliminare `.github/workflows/npm-release-reproduce-127.yml` nello stesso commit atomico di release, preservando CI, Pages e cleanup.
+- Il ledger CSV stima usando tariffe manuali, **non prova fatture reali**; nessun provider né saldo ufficiale verificato. Le epic #17 e #6 rimangono aperte; nuove release npm devono seguire `docs/npm-lockfile-releases.md`.
+
 ### Ledger economico CSV locale — issue #126, ADR 0118, epic #17
 
 - Esportare unicamente Activity AI del libro selezionato tramite `buildAiCostLedgerCsv(bookId, activities, settings)`; non includere tentativi `aiRequested=false`, log manuali, prompt, prosa, titoli, errori, chiavi né dati degli altri libri. Download locale senza rete, anche con budget disattivo.

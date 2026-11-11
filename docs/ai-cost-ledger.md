@@ -1,4 +1,4 @@
-# Esportare il ledger dei consumi AI — BookWriter, issue #126
+# Esportare il ledger dei consumi AI — BookWriter v0.11.83, issue #126
 
 La Dashboard del libro contiene il pannello **Budget AI del libro** con il pulsante **Esporta ledger CSV**. Il pulsante è disponibile appena il libro selezionato ha registrato un tentativo AI; funziona anche con il budget **disattivato**. L'esportazione avviene interamente nel browser e non contatta provider, servizi analytics o GitHub.
 

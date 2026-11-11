@@ -6,7 +6,8 @@
 
 ## Funzionalità disponibili
 
-- **Ledger dei consumi AI in CSV (#126, non ancora in release numerica):** dalla Dashboard puoi esportare i tentativi AI del solo libro attivo, con token comunicati, tariffe manuali al tentativo o listino corrente dichiarato per record legacy e spesa stimata; la colonna fattura provider resta vuota. Download locale, senza prompt, prosa, errori o credenziali, con difesa dalle formule CSV. [Guida](docs/ai-cost-ledger.md), [ADR 0118](ADR/0118-local-ai-cost-ledger-csv.md).
+- **Release v0.11.83 (#127):** incluso il ledger CSV del libro (#126) con token riportati dal provider, listini manuali snapshot/legacy, stime solo con usage completo e fattura reale non disponibile. Node 22/npm 10, registry ufficiale, manifest/lockfile prodotti con npm e due `npm ci` puliti. [Changelog](docs/CHANGELOG.md), [guida](docs/ai-cost-ledger.md), [procedura release](docs/npm-lockfile-releases.md). Nessuna nuova dipendenza, modifica del canone o delle credenziali.
+- **Ledger dei consumi AI in CSV (#126, v0.11.83):** dalla Dashboard puoi esportare i tentativi AI del solo libro attivo, con token comunicati, tariffe manuali al tentativo o listino corrente dichiarato per record legacy e spesa stimata; la colonna fattura provider resta vuota. Download locale, senza prompt, prosa, errori o credenziali, con difesa dalle formule CSV. [Guida](docs/ai-cost-ledger.md), [ADR 0118](ADR/0118-local-ai-cost-ledger-csv.md).
 ## Funzionalità disponibili
 
 - **Release v0.11.82 (issue #125):** consolidati i limiti del corpo JSON (#123) e dell'attesa degli header POST (#124), senza retry impliciti, token inventati o approvazioni editoriali parziali. Manifest e lockfile prodotti con npm 10/Node 22 sul registro ufficiale e verificati con due `npm ci` puliti. [Changelog](docs/CHANGELOG.md) e [guida release](docs/npm-lockfile-releases.md). Nessuna nuova dipendenza, modifica del canone o provider AI reale simulato come prova.

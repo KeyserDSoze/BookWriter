@@ -1,6 +1,6 @@
 # ADR 0118 — Ledger economico AI esportabile per libro senza inventare fatture
 
-- **Stato:** implementato su `main`, non ancora incluso in una release numerica successiva a 0.11.82
+- **Stato:** accettato, rilasciato in v0.11.83 su `main` (issue #127)
 - **Data:** 2026-11-11
 - **Issue:** [#126](https://github.com/KeyserDSoze/BookWriter/issues/126), epic [#17](https://github.com/KeyserDSoze/BookWriter/issues/17)
 - **Precedenti:** [ADR 0010](0010-ai-usage-observability.md), [ADR 0012](0012-book-ai-budget-guardrails.md), [ADR 0108](0108-price-snapshot-ai-budget.md), [ADR 0117](0117-ai-header-deadline.md)
