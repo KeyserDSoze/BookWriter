@@ -106,7 +106,9 @@ describe("Parametro limite token POST Chat Completions", () => {
       for (const withCap of [true, false]) {
         const {settings,book}=fixture();
         settings.endpoints[0]!.outputTokenParameter="max_completion_tokens";
-        const request=vi.fn().mockResolvedValue(new Response("corpo privato, non visualizzare", {status}));
+        const rejected=new Response("corpo privato, non visualizzare", {status});
+        const cancel=vi.spyOn(rejected.body!, "cancel");
+        const request=vi.fn().mockResolvedValue(rejected);
         vi.stubGlobal("fetch",request);
         const call=callModel("chapterAudit","Sistema privato","Prompt privato",settings,book,
           new AbortController().signal,withCap ? {maxOutputTokens:1024} : undefined);
@@ -118,6 +120,7 @@ describe("Parametro limite token POST Chat Completions", () => {
         expect(error.message).not.toContain("corpo privato");
         expect(error.message).not.toContain("Prompt privato");
         expect(request).toHaveBeenCalledTimes(1);
+        expect(cancel).toHaveBeenCalledTimes(1);
         expect(Object.prototype.hasOwnProperty.call(body(request),"max_completion_tokens")).toBe(withCap);
       }
     }
