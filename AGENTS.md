@@ -4,6 +4,11 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Commit atomico delle risposte AI e audit autopilot — issue #142 / ADR 0125
+
+- Dopo il controllo di `updatedAt` della risposta AI, l'autopilot deve chiamare `saveBookAndActivity(latest, started, book.updatedAt)` **con il token della revisione verificata**, affinché il CAS avvenga dentro la **stessa transazione IndexedDB** che scrive canon, attività e outbox. Web Locks/lease remoto non sostituiscono il CAS contro import non cooperativi.
+- In caso di `BookRevisionConflict` alla transazione, **mai** modificare status, memoria, segreti, scene, freeze o sync del libro concorrente nel `catch`. Archiviare soltanto l'Activity della chiamata tentata con `cancelled`, `aiRequested` e usage osservato (senza testo, summary, prompt, segreti né retry); l'autore ricarica il libro. Test Vitest di concorrenza interposta tra read/commit, scenari normali della redazione e atomicità low-level. [ADR 0125](ADR/0125-autopilot-ai-commit-cas.md). Versione npm invariata fino a release separata.
+
 ### Release npm v0.11.88 — issue #141, riconciliazione canone #140
 
 - Node 22/npm 10 e registry npm ufficiale: manifest e lockfile **0.11.88** prodotti e verificati con [runner #43068203147](https://github.com/KeyserDSoze/BookWriter/actions/runs/43068203147) `completed/success`: albero npm con **235 voci** e transitive `resolved`/`integrity` invariati, due `npm ci` puliti, entrambi seguiti da typecheck, **825 Vitest su 132 file**, 9 smoke e build. SHA-256 file npm e artifact verificati, nessun editing manuale del lockfile.
