@@ -62,6 +62,54 @@ describe("Inventario modelli AI non attendibile", () => {
     await expect(fetchModels(url, key)).rejects.toThrow(/troppo grande/);
   });
 
+  it("scarta senza lettura i body /models con MIME e Content-Length invalidi", async () => {
+    const cases: Array<{headers:Record<string,string>; reason:RegExp}> = [
+      {headers:{"content-type":"text/html"},reason:/Catalogo modelli non valido/},
+      {headers:{"content-type":"application/json","content-length":"non numerico"},reason:/Catalogo modelli non valido/},
+      {headers:{"content-type":"application/json","content-length":"256001"},reason:/troppo grande/},
+    ];
+    for (const {headers,reason} of cases) {
+      const res=new Response("corpo privato da scartare", {headers});
+      const cancel=vi.spyOn(res.body!, "cancel");
+      const request=vi.fn().mockResolvedValue(res);
+      vi.stubGlobal("fetch",request);
+      await expect(fetchModels(url,key)).rejects.toThrow(reason);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(request).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("non divulga l'errore grezzo di uno stream /models già bloccato", async () => {
+    const response=reply({data:[{id:"valid"}]});
+    const lock=response.body!.getReader();
+    const request=vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch",request);
+    try {
+      await expect(fetchModels(url,key)).rejects.toThrow(/Catalogo modelli non valido/);
+      expect(request).toHaveBeenCalledTimes(1);
+    } finally {
+      lock.releaseLock();
+    }
+  });
+
+  it("il cleanup preliminare difettoso non nasconde il rifiuto del catalogo", async () => {
+    for (const failure of ["throw","reject"] as const) {
+      const res=new Response("corpo del provider",{
+        headers:{"content-type":"text/html"},
+      });
+      const cancel=vi.spyOn(res.body!, "cancel");
+      if (failure==="throw")
+        cancel.mockImplementation(()=>{ throw new Error("dettagli privati"); });
+      else
+        cancel.mockRejectedValue(new Error("dettagli privati"));
+      const request=vi.fn().mockResolvedValue(res);
+      vi.stubGlobal("fetch",request);
+      await expect(fetchModels(url,key)).rejects.toThrow(/Catalogo modelli non valido/);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(request).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("blocca lo stream oltre il limite anche con header Content-Length assente o falso", async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
