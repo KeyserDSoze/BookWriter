@@ -6,6 +6,7 @@
 
 ## Funzionalità disponibili
 
+- **Deadline header AI configurabile (#124, non rilasciata):** l'attesa di `POST /chat/completions` prima degli header è limitata a 5 minuti per default, regolabile per endpoint fra 1 e 30 minuti. Timeout, pausa autore e limite body sono separati; il costo effettivo può restare ignoto. [Guida](docs/ai-completion-response.md), [ADR 0117](ADR/0117-ai-header-deadline.md).
 - **Risposte AI limitate (#123):** le generazioni OpenAI-compatible non possono più impegnare memoria indefinita con JSON enormi o stream che non terminano: limite 2 MB sull'envelope e timeout di lettura 60 s dopo gli header, con cancel/abort e nessuna prosa parziale. [Guida](docs/ai-completion-response.md), [ADR 0116](ADR/0116-bounded-ai-completion-response.md).
 - **Release v0.11.81 (issue #120):** consolidati #118, #119, #121 e #122: inventario AI validato, protezione dalle risposte obsolete e dai salvataggi concorrenti, inizializzazione atomica della chiave WebCrypto fra schede. Manifest e lockfile rigenerati con npm 10/Node 22 e doppio `npm ci` pulito; [changelog](docs/CHANGELOG.md) e [guida release](docs/npm-lockfile-releases.md). Nessuna nuova dipendenza né modifica del canone.
 - **Chiave locale WebCrypto atomica (#122):** quando due cifrature iniziano contemporaneamente, anche da schede differenti, IndexedDB sceglie una sola chiave AES-GCM non esportabile; i cifrati restano decifrabili dopo reload. [ADR 0115](ADR/0115-atomic-local-device-key-initialization.md), [guida](docs/local-crypto-device-key.md).
