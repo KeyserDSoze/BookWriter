@@ -101,6 +101,28 @@ describe("Parametro limite token POST Chat Completions", () => {
     }
   });
 
+  it("suggerisce un controllo del parametro soltanto su HTTP 400/422 con cap inviato", async () => {
+    for (const status of [400, 422, 429]) {
+      for (const withCap of [true, false]) {
+        const {settings,book}=fixture();
+        settings.endpoints[0]!.outputTokenParameter="max_completion_tokens";
+        const request=vi.fn().mockResolvedValue(new Response("corpo privato, non visualizzare", {status}));
+        vi.stubGlobal("fetch",request);
+        const call=callModel("chapterAudit","Sistema privato","Prompt privato",settings,book,
+          new AbortController().signal,withCap ? {maxOutputTokens:1024} : undefined);
+        const error=await call.catch(e=>e as Error);
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toContain("HTTP "+status);
+        expect(error.message.includes("Controlla anche il parametro limite output API"))
+          .toBe(withCap && (status===400 || status===422));
+        expect(error.message).not.toContain("corpo privato");
+        expect(error.message).not.toContain("Prompt privato");
+        expect(request).toHaveBeenCalledTimes(1);
+        expect(Object.prototype.hasOwnProperty.call(body(request),"max_completion_tokens")).toBe(withCap);
+      }
+    }
+  });
+
   it("valori estranei dal profilo o limite invalido si fermano prima della rete", async () => {
     const {settings,book}=fixture();
     const request=vi.fn();
