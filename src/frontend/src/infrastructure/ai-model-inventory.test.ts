@@ -76,6 +76,68 @@ describe("Inventario modelli AI non attendibile", () => {
     await expect(fetchModels(url, key)).rejects.toThrow(/troppo grande/);
   });
 
+  it("interrompe una lettura /models sospesa quando l'autore annulla", async () => {
+    const controller = new AbortController();
+    let cancelled=false;
+    const stream=new ReadableStream<Uint8Array>({
+      cancel(){cancelled=true;},
+    });
+    const request=vi.fn().mockResolvedValue(new Response(stream,{
+      headers:{"content-type":"application/json"},
+    }));
+    vi.stubGlobal("fetch",request);
+    const pending=fetchModels(url,key,controller.signal);
+    // The read starts after the mocked fetch headers arrive.
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({name:"AbortError"});
+    await Promise.resolve();
+    expect(cancelled).toBe(true);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("rispetta la deadline di 12 secondi anche se /models invia gli header ma non termina", async () => {
+    vi.useFakeTimers();
+    try {
+      let cancelled=false;
+      const stream=new ReadableStream<Uint8Array>({
+        cancel(){cancelled=true;},
+      });
+      vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(stream,{
+        headers:{"content-type":"application/json"},
+      })));
+      const pending=fetchModels(url,key);
+      // Attach the rejection observer before advancing the clock.
+      const failure=expect(pending).rejects.toThrow(/Timeout del catalogo modelli/);
+      await vi.advanceTimersByTimeAsync(12_001);
+      await failure;
+      await Promise.resolve();
+      expect(cancelled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("conserva gli errori di catalogo quando cancel fallisce sincronicamente", async () => {
+    for (const failure of ["throw","reject"] as const) {
+      const cancel=vi.fn();
+      if (failure==="throw")
+        cancel.mockImplementation(()=>{throw new Error("segreto del cleanup");});
+      else cancel.mockRejectedValue(new Error("segreto del cleanup"));
+      const reader={
+        read:vi.fn().mockRejectedValue(new Error("contenuto privato")),
+        cancel,releaseLock:vi.fn(),
+      };
+      const response=new Response(null,{headers:{"content-type":"application/json"}});
+      Object.defineProperty(response,"body",{value:{getReader:()=>reader}});
+      vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response));
+      await expect(fetchModels(url,key)).rejects.toThrow(/Catalogo modelli non valido/);
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(reader.releaseLock).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("gestisce HTTP 429 e interruzione del chiamante senza divulgare chiavi o body", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
       "sk-local-secret-not-in-errors", { status: 429 },
