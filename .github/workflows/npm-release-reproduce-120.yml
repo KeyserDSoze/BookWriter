@@ -1,0 +1,87 @@
+name: Reproduce npm release 0.11.81 for issue 120
+
+# One-shot, read-only npm reproduction. Delete from main after the
+# verified output is copied to a normal GitHub commit.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/npm-release-reproduce-120.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate release files with npm 10 and official registry
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+          test "$(node -p "require('./package.json').version")" = "0.11.80"
+          npm version 0.11.81 --no-git-tag-version --ignore-scripts
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          node - <<'NODE'
+          const assert = require("node:assert/strict");
+          const fs = require("node:fs");
+          const manifest = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          assert.equal(manifest.version, "0.11.81");
+          assert.equal(lock.version, manifest.version);
+          assert.equal(lock.packages[""].version, manifest.version);
+          assert.deepEqual(lock.packages[""].dependencies, manifest.dependencies);
+          assert.deepEqual(lock.packages[""].devDependencies, manifest.devDependencies);
+          assert.equal(lock.lockfileVersion, 3);
+          const before = JSON.parse(require("node:child_process").execFileSync(
+            "git", ["show", "HEAD:src/frontend/package-lock.json"], {encoding:"utf8"}));
+          for (const [id, pkg] of Object.entries(before.packages)) {
+            if (id === "") continue;
+            assert.deepEqual(lock.packages[id], pkg, "Unexpected transitive lock change: " + id);
+          }
+          assert.deepEqual(Object.keys(lock.packages), Object.keys(before.packages));
+          console.log("LOCK_PROVENANCE_OK: no dependency tree changes");
+          NODE
+          git diff --stat -- package.json package-lock.json
+          git diff -- package.json package-lock.json | head -n 90
+      - name: Clean install and checks round one
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run test
+          npm run smoke
+          npm run build
+      - name: Clean install and checks round two
+        run: |
+          set -euo pipefail
+          rm -rf node_modules
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run test
+          npm run smoke
+          npm run build
+      - name: Emit npm-generated package and lockfile with chunk indexes
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const crypto = require("node:crypto");
+          for (const file of ["package.json", "package-lock.json"]) {
+            const raw = fs.readFileSync(file, "utf8");
+            const size = 3000;
+            const chunks = Math.ceil(raw.length / size);
+            const sha256 = crypto.createHash("sha256").update(raw).digest("hex");
+            console.log("BOOKWRITER120|META|" + file + "|" + raw.length + "|" + chunks + "|" + sha256);
+            for (let i = 0; i < chunks; i++)
+              console.log("BOOKWRITER120|DATA|" + file + "|" + i + "|" + JSON.stringify(raw.slice(i*size,(i+1)*size)));
+          }
+          NODE
