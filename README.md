@@ -6,6 +6,7 @@
 
 ## Funzionalità disponibili
 
+- **Release v0.11.81 (issue #120):** consolidati #118, #119, #121 e #122: inventario AI validato, protezione dalle risposte obsolete e dai salvataggi concorrenti, inizializzazione atomica della chiave WebCrypto fra schede. Manifest e lockfile rigenerati con npm 10/Node 22 e doppio `npm ci` pulito; [changelog](docs/CHANGELOG.md) e [guida release](docs/npm-lockfile-releases.md). Nessuna nuova dipendenza né modifica del canone.
 - **Chiave locale WebCrypto atomica (#122):** quando due cifrature iniziano contemporaneamente, anche da schede differenti, IndexedDB sceglie una sola chiave AES-GCM non esportabile; i cifrati restano decifrabili dopo reload. [ADR 0115](ADR/0115-atomic-local-device-key-initialization.md), [guida](docs/local-crypto-device-key.md).
 - **Salvataggi impostazioni AI protetti (#121):** se un endpoint, modello o chiave cambia mentre l'app cifra e salva, la vecchia richiesta viene rifiutata senza cancellare i draft dell'autore. [Guida](docs/ai-model-inventory.md), [ADR 0114](ADR/0114-endpoint-settings-save-fencing.md).
 - **Inventario modelli non obsoleto (#119):** la risposta a `GET /models` non sostituisce modelli configurati manualmente se nel frattempo cambiano endpoint, chiave o profilo; soltanto l'ultima ricerca esplicita pertinente può aggiornare l'elenco. Vedi [guida](docs/ai-model-inventory.md) e [ADR 0113](ADR/0113-stale-model-inventory-response-fence.md).

@@ -1,6 +1,8 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issue #122 (epic #6/#10)
+## 0.11.81 — 2026-11-11 (main, issues #118/#119/#121/#122)
+
+### Chiave WebCrypto atomica — #122
 
 **La chiave locale WebCrypto viene creata una sola volta anche con cifrature simultanee**
 
@@ -8,7 +10,7 @@
 - Nessun cambiamento al formato `{iv,data}`, chiavi AES-GCM 256 bit non esportabili e dati legacy mantenuti. La decifratura impossibile mostra un errore italiano privo di segreti, invitando a reinserire la credenziale: i vecchi cifrati con chiavi perse non vengono dichiarati recuperabili.
 - Vitest con cifrature simultanee, continuità legacy e record corrotto; Playwright desktop/mobile con due schede e due inizializzazioni contestuali. [ADR 0115](../ADR/0115-atomic-local-device-key-initialization.md), [guida](local-crypto-device-key.md). Nessun backend o dipendenza nuova.
 
-## Non rilasciato — issue #121 (epic #6/#10)
+### Salvataggio sicuro delle impostazioni AI — #121
 
 **Salvataggio delle impostazioni AI protetto durante la cifratura delle chiavi**
 
@@ -16,7 +18,7 @@
 - Ogni tentativo ha una generazione per scheda: i salvataggi precedenti non possono essere applicati dopo uno nuovo né sovrascriverne l'avviso. `saveSettings` ricontrolla il fence dopo `getDb` e appena prima della richiesta di scrittura; l'autore deve riprovare esplicitamente dopo un conflitto.
 - Vitest su cifratura, apertura DB, rimozione e due click; Playwright desktop/mobile con cifratura ritardata. [ADR 0114](../ADR/0114-endpoint-settings-save-fencing.md) e [guida](ai-model-inventory.md). Nessuna dipendenza o modifica canone/ZIP.
 
-## Non rilasciato — issue #119 (epic #6)
+### Cataloghi /models non obsoleti — #119
 
 **Il catalogo /models non sovrascrive configurazioni cambiate durante la richiesta**
 
@@ -24,7 +26,7 @@
 - Due ricerche concorrenti sullo stesso endpoint non possono applicare una risposta precedente dopo la più recente. Controllo eseguito prima del fetch (dopo la decifratura) e immediatamente prima del commit in memoria, con aggiornamenti sincronizzati dei ref React e nessun effetto collaterale negli updater.
 - Nuovi test Vitest e Playwright desktop/mobile con provider mock ritardato; nessun invio ulteriore, nessuna persistenza di chiavi, nessuna modifica al canone. [Guida](ai-model-inventory.md), [ADR 0113](../ADR/0113-stale-model-inventory-response-fence.md), #119.
 
-## Non rilasciato — issue #118 (main)
+### Validazione del catalogo modelli — #118
 
 **Scoperta modelli AI: cataloghi esterni limitati e non distruttivi**
 

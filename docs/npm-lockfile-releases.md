@@ -6,7 +6,7 @@ Per evitare che CI e deploy risolvano versioni npm diverse, `src/frontend/packag
 
 ## Aggiornare consapevolmente un pacchetto
 
-1. Crea un branch nuovo da `main` e modifica le dipendenze/versione SemVer nel `src/frontend/package.json`. Tieni allineati `tailwindcss` e `@tailwindcss/vite` a versioni **esattamente uguali e pubblicate**; considera rischio di pacchetti nativi opzionali.
+1. Controlla la HEAD aggiornata di `main` e la issue di release. Per le release concordate direttamente su `main`, prepara un commit fast-forward con manifest, lockfile e changelog coerenti; se il registro npm non è raggiungibile nel tuo ambiente, usa un runner GitHub Actions temporaneo **senza permessi di scrittura** per rigenerare i file e verificane la provenienza. Modifica le dipendenze/versione SemVer nel `src/frontend/package.json`. Tieni allineati `tailwindcss` e `@tailwindcss/vite` a versioni **esattamente uguali e pubblicate**; considera rischio di pacchetti nativi opzionali.
 2. Da Node 22/npm 10, con accesso al registro npm ufficiale, genera nuovamente il lockfile:
    ```sh
    cd src/frontend
@@ -24,7 +24,7 @@ Per evitare che CI e deploy risolvano versioni npm diverse, `src/frontend/packag
    npm run test:e2e
    ```
    Per i test browser occorrono Chromium e le librerie Playwright previste dal progetto.
-5. Committa manifest, lockfile, versioning, changelog e documentazione **insieme**. Apri la PR e attendi la CI completa sulla HEAD esatta, inclusi Playwright desktop/mobile. Dopo merge, verifica gli SHA e i risultati separati di CI `main`, Pages e cleanup. Non equiparare merge e deploy.
+5. Committa manifest, lockfile, versioning, changelog e documentazione **insieme**, senza modificare il lockfile a mano. Per lo sviluppo diretto su `main` concordato, usa un fast-forward con verifica dell'expected HEAD e senza force; non aprire branch/PR non richiesti. Rimuovi eventuali workflow temporanei **nel commit di release**. Verifica la CI completa sulla HEAD esatta, inclusi Playwright desktop/mobile, EPUBCheck, Pages e cleanup. Non equiparare commit e deploy.
 
 ## Cosa significa il nuovo controllo
 
@@ -35,3 +35,11 @@ Un lockfile riduce il drift delle versioni; non certifica automaticamente l'asse
 ## Contesto incidente
 
 La PR #41 (v0.10.6) aveva CI verde, ma il primo deploy su `main` fallì per `@tailwindcss/oxide@4.3.5` non disponibile. La PR #42 (v0.10.7) limitò il problema con versioni pinned e Pages tornò verde. La **issue #43** e ADR 0031 completano il passaggio a una singola risoluzione npm registrata.
+
+## Release 0.11.81 — issue #120
+
+- Versione rigenerata su runner GitHub Actions con Node 22/npm 10 usando `npm version 0.11.81 --no-git-tag-version --ignore-scripts` e `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`.
+- Controllo automatico di tutte le voci del lockfile: **nessuna dipendenza transitiva aggiunta o modificata** rispetto a 0.11.80; modificata solo la versione root da 0.11.80 a 0.11.81. URL `resolved` e checksum `integrity` invariati.
+- [Riproduzione npm #43002614967](https://github.com/KeyserDSoze/BookWriter/actions/runs/43002614967): due installazioni `npm ci` pulite e due cicli TypeScript, Vitest, smoke e build. I file provengono dai log del runner con frammenti, quantità e lunghezze convalidate: non sono stati costruiti manualmente.
+- La CI di `main` include Playwright Chromium desktop/mobile, EPUBCheck e Pages; i risultati di release definitivi devono essere verificati sulla HEAD del commit, non solo sul runner di preparazione.
+- Nessuna nuova dipendenza, backend, mutazione di libri/canone o chiavi API. Changelog 0.11.81: #118, #119, #121 e #122.
