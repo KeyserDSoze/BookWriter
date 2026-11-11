@@ -21,6 +21,6 @@ Una risposta tardiva non deve sovrascrivere memoria, timeline e segreti dopo una
 
 ## Verifiche e limiti
 
-Vitest: checkpoint immutato, varianti di scena/ordine/status e memoria privata, fase/stage/capitolo/cursore mutati, cursore legacy mancante, scena congelata e segmenti multipli. Il runner conserva le protezioni di lease writer e CAS IndexedDB indipendenti dal gate. Frontend CI con Playwright desktop/mobile, EPUBCheck su quattro EPUB, Pages e cleanup devono essere verificati sulla **stessa HEAD** prima di chiudere #140.
+Vitest: checkpoint immutato, varianti di scena/ordine/status e memoria privata, fase/stage/capitolo/cursore mutati, cursore legacy mancante, scena congelata e segmenti multipli. Test d'integrazione del runner: restore concorrente della memoria direttamente in IndexedDB con **updatedAt invariato** durante il provider mock; anche quando il CAS generico non rileva la variazione, la riconciliazione viene rifiutata senza sovrascrivere il segreto aggiornato, senza canonizzare la scena, mantenendo nel ledger i token restituiti dal provider. Il runner conserva le protezioni di lease writer e CAS IndexedDB indipendenti dal gate. Frontend CI con Playwright desktop/mobile, EPUBCheck su quattro EPUB, Pages e cleanup devono essere verificati sulla **stessa HEAD** prima di chiudere #140.
 
 La comparazione locale garantisce solo che la **risposta appartiene al prompt preparato**, non che la riconciliazione del modello sia vera, esaustiva o semanticamente corretta. L'uso reale di crediti resta soggetto al ledger e al budget AI.
