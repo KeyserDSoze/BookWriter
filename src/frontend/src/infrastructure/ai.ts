@@ -245,15 +245,34 @@ export async function fetchModels(
   try {
     if (signal?.aborted) throw new DOMException("Richiesta annullata.", "AbortError");
     let response: Response;
+    // A provider/test proxy can ignore abort before headers. Do not wait for
+    // the underlying fetch forever; the same deadline covers headers and body.
+    let waitingForHeaders = true;
+    let onDeadline: (() => void) | undefined;
+    const interruptedHeaders = new Promise<never>((_, reject) => {
+      onDeadline = () => reject(new Error("Ricerca modelli interrotta."));
+      controller.signal.addEventListener("abort", onDeadline, { once: true });
+      if (controller.signal.aborted) onDeadline();
+    });
     try {
-      response = await fetch(base + "/models", {
+      const pendingHeaders = fetch(base + "/models", {
         method: "GET", mode: "cors", credentials: "omit",
         referrerPolicy: "no-referrer", cache: "no-store", redirect: "error",
         headers: { Authorization: "Bearer " + secret },
         signal: controller.signal,
+      }).then(late => {
+        if (!waitingForHeaders) {
+          try { void late.body?.cancel().catch(() => {}); }
+          catch { /* stale response may already be locked */ }
+        }
+        return late;
       });
+      response = await Promise.race([pendingHeaders, interruptedHeaders]);
     } catch {
       throw new Error("Impossibile contattare il catalogo modelli: verifica rete, URL e CORS.");
+    } finally {
+      waitingForHeaders = false;
+      if (onDeadline) controller.signal.removeEventListener("abort", onDeadline);
     }
     if (!response.ok) throw new Error(friendlyApiError(response.status));
     const parsed = await boundedModelCatalog(response, controller.signal);
