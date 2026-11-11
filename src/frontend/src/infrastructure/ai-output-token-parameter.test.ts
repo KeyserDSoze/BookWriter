@@ -67,7 +67,8 @@ describe("Parametro limite token POST Chat Completions", () => {
       outputTokenParameter:"max_completion_tokens",
     });
     settings.taskRoutes.chapterAudit={endpointId:"compat",modelId:"model-a"};
-    const request=vi.fn().mockResolvedValue(ok());
+    // A Response body is a one-shot ReadableStream: give each POST its own body.
+    const request=vi.fn().mockImplementation(async()=>ok());
     vi.stubGlobal("fetch",request);
     await callModel("chapterAudit","Sistema","Prompt",settings,book,
       new AbortController().signal,{maxOutputTokens:256});

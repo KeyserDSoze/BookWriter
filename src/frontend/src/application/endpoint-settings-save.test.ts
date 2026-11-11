@@ -110,7 +110,9 @@ describe("Salvataggio impostazioni endpoint protetto da snapshot",()=>{
     expect(db.writes).toHaveLength(1);
     expect(db.writes[0]!.endpoints[0]!.outputTokenParameter).toBe("max_completion_tokens");
     expect(db.writes[0]!.endpoints[0]!.secret).toEqual(encrypted("new-private-key"));
-    expect(JSON.stringify(db.writes)).not.toContain("new-private-key");
+    // The fake encrypted IV/cipher intentionally include the tag: assert
+    // no plaintext field rather than forbidding substrings in fake ciphertext.
+    expect(JSON.stringify(db.writes)).not.toContain('"new-private-key"');
   });
 
   it("rifiuta ogni valore sconosciuto prima di cifrare qualunque chiave o scrivere IndexedDB",async()=>{
