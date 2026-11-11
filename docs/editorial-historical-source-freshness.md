@@ -1,5 +1,11 @@
 # Rivalidazione delle fonti storiche nella redazione (v0.11.69)
 
+## Il dossier usato dall'AI non può cambiare durante la risposta (#144)
+
+Oltre al controllo sulle citazioni dei rilievi già archiviati, BookWriter lega ora la risposta del **revisore storico** e quella del **giudice critico** all'esatto dossier storico del capitolo **mostrato nel prompt**. Se durante la richiesta un import o ripristino cambia estratti, revisioni, fonti attive, provenienza dichiarata, OCR o schede bibliografiche, l'output viene scartato, anche se il `updatedAt` del libro non cambia.
+
+Il controllo usa una snapshot **temporanea in memoria**, mai registrata come nuovo dato sensibile. Il libro mantiene il dossier più recente; non vengono approvati report o verdetti basati su fonti superate, neppure se il rapporto dice semplicemente `pass` e non contiene citazioni. Nessun re-fetch nascosto, ricerca aggiuntiva, retry o prova automatica della verità storica. Il confronto della fonte non sostituisce il giudizio critico dell'autore. [ADR 0126](../ADR/0126-historical-dossier-prompt-freshness.md) · [issue #144](https://github.com/KeyserDSoze/BookWriter/issues/144).
+
 ## Perché anche una review completa può diventare obsoleta
 
 Il manoscritto può restare esattamente lo stesso dopo i dodici rapporti, mentre il dossier storico cambia. Una revisione di Wikipedia viene sostituita; una trascrizione è ritirata; una fonte non contiene più la citazione usata; due documenti dichiarati indipendenti si rivelano derivati dalla stessa fonte. Il numero dei report e l'impronta del testo **non** individuano questi problemi.
