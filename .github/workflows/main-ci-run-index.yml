@@ -1,0 +1,40 @@
+name: Index main CI runs for release verification
+
+# Read-only checkout permissions; issue comments expose exact workflow run IDs
+# needed for CI/deploy verification. No source checkout or code writes.
+on:
+  workflow_run:
+    workflows:
+      - Frontend CI
+      - Deploy BookWriter Pages
+      - Cleanup merged branches
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  record:
+    if: >-
+      ${{ github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record verified-source run identifier while release issue is open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          state="$(gh api "repos/$GITHUB_REPOSITORY/issues/136" --jq '.state')"
+          if [ "$state" != "open" ]; then
+            echo "Release tracking issue #136 is closed; no comment needed."
+            exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/issues/136/comments" \
+            -f "body=BOOKWRITER136|CI|$RUN_ID|$RUN_SHA|$RUN_NAME|$RUN_CONCLUSION. Automated run index; inspect jobs and logs before closing issues."
