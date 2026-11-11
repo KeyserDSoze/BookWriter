@@ -28,6 +28,8 @@ export interface EndpointProfile {
   baseUrl: string;
   secret: EncryptedSecret | null;
   models: string[];
+  /** Max time awaiting POST /chat/completions headers (60–1800 s); default 300. */
+  headerTimeoutSeconds?: number;
 }
 export interface ModelRoute { endpointId: string; modelId: string; }
 /** User-entered tariff (not verified against provider invoices). */
