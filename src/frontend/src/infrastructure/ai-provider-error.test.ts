@@ -80,7 +80,7 @@ describe("HTTP 200: usage osservato ma testo non utilizzabile", () => {
     const {book,settings}=fixture();
     vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({
       choices:null,usage:{prompt_tokens:17,completion_tokens:5},
-    }),{status:200})));
+    }),{status:200,headers:{"content-type":"application/json"}})));
     await expect(callModel("chapterAudit","System","Prompt",settings,book,
       new AbortController().signal)).rejects.toMatchObject({
         name:"MalformedProviderContentError",inputTokens:17,outputTokens:5,
