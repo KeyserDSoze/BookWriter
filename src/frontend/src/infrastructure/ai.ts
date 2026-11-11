@@ -2,6 +2,7 @@ import type { AppSettings, BookProject, TaskKind } from "../domain/types";
 import { routeFor } from "../domain/types";
 import { decryptLocal } from "./crypto";
 import { validTokenCount } from "../domain/ai-usage";
+import { assertChatModelCapability } from "../domain/model-capabilities";
 import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
@@ -84,6 +85,7 @@ export async function callModel(
   const endpoint = settings.endpoints.find(p => p.id === assignment.endpointId);
   if (!endpoint) throw new Error(`Endpoint non configurato per ${kind}.`);
   if (!assignment.modelId.trim()) throw new Error(`Seleziona il modello per l'attività ${kind} nelle Impostazioni.`);
+  assertChatModelCapability(endpoint, assignment.modelId);
   // Fail closed on malformed local/imported settings before decrypting or POST.
   const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
   if (options?.maxOutputTokens !== undefined &&

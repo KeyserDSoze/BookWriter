@@ -22,12 +22,17 @@ import type { NarrativeTransferShareDecision } from "./narrative-transfer-sharin
 import type { EditorialVerificationChoice } from "./editorial-verification-choices";
 
 export interface EncryptedSecret { iv: string; data: string; }
+/** Author-declared roles; /models does not attest capabilities. */
+export type ModelCapability = "chat" | "tools" | "embedding" | "voice";
+export type AuxiliaryModelCapability = Exclude<ModelCapability, "chat">;
 export interface EndpointProfile {
   id: string;
   name: string;
   baseUrl: string;
   secret: EncryptedSecret | null;
   models: string[];
+  /** Manual per-model labels. Missing field = legacy, no role restriction. */
+  modelCapabilities?: Record<string, ModelCapability[]>;
   /** Opt out of Bearer only for literal loopback hostnames; legacy requires api_key. */
   authMode?: "api_key" | "none";
   /** Max time awaiting POST /chat/completions headers (60–1800 s); default 300. */
@@ -69,6 +74,8 @@ export interface AppSettings {
   endpoints: EndpointProfile[];
   defaultRoute: ModelRoute;
   taskRoutes: Partial<Record<TaskKind, ModelRoute>>;
+  /** Selected defaults for future adapters; Chat continues to use defaultRoute. */
+  capabilityRoutes?: Partial<Record<AuxiliaryModelCapability, ModelRoute>>;
   aiPriceRates?: AiPriceRate[];
   theme: "dark" | "light" | "system";
 }

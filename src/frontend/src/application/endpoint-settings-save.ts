@@ -1,6 +1,7 @@
 import type { AppSettings, EncryptedSecret } from "../domain/types";
 import { chatOutputTokenParameter, endpointAuthMode, normalizeEndpoint } from "../infrastructure/ai";
 import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
+import { assertModelCapabilitySettings } from "../domain/model-capabilities";
 
 export interface EndpointSettingsSnapshot {
   settings: AppSettings;
@@ -43,6 +44,8 @@ export class EndpointSettingsSaveCoordinator {
       if (!isCurrent()) throw new StaleEndpointSettingsSave(attempt !== this.latest);
     };
     try {
+      // Validate all declared model tags and defaults before encryption/IndexedDB.
+      assertModelCapabilitySettings(snapshot.settings);
       // Validate all endpoint profiles before starting any encryption.
       const verified = snapshot.settings.endpoints.map(profile => {
         const baseUrl = normalizeEndpoint(profile.baseUrl);
