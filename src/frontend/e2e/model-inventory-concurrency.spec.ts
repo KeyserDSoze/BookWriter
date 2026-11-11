@@ -98,8 +98,16 @@ test("solo l'ultima ricerca concorrente aggiorna i modelli; salvataggio persiste
     await expect(models).toHaveValue("catalog-2");
     await expect(page.getByText("Trovati 1 modelli. Premi Salva impostazioni per conservarli.")).toBeVisible();
 
+    const previousResponse = page.waitForResponse(async response =>
+      response.url().endsWith("/v1/models") &&
+      (await response.json() as {data?: Array<{id?: string}>}).data?.[0]?.id === "catalog-1");
     catalog.release(1);
-    // The earlier request cannot overwrite the newer accepted catalogue.
+    await previousResponse;
+    // Drain browser microtasks and a React render after the older response,
+    // not merely an assertion that passed before the fetch finished.
+    await page.evaluate(() => new Promise<void>(resolve => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
     await expect(models).toHaveValue("catalog-2");
     await page.getByRole("button", { name: "Salva impostazioni" }).click();
     await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();

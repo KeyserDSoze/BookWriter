@@ -229,6 +229,7 @@ export default function App() {
     const startingDraft = keyDraftsRef.current[endpointId] ?? "";
     const attempt = (latestModelInventoryRequest.current[endpointId] ?? 0) + 1;
     latestModelInventoryRequest.current[endpointId] = attempt;
+    setNotice("Ricerca catalogo modelli in corso…");
     const newest = () => latestModelInventoryRequest.current[endpointId] === attempt;
     const current = () => isCurrentModelInventoryRequest(
       endpoint, settingsRef.current, startingDraft,
