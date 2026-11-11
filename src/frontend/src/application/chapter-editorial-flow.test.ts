@@ -5,6 +5,7 @@ import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infra
 const { modelCall, writerGuard } = vi.hoisted(() => ({ modelCall: vi.fn(), writerGuard: vi.fn() }));
 vi.mock("../infrastructure/ai", () => ({ callModel: modelCall }));
 vi.mock("./writer-guard", () => ({ withWriterGuard: writerGuard }));
+import { createEditorialCycle } from "../domain/editorial-board";
 import { AutopilotRunner } from "./autopilot";
 
 function book(): BookProject {
@@ -140,6 +141,45 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(tasks.filter(x=>x==="chapterRepair")).toHaveLength(1);
     expect(tasks.filter(x=>x==="consolidate")).toHaveLength(1);
   });
+  it("non sovrascrive il canone se la memoria cambia durante reconcile senza bump updatedAt",async()=>{
+    const source=book();
+    source.phase="chapterReview";
+    source.chapters[0]!.scenes[0]!.status="draft";
+    source.editorialCycle=createEditorialCycle("ch-1");
+    source.editorialCycle.stage="reconcile";
+    source.editorialCycle.reconcileCursor=0;
+    await saveBook(source,false);
+    modelCall.mockImplementation(async(kind:string)=>{
+      expect(kind).toBe("consolidate");
+      // Simulate a legacy restore that changes the source without incrementing
+      // updatedAt. The generic DB revision fence alone cannot detect this.
+      const changed=(await getBook(source.id))!;
+      const unchangedStamp=changed.updatedAt;
+      changed.memory.secrets.chiave="NUOVO SEGRETO PRIVATO DELL'AUTORE";
+      changed.memory.currentState="L'autore ha corretto la memoria narrativa.";
+      expect(changed.updatedAt).toBe(unchangedStamp);
+      await (await getDb()).put("books",changed);
+      return {text:JSON.stringify(source.memory),endpointId:"test",modelId:"Memory",
+        inputTokens:45,outputTokens:27};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const actual=(await getBook(source.id))!;
+    expect(modelCall).toHaveBeenCalledTimes(1);
+    expect(actual.status).toBe("error");
+    expect(actual.previousError).toMatch(/Riconciliazione obsoleta/);
+    expect(actual.previousError).not.toContain("NUOVO SEGRETO PRIVATO");
+    expect(actual.memory.secrets.chiave).toBe("NUOVO SEGRETO PRIVATO DELL'AUTORE");
+    expect(actual.memory.currentState).toBe("L'autore ha corretto la memoria narrativa.");
+    expect(actual.editorialCycle).toMatchObject({stage:"reconcile",reconcileCursor:0});
+    expect(actual.chapters[0]!.scenes[0]!.status).toBe("draft");
+    expect(actual.chapters[0]!.frozenAt).toBeUndefined();
+    const attempted=(await listActivities(source.id)).filter(a=>a.aiRequested);
+    expect(attempted).toHaveLength(1);
+    expect(attempted[0]).toMatchObject({
+      status:"failed",inputTokens:45,outputTokens:27,
+    });
+  });
+
   it("non applica il report AI se l'autore modifica il libro durante la chiamata",async()=>{
     const source=book();await saveBook(source,false);
     modelCall.mockImplementation(async()=>{
