@@ -111,6 +111,9 @@ export async function callModel(
   }
   if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
   if (!response.ok) {
+    // Do not read untrusted error payloads; release the stream best effort.
+    // Cancellation is not a second request and must not hide the HTTP status.
+    void response.body?.cancel().catch(() => {});
     const reason = friendlyApiError(response.status);
     // A rejected request may have been billed; never inspect provider body or retry.
     if ((response.status === 400 || response.status === 422) && options?.maxOutputTokens !== undefined) {
