@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ShieldAlert, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import type { Activity, AiPriceRate, AppSettings, BookProject, ModelRoute } from "../domain/types";
-import { accountBookAiBudget, accountSessionAiBudget, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid, isPriceRate } from "../domain/ai-budget";
+import { accountBookAiBudget, accountSessionAiBudget, assessAiBudgetHeadroom, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid, isPriceRate } from "../domain/ai-budget";
 import { getBook, saveBook } from "../infrastructure/db";
 import { exportAiCostLedgerCsv } from "../infrastructure/ai-ledger-export";
 import { isBillableAttempt } from "../domain/ai-budget";
@@ -56,6 +56,10 @@ export function AiBudgetPanel({
   const sessionAccounting = sessionBudget && recentSession?.runId
     ? accountSessionAiBudget(activities, settings, sessionBudget, book.id, recentSession.runId)
     : undefined;
+  const bookHeadroom = snapshot && book.aiBudget?.enabled
+    ? assessAiBudgetHeadroom(snapshot, book.aiBudget.limitEur) : undefined;
+  const sessionHeadroom = sessionBudget && sessionAccounting
+    ? assessAiBudgetHeadroom(sessionAccounting, sessionBudget.sessionLimitEur!) : undefined;
   const rateIn = editingPrice ? draftInput : String(savedRate?.inputEurPerMillion ?? "");
   const rateOut = editingPrice ? draftOutput : String(savedRate?.outputEurPerMillion ?? "");
 
@@ -147,6 +151,24 @@ export function AiBudgetPanel({
     {book.aiBudget?.enabled && snapshot && <div className="mt-3 space-y-1 rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
       <p><b>Spesa stimata da usage noto:</b> {money(snapshot.estimatedSpentEur)}</p>
       <p><b>Soglia configurata:</b> {money(book.aiBudget.limitEur)}</p>
+      {bookHeadroom?.knownRemainingEur !== undefined &&
+        <p><b>Margine stimato noto del libro:</b> {money(bookHeadroom.knownRemainingEur)}
+          <span className="muted text-xs"> · Non comprende la riserva per la prossima richiesta né addebiti esterni.</span>
+        </p>}
+      {bookHeadroom?.status === "vicino" &&
+        <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+          Avviso preventivo libro: almeno l'80% del limite stimato è già utilizzato
+          secondo i token noti. Verifica prezzi e margine prima di riprendere.
+        </p>}
+      {bookHeadroom?.status === "raggiunto" &&
+        <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+          Limite stimato del libro raggiunto: la prossima chiamata sarà bloccata dal preflight.
+        </p>}
+      {bookHeadroom?.status === "incerto" &&
+        <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+          Consumi incerti del libro: il margine non è affidabile; il preflight bloccherà
+          nuove richieste finché l'uso o la tariffa rimangono sconosciuti.
+        </p>}
       <p className="muted text-xs">
         Dal {new Date(book.aiBudget.enabledAt).toLocaleString("it-IT")} ·
         {snapshot.countedCalls} richieste · {snapshot.incompleteCount} senza usage completo ·
@@ -163,6 +185,24 @@ export function AiBudgetPanel({
       {sessionAccounting ? <>
         <p><b>Ultima sessione AI registrata:</b> {money(sessionAccounting.estimatedSpentEur)} di stima nota ·
           {" "}{sessionAccounting.countedCalls} tentativi.</p>
+        {sessionHeadroom?.knownRemainingEur !== undefined &&
+          <p><b>Margine stimato noto della sessione:</b> {money(sessionHeadroom.knownRemainingEur)}
+            <span className="muted text-xs"> · Esclude la riserva della prossima richiesta.</span>
+          </p>}
+        {sessionHeadroom?.status === "vicino" &&
+          <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+            Avviso preventivo sessione: almeno l'80% del plafond stimato di questa sessione
+            è già utilizzato. La prossima richiesta potrebbe non rientrare nel margine.
+          </p>}
+        {sessionHeadroom?.status === "raggiunto" &&
+          <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+            Limite stimato della sessione raggiunto: il preflight bloccherà le richieste del run.
+          </p>}
+        {sessionHeadroom?.status === "incerto" &&
+          <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+            Consumi incerti della sessione: impossibile calcolare un margine affidabile
+            con usage o tariffa mancanti.
+          </p>}
         {sessionAccounting.incompleteCount + sessionAccounting.unpricedCount > 0 &&
           <p role="note" className="text-xs text-amber-700 dark:text-amber-300">
             {sessionAccounting.incompleteCount} tentativi senza usage completo ·
@@ -219,11 +259,6 @@ export function AiBudgetPanel({
         <Button size="sm" disabled={busy} variant="outline" onClick={() => void saveRate()}>Salva tariffa del modello</Button>
       </> : <p className="muted text-sm">Configura prima un modello in Impostazioni → Router dei modelli.</p>}
     </div>
-    {(snapshot && (snapshot.incompleteCount > 0 || snapshot.unpricedCount > 0)) &&
-      <p role="alert" className="mt-3 flex gap-2 text-sm text-amber-700 dark:text-amber-300">
-        <ShieldAlert size={17} className="shrink-0"/>
-        Consumi incerti: l'autopilot si fermerà per sicurezza prima delle nuove chiamate.
-      </p>}
     <p className="muted mt-3 text-xs">
       Il modello potrebbe ignorare max_tokens e un provider potrebbe addebitare chiamate senza usage.
       Il browser non conosce il credito reale: verifica sempre fatture e tariffe sul portale del provider.

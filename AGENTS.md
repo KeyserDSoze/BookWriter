@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Avvisi anticipati del budget stimato AI — #132, ADR 0121, epic #17
+
+- Sia il periodo del libro sia l'**ultima sessione AI del solo libro** mostrano stato puro da `assessAiBudgetHeadroom` calcolato su `accountBookAiBudget`/`accountSessionAiBudget`. **Dall'80% incluso** del consumo stimato noto, mostrare un warning accessibile, distinto dallo stop alla soglia completa. Evitare un avviso per sessioni inesistenti o quando budget disattivato, isolare rigorosamente libro e `runId`.
+- Quando usage o tariffa di un tentativo AI sono incompleti/invalidi, il livello è `incerto`: **nascondere il margine stimato apparentemente disponibile**, e non affermare zero addebiti. Solo se complete, indicare `max(0, limite - spesa stimata da usage noto)` come margine stimato, non saldo provider, fattura, riserva per nuovo prompt o tetto multi-device.
+- L'80% è **solo informazione**: non modificare preflight, Activity, stato dell'autopilot, writer lease, canone, backup ZIP o numero versione. Test unitari confini 0/80/100/unknown e Playwright desktop/mobile su due sessioni, incremento dei limiti e isolamento dei libri. Lasciare npm `0.11.85` fino al successivo bump generato con npm ufficiale. [ADR 0121](ADR/0121-early-ai-budget-headroom-warnings.md), [guida](docs/ai-budget.md).
+
 ### Release v0.11.85 — issue #131, limite AI per sessione #130
 
 - `src/frontend/package.json` e `src/frontend/package-lock.json` versione **0.11.85** sono rigenerati con npm 10/Node 22 dal registro npm ufficiale, senza edit manuali o modifica di `resolved`/`integrity`; preservare le 235 voci del dependency tree. Due `npm ci` puliti e due cicli typecheck, Vitest, smoke e build precedono il commit. La UI deriva la versione dal manifest.

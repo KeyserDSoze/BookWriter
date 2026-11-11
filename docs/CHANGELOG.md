@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #132 (epic #17/#6)
+
+**Avvisi preventivi per margine del budget AI noto, per libro e sessione**
+
+- Nel pannello Budget AI, la stima di uso osservato attiva un avviso informativo **dall'80%** della soglia del libro e separatamente del plafond dell'ultima sessione AI registrata, con stato di limite raggiunto dal 100%. Viene mostrato il `margine stimato noto` soltanto se tutti i tentativi potenzialmente fatturabili del periodo hanno usage e tariffa completi e validi.
+- Consumo **incerto** (usage incompleto/in corso o tariffa invalida) prevale sugli avvisi percentuali e **nasconde il margine apparente**; nessun saldo finanziario o fattura provider inventati. I warning **non cambiano** preflight, writer guard, Activity, periodo, canon o riserve per la prossima chiamata. Budget disattivato e libro senza sessione non mostrano avvisi.
+- Nuovi Vitest su soglie e priorità dell'incertezza e Playwright desktop/mobile su 80% libro/sessione, cambio consapevole dei limiti, usage ignoto e isolamento dei libri. [ADR 0121](../ADR/0121-early-ai-budget-headroom-warnings.md) · [guida](ai-budget.md) · #132. **Versione npm ancora 0.11.85**; release numerica successiva separata.
+
 ## 0.11.85 — 2026-11-11 (main, issue #130, epic #17/#6)
 
 **Limite preventivo stimato per singola sessione AI**

@@ -12,6 +12,12 @@ La redazione multi-agente usa almeno **12 chiamate per segmento**, oltre a giudi
 
 La protezione si applica anche alle proposte AI facoltative di fusione delle scene. Le fusioni manuali e le operazioni locali non richiedono credito AI.
 
+## Avvisi preventivi di budget e margine noto — issue #132
+
+Quando il budget del libro è attivo, la Dashboard mostra il **margine stimato noto del libro** come differenza fra limite locale e soli costi stimabili usando usage completo e tariffe manuali valide. **Dall'80% di spesa stimata osservata**, un messaggio **Avviso preventivo libro** segnala che ti stai avvicinando alla soglia; dal 100% mostra **Limite stimato del libro raggiunto**. Se hai configurato anche il plafond per singolo Avvia/Riprendi, gli stessi messaggi e il margine sono **separati per l'ultima sessione registrata**, senza sommare altri runId al suo tetto. Gli avvisi dell'80% sono informativi: **non fermano** le chiamate in anticipo; prima di ogni invio il preflight resta obbligato a stimare e riservare anche il nuovo input/output.
+
+Se anche **un solo tentativo** del periodo ha uso osservato incompleto, è in corso, o manca una tariffa valida, il messaggio diventa **Consumi incerti** e **non viene mostrato un margine disponibile**. Non considerare quindi “margine non mostrato” uguale a zero costo. L'importo visibile con consumo completo è una **stima locale**, non il saldo del provider: non include prossime riserve, addebiti esterni, caching, tasse o cambio valuta. Un libro con budget disattivato o una sessione senza chiamate non genera warning. [ADR 0121](../ADR/0121-early-ai-budget-headroom-warnings.md).
+
 ## Limite aggiuntivo per singola sessione AI — issue #130
 
 Nella Dashboard, oltre alla soglia globale per libro, puoi configurare il **Limite aggiuntivo per sessione AI (€)**, facoltativo (0,01–100.000 €). Lascia il campo vuoto per utilizzare soltanto il budget del libro. Quando è abilitato, per ogni richiesta il runner somma le stime dei tentativi del `runId` corrente e riserva il massimo stimato di input/output: se raggiunge il limite di sessione, la nuova chiamata **non viene inviata**, anche con plafond globale ancora disponibile.

@@ -28,3 +28,8 @@ Il budget preventivo opzionale del libro considera tutti i tentativi AI osservat
 ## Verifiche
 
 Vitest sul preflight globale + sessione, isolamento fra libri/runId/date, blocco dopo più chiamate nello stesso run, ripresa con budget globale immutato, mancanza di runId, uso incerto, snapshot invalidi e limiti numerici; backup ZIP valido, legacy e manomesso; Playwright Chromium desktop/mobile per blocco prima della rete con limite sessione, aumento deliberato e arresto per usage mancante. CI, Pages, cleanup e EPUBCheck 5.4.0 sulla medesima HEAD definitiva prima di chiudere #130.
+
+
+## Estensione di osservabilità — ADR 0121 / #132
+
+La UI del budget per sessione riceve ora un **avviso anticipato dall'80%** della spesa stimata nota nel `runId` più recente, indipendente dall'avviso sul periodo globale. È una proiezione dell'accounting, senza blocco aggiuntivo prima del provider o nuovo stato persistente; usage/tariffe incerti **nascondono** i margini apparentemente disponibili. [ADR 0121](0121-early-ai-budget-headroom-warnings.md) conserva definizioni e limiti, compreso il fatto che la Dashboard non può conoscere la riserva della prossima richiesta.

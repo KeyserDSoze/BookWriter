@@ -16,6 +16,10 @@ La sezione **Dashboard → Consumi AI registrati** mostra i token dichiarati dag
 
 Sono mostrate le attività registrate **soltanto per il libro selezionato**. Gli interventi manuali che non invocano l'AI non vengono sommati come chiamate a pagamento.
 
+## Avvisi anticipati della soglia stimata — issue #132
+
+La Dashboard, quando il budget opzionale è abilitato, mostra un avviso **dall'80% del consumo stimato conosciuto** del libro e, indipendentemente, dell'ultima sessione `runId`. Se il valore noto è arrivato al 100% compare un avviso di tetto raggiunto. **Se anche un tentativo ha usage incompleto/in corso o tariffa assente, non viene mostrato alcun margine disponibile**: “consumi incerti” non significa zero fatturato. È una segnalazione informativa, distinta dal preflight che considera la riserva del prossimo prompt e può bloccare anche sotto l'80% già osservato. [Guida](ai-budget.md) · [ADR 0121](../ADR/0121-early-ai-budget-headroom-warnings.md).
+
 ## Limite di stima per ogni sessione AI — issue #130
 
 L'autore può impostare `sessionLimitEur` facoltativo sul budget del libro. Ogni Avvia/Riprendi crea un nuovo `runId`; il preflight confronta **l'uso osservato di questa sessione + riserva della nuova richiesta** con il suo plafond, oltre a far rispettare il limite globale di libro. Usage mancante, parziale, `running` o tariffe invalide **non** equivalgono a costo zero. Una nuova sessione non cancella le richieste e le spese precedenti dal libro, e non dimostra fatture ufficiali. [Guida](ai-budget.md) · [ADR 0120](../ADR/0120-session-ai-budget.md).

@@ -118,7 +118,7 @@ test("budget desktop/mobile: prevent provider spend and stop after missing usage
   expect(after.status).toBe("paused");
   expect(after.attempts).toBe(1);
   expect(after.reviewed).toBe(1);
-  await expect(panel.getByText(/Consumi incerti/)).toBeVisible();
+  await expect(panel.getByRole("alert",{name:/Consumi incerti del libro/})).toBeVisible();
   const widths=await page.evaluate(()=>({actual:document.documentElement.scrollWidth,
     expected:window.innerWidth}));
   expect(widths.actual).toBeLessThanOrEqual(widths.expected+1);

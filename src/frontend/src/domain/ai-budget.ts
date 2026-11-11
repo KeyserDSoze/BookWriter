@@ -16,6 +16,37 @@ export interface AiBudgetAccounting {
   /** Complete legacy rows priced with today's rate (not a saved historical quote). */
   legacyPricedCount: number;
 }
+export const AI_BUDGET_WARNING_FRACTION = 0.8;
+export type AiBudgetHeadroomStatus = "sotto_soglia" | "vicino" | "raggiunto" | "incerto";
+export interface AiBudgetHeadroom {
+  status: AiBudgetHeadroomStatus;
+  /** Based only on complete, priced observed usage — never provider credit. */
+  knownRemainingEur?: number;
+  /** Ratio of priced, reported usage to the configured local ceiling, not a billing ratio. */
+  knownUsedFraction?: number;
+}
+
+/** Informational 80% notice. Missing usage outranks numeric margins; the
+ * preflight remains the only call-level stop and also reserves future output.
+ * Never infer a safe provider balance from an incomplete attempt.
+ */
+export function assessAiBudgetHeadroom(
+  accounting: AiBudgetAccounting, limitEur: number,
+): AiBudgetHeadroom {
+  if (!Number.isFinite(limitEur) || limitEur <= 0 ||
+      !Number.isFinite(accounting.estimatedSpentEur) || accounting.estimatedSpentEur < 0 ||
+      accounting.incompleteCount > 0 || accounting.unpricedCount > 0) {
+    return { status: "incerto" };
+  }
+  const fraction = accounting.estimatedSpentEur / limitEur;
+  return {
+    status: fraction >= 1 ? "raggiunto" :
+      fraction >= AI_BUDGET_WARNING_FRACTION ? "vicino" : "sotto_soglia",
+    knownRemainingEur: Math.max(0, limitEur - accounting.estimatedSpentEur),
+    knownUsedFraction: fraction,
+  };
+}
+
 export interface BudgetPreflight extends AiBudgetAccounting {
   estimatedNextEur: number;
   reservedInputTokens: number;
