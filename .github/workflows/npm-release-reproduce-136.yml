@@ -108,3 +108,12 @@ jobs:
               console.log("BOOKWRITER136|DATA|"+file+"|"+index+"|"+JSON.stringify(data.slice(index*size,(index+1)*size)));
           }
           NODE
+      - name: Upload exact npm release files for provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookwriter-npm-0.11.87-generated
+          path: |
+            src/frontend/package.json
+            src/frontend/package-lock.json
+          if-no-files-found: error
+          retention-days: 7
