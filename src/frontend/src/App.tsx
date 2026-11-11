@@ -578,8 +578,9 @@ export default function App() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Nome endpoint"><input className="field" value={endpoint.name} onChange={e => updateEndpoint(endpoint.id, { name: e.target.value })} /></Field>
                 <Field label="Base URL"><input className="field" inputMode="url" value={endpoint.baseUrl} onChange={e => updateEndpoint(endpoint.id, { baseUrl: e.target.value })} /></Field>
-                <Field label="Autenticazione AI">
-                  <select className="field" value={endpoint.authMode ?? "api_key"}
+                <div className="block min-w-0">
+                  <label className="mb-1 block text-sm font-semibold" htmlFor={`endpoint-auth-${endpoint.id}`}>Autenticazione AI</label>
+                  <select id={`endpoint-auth-${endpoint.id}`} className="field" value={endpoint.authMode ?? "api_key"}
                     onChange={e => {
                       const authMode = e.target.value as "api_key" | "none";
                       updateEndpoint(endpoint.id, { authMode });
@@ -592,7 +593,7 @@ export default function App() {
                     <option value="api_key">API key (Bearer)</option>
                     <option value="none">Nessuna autenticazione (solo localhost)</option>
                   </select>
-                </Field>
+                </div>
                 {endpoint.authMode !== "none" && <Field label={endpoint.secret ? "Nuova API key (opzionale; già salvata)" : "API key"}>
                   <input type="password" className="field" autoComplete="off" value={keyDrafts[endpoint.id] ?? ""} onChange={e => setKeyDrafts(old => ({ ...old, [endpoint.id]: e.target.value }))} placeholder={endpoint.secret ? "••••••••••" : "Inserisci la chiave"} />
                 </Field>}
