@@ -124,3 +124,20 @@ jobs:
             src/frontend/package-lock.json
           if-no-files-found: error
           retention-days: 7
+
+  report:
+    if: ${{ always() }}
+    needs: [generate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Record run ID on issue 136 for reproducibility verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GENERATE_RESULT: ${{ needs.generate.result }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/issues/136/comments" \
+            -f "body=BOOKWRITER136|RUN|$GITHUB_RUN_ID|$GITHUB_SHA|$GENERATE_RESULT. Provenance job has contents:read; issue reporter has issues:write only. Not a published release."
