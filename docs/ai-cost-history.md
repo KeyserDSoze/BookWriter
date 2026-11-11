@@ -1,4 +1,4 @@
-# Storico dei costi AI per singolo task — BookWriter, issue #128
+# Storico dei costi AI per singolo task — BookWriter v0.11.84, issue #128
 
 Nella Dashboard del libro, nel pannello **Budget AI del libro**, trovi la sezione **Storico dei costi per task AI**. Funziona anche se il budget preventivo è disattivato: legge soltanto le Activity locali del libro attualmente selezionato. Non chiama provider, non acquista token e non esporta prosa.
 

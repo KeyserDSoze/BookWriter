@@ -1,4 +1,4 @@
-# Aggiornare dipendenze e pubblicare BookWriter (npm lockfile v0.10.8)
+# Aggiornare dipendenze e pubblicare BookWriter (lockfile npm riproducibile)
 
 ## Scopo
 
@@ -59,3 +59,13 @@ La PR #41 (v0.10.6) aveva CI verde, ma il primo deploy su `main` fallì per `@ta
 - [Riproduzione npm read-only #43018025471](https://github.com/KeyserDSoze/BookWriter/actions/runs/43018025471), `completed/success`: **235 voci** nel lock, tree completo, URL `resolved` HTTPS e hash `integrity` invariati; soltanto la versione root cambia da 0.11.82 a 0.11.83. **Due `npm ci` puliti** e due cicli TypeScript, **779 Vitest (127 file)**, smoke e build superati. Hash del lock invariato durante entrambe le installazioni.
 - Manifest npm generato SHA-256 `2d59440f1ae1b887b8e0e27d976c295f58066b79685b3cd69019c0066ae94582`; lockfile npm generato SHA-256 `a4230c9b239b949114e402ac7997934e88cc964b3b8cefa60b70d4a00326bb2a`, recuperato da **39 frammenti indicizzati** con lunghezza verificata e confrontato integralmente con il precedente. Nessun edit manuale del lockfile, nuova dipendenza o migrazione ZIP.
 - Il workflow temporaneo read-only `npm-release-reproduce-127.yml` è cancellato **nello stesso commit di release**. Verificare e riportare su [#127](https://github.com/KeyserDSoze/BookWriter/issues/127) esiti CI (inclusi 2 progetti Playwright ed EPUBCheck su 4 EPUB), Pages e cleanup `completed/success` sulla **HEAD definitiva** prima di chiudere. Le tariffe e le fatture reali dei provider non sono state verificate.
+
+
+## Release 0.11.84 — issue #129
+
+- Inclusa la vista **storico costi per task AI** già sviluppata e verificata nella [#128](https://github.com/KeyserDSoze/BookWriter/issues/128). Il patch bump è stato prodotto da **Node 22/npm 10 e registry npm ufficiale** con `npm version 0.11.84 --no-git-tag-version --ignore-scripts` e `npm install --package-lock-only --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org`.
+- [Runner temporaneo read-only #43025978874](https://github.com/KeyserDSoze/BookWriter/actions/runs/43025978874), **`completed/success`**: manifest e lockfile v3 root `0.11.84`, **235 voci** del dependency tree preservate, `resolved` HTTPS e `integrity` delle voci transitive invariati. Il diff npm contiene solo il bump versione root.
+- **Due installazioni `npm ci` completamente pulite**, ciascuna con typecheck, **783 test Vitest (128 file)**, smoke e build superati. L'hash del lockfile generato da npm è rimasto invariato durante entrambe le installazioni.
+- Manifest npm generato SHA-256 `1c8d458cb4e3627cd2db040d7bafc14b63b1f7c3d023f942180bad1d18d3d7f5` (1 chunk), lockfile npm SHA-256 `24c9c83e3652cd3718534d362ca6d243a40886b2d624bc6281b0c0a4317222d7` (**39 chunk indicizzati**), entrambi prelevati dai log del runner con lunghezze e versioni controllate contro i file base. Nessuna modifica manuale a lockfile o hash.
+- Nel commit atomico di release il workflow `.github/workflows/npm-release-reproduce-129.yml` viene eliminato; rimangono solo CI, Pages e cleanup. **Prima di chiudere #129**, verificare sulla stessa HEAD definitiva Frontend CI (incl. Playwright Chromium desktop/mobile e EPUBCheck su quattro EPUB), Pages e cleanup tutti `completed/success`, annotando commit/run nell'issue.
+- Nessuna nuova dipendenza, migrazione ZIP, aggiornamento delle tariffe reali o accesso a fatture del provider. Le epic #17 e #6 rimangono aperte per la contabilità avanzata.

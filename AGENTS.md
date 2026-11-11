@@ -4,11 +4,17 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release 0.11.84 — issue #129, storico dei costi per task #128
+
+- Nuova versione `src/frontend/package.json` e `package-lock.json` **0.11.84**, generata soltanto con npm 10/Node 22 dal registro npm ufficiale e riproduzione read-only temporanea. Conservare dipendenze, `resolved` HTTPS e checksum `integrity`; verifica con due `npm ci` puliti e due suite TypeScript, Vitest, smoke e build. **Mai** modificare manualmente il lockfile.
+- Lo storico task #128 è incluso in changelog `0.11.84`; preservare fonte contabile condivisa col CSV e budget, filtraggio per singolo libro, distinguere uso incerto da costo zero, stime da fatture provider. Nessun cambio di canone, provider esterno, backup ZIP o credenziali.
+- Il workflow temporaneo read-only `.github/workflows/npm-release-reproduce-129.yml` va cancellato nello **stesso commit atomico** di manifest, lockfile e doc. Verificare CI completa (Playwright desktop/mobile + EPUBCheck), Pages e cleanup sulla HEAD definitiva prima di chiudere #129. Epic #17/#6/#20 restano aperte.
+
 ### Storico costi per task AI — issue #128, ADR 0119, epic #17
 
 - Lo storico della Dashboard deve limitarsi alle Activity del libro selezionato, usando `listBookAiCostHistory(bookId, activities, settings)` condiviso con il ledger CSV #126 e la stessa `assessAiCostAttempt` del budget. Escludere manuali e preflight `aiRequested=false`; conservare la distinzione fra zero valido, usage parziale, `running`, tariffe snapshot, legacy e snapshot corrotti. Nessuna fattura provider dimostrata.
 - Visualizzare al massimo dieci tentativi alla volta, più recenti prima, con estensione esplicita e filtro dei record senza stima; non caricare tutto il canone narrativo in UI e non aggiungere chiamate a provider. Il titolo Activity è metadata locale potenzialmente sensibile; React deve renderlo come testo senza HTML, mai aggiungere prompt, output, errori grezzi o chiavi nel pannello o nel CSV.
-- Mantenere layout mobile senza overflow e gestione di identificatori lunghi/importati, test Vitest di isolamento/prezzi e Playwright desktop/mobile di filtri/espansione/cambio libro. Numero npm 0.11.83 invariato finché non viene eseguita una release npm+lockfile separata. [Guida](docs/ai-cost-history.md), [ADR 0119](ADR/0119-task-ai-cost-history.md).
+- Mantenere layout mobile senza overflow e gestione di identificatori lunghi/importati, test Vitest di isolamento/prezzi e Playwright desktop/mobile di filtri/espansione/cambio libro. Storico task incluso nella release npm verificata 0.11.84; modificare la versione futura soltanto tramite il runbook npm+lockfile. [Guida](docs/ai-cost-history.md), [ADR 0119](ADR/0119-task-ai-cost-history.md).
 
 ### Release v0.11.83 — issue #127, ledger CSV #126
 

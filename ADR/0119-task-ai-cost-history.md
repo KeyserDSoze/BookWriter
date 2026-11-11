@@ -1,6 +1,6 @@
 # ADR 0119 — Storico dei costi AI per task nella Dashboard
 
-- **Stato:** implementato su `main`, in attesa della prossima release numerica dopo v0.11.83
+- **Stato:** accettato, incluso nella release v0.11.84 (#129) su `main`
 - **Data:** 2026-11-11
 - **Issue:** [#128](https://github.com/KeyserDSoze/BookWriter/issues/128); epic [#17](https://github.com/KeyserDSoze/BookWriter/issues/17) e [#6](https://github.com/KeyserDSoze/BookWriter/issues/6)
 - **Precedenti:** [ADR 0010](0010-ai-usage-observability.md), [ADR 0012](0012-book-ai-budget-guardrails.md), [ADR 0108](0108-price-snapshot-ai-budget.md), [ADR 0118](0118-local-ai-cost-ledger-csv.md)
