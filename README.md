@@ -6,7 +6,9 @@
 
 ## Funzionalità disponibili
 
-- **Commit AI sicuro rispetto alle modifiche concorrenti (#142, non ancora in release npm):** la transazione atomica confronta la revisione del libro prima di approvare prosa, canone e audit; se un altro writer ha aggiornato il libro, la risposta AI viene scartata preservando lo stato e i token usage osservati. [ADR 0125](ADR/0125-autopilot-ai-commit-cas.md) · [Guida](docs/autopilot.md).
+- **Release npm v0.11.89 (#143):** consolida il CAS atomico dell'autopilot (#142). File npm generati con [runner #43079099716](https://github.com/KeyserDSoze/BookWriter/actions/runs/43079099716), due `npm ci` e **826 Vitest per ciclo**, typecheck, smoke e build riusciti; lockfile senza aggiornamenti transitivi. CI/Pages/cleanup sulla HEAD finale da verificare.
+
+- **Commit AI sicuro rispetto alle modifiche concorrenti (#142, v0.11.89):** la transazione atomica confronta la revisione del libro prima di approvare prosa, canone e audit; se un altro writer ha aggiornato il libro, la risposta AI viene scartata preservando lo stato e i token usage osservati. [ADR 0125](ADR/0125-autopilot-ai-commit-cas.md) · [Guida](docs/autopilot.md).
 
 - **Release npm v0.11.88 (#141):** include il gate di freschezza della riconciliazione editoriale (#140) con snapshot effimere e rifiuto dell'output stale. Manifest e lockfile generati da Node 22/npm 10 e registry ufficiale, senza modifiche a dipendenze transitive; [runner di riproduzione #43068203147](https://github.com/KeyserDSoze/BookWriter/actions/runs/43068203147) con due `npm ci` e **825 Vitest per ciclo**, smoke/typecheck/build verificati. La CI browser completa, Pages e cleanup della nuova HEAD di release devono ancora essere attestati.
 

@@ -4,10 +4,15 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release npm v0.11.89 — issue #143, autopilot CAS #142
+
+- Manifest/lockfile npm 0.11.89 rigenerati con Node 22/npm 10 e registro ufficiale nel [runner #43079099716](https://github.com/KeyserDSoze/BookWriter/actions/runs/43079099716) `completed/success`. Lockfile v3 con **235 voci**, dipendenze transitive, URL `resolved` e `integrity` invariati. Due `npm ci` puliti: per ciascuno typecheck, **826 Vitest in 133 file**, 9 smoke e build. File originali verificati tramite artifact e SHA-256; nessun editing manuale.
+- Eliminare `npm-release-reproduce-143.yml` nello **stesso commit atomico** su `main` di manifest, lockfile e documenti. La chiusura #143 richiede CI Frontend Playwright desktop/mobile ed EPUBCheck 4 EPUB, Pages e cleanup `completed/success` sulla stessa HEAD finale; epic #6/#20 restano aperte.
+
 ### Commit atomico delle risposte AI e audit autopilot — issue #142 / ADR 0125
 
 - Dopo il controllo di `updatedAt` della risposta AI, l'autopilot deve chiamare `saveBookAndActivity(latest, started, book.updatedAt)` **con il token della revisione verificata**, affinché il CAS avvenga dentro la **stessa transazione IndexedDB** che scrive canon, attività e outbox. Web Locks/lease remoto non sostituiscono il CAS contro import non cooperativi.
-- In caso di `BookRevisionConflict` alla transazione, **mai** modificare status, memoria, segreti, scene, freeze o sync del libro concorrente nel `catch`. Archiviare soltanto l'Activity della chiamata tentata con `cancelled`, `aiRequested` e usage osservato (senza testo, summary, prompt, segreti né retry); l'autore ricarica il libro. Test Vitest di concorrenza interposta tra read/commit, scenari normali della redazione e atomicità low-level. [ADR 0125](ADR/0125-autopilot-ai-commit-cas.md). Versione npm invariata fino a release separata.
+- In caso di `BookRevisionConflict` alla transazione, **mai** modificare status, memoria, segreti, scene, freeze o sync del libro concorrente nel `catch`. Archiviare soltanto l'Activity della chiamata tentata con `cancelled`, `aiRequested` e usage osservato (senza testo, summary, prompt, segreti né retry); l'autore ricarica il libro. Test Vitest di concorrenza interposta tra read/commit, scenari normali della redazione e atomicità low-level. [ADR 0125](ADR/0125-autopilot-ai-commit-cas.md). Incluso nella versione npm 0.11.89 (#143).
 
 ### Release npm v0.11.88 — issue #141, riconciliazione canone #140
 

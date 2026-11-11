@@ -154,3 +154,7 @@ Con budget del libro attivo, un limite facoltativo per sessione può fermare il 
 ## Scelta esplicita del parametro output — issue #135
 
 Il guard preventivo resta attivo per libro e sessione: quando riserva i token di output, `callModel` invia una sola delle chiavi Chat Completions `max_tokens` (default legacy) o `max_completion_tokens` scelta dall'autore in Impostazioni per l'endpoint. Non si fanno retry automatici modificando il parametro dopo una risposta HTTP non riuscita, un abort o un timeout; i consumi privi di usage restano ignoti. Il modello e il provider possono richiedere altre API o parametri non supportati: verificare la compatibilità prima dell'avvio. [Guida](ai-output-token-parameter.md), [ADR 0122](../ADR/0122-chat-completions-output-cap-parameter.md).
+
+## Release npm 0.11.89
+
+Il commit AI protetto dal CAS locale (#142, ADR 0125) è incluso nella versione **0.11.89** (#143). Non costituisce certificazione di sincronizzazione fra dispositivi né di fatturazione effettiva.

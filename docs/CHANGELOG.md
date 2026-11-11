@@ -1,11 +1,16 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issue #142 (epic #6/#20)
+## 0.11.89 — 2026-11-11 (main, issue #142, epic #6/#20)
+
+**Release npm riproducibile — issue #143**
+
+- [Runner #43079099716](https://github.com/KeyserDSoze/BookWriter/actions/runs/43079099716) `completed/success`: Node 22/npm 10, registry npm ufficiale, root-only 0.11.88→0.11.89; lockfile v3 con **235 voci**, transitive, `resolved` e `integrity` invariati.
+- Due `npm ci` con typecheck, **826 Vitest in 133 file**, 9 smoke e build per ciclo. Artifact originale verificato con log indicizzati e SHA-256: package.json `9d188859cf46f9e06bdc9b158047486209c50a7167201bd04636391060a74481`, package-lock.json `cacdedb4ea366aafe418586fd70ae975317ae3c0480602957dcacbb28bff0409`. Workflow temporaneo eliminato atomicamente con manifest, lockfile e documenti; CI browser, Pages e cleanup della nuova HEAD ancora da attestare.
 
 **Commit AI dell'autopilot protetto da CAS atomico — #142**
 
 - Ogni risultato AI dell'autopilot viene salvato con precondizione `updatedAt` nella **stessa transazione IndexedDB** che modifica libro, Activity e outbox; una modifica concorrente tra rilettura e commit non sovrascrive canon, memoria o segreti.
-- Un conflitto al commit non sovrascrive neppure lo stato del libro autore: il risultato resta non canonizzato, viene conservato soltanto un audit `cancelled` senza output, con usage osservato quando disponibile. Nessuna richiesta aggiuntiva né costo stimato come usage reale. Test d'integrazione su race interposta, ADR 0125 e guida autopilot. **Versione npm 0.11.88 invariata** fino a release separata.
+- Un conflitto al commit non sovrascrive neppure lo stato del libro autore: il risultato resta non canonizzato, viene conservato soltanto un audit `cancelled` senza output, con usage osservato quando disponibile. Nessuna richiesta aggiuntiva né costo stimato come usage reale. Test d'integrazione su race interposta, ADR 0125 e guida autopilot. **Incluso nella versione npm 0.11.89** (#143).
 
 ## 0.11.88 — 2026-11-11 (main, issue #140, epic #20/#6)
 
