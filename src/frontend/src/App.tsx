@@ -22,6 +22,7 @@ import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 import { updateBookModelRoute } from "./application/book-settings";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
+import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
@@ -85,6 +86,7 @@ export default function App() {
     renderKeyDrafts(next);
   }
   const latestModelInventoryRequest = useRef<Record<string, number>>({});
+  const endpointSettingsSave = useRef(new EndpointSettingsSaveCoordinator()).current;
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [writingStyle, setWritingStyle] = useState("Narrativa immersiva, concreta, coerente; niente cliché.");
@@ -210,18 +212,20 @@ export default function App() {
     setSettings(old => ({ ...old, endpoints: old.endpoints.map(e => e.id === id ? { ...e, ...update } : e) }));
   }
   async function saveEndpointSettings() {
+    // Capture the actual inputs at the click, not a possibly stale render.
+    const snapshot = { settings: settingsRef.current, keyDrafts: keyDraftsRef.current };
     try {
-      const endpoints = await Promise.all(settings.endpoints.map(async e => {
-        const newKey = keyDrafts[e.id];
-        return {
-          ...e,
-          baseUrl: normalizeEndpoint(e.baseUrl),
-          secret: newKey ? await encryptLocal(newKey) : e.secret,
-        };
-      }));
-      await persistSettings({ ...settings, endpoints });
-      setKeyDrafts({});
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Impossibile salvare la configurazione."); }
+      await endpointSettingsSave.save(snapshot,
+        () => ({ settings: settingsRef.current, keyDrafts: keyDraftsRef.current }),
+        encryptLocal, saveSettings, next => {
+          setSettings(next);
+          setKeyDrafts({});
+          setNotice("Impostazioni salvate in IndexedDB.");
+        });
+    } catch (e) {
+      if (e instanceof StaleEndpointSettingsSave && e.superseded) return;
+      setNotice(e instanceof Error ? e.message : "Impossibile salvare la configurazione.");
+    }
   }
   async function discoverModels(endpointId: string) {
     const endpoint = settingsRef.current.endpoints.find(e => e.id === endpointId);

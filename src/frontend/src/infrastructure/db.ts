@@ -31,8 +31,13 @@ export async function loadSettings(): Promise<AppSettings> {
   return stored ?? structuredClone(DEFAULT_SETTINGS);
 }
 
-export async function saveSettings(settings: AppSettings): Promise<void> {
+export async function saveSettings(
+  settings: AppSettings, isCurrent?: () => boolean,
+): Promise<void> {
   const db = await getDb();
+  // Recheck after opening IndexedDB; no await between fence and put.
+  if (isCurrent && !isCurrent())
+    throw new Error("Impostazioni cambiate durante il salvataggio: nessuna scrittura eseguita.");
   await db.put("settings", settings, "global");
 }
 
