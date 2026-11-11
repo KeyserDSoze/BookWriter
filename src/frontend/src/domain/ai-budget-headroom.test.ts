@@ -15,9 +15,9 @@ describe("Avviso anticipato dei budget AI locali", () => {
     expect(assessAiBudgetHeadroom(account(0), 10)).toEqual({
       status: "sotto_soglia", knownRemainingEur: 10, knownUsedFraction: 0,
     });
-    expect(assessAiBudgetHeadroom(account(7.999), 10)).toMatchObject({
-      status: "sotto_soglia", knownUsedFraction: 0.7999,
-    });
+    const justBelow = assessAiBudgetHeadroom(account(7.999), 10);
+    expect(justBelow.status).toBe("sotto_soglia");
+    expect(justBelow.knownUsedFraction).toBeCloseTo(0.7999, 8);
   });
 
   it("avverte precisamente dall'80%, ma non blocca né altera il preflight", () => {
