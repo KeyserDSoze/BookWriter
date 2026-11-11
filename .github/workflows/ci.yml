@@ -31,8 +31,12 @@ jobs:
         run: npm run smoke
       - name: Build
         run: npm run build
+      # Both Playwright projects use headless Chromium. GitHub-hosted Ubuntu
+      # provides the runtime libraries; --with-deps additionally invokes apt,
+      # which can fail from runner DNS outages unrelated to BookWriter tests.
+      # Do not skip browser tests: missing libs still fail on launch.
       - name: Install browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --only-shell chromium
       - name: End-to-end browser tests (desktop + mobile)
         run: npm run test:e2e
       - name: Upload Playwright report on failure

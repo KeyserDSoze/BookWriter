@@ -2,6 +2,9 @@
 
 ## Non rilasciato — issue #132 (epic #17/#6)
 
+- **Hardening CI Playwright #134:** sui runner `ubuntu-latest` l'installazione di Chromium per i due progetti headless usa `npx playwright install --only-shell chromium`, senza `apt` che è fallito a causa del DNS degli archivi Ubuntu. La suite E2E **non viene disabilitata**; se il browser non si avvia la CI fallisce. Nessun cambio di dipendenze o versione npm. [Guida](ci-playwright-headless-shell.md).
+
+
 **Avvisi preventivi per margine del budget AI noto, per libro e sessione**
 
 - Nel pannello Budget AI, la stima di uso osservato attiva un avviso informativo **dall'80%** della soglia del libro e separatamente del plafond dell'ultima sessione AI registrata, con stato di limite raggiunto dal 100%. Viene mostrato il `margine stimato noto` soltanto se tutti i tentativi potenzialmente fatturabili del periodo hanno usage e tariffa completi e validi.

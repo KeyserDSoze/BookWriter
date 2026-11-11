@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### CI Chromium headless senza dipendenze apt — #134, per #132
+
+- Su runner GitHub-hosted `ubuntu-latest`, la CI deve eseguire `npx playwright install --only-shell chromium` (Playwright vincolato da npm lockfile) e **tutti i test** `desktop-chromium` e `mobile-chromium`. Evitare `--with-deps` sul runner standard: invoca `apt` e il DNS degli archivi Ubuntu 26.04 è fallito su #43035024633, impedendo di arrivare ai test E2E pur con 795 Vitest e build verdi.
+- La modifica **non** salta i test o ignora le librerie runtime mancanti: se Chromium non parte, il job deve fallire. Per host self-managed senza libs Playwright bisogna installarle in un ambiente con repository OS disponibili. [Guida](docs/ci-playwright-headless-shell.md). Non alterare versioni npm, lockfile o test per compensare problemi DNS del runner.
+- Chiusura #134/#132 solo con Frontend CI completo (E2E desktop/mobile), EPUBCheck, Pages e cleanup tutti verdi sulla stessa HEAD. #133 rimane la futura release numerica npm.
+
 ### Avvisi anticipati del budget stimato AI — #132, ADR 0121, epic #17
 
 - Sia il periodo del libro sia l'**ultima sessione AI del solo libro** mostrano stato puro da `assessAiBudgetHeadroom` calcolato su `accountBookAiBudget`/`accountSessionAiBudget`. **Dall'80% incluso** del consumo stimato noto, mostrare un warning accessibile, distinto dallo stop alla soglia completa. Evitare un avviso per sessioni inesistenti o quando budget disattivato, isolare rigorosamente libro e `runId`.
