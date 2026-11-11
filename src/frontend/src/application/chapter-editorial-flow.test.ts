@@ -158,7 +158,8 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
       changed.memory.secrets.chiave="NUOVO SEGRETO PRIVATO DELL'AUTORE";
       changed.memory.currentState="L'autore ha corretto la memoria narrativa.";
       expect(changed.updatedAt).toBe(unchangedStamp);
-      await (await getDb()).put("books",changed);
+      // The books store uses an explicit out-of-line key, just like saveBook.
+      await (await getDb()).put("books",changed,changed.id);
       return {text:JSON.stringify(source.memory),endpointId:"test",modelId:"Memory",
         inputTokens:45,outputTokens:27};
     });
