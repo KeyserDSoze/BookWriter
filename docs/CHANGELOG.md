@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #119 (epic #6)
+
+**Il catalogo /models non sovrascrive configurazioni cambiate durante la richiesta**
+
+- In Impostazioni, la ricerca verifica identità del profilo, chiave draft e seriale della richiesta; una risposta arrivata dopo una modifica di URL, credenziale, nome, lista manuale o rimozione è scartata senza cambiare i modelli, anche se HTTP 200.
+- Due ricerche concorrenti sullo stesso endpoint non possono applicare una risposta precedente dopo la più recente. Controllo eseguito prima del fetch (dopo la decifratura) e immediatamente prima del commit in memoria, con aggiornamenti sincronizzati dei ref React e nessun effetto collaterale negli updater.
+- Nuovi test Vitest e Playwright desktop/mobile con provider mock ritardato; nessun invio ulteriore, nessuna persistenza di chiavi, nessuna modifica al canone. [Guida](ai-model-inventory.md), [ADR 0113](../ADR/0113-stale-model-inventory-response-fence.md), #119.
+
 ## Non rilasciato — issue #118 (main)
 
 **Scoperta modelli AI: cataloghi esterni limitati e non distruttivi**

@@ -21,6 +21,7 @@ import { AiBudgetPanel } from "./components/AiBudgetPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 import { updateBookModelRoute } from "./application/book-settings";
+import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import packageInfo from "../package.json";
 
 type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
@@ -67,8 +68,23 @@ export default function App() {
   const [books, setBooks] = useState<BookProject[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [settings, setSettings] = useState<AppSettings>(structuredClone(DEFAULT_SETTINGS));
-  const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
+  // The inventory fetch may finish between user events and React's batched render.
+  // Keep the last synchronous update available to async completion checks.
+  const [settings, renderSettings] = useState<AppSettings>(structuredClone(DEFAULT_SETTINGS));
+  const settingsRef = useRef(settings);
+  function setSettings(update: React.SetStateAction<AppSettings>): void {
+    const next = typeof update === "function" ? update(settingsRef.current) : update;
+    settingsRef.current = next;
+    renderSettings(next);
+  }
+  const [keyDrafts, renderKeyDrafts] = useState<Record<string, string>>({});
+  const keyDraftsRef = useRef(keyDrafts);
+  function setKeyDrafts(update: React.SetStateAction<Record<string, string>>): void {
+    const next = typeof update === "function" ? update(keyDraftsRef.current) : update;
+    keyDraftsRef.current = next;
+    renderKeyDrafts(next);
+  }
+  const latestModelInventoryRequest = useRef<Record<string, number>>({});
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [writingStyle, setWritingStyle] = useState("Narrativa immersiva, concreta, coerente; niente cliché.");
@@ -207,13 +223,40 @@ export default function App() {
       setKeyDrafts({});
     } catch (e) { setNotice(e instanceof Error ? e.message : "Impossibile salvare la configurazione."); }
   }
-  async function discoverModels(e: EndpointProfile) {
+  async function discoverModels(endpointId: string) {
+    const endpoint = settingsRef.current.endpoints.find(e => e.id === endpointId);
+    if (!endpoint) { setNotice("Endpoint non più presente: nessun catalogo applicato."); return; }
+    const startingDraft = keyDraftsRef.current[endpointId] ?? "";
+    const attempt = (latestModelInventoryRequest.current[endpointId] ?? 0) + 1;
+    latestModelInventoryRequest.current[endpointId] = attempt;
+    const newest = () => latestModelInventoryRequest.current[endpointId] === attempt;
+    const current = () => isCurrentModelInventoryRequest(
+      endpoint, settingsRef.current, startingDraft,
+      keyDraftsRef.current[endpointId] ?? "", attempt,
+      latestModelInventoryRequest.current[endpointId],
+    );
+    const discardStale = () => {
+      if (!newest()) return; // A newer explicit lookup owns the outcome.
+      setNotice("Catalogo ignorato: endpoint, chiave o modelli modificati durante la ricerca. Premi di nuovo Leggi /models.");
+    };
     try {
-      const secret = keyDrafts[e.id] || (e.secret ? await decryptLocal(e.secret) : "");
+      const secret = startingDraft || (endpoint.secret ? await decryptLocal(endpoint.secret) : "");
+      if (!current()) { discardStale(); return; }
       if (!secret) throw new Error("Inserisci prima la chiave API.");
-      const models = await fetchModels(e.baseUrl, secret);
-      updateEndpoint(e.id, { models }); setNotice(`Trovati ${models.length} modelli. Premi Salva impostazioni per conservarli.`);
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Elenco modelli non disponibile: inserisci manualmente il nome."); }
+      const models = await fetchModels(endpoint.baseUrl, secret);
+      if (!current()) { discardStale(); return; }
+      // Synchronous ref-based commit: there is no async gap after the guard
+      // and no side effect inside a React state updater.
+      const latest = settingsRef.current;
+      setSettings({ ...latest, endpoints: latest.endpoints.map(profile =>
+        profile === endpoint ? { ...profile, models } : profile) });
+      setNotice(`Trovati ${models.length} modelli. Premi Salva impostazioni per conservarli.`);
+    } catch (error) {
+      if (!newest()) return;
+      if (!current()) { discardStale(); return; }
+      setNotice(error instanceof Error ? error.message :
+        "Elenco modelli non disponibile: inserisci manualmente il nome.");
+    }
   }
   async function updateBookRoute(task: TaskKind, endpointId: string, modelId: string) {
     if (!current) return;
@@ -535,7 +578,7 @@ export default function App() {
                 </Field>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => void discoverModels(endpoint)}><RefreshCw size={16} /> Leggi /models</Button>
+                <Button variant="outline" onClick={() => void discoverModels(endpoint.id)}><RefreshCw size={16} /> Leggi /models</Button>
                 {settings.endpoints.length > 1 && <Button variant="destructive" onClick={() => setSettings(s => ({...s, endpoints:s.endpoints.filter(x => x.id !== endpoint.id)}))}>Rimuovi</Button>}
               </div>
             </div>)}

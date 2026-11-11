@@ -6,6 +6,8 @@
 
 ## Funzionalità disponibili
 
+- **Inventario modelli non obsoleto (#119):** la risposta a `GET /models` non sostituisce modelli configurati manualmente se nel frattempo cambiano endpoint, chiave o profilo; soltanto l'ultima ricerca esplicita pertinente può aggiornare l'elenco. Vedi [guida](docs/ai-model-inventory.md) e [ADR 0113](ADR/0113-stale-model-inventory-response-fence.md).
+
 - SPA mobile e desktop, tema chiaro/scuro.
 - Creazione di libri, orchestra AI multi-modello con osservabilità dei passaggi e possibilità di pause/revisioni.
 - Persistenza IndexedDB e chiavi API cifrate con Web Crypto.
