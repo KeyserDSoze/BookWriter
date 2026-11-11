@@ -26,6 +26,8 @@ Questa è una garanzia **intra-tab**. Una transazione IndexedDB già inviata non
 
 Per il server locale LM Studio consulta [Modelli locali senza API key](ai-local-endpoints.md). No-auth non è ammesso per URL remoti e omette l'header Authorization; la preferenza è salvata in IndexedDB e nel backup ZIP full.
 
+La ricerca si limita a restituire gli ID: le capacità effettive non sono verificabili da questo endpoint. Dopo la ricerca puoi assegnare manualmente tag e predefiniti in [Ruoli dei modelli AI](model-capabilities.md), senza attivare automaticamente gli adapter audio/embedding/strumenti.
+
 ## Release npm
 
 La deadline totale e il cleanup degli stream per il catalogo modelli (#139, ADR 0123) sono inclusi nella versione **0.11.87** (#136). CORS e capacità effettive del provider restano da verificare caso per caso.

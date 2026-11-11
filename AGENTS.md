@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Tag manuali e default dei modelli — issue #147 / ADR 0128
+
+- `GET /models` elenca soltanto ID, **mai** attribuire automaticamente capacità dal nome del modello o dal provider. `EndpointProfile.modelCapabilities?` mappa ogni ID a uno o più tag letterali `chat/tools/embedding/voice`, scelta esplicita dell'autore; metadata, non certificazione di compatibilità.
+- `AppSettings.defaultRoute` è il predefinito Chat utilizzato da tutti i task legacy e override; `capabilityRoutes?` contiene SOLO default opzionali tools/embedding/voice, **non** implementa ancora gli adapter né abilita richieste di voce/embedding/strumenti. Prima della Chat Completions, un modello con tag espliciti **senza chat** deve fallire prima del POST; modelli legacy senza tag mantengono il routing precedente.
+- La UI mostra i modelli del catalogo con ricerca/paginazione, checkbox tag multiuso e selezione predefiniti, salvati con fencing IndexedDB. ZIP full esporta e valida solo enum e route ammesse, rifiuta dati ostili/duplicati e conserva backup legacy; ZIP content non include impostazioni. Aggiornare test Vitest e Playwright desktop/mobile, documentare confini funzionali; nessun bump npm manuale. [ADR 0128](ADR/0128-model-capability-tags.md) · [guida](docs/model-capabilities.md).
+
+
 ### Endpoint AI locali senza API key — issue #146 / ADR 0127
 
 - `EndpointProfile.authMode?` è `api_key` (legacy/default) o `none`; `none` solo per hostname letterali `localhost` e `127.0.0.1` dopo `normalizeEndpoint`. Il nome LM Studio, la chiave vuota o DNS alias non attivano automaticamente no-auth.

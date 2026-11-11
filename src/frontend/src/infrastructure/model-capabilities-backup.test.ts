@@ -66,7 +66,7 @@ describe("ZIP full per tag e predefiniti dei modelli",()=>{
         };
       },
       (settings:Record<string,unknown>)=>{
-        settings.capabilityRoutes={...settings.capabilityRoutes as object,
+        settings.capabilityRoutes={...(settings.capabilityRoutes as object),
           embedding:{endpointId:"openai",modelId:"voice-model"}};
       },
       (settings:Record<string,unknown>)=>{

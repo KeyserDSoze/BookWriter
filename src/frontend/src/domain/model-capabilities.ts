@@ -19,7 +19,11 @@ export function declaredModelCapabilities(endpoint: EndpointProfile, modelId: st
 export function withModelCapability(
   endpoint: EndpointProfile, modelId: string, capability: ModelCapability, enabled: boolean,
 ): EndpointProfile {
-  const tags: Record<string, ModelCapability[]> = { ...endpoint.modelCapabilities };
+  if (!modelId || ["__proto__", "constructor", "prototype"].includes(modelId))
+    throw new Error("Identificatore del modello non valido per i tag.");
+  const tags: Record<string, ModelCapability[]> = Object.assign(
+    Object.create(null) as Record<string, ModelCapability[]>, endpoint.modelCapabilities ?? {},
+  );
   const current = declaredModelCapabilities(endpoint, modelId);
   const next = enabled
     ? MODEL_CAPABILITIES.filter(tag => tag === capability || current.includes(tag))

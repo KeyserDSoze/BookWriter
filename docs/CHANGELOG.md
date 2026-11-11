@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #147 (epic #6)
+
+**Modelli configurabili per capacità e default distinti — #147**
+
+- La ricerca `/models` alimenta un catalogo con ricerca/paginazione e checkbox per tag manuali **Chat / scrittura, Tool calling, Embedding, Voce**, anche combinabili. Si può impostare il predefinito Chat già usato dall'autopilot e tenere predefiniti separati per tools, embedding e voce.
+- Il preflight Chat Completions impedisce di inviare prompt a un modello esplicitamente taggato soltanto come voce/embedding. Modelli legacy privi di tag e route per-task rimangono compatibili; le assegnazioni non certificano supporto API, né introducono adapter audio/embedding/tools. ZIP full persiste e valida l'inventario dei tag, backup content/legacy immutati. [ADR 0128](../ADR/0128-model-capability-tags.md) · [guida](model-capabilities.md). **Versione npm 0.11.89 invariata** in attesa di release dedicata.
+
+
 ## Non rilasciato — issue #146 (epic #6)
 
 **LM Studio/localhost senza API key — #146**
