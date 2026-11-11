@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #142 (epic #6/#20)
+
+**Commit AI dell'autopilot protetto da CAS atomico — #142**
+
+- Ogni risultato AI dell'autopilot viene salvato con precondizione `updatedAt` nella **stessa transazione IndexedDB** che modifica libro, Activity e outbox; una modifica concorrente tra rilettura e commit non sovrascrive canon, memoria o segreti.
+- Un conflitto al commit non sovrascrive neppure lo stato del libro autore: il risultato resta non canonizzato, viene conservato soltanto un audit `cancelled` senza output, con usage osservato quando disponibile. Nessuna richiesta aggiuntiva né costo stimato come usage reale. Test d'integrazione su race interposta, ADR 0125 e guida autopilot. **Versione npm 0.11.88 invariata** fino a release separata.
+
 ## 0.11.88 — 2026-11-11 (main, issue #140, epic #20/#6)
 
 **Release npm riproducibile — issue #141**
