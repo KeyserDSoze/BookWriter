@@ -588,6 +588,10 @@ export class AutopilotRunner {
             // attempted request may still have cost tokens, but we must not
             // overwrite the competing book (even just to mark it paused).
             started.status = "cancelled";
+            // These fields were prepared for the successful canon commit but
+            // must not leak into the standalone attempted-request audit.
+            delete started.summary;
+            delete started.output;
             started.error = "Il libro è cambiato durante il salvataggio AI: risultato non applicato. Ricarica prima di riprendere.";
             started.endedAt = new Date().toISOString();
             await saveActivity(started);
