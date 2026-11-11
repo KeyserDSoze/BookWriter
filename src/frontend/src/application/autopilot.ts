@@ -6,6 +6,7 @@ import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivi
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
 import { acceptedRepairs, adjudicationPrompt, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
@@ -215,6 +216,8 @@ function nextWork(book: BookProject): Work | null {
       if (cycle.stage === "review") {
         const next = nextReviewSlot(book, cycle);
         if (!next) throw new Error("Checkpoint revisioni incompleto: nessun revisore disponibile.");
+        const historicalSnapshot = next.role === "historical"
+          ? captureHistoricalPromptDossier(book, cycle.chapterId, "review") : undefined;
         const prompt = reviewerPrompt(book, cycle, next.role, next.segment, next.segmentCount);
         const title = "Redazione: " + next.role + " " + (cycle.reports.length + 1) + "/" +
           (next.segmentCount * 12);
@@ -228,6 +231,9 @@ function nextWork(book: BookProject): Work | null {
             const current = b.editorialCycle;
             const ch = b.chapters.find(c => c.id === cycle.chapterId);
             if (!current || !ch) throw new Error("Il ciclo editoriale è cambiato.");
+            // An author/import can replace historical material without updating
+            // the book timestamp. Never approve a report based on old sources.
+            if (historicalSnapshot) assertCurrentHistoricalPromptDossier(b, historicalSnapshot);
             const report = validateReport(current, next.role, next.segment, next.segmentCount, text, ch, b);
             current.reports.push(report);
             if (!nextReviewSlot(b, current)) current.stage = "adjudicate";
@@ -238,6 +244,7 @@ function nextWork(book: BookProject): Work | null {
         // Never consult the judge based solely on reports.length: all roles,
         // segments, quote anchors and source stamps must still be current.
         assertEditorialReviewCoverage(book, cycle, true);
+        const historicalSnapshot = captureHistoricalPromptDossier(book, cycle.chapterId, "adjudicate");
         const prompt = adjudicationPrompt(book, cycle);
         return {
           phase: "chapterReview", kind: "chapterJudge", system: prompt.system,
@@ -250,6 +257,7 @@ function nextWork(book: BookProject): Work | null {
             if (!current) throw new Error("Ciclo editoriale non disponibile.");
             const chapter = b.chapters.find(c => c.id === current.chapterId);
             if (!chapter) throw new Error("Capitolo del giudice non disponibile.");
+            assertCurrentHistoricalPromptDossier(b, historicalSnapshot);
             assertEditorialReviewCoverage(b, current, true);
             current.judgment = validateJudgment(current, text, chapter, b);
             current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
