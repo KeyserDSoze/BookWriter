@@ -1,19 +1,21 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issue #124 (epic #6/#17/#20)
+## 0.11.82 — 2026-11-11 (main, issues #123/#124)
+
+### Timeout prima degli header AI — #124
 
 **Timeout separato dell'attesa degli header per il provider AI**
 
 - Per ogni endpoint l'autore può scegliere fra 60 e 1800 s (default 300 s); import/export ZIP completo conserva il limite, gli archivi precedenti restano compatibili. La richiesta POST non può restare in attesa indefinita anche se `fetch` ignora AbortController. La cancellazione dell'autore rimane `AbortError`, non timeout.
-- Gli errori di deadline sono sanitizzati, non inventano consumi né approvano scene/rapporti/freeze; non scattano retry. Il limite del corpo JSON di 2 MB/60 s dopo gli header della #123 non cambia. [ADR 0117](../ADR/0117-ai-header-deadline.md), [guida](ai-completion-response.md), #124. Numero release invariato in attesa del prossimo `npm` release.
+- Gli errori di deadline sono sanitizzati, non inventano consumi né approvano scene/rapporti/freeze; non scattano retry. Il limite del corpo JSON di 2 MB/60 s dopo gli header della #123 non cambia. [ADR 0117](../ADR/0117-ai-header-deadline.md), [guida](ai-completion-response.md), #124. Incluso nella release v0.11.82 con manifest e lockfile generati da npm.
 
-## Non rilasciato — issue #123 (epic #6/#17/#20)
+### Risposte di generazione limitate — #123
 
 **Risposte di generazione AI limitate e annullabili prima di applicare prosa o uso token**
 
 - `POST /chat/completions` non invoca più `response.json()` su un corpo arbitrariamente grande: lettura a chunk con massimo **2.000.000 byte UTF-8** per l'intero envelope JSON, verifica Content-Length dichiarato e misurazione reale, MIME JSON, decoding UTF-8 rigoroso e nessuna prosa troncata. Un provider non conforme fallisce senza canonizzazione.
 - Timer **60 secondi dalla ricezione degli header** per completare la lettura, distinto dai tempi di generazione precedenti; `AbortSignal` dell'autore interrompe anche reader in attesa, cancellazione best effort dello stream senza attenderla. Errori italiani redatti per oversize, timeout, stream/JSON malformati.
-- Usage contato **solo da un JSON completo valido**; risposta scartata pre-parsing non ha token inventati né Activity riuscita, e il budget registra consumo ignoto in modo conservativo. Mantiene la validazione stringhe/parti testuali #115 e i conteggi su contenuto malformato ma JSON valido #111. [ADR 0116](../ADR/0116-bounded-ai-completion-response.md), [guida](ai-completion-response.md), #123. Nessuna dipendenza, modifica al canone o update del numero versione in attesa del prossimo ciclo npm.
+- Usage contato **solo da un JSON completo valido**; risposta scartata pre-parsing non ha token inventati né Activity riuscita, e il budget registra consumo ignoto in modo conservativo. Mantiene la validazione stringhe/parti testuali #115 e i conteggi su contenuto malformato ma JSON valido #111. [ADR 0116](../ADR/0116-bounded-ai-completion-response.md), [guida](ai-completion-response.md), #123. Nessuna nuova dipendenza o modifica al canone; incluso nella release v0.11.82.
 
 ## 0.11.81 — 2026-11-11 (main, issues #118/#119/#121/#122)
 

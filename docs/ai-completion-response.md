@@ -1,4 +1,4 @@
-# Risposte AI sicure e limitate — issue #123
+# Risposte AI sicure e limitate — v0.11.82, issues #123/#124
 
 BookWriter invia richieste esplicite OpenAI-compatible a `POST /chat/completions` per scrivere o revisionare libri. I provider sono servizi esterni: una risposta HTTP 200 non è automaticamente attendibile né autorizza la modifica del romanzo.
 

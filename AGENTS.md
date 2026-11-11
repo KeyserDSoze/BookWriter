@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release 0.11.82 — issue #125
+
+- Rilasciate congiuntamente #123 e #124: preservare **sempre** la distinzione fra attesa degli header HTTP (300 s default, 60–1800 configurabili) e lettura del corpo (60 s, 2 MB). `AbortError` dell'autore prevale e il ledger non può attribuire token zero a un tentativo incerto.
+- `src/frontend/package.json` e `package-lock.json` versione 0.11.82 provengono dalla riproduzione read-only Node 22/npm 10 con registry ufficiale e due `npm ci` puliti: non modificare il lock manualmente, usare `docs/npm-lockfile-releases.md` per ulteriori release. Workflow temporaneo #125 rimosso dal commit, solo i workflow permanenti.
+- I test mock non dimostrano affidabilità su provider reali, rete intermittente, sospensione mobile o correttezza semantica della prosa; mantenere aperte le epic #6/#17/#20 fino a verifiche specifiche.
+
 ### Deadline degli header AI — issue #124, ADR 0117
 
 - Le richieste `POST /chat/completions` hanno due deadline **distinte**: header configurabili per endpoint (default 300 s, intervallo 60–1800 s) e lettura JSON dopo HTTP 2xx (60 s, limite 2 MB, #123). Una inferenza lenta non autorizza un retry implicito.

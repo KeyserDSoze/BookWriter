@@ -43,3 +43,11 @@ La PR #41 (v0.10.6) aveva CI verde, ma il primo deploy su `main` fallì per `@ta
 - [Riproduzione npm #43002614967](https://github.com/KeyserDSoze/BookWriter/actions/runs/43002614967): due installazioni `npm ci` pulite e due cicli TypeScript, Vitest, smoke e build. I file provengono dai log del runner con frammenti, quantità e lunghezze convalidate: non sono stati costruiti manualmente.
 - La CI di `main` include Playwright Chromium desktop/mobile, EPUBCheck e Pages; i risultati di release definitivi devono essere verificati sulla HEAD del commit, non solo sul runner di preparazione.
 - Nessuna nuova dipendenza, backend, mutazione di libri/canone o chiavi API. Changelog 0.11.81: #118, #119, #121 e #122.
+
+
+## Release 0.11.82 — issue #125
+
+- Le patch #123 (2 MB/60 s per il corpo JSON) e #124 (deadline 60–1800 s sugli header) sono consolidate nella release 0.11.82 con comportamento fail-closed e usage sconosciuto distinto da zero.
+- [Riproduzione ufficiale npm #43013350797](https://github.com/KeyserDSoze/BookWriter/actions/runs/43013350797): Node 22/npm 10, registry ufficiale, `npm version 0.11.82 --no-git-tag-version --ignore-scripts`, `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`; **235** voci nel lockfile, tree e integrity immutati, versione root aggiornata; due `npm ci` puliti seguiti ciascuno da TypeScript, **772 Vitest**, smoke e build, tutti verdi.
+- Il commit diretto su `main` include i **file esatti** emessi dal runner (39 frammenti indicizzati del lock con digest SHA-256 `c5f129d11e99b284dd4e718802e83b7c4a61ca7c6d06e7edeac6c62277bd3418`, manifest SHA-256 `b1c0a77b4c2fa97299fddfe8d0b30b7d5c1952235d1066edff40164999e7b31f`) e rimuove il workflow temporaneo read-only `npm-release-reproduce-125.yml` nello stesso commit. Non sono state modificate manualmente le dipendenze transitive.
+- La CI definitiva sulla **HEAD pubblicata** deve superare di nuovo Playwright Chromium desktop/mobile, EPUBCheck sui quattro EPUB sintetici, Pages e pulizia branch prima di chiudere #125. Nessun test con provider AI reali è implicato.
