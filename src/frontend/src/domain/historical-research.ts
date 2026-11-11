@@ -1,3 +1,4 @@
+import type { BookProject } from "./types";
 import type { ChapterBibliography } from "./bibliography";
 import type { ChapterArchiveCatalog } from "./archival-catalog";
 import { activeManualEvidence, type ChapterManualEvidence } from "./manual-evidence";
@@ -85,6 +86,45 @@ export interface HistoricalClaim {
   /** New historical conflict reports must compare document scope explicitly.
    * Legacy persisted reports may omit it and remain readable. */
   conflictContext?: HistoricalConflictContext;
+}
+
+/** This stays in the in-flight editorial task only, never in a saved dossier
+ * or the Activity log. It proves prompt freshness, not source authenticity. */
+export interface HistoricalPromptDossierSnapshot {
+  chapterId: string;
+  stage: "review" | "adjudicate";
+  round: number;
+  reportCount: number;
+  dossierJson: string;
+}
+
+/** Bind the exact historical evidence shared with an agent to its checkpoint.
+ * Imported books may have a modified dossier without a changed updatedAt. */
+export function captureHistoricalPromptDossier(
+  book: BookProject, chapterId: string, stage: "review" | "adjudicate",
+): HistoricalPromptDossierSnapshot {
+  const cycle = book.editorialCycle;
+  const chapter = book.chapters.find(ch => ch.id === chapterId);
+  if (book.phase !== "chapterReview" || !cycle || cycle.chapterId !== chapterId ||
+      cycle.stage !== stage || !Number.isSafeInteger(cycle.round) || cycle.round < 1 ||
+      !Array.isArray(cycle.reports) || !chapter || chapter.frozenAt)
+    throw new Error("Checkpoint delle fonti storiche non valido: redazione o capitolo cambiati.");
+  return {
+    chapterId, stage, round: cycle.round, reportCount: cycle.reports.length,
+    dossierJson: JSON.stringify(chapter.historicalDossier ?? null),
+  };
+}
+
+/** Fail closed before applying a report/judgment generated with stale sources.
+ * No remote fetch, output or private citation is included in the error. */
+export function assertCurrentHistoricalPromptDossier(
+  book: BookProject, expected: HistoricalPromptDossierSnapshot,
+): void {
+  const current = captureHistoricalPromptDossier(book, expected.chapterId, expected.stage);
+  if (current.round !== expected.round ||
+      current.reportCount !== expected.reportCount ||
+      current.dossierJson !== expected.dossierJson)
+    throw new Error("Fonti storiche cambiate durante la valutazione: risposta AI obsoleta e non applicata.");
 }
 
 export function normalizeResearchQueries(queries: readonly string[]): string[] {
