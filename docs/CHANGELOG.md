@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #140 (epic #20/#6)
+
+**Riconciliazione del canone dopo remediation protetta da snapshot live — #140**
+
+- La riconciliazione del capitolo, successiva alle correzioni accettate dal giudice, associa l'output AI **all'esatto cursore, segmento, stato completo delle scene e memoria narrativa** usati nel prompt. Una risposta obsoleta non modifica canone, scene o checkpoint; vecchi cursori mancanti sono rifiutati prima della chiamata.
+- Test Vitest per mutazioni di fase/stage/capitolo/cursore, scena/status/ordine e segreti, incluso capitolo multi-segmento. Snapshot effimere e locali, senza nuovi campi persistiti, chiamate o retry. [ADR 0124](../ADR/0124-editorial-reconcile-checkpoint-fence.md) · [guida](editorial-board.md). **Versione npm 0.11.87 invariata** fino a release dedicata.
+
 ## 0.11.87 — 2026-11-11 (main, issues #135/#137/#138/#139, epic #17/#6)
 
 **Release npm riproducibile — issue #136**
