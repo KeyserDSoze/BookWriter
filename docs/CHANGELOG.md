@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #122 (epic #6/#10)
+
+**La chiave locale WebCrypto viene creata una sola volta anche con cifrature simultanee**
+
+- `deviceKey` esegue un secondo controllo del record `meta["device-encryption-key"]` **nella stessa transazione IndexedDB readwrite** in cui, solo se assente, inserisce la candidata AES-GCM non esportabile con `add`. Chiavi candidate generate da schede concorrenti non sovrascrivono quella effettivamente committata; un cifrato non può usare una candidata prima del `tx.done`.
+- Nessun cambiamento al formato `{iv,data}`, chiavi AES-GCM 256 bit non esportabili e dati legacy mantenuti. La decifratura impossibile mostra un errore italiano privo di segreti, invitando a reinserire la credenziale: i vecchi cifrati con chiavi perse non vengono dichiarati recuperabili.
+- Vitest con cifrature simultanee, continuità legacy e record corrotto; Playwright desktop/mobile con due schede e due inizializzazioni contestuali. [ADR 0115](../ADR/0115-atomic-local-device-key-initialization.md), [guida](local-crypto-device-key.md). Nessun backend o dipendenza nuova.
+
 ## Non rilasciato — issue #121 (epic #6/#10)
 
 **Salvataggio delle impostazioni AI protetto durante la cifratura delle chiavi**
