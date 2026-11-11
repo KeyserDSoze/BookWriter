@@ -170,19 +170,38 @@ function invalidModelCatalog(): ModelCatalogError {
     "Catalogo modelli non valido: conserva i modelli precedenti o inserisci manualmente il nome.");
 }
 
+/** A rejected /models reply is untrusted, including its body. Never read it,
+ * and never let a broken/locked stream replace the original validation error. */
+function discardModelCatalogBody(response: Response): void {
+  try { void response.body?.cancel().catch(() => { /* network already closed */ }); }
+  catch { /* a locked or broken stream must not mask the reason for rejection */ }
+}
+
 /** A provider response is untrusted even with HTTP 200. Never buffer an
  * unbounded model catalogue, trust Content-Length alone or log its body. */
 async function boundedModelCatalog(response: Response, signal: AbortSignal): Promise<unknown> {
   const mime = response.headers.get("content-type") ?? "";
-  if (mime && !/\/json(?:\s*;|$)|\+json(?:\s*;|$)/i.test(mime))
+  if (mime && !/\/json(?:\s*;|$)|\+json(?:\s*;|$)/i.test(mime)) {
+    discardModelCatalogBody(response);
     throw invalidModelCatalog();
+  }
   const rawLength = response.headers.get("content-length");
   if (rawLength !== null) {
-    if (!/^\d+$/.test(rawLength.trim())) throw invalidModelCatalog();
-    if (Number(rawLength) > MAX_MODEL_CATALOG_BYTES)
+    if (!/^\d+$/.test(rawLength.trim())) {
+      discardModelCatalogBody(response);
+      throw invalidModelCatalog();
+    }
+    if (Number(rawLength) > MAX_MODEL_CATALOG_BYTES) {
+      discardModelCatalogBody(response);
       throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
+    }
   }
-  const reader = response.body?.getReader();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try { reader = response.body?.getReader(); }
+  catch {
+    discardModelCatalogBody(response);
+    throw invalidModelCatalog();
+  }
   if (!reader) throw invalidModelCatalog();
   let onAbort: (() => void) | undefined;
   const interrupted = new Promise<never>((_, reject) => {
@@ -277,8 +296,7 @@ export async function fetchModels(
     if (!response.ok) {
       // HTTP errors do not contain usable catalogue data. Never read the
       // provider's untrusted body or allow cleanup to hide the HTTP status.
-      try { void response.body?.cancel().catch(() => {}); }
-      catch { /* custom streams can throw synchronously */ }
+      discardModelCatalogBody(response);
       throw new Error(friendlyApiError(response.status));
     }
     const parsed = await boundedModelCatalog(response, controller.signal);
