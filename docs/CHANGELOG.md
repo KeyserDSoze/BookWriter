@@ -4,7 +4,7 @@
 
 **Deadline effettiva per l'inventario /models — #139**
 
-- La ricerca modelli GET ha una deadline complessiva di 12 secondi, valida anche se `fetch` resta bloccato prima degli header o il body dopo gli header; una risposta arrivata tardi viene scartata. Un abort dell'autore prevale sul timeout; stream cancellati best-effort e nessun catalogo parziale, retry, testo o chiavi esposti. Test su lettura sospesa, deadline, cancellazione difettosa e limiti del catalogo. [ADR 0123](../ADR/0123-model-catalog-total-deadline.md) e [guida](ai-model-inventory.md). Versione npm invariata, release #136 separata.
+- La ricerca modelli GET ha una deadline complessiva di 12 secondi, valida anche se `fetch` resta bloccato prima degli header o il body dopo gli header; una risposta arrivata tardi viene scartata. Un abort dell'autore prevale sul timeout; anche i corpi di HTTP non-2xx vengono scartati senza lettura e senza nascondere lo status; stream cancellati best-effort e nessun catalogo parziale, retry, testo o chiavi esposti. Test su lettura sospesa, deadline, cancellazione difettosa e limiti del catalogo. [ADR 0123](../ADR/0123-model-catalog-total-deadline.md) e [guida](ai-model-inventory.md). Versione npm invariata, release #136 separata.
 
 **Cleanup sicuro delle risposte HTTP 2xx — #138**
 
