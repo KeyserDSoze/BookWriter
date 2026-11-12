@@ -1,7 +1,10 @@
 import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import { callModel } from "../infrastructure/ai";
-import { addAiDelta, currentLiveAi, finishLiveAi, markAiHeader, saveAiTrace, startLiveAi } from "../infrastructure/ai-observability";
+import { addAiDelta, currentLiveAi, finishLiveAi, markAiHeader, markAiTransport, markNativePhase,
+  saveAiTrace, startLiveAi } from "../infrastructure/ai-observability";
+import { taskReasoningChoice } from "../domain/task-reasoning";
+import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
 import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
@@ -536,6 +539,9 @@ export class AutopilotRunner {
         }
         const settings = await loadSettings();
         const assignment = routeFor(work.kind, settings, book);
+        const configuredEndpoint=settings.endpoints.find(e=>e.id===assignment.endpointId);
+        const requestedEffort=configuredEndpoint
+          ? taskReasoningChoice(work.kind,settings,book,configuredEndpoint):undefined;
         const started: Activity = {
           id: crypto.randomUUID(), bookId, runId,
           phase: work.phase, title: work.title, reason: work.reason,
@@ -543,6 +549,7 @@ export class AutopilotRunner {
           createdAt: new Date().toISOString(),
           endpointId: assignment.endpointId, modelId: assignment.modelId,
           aiRequested: false,
+          ...(requestedEffort===undefined?{}:{requestedReasoningEffort:requestedEffort}),
         };
         await saveActivity(started);
         await onUpdate();
@@ -575,15 +582,22 @@ export class AutopilotRunner {
             activityId:started.id,bookId,title:work.title,
             endpointId:assignment.endpointId,modelId:assignment.modelId,
             inspect:settings.inspectAiRequests === true,
+            ...(requestedEffort===undefined?{}:{requestedReasoning:requestedEffort}),
+            streamDeadlineSeconds:configuredEndpoint?.streamTimeoutSeconds??600,
           });
           const inspectStream = settings.inspectAiRequests===true ||
-            settings.endpoints.find(e=>e.id===assignment.endpointId)?.streamMode==="sse";
+            configuredEndpoint?.streamMode==="sse" ||
+            configuredEndpoint?.apiProtocol==="lmstudio_native";
           const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,
             preflight || inspectStream ? {
               ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
               ...(inspectStream ? {
                 onHeaders:()=>markAiHeader(started.id),
                 onProgress:(delta:import("../infrastructure/ai-stream").AiStreamDelta)=>addAiDelta(started.id,delta),
+                onTransport:(stats:import("../infrastructure/lmstudio-native").AiTransportStats)=>
+                  markAiTransport(started.id,stats),
+                onPhase:(phase:import("../infrastructure/lmstudio-native").LmStudioPhase)=>
+                  markNativePhase(started.id,phase),
               } : {}),
             } : undefined);
           // A provider reply may carry usage even when the editorial schema,
@@ -621,7 +635,10 @@ export class AutopilotRunner {
           finishLiveAi(started.id,"completata");
           await onUpdate();
         } catch (error) {
-          finishLiveAi(started.id,signal.aborted?"interrotta":"rifiutata");
+          const message=error instanceof ProviderResponseReadError?error.message:
+            error instanceof Error && error.name==="ProviderHeaderTimeoutError"?error.message:
+            "La richiesta non ha prodotto un risultato applicabile. Apri il task per vedere l'errore.";
+          finishLiveAi(started.id,signal.aborted?"interrotta":"rifiutata",message);
           // HTTP 200 + valid JSON can report usage with empty or malformed
           // content. Keep the observed counters on failure, without approving
           // a report, chapter or remediation.

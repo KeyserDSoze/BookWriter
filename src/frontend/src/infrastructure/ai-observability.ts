@@ -1,5 +1,7 @@
 import { getDb } from "./db";
 import type { AiStreamDelta } from "./ai-stream";
+import type { LmStudioPhase, AiTransportStats } from "./lmstudio-native";
+import type { TaskReasoning } from "../domain/types";
 
 /** Sensitive author-consented AI inspection. This metadata store is not
  * included in full/content ZIP, outbox, canon, or GitHub sync. */
@@ -66,6 +68,14 @@ export interface LiveAiTrace {
   textCharacters:number;
   reasoningCharacters:number;
   inspect:boolean;
+  requestedReasoning?:TaskReasoning;
+  streamDeadlineSeconds?:number;
+  transportBytes:number;
+  transportEvents:number;
+  providerPhase?:LmStudioPhase["phase"];
+  providerProgress?:number;
+  endedAt?:number;
+  error?:string;
 }
 /** Module-local ephemeral stream, never persisted unless opt-in above. */
 let live:LiveAiTrace|null=null;
@@ -83,14 +93,24 @@ export function subscribeLiveAi(listener:()=>void):()=>void{
   listeners.add(listener);return ()=>{listeners.delete(listener);};
 }
 export function currentLiveAi():LiveAiTrace|null {return live;}
-export function startLiveAi(values:Omit<LiveAiTrace,"stage"|"startedAt"|"textPreview"|"reasoningPreview"|"textCharacters"|"reasoningCharacters">){
+export function startLiveAi(values:Omit<LiveAiTrace,"stage"|"startedAt"|"textPreview"|"reasoningPreview"|"textCharacters"|"reasoningCharacters"|"transportBytes"|"transportEvents">){
   live={...values,stage:"inviata",startedAt:Date.now(),textPreview:"",reasoningPreview:"",
-    textCharacters:0,reasoningCharacters:0};
+    textCharacters:0,reasoningCharacters:0,transportBytes:0,transportEvents:0};
   notifyNow();
 }
 export function markAiHeader(activityId:string){
   if(!live||live.activityId!==activityId)return;
   live={...live,stage:"header"};notifyNow();
+}
+export function markAiTransport(activityId:string,values:AiTransportStats){
+  if(!live || live.activityId!==activityId)return;
+  live={...live,transportBytes:values.bytes,transportEvents:values.events};
+  notifyLater();
+}
+export function markNativePhase(activityId:string,value:LmStudioPhase){
+  if(!live || live.activityId!==activityId)return;
+  live={...live,providerPhase:value.phase,providerProgress:value.progress};
+  notifyNow();
 }
 export function addAiDelta(activityId:string,delta:AiStreamDelta){
   if(!live||live.activityId!==activityId)return;
@@ -105,7 +125,7 @@ export function addAiDelta(activityId:string,delta:AiStreamDelta){
   }
   notifyLater();
 }
-export function finishLiveAi(activityId:string,status:"completata"|"rifiutata"|"interrotta"){
+export function finishLiveAi(activityId:string,status:"completata"|"rifiutata"|"interrotta",error?:string){
   if(!live||live.activityId!==activityId)return;
-  live={...live,stage:status};notifyNow();
+  live={...live,stage:status,endedAt:Date.now(),error};notifyNow();
 }

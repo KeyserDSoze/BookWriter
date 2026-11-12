@@ -28,7 +28,7 @@ export function AiTaskWorkspace({
   useEffect(()=>{setChosen("");setTrace(null);setMessage("");},[bookId,inspectionEnabled]);
   const recent=compact?activities.slice(0,8):activities;
   const active=live?.bookId===bookId?live:null;
-  const elapsed=active?Math.max(0,Math.floor((clock-active.startedAt)/1000)):0;
+  const elapsed=active?Math.max(0,Math.floor(((active.endedAt??clock)-active.startedAt)/1000)):0;
   const inspect=async(id:string)=>{
     setChosen(id);setTrace(null);setMessage("");
     if(!inspectionEnabled) {
@@ -52,6 +52,21 @@ export function AiTaskWorkspace({
       className="mt-3 space-y-2 rounded-lg border border-emerald-600/40 p-3">
       <p className="font-semibold">{active.title}</p>
       <p className="muted text-sm">Stato: {active.stage} · {elapsed} s · Modello {active.modelId} · Endpoint {active.endpointId}</p>
+      <p className="text-xs">Reasoning richiesto: {active.requestedReasoning??"automatico (nessun parametro)"} ·
+        Limite streaming: {active.streamDeadlineSeconds??600} secondi.</p>
+      <p className="text-xs">
+        {active.providerPhase==="model_loading"?"LM Studio: caricamento modello":
+          active.providerPhase==="prompt_processing"?"LM Studio: elaborazione del prompt":
+          active.providerPhase==="reasoning"?"LM Studio: fase reasoning":
+          active.providerPhase==="message"?"LM Studio: scrittura della risposta":
+          active.transportEvents>0?"Il provider ha inviato eventi ma non necessariamente testo":
+          active.stage==="inviata"?"Richiesta inviata: in attesa degli header HTTP":
+          "Header ricevuti: in attesa del primo evento SSE o del primo token."}
+        {active.providerProgress!==undefined?` — ${Math.round(active.providerProgress*100)}% (dal provider)`:""}
+      </p>
+      <p className="muted text-xs">Eventi SSE ricevuti: {active.transportEvents} · Byte di rete ricevuti: {active.transportBytes}.
+        {active.stage==="rifiutata"?" Il testo non è stato applicato al libro.":""}</p>
+      {active.error&&<p role="alert" className="text-sm text-red-500 dark:text-red-300">{active.error}</p>}
       <p className="text-xs">Output ricevuto: {active.textCharacters} caratteri.
         {active.reasoningCharacters>0?` Reasoning ricevuto: ${active.reasoningCharacters} caratteri.`:
           " Nessun contenuto di reasoning trasmesso dal provider."}
@@ -82,6 +97,7 @@ export function AiTaskWorkspace({
               <p><b>Fase:</b> {item.phase} · <b>Esito:</b> {status(item.status)}</p>
               {item.endpointId&&<p className="muted text-xs">Endpoint: {item.endpointId} · Modello: {item.modelId??"non configurato"} · Richiesta: {item.aiRequested?"tentata":"non inviata"}</p>}
               {item.inputTokens!==undefined&&<p className="text-xs">Token input: {item.inputTokens}, output: {item.outputTokens??"N/D"}</p>}
+              {item.requestedReasoningEffort&&<p className="text-xs">Reasoning richiesto: {item.requestedReasoningEffort} (non certifica il valore effettivo usato dal provider)</p>}
               {item.error&&!compact&&<p className="text-sm text-red-600 dark:text-red-300">{item.error}</p>}
               {item.output&&<details className="rounded border border-slate-400/30 p-2">
                 <summary className="cursor-pointer text-sm font-semibold">Risposta AI confermata</summary>
