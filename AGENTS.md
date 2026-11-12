@@ -4,6 +4,12 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Accessibilità router Chat e compatibilità test legacy — #147 (fix E2E)
+
+- Il campo **Modello predefinito** deve restare un `input` con ruolo ARIA **textbox**, utilizzato sia dall'autore per scrivere ID manuali sia da test browser preesistenti. **Non** collegare direttamente `<datalist>` all'input: su Chromium gli cambia il ruolo in `combobox` e gli E2E non trovano più il campo, anche se la build riesce.
+- Il catalogo selezionabile è un `<select>` distinto, etichettato **Seleziona modello Chat dal catalogo** e filtrato ai modelli legacy senza tag o esplicitamente `chat`; selezione manuale e default Chat condividono `AppSettings.defaultRoute`. Non inferire compatibilità dalla presenza dell'ID. Test Playwright desktop e mobile per entrambi i controlli.
+
+
 ### CI browser sharded obbligatoria — #152 / ADR 0131
 
 - La workflow `.github/workflows/ci.yml` deve restare un gate **obbligatorio**: `frontend` esegue typecheck, Vitest, smoke, build; `epubcheck` valida 4 EPUB reali; `e2e` usa matrice di quattro shard Playwright indipendenti, con **entrambi** i progetti Chromium desktop e mobile in ciascuno shard (aggregati per coprire tutte le spec).

@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## Non rilasciato — correzione accessibilità router #147
+
+- Il modello predefinito Chat torna selezionabile tramite una **casella di testo** con ruolo accessibile stabile, affiancata da un menu per scegliere gli ID compatibili trovati nel catalogo. La precedente `datalist` trasformava la casella in una combobox su Chromium, causando regressioni nei test browser esistenti; nessun cambio al defaultRoute, ai dati del libro o alle chiavi API.
+
+
 ## Non rilasciato — issue #152
 
 - **CI più verificabile e veloce:** Playwright desktop/mobile rimane obbligatorio ma viene eseguito in 4 shard su runner indipendenti. Typecheck/Vitest/smoke/build e EPUBCheck restano gate separati. `fail-fast:false` evita che un fallimento cancelli i risultati degli altri shard; timeout esplicito e artifact diagnostici univoci su errore. Nessuna riduzione di test, nessun bump/npm lockfile modificato. [ADR 0131](../ADR/0131-sharded-mandatory-browser-ci.md).

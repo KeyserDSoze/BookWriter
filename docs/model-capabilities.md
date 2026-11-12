@@ -13,7 +13,7 @@ Un modello può avere tag multipli, per esempio Chat + Tool calling. Nomi o pref
 
 ## Predefiniti
 
-Il predefinito **Chat / scrittura** continua a usare `AppSettings.defaultRoute` e gli override `taskRoutes` o del singolo libro; il pulsante per il Chat lo aggiorna senza modificare gli altri ruoli. I tre selettori separati **Tool calling**, **Embedding** e **Voce** accettano solo modelli manualmente etichettati con quel ruolo, anche su endpoint differenti. Sono selezioni per integrazioni future: non avviano chiamate al provider.
+Il predefinito **Chat / scrittura** si può scegliere da **Seleziona modello Chat dal catalogo** oppure inserire manualmente nella casella **Modello predefinito** (che resta un campo testo accessibile). Continua a usare `AppSettings.defaultRoute` e gli override `taskRoutes` o del singolo libro; il pulsante per il Chat lo aggiorna senza modificare gli altri ruoli. I tre selettori separati **Tool calling**, **Embedding** e **Voce** accettano solo modelli manualmente etichettati con quel ruolo, anche su endpoint differenti. Sono selezioni per integrazioni future: non avviano chiamate al provider.
 
 Se un modello possiede tag espliciti ma **non** il tag Chat, BookWriter interrompe una richiesta Chat Completions indirizzata a quel modello **prima di inviare il prompt**. Un modello legacy senza tag mantiene il comportamento precedente. Rimuovere il tag da un modello predefinito annulla la scelta di quel ruolo senza riscrivere altri predefiniti.
 
