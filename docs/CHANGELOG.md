@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #165 (preflight non distruttivo per il rewind)
+
+- Nella scheda task dedicata, pannello **Prima di ripartire** con numero di attività temporalmente successive e anteprima dei primi cinque task, conteggio delle attività con data identica o non valida, stato attuale di freeze/canone/revisioni e avviso se l'autopilot è in corso.
+- Isolamento per libro e rigetto di identità/data del task non affidabili; niente testi di scene, `Activity.output`, prompt, reasoning, trascrizioni private, copie o invii al provider. L'ordine dei timestamp **non** dimostra dipendenze narrative e il canone attuale **non** è una snapshot del passato.
+- Funzione pura/test Vitest e Playwright desktop/mobile con dati sintetici. Non esegue replay, backup o ripristini: vero rewind #158 ancora aperto. [ADR 0139](../ADR/0139-rewind-readonly-impact-preflight.md) · [Guida](ai-task-inspection.md).
+
 ## Non rilasciato — #164 (scheda task dedicata)
 
 - In **Attività**, apertura di una singola scheda task con navigazione precedente/successivo dentro la vista filtrata, anche con raggruppamenti per run. Ritorno al registro senza perdere filtri; Dashboard compatta invariata.

@@ -493,7 +493,7 @@ export default function App() {
       </div>}
 
       {page === "activities" && (current ?
-        <AiTaskWorkspace bookId={current.id} activities={activities} live={liveAi}
+        <AiTaskWorkspace book={current} bookId={current.id} activities={activities} live={liveAi}
           inspectionEnabled={settings.inspectAiRequests===true}
           onPrepareRevision={prepareActivityRevision}/>
         : <Section title="Registro delle attività"><Empty>Seleziona un libro per ispezionare le attività.</Empty></Section>)}

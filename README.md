@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Preflight rewind non distruttivo (#165, sviluppo successivo a 0.11.91):** nella scheda di un task storico in Attività, una valutazione esplicita delle attività con timestamp successivo, di date uguali/non verificabili e dei capitoli **attualmente** congelati, scene canoniche e revisioni pendenti. Non è un confronto storico, una dipendenza narrativa provata né un comando di ripristino: il vero rewind con checkpoint/diff/undo rimane #158. [ADR 0139](ADR/0139-rewind-readonly-impact-preflight.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Scheda task dedicata (#164, incremento non ancora nella release numerata):** in Attività, «Apri scheda task» isola un'attività in una vista a tutta pagina con navigazione fra i soli task filtrati, mantenendo l'ordine scelto e gli eventuali raggruppamenti. Cambio selezione/ritorno invalidano le trascrizioni private in volo; nessuna lettura sensibile automatica, richiesta AI o rewind del canone. [ADR 0138](ADR/0138-focused-task-inspection.md) · [Guida](docs/ai-task-inspection.md).
 
 

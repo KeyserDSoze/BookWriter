@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Activity } from "../domain/types";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import {
+  analyzeRewindPreflight, type RewindPreflightBook,
+} from "../domain/rewind-preflight";
+import {
   completedTaskDurationSeconds, estimatedTaskCostEur, filterTaskTimeline,
   groupTaskTimelineByRun, resolveTaskFocus,
   formatTaskDuration, summarizeTaskTimeline,
@@ -12,6 +15,7 @@ import {
 } from "../infrastructure/ai-observability";
 
 interface Props {
+  book?: RewindPreflightBook;
   bookId: string;
   activities: Activity[];
   live: LiveAiTrace | null;
@@ -23,7 +27,7 @@ interface Props {
 
 /** Task-first, read-only inspector. Provisional tokens are NEVER canonical. */
 export function AiTaskWorkspace({
-  bookId, activities, live, inspectionEnabled, onPrepareRevision, compact=false,
+  book, bookId, activities, live, inspectionEnabled, onPrepareRevision, compact=false,
   onOpenFull,
 }: Props) {
   const [chosen,setChosen]=useState("");
@@ -53,6 +57,10 @@ export function AiTaskWorkspace({
   [activities,compact,groupByRun,runGroups,filtered]);
   const focused=compact?undefined:resolveTaskFocus(ordered,focusedTaskId);
   const recent=focused?[ordered[focused.index]!]:ordered;
+  const preflight=useMemo(()=>
+    !compact&&focused&&book&&book.id===bookId
+      ?analyzeRewindPreflight(book,activities,focused.id):null,
+  [compact,focused?.id,book,bookId,activities]);
   useEffect(()=>{
     if(focused)focusHeadingRef.current?.focus();
   },[focused?.id,bookId]);
@@ -163,6 +171,46 @@ export function AiTaskWorkspace({
       <p className="muted text-sm">Visualizzazione singola di sola lettura,
         nel medesimo ordine dei filtri e dei raggruppamenti selezionati.
         Nessun ripristino del libro o invio di richieste AI.</p>
+      {preflight&&<section aria-label="Valutazione preliminare di ripartenza"
+        className="space-y-2 rounded-lg border border-amber-500/50 p-3 text-sm">
+        <h4 className="font-semibold">Prima di ripartire: impatto potenziale (non un rewind)</h4>
+        {preflight.kind==="unavailable"?
+          <p role="alert">Non è possibile stabilire una cronologia affidabile
+            per questo task: identità, libro o data non verificabili.
+            Nessun ripristino è disponibile.</p>:
+          <>
+            <p>Attività registrate con orario successivo: <b>{preflight.laterTaskCount}</b>.
+              {preflight.sameTimeCount>0&&` ${preflight.sameTimeCount} attività con lo stesso istante (ordine non determinabile).`}
+              {preflight.invalidTimeCount>0&&` ${preflight.invalidTimeCount} attività con data non verificabile.`}</p>
+            {preflight.laterTaskSample.length>0&&<div>
+              <p className="font-medium">Prime {preflight.laterTaskSample.length} attività successive per orario:</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5">
+                {preflight.laterTaskSample.map(task=>
+                  <li key={task.id}>{task.title} · {task.phase} · {status(task.status)}</li>)}
+              </ul>
+            </div>}
+            <p>Stato <b>attuale</b> del libro: {preflight.currentChapterCount} capitoli,
+              {" "}{preflight.currentFrozenChapterCount} capitoli congelati,
+              {" "}{preflight.currentCanonSceneCount} scene canoniche,
+              {" "}{preflight.currentPendingReviewCount} scene segnalate per rilettura.</p>
+            {book?.status==="running"&&
+              <p className="font-semibold text-amber-700 dark:text-amber-300">
+                L'autopilot è in esecuzione: è necessario fermarlo e verificare il checkpoint
+                prima di qualsiasi futura revisione.</p>}
+            {preflight.runningTaskCount>0&&
+              <p className="muted">Sono registrati {preflight.runningTaskCount}
+                {" "}altri task in corso; i loro esiti non sono noti.</p>}
+            <p className="muted text-xs">Ordine temporale osservato, <b>non</b> dipendenze
+              narrative dimostrate. Anche «0 attività successive» non certifica assenza
+              di conseguenze: potrebbero esserci date ambigue, revisioni non tracciate
+              o capitoli dipendenti.</p>
+          </>}
+        <p className="text-xs">Non esistono snapshot storiche prima/dopo per ogni task,
+          né un diff affidabile rispetto al passato. Nessun capitolo viene ripristinato
+          o sbloccato e non vengono inviate richieste AI. Usa «Prepara revisione»
+          solo come istruzione per il libro corrente; vero rewind, backup,
+          approvazioni e controllo delle conseguenze restano nella issue #158.</p>
+      </section>}
       <div className="flex flex-wrap gap-2" aria-label="Navigazione task">
         <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
           onClick={()=>focusTask("")}>Torna al registro dei task</button>

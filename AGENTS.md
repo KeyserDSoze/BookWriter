@@ -1,5 +1,11 @@
 # BookWriter — istruzioni per agenti e sviluppatori
 
+## Preflight rewind storico a sola lettura — #165 / ADR 0139
+
+- La valutazione preliminare dei task storici usa **solo metadati** `Activity.id/bookId/title/phase/status/createdAt` e conteggi del **canone attuale** (`chapters`, `frozenAt`, stato `canon`, `editorialReviewSceneIds`). Mai leggere o trasmettere `Activity.output`, `Scene.text`, prompt, reasoning, memoria privata, tracce, chiavi. Mai alterare il libro, inviare POST AI, generare un falso checkpoint o asserire un rewind effettivo.
+- Il confronto temporale richiede ISO8601 con timezone e data civile valida; cronologie ambiguamente coeve e date malformate sono conteggiate come **incerte**, non trattate come assenza di task successivi. Ignorare attività di altri libri, fallire esplicitamente quando la selezione non appartiene al libro o è duplicata. La lista di titoli successivi è campionata a massimo cinque, senza output.
+- I timestamp non rappresentano dipendenze causali. Il canone corrente non è uno snapshot del passato. Autopilot running richiede stop prima di qualsiasi revisione; revisione corrente invariata con Web Lock/CAS; nessuna approvazione di ripristino concessa. Il vero rewind #158 richiede snapshot pre/post, diff, backup, invalidazione downstream, gestione freeze e consenso esplicito. Test Vitest + Playwright desktop/mobile; Frontend CI/EPUBCheck/Pages/cleanup sulla stessa HEAD. [ADR 0139](ADR/0139-rewind-readonly-impact-preflight.md) · [Guida](docs/ai-task-inspection.md).
+
 Queste regole valgono per **tutta** la repository. Leggi README, documentazione, ADR e feature prima di modificare codice. Interfaccia, documentazione, ADR e messaggi destinati all'autore sono in **italiano**; identificatori del codice in inglese.
 
 ## Scheda task dedicata a sola lettura — #164 / ADR 0138

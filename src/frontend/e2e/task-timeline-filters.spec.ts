@@ -34,8 +34,22 @@ async function openStore(page:Page,bookId:string){
         endpointId:"local",modelId:"meta/muse-glimmer",aiRequested:true},
     ];
     await new Promise<void>((resolve,reject)=>{
-      const tx=db.transaction("activities","readwrite");
+      const tx=db.transaction(["activities","books"],"readwrite");
       for(const activity of activities)tx.objectStore("activities").put(activity,activity.id);
+      const bookRequest=tx.objectStore("books").get(id);
+      bookRequest.onsuccess=()=>{
+        const book=bookRequest.result as {
+          id:string;chapters:Array<unknown>;editorialReviewSceneIds?:string[];
+        }|undefined;
+        if(!book){tx.abort();return;}
+        book.chapters=[{
+          id:"chapter-one",number:1,title:"Capitolo uno",purpose:"Introduzione",
+          frozenAt:"2026-11-12T08:30:00.000Z",
+          scenes:[{id:"scene-one",number:1,title:"Scena canonica",
+            objective:"Introduzione",text:"Una scena canonica sintetica.",status:"canon"}],
+        }];
+        tx.objectStore("books").put(book,id);
+      };
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
       tx.onabort=()=>reject(tx.error);
@@ -115,18 +129,29 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
 
   await list.first().getByRole("button",{name:"Apri scheda task"}).click();
   const focus=timeline.getByRole("region",{name:"Scheda task dedicata"});
+  const impact=focus.getByRole("region",{name:"Valutazione preliminare di ripartenza"});
   await expect(focus).toContainText("1 di 3");
+  await expect(impact).toContainText("Attività registrate con orario successivo: 0");
+  await expect(impact).toContainText("1 capitoli congelati");
+  await expect(impact).toContainText("1 scene canoniche");
+  await expect(impact).toContainText("Non esistono snapshot storiche");
   await expect(list).toHaveCount(1);
   await expect(list.first()).toContainText("Revisione conclusiva");
   await expect(focus.getByRole("button",{name:"Task precedente"})).toBeDisabled();
   await focus.getByRole("button",{name:"Task successivo"}).click();
   await expect(focus).toContainText("2 di 3");
+  await expect(impact).toContainText("Attività registrate con orario successivo: 1");
+  await expect(impact).toContainText("Revisione conclusiva");
   await expect(list.first()).toContainText("Scrittura scena");
   await focus.getByRole("button",{name:"Task successivo"}).click();
   await expect(list.first()).toContainText("Brainstorming iniziale");
+  await expect(impact).toContainText("Attività registrate con orario successivo: 2");
+  await expect(impact).toContainText("Scrittura scena");
+  await expect(impact).toContainText("Revisione conclusiva");
   await expect(focus.getByRole("button",{name:"Task successivo"})).toBeDisabled();
   await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
   await expect(focus).toHaveCount(0);
+  await expect(impact).toHaveCount(0);
   await expect(list).toHaveCount(3);
 });
 

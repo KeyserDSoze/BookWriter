@@ -1,5 +1,11 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## Valutazione preliminare prima di un rewind — #165
+
+In **Attività → Apri scheda task** compare **Prima di ripartire: impatto potenziale (non un rewind)**. Il pannello mostra il numero dei task con orario di creazione sicuramente successivo al task selezionato, fino a cinque esempi cronologici, e segnala separatamente le attività con timestamp **identico** o **non verificabile**. Nessun filtro della vista o raggruppamento nasconde le altre attività del libro nel conteggio; vengono ignorati i task di altri libri. Se data/identità del task non è affidabile, la valutazione fallisce in modo esplicito. Anche quando non risultano successori, **non** significa che non esistano conseguenze narrative.
+
+Il pannello mostra inoltre **solo lo stato attuale**: capitoli, capitoli congelati, scene canoniche e scene segnalate per rilettura. Non equivale alla situazione al tempo del task, non calcola un diff, non distingue capitoli effettivamente dipendenti da capitoli indipendenti e non modifica il canone. L'eventuale attività dell'autopilot richiede prima la pausa. Il bottone **Prepara revisione da questo task** continua a proporre una nuova istruzione per il libro **corrente**, soggetta al flusso esistente di autorizzazione e CAS; non torna automaticamente indietro. Le snapshot versionate pre/post, il backup, l'undo/branch, le differenze, gli strumenti editoriali e la rivalidazione downstream restano requisiti non completati della #158. [ADR 0139](../ADR/0139-rewind-readonly-impact-preflight.md).
+
 ## Scheda dedicata di un singolo task — #164
 
 Nella pagina **Attività** scegli **Apri scheda task** su una riga. La lista lascia spazio a un solo task, con dati già registrati, risposta confermata (se presente) e pulsante per ispezionare richiesta e risposta. Il titolo della scheda mostra la posizione nella vista corrente; **Task precedente** e **Task successivo** percorrono soltanto gli elementi risultanti dalla ricerca, dai filtri e dall'ordinamento scelti, anche quando è attivo il raggruppamento per run. **Torna al registro dei task** ripristina l'elenco preservando filtri e gruppi, senza modificare l'attività.
