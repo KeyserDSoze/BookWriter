@@ -36,9 +36,11 @@ test("lettura ad alta voce e ricerca semantica canonical-only con LM Studio mock
       if(url!=="http://localhost:1234/v1/embeddings")return original(input,init);
       const payload=JSON.parse(String(init?.body)) as {model:string;input:string[]};
       probe.embedRequests!.push(payload);
-      const data=payload.input.map((value,index)=>({
-        index,embedding:value.toLowerCase().includes("ponte")?[1,0,0]:[0,1,0],
-      }));
+      const data=payload.input.map((value,index)=>{
+        const lower=value.toLowerCase();
+        return {index,embedding:lower.includes("cascata")?[0,0,1]:
+          lower.includes("ponte")?[1,0,0]:[0,1,0]};
+      });
       return new Response(JSON.stringify({data}),{headers:{"content-type":"application/json"}});
     };
   });
@@ -130,4 +132,52 @@ test("lettura ad alta voce e ricerca semantica canonical-only con LM Studio mock
     scroll:document.documentElement.scrollWidth,viewport:window.innerWidth,
   }));
   expect(layout.scroll).toBeLessThanOrEqual(layout.viewport+1);
+
+  // A long canonical scene must expose its ending through the third sampled
+  // passage, not just the first 1400 chars. Drafts are still never sent.
+  const longForest="La foresta ricopriva il sentiero. "+
+    "Nebbia calma fra gli alberi. ".repeat(240)+
+    "Alla fine appariva la cascata nascosta con un simbolo inciso.";
+  await page.evaluate(text=>new Promise<void>((resolve,reject)=>{
+    const request=indexedDB.open("bookwriter");
+    request.onerror=()=>reject(request.error);
+    request.onsuccess=()=>{
+      const db=request.result;
+      const tx=db.transaction("books","readwrite");
+      const get=tx.objectStore("books").getAll();
+      get.onerror=()=>reject(get.error);
+      get.onsuccess=()=>{
+        const book=get.result[0] as {id:string;chapters:Array<{scenes:Array<{id:string;text:string}>}>};
+        const forest=book.chapters[0]?.scenes.find(s=>s.id==="scene-forest");
+        if(!forest){reject(new Error("Scena lunga assente"));return;}
+        forest.text=text;
+        tx.objectStore("books").put(book,book.id);
+      };
+      tx.onerror=()=>reject(tx.error);
+      tx.oncomplete=()=>resolve();
+    };
+  }),longForest);
+  await page.reload();
+  await navigation().getByRole("button",{name:"Libro"}).click();
+  const longSearch=page.getByRole("region",{name:"Ricerca semantica"});
+  await expect(longSearch.getByText(/caratteri non coperti/)).toBeVisible();
+  await longSearch.getByRole("button",{name:"Indicizza scene su localhost"}).click();
+  await expect(longSearch.getByText(/Indicizzate 2 scene in memoria volatile \(4 passaggi\)/)).toBeVisible();
+  await longSearch.getByRole("textbox",{name:"Cerca nel manoscritto"}).fill("cascata");
+  await longSearch.getByRole("button",{name:"Cerca scene simili"}).click();
+  const longResults=longSearch.getByRole("list",{name:"Risultati semantici"}).getByRole("listitem");
+  await expect(longResults.first()).toContainText("La foresta");
+  await expect(longResults.first()).toContainText("Passaggio corrispondente 3 di 3");
+  const allRequests=await page.evaluate(()=>(window as LocalWindow).embedRequests);
+  // addInitScript runs on reload: only new index and query requests survive.
+  expect(allRequests).toHaveLength(2);
+  expect(allRequests?.[0]?.input).toHaveLength(4);
+  expect(allRequests?.[0]?.input[3]).toContain("cascata nascosta");
+  expect(allRequests?.[0]?.input.every(value=>value.length<=1600)).toBe(true);
+  expect(JSON.stringify(allRequests)).not.toContain("bozza segreta");
+  const relatedLong=longSearch.getByRole("group",{name:"Confronto scene per continuità narrativa"});
+  await relatedLong.getByRole("combobox",{name:"Scena di riferimento"}).selectOption("scene-forest");
+  await relatedLong.getByRole("button",{name:"Trova scene collegate"}).click();
+  await expect(longSearch.getByRole("list",{name:"Scene collegate"}).getByRole("listitem")).toHaveCount(1);
+  expect((await page.evaluate(()=>(window as LocalWindow).embedRequests))?.length).toBe(2);
 });

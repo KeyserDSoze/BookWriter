@@ -30,7 +30,7 @@ describe("Campionamento controllato di scene per embedding locale",()=>{
     const sampled=sampleSemanticPassages(value);
     expect(sampled.passages).toHaveLength(3);
     expect(sampled.passages[0]).toContain("INCIPIT");
-    expect(sampled.passages[1]).toContain("CENTRO");
+    expect(sampled.passages[1]).toContain("mezzo");
     expect(sampled.passages[2]).toContain("ultimo");
     expect(sampled.uncoveredCharacters).toBeGreaterThan(0);
     expect(sampled.uncoveredCharacters+sampled.passages.reduce((sum,p)=>sum+p.length,0))
