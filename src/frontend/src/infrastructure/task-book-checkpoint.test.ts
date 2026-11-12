@@ -12,6 +12,7 @@ import {
 import { createBackup } from "./backup";
 import {
   inspectNarrativeTaskHistoryImpact, inspectTaskBookCheckpoint,
+  prepareHistoricalRewindReviewPlan,
   loadTaskBookConsent, loadTaskBookInventory,
   setTaskBookConsent, taskBookConsentKey, taskBookKey, taskBookUsageKey,
 } from "./task-book-checkpoint";
@@ -236,6 +237,90 @@ describe("Checkpoint narrativi integrali locali, consenso separato #172",()=>{
       before:{id:a.id,chapters:[]},after:{id:a.id,chapters:[]}},
       taskBookKey(a.id,id));
     expect(await inspectNarrativeTaskHistoryImpact(a.id,id)).toBeNull();
+  });
+
+  it("piano prima/dopo con digest reali: lettura consentita, zero scritture",async()=>{
+    const book=await fixture();
+    await setTaskBookConsent(book.id,true);
+    const id=crypto.randomUUID();
+    const after=await commit(book,id);
+    const db=await getDb();
+    const raw=await db.get("meta",taskBookKey(book.id,id));
+    const encoded=(value:unknown)=>new TextEncoder().encode(JSON.stringify(value));
+    const hex=async(value:unknown)=>Array.from(new Uint8Array(
+      await crypto.subtle.digest("SHA-256",encoded(value))),
+      x=>x.toString(16).padStart(2,"0")).join("");
+    const expectedBefore=await hex(raw.before);
+    const expectedAfter=await hex(raw.after);
+    expect(expectedBefore).not.toBe(expectedAfter);
+    const pre=await prepareHistoricalRewindReviewPlan(book.id,id,"before");
+    const post=await prepareHistoricalRewindReviewPlan(book.id,id,"after");
+    expect(pre).toMatchObject({
+      bookId:book.id,activityId:id,target:"before",
+      targetRevision:book.updatedAt,currentRevision:after.updatedAt,
+      targetSha256:expectedBefore,currentSha256:expectedAfter,
+      candidateChapterCount:1,runningActivityCount:0,
+      remoteConfigured:true,targetFrozenCount:1,currentFrozenCount:0,
+    });
+    expect(post).toMatchObject({
+      target:"after",targetSha256:expectedAfter,
+      currentSha256:expectedAfter,currentEqualsTargetRevision:true,
+    });
+    for(const secret of ["BRIEF_AUTORE_PRIVATO","PROSA_PRE",
+      "SEGRETO_MEMORIA","libro-privato","SEGRETO_OUTPUT_AI"])
+      expect(JSON.stringify(pre)).not.toContain(secret);
+    expect(await db.get("meta",taskBookKey(book.id,id))).toEqual(raw);
+    expect(await getBook(book.id)).toEqual(after);
+    expect(await db.get("activities",id)).toBeDefined();
+  });
+
+  it("piano segnala task ancora running e baseline mutata senza autorizzare restore",async()=>{
+    const book=await fixture();
+    await setTaskBookConsent(book.id,true);
+    const id=crypto.randomUUID();
+    const after=await commit(book,id);
+    const db=await getDb();
+    const original=await prepareHistoricalRewindReviewPlan(book.id,id,"before");
+    expect(original).toBeTruthy();
+    const updated=structuredClone(after);
+    updated.brief="ALTRO_BRIEF_PRIVATO";
+    updated.status="running";
+    await saveBook(updated,false,after.updatedAt);
+    const current=(await getBook(book.id))!;
+    await db.put("activities",{
+      ...activity(book,crypto.randomUUID()),status:"running",
+    },crypto.randomUUID());
+    const plan=await prepareHistoricalRewindReviewPlan(book.id,id,"before");
+    expect(plan?.currentRevision).toBe(current.updatedAt);
+    expect(plan?.currentSha256).not.toBe(original?.currentSha256);
+    expect(plan?.blockers).toContain("book_running");
+    expect(plan?.blockers).toContain("running_activity");
+    expect(plan?.blockers).toContain("remote_lease_unverified");
+    expect(plan?.blockers).toContain("external_backup_unverified");
+    expect(plan?.blockers).toContain("historical_fork_unavailable");
+    expect(plan?.blockers).toContain("editorial_approval_unavailable");
+    expect(plan).not.toHaveProperty("readyToRestore");
+  });
+
+  it("piano fail-closed con book/task cross-book, revoca e snapshot corrotta",async()=>{
+    const a=await fixture(),b=await fixture();
+    await setTaskBookConsent(a.id,true);
+    const id=crypto.randomUUID();
+    await commit(a,id);
+    expect(await prepareHistoricalRewindReviewPlan(a.id,id,"after")).toBeTruthy();
+    expect(await prepareHistoricalRewindReviewPlan(b.id,id,"after")).toBeNull();
+    expect(await prepareHistoricalRewindReviewPlan(a.id,"missing","before")).toBeNull();
+    expect(await prepareHistoricalRewindReviewPlan(a.id,id,"strano" as "before"))
+      .toBeNull();
+    await setTaskBookConsent(a.id,false);
+    expect(await prepareHistoricalRewindReviewPlan(a.id,id,"before")).toBeNull();
+    await setTaskBookConsent(a.id,true);
+    const db=await getDb();
+    await db.put("meta",{schemaVersion:1,bookId:a.id,activityId:id,
+      before:{id:a.id,chapters:[]},after:{id:a.id,chapters:[]}},
+      taskBookKey(a.id,id));
+    expect(await prepareHistoricalRewindReviewPlan(a.id,id,"before")).toBeNull();
+    expect(await getBook(a.id)).toBeDefined();
   });
 
   it("checkpoint corrotto o senza bookId esatto non rivela metadati",async()=>{

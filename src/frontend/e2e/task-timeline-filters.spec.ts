@@ -388,6 +388,15 @@ test("checkpoint narrativo integrale opt-in: capture locale, metadati e revoca, 
   await expect(impact).toContainText("memoria cambiata: sì");
   await expect(impact).toContainText("Capitoli correnti candidati a revisione: 1");
   await expect(impact).toContainText("non un grafo");
+  const reviewBeforeRevocation=panel.getByRole("region",{
+    name:"Piano di revisione storica non eseguibile",
+  });
+  await reviewBeforeRevocation.getByRole("button",{
+    name:"Genera preflight del piano storico",
+  }).click();
+  await expect(reviewBeforeRevocation.getByRole("region",{
+    name:"Metadati piano storico",
+  })).toContainText("Prerequisiti NON soddisfatti");
   for(const secret of ["SEGRETO_INTEGRALE","TESTO_PRIVATO",
     "OUTPUT_AI_PRIVATO_NO_SNAPSHOT"])
     await expect(panel).not.toContainText(secret);
@@ -409,6 +418,7 @@ test("checkpoint narrativo integrale opt-in: capture locale, metadati e revoca, 
   await expect(panel).toContainText("Stato consenso integrale: disattivato");
   await expect(summary).toHaveCount(0);
   await expect(impact).toHaveCount(0);
+  await expect(reviewBeforeRevocation).toHaveCount(0);
   const persisted=await page.evaluate(async(id)=>{
     const {getDb,getBook}=await import("/src/infrastructure/db.ts");
     const db=await getDb();
@@ -485,11 +495,46 @@ test("analisi narrativa: cambio task e libro nasconde i metadati storici, deskto
   await expect(impact).toHaveCount(0);
   await panel.getByRole("button",{name:"Analizza differenze narrative storiche"}).click();
   await expect(impact).toContainText("Capitoli correnti candidati a revisione: 1");
+  const review=panel.getByRole("region",{name:"Piano di revisione storica non eseguibile"});
+  const plan=review.getByRole("region",{name:"Metadati piano storico"});
+  await expect(plan).toHaveCount(0);
+  await review.getByRole("button",{name:"Genera preflight del piano storico"}).click();
+  await expect(plan).toContainText("stato PRIMA del task");
+  await expect(plan).toContainText("Capitoli correnti candidati a riesame: 1");
+  await expect(plan).toContainText("Fork storico non ancora implementato");
+  await expect(plan.getByLabel("Impronta SHA-256 storica")).toContainText(/^[a-f0-9]{64}$/);
+  const preHash=await plan.getByLabel("Impronta SHA-256 storica").innerText();
+  const currentHash=await plan.getByLabel("Impronta SHA-256 attuale").innerText();
+  expect(preHash).not.toBe(currentHash);
+  await plan.getByLabel("Istruzione correttiva locale non inviata")
+    .fill("BOZZA_CORRETTIVA_PRIVATA_NON_INVIARE");
+  await plan.getByRole("button",{name:"Riconvalida impronte e revisione"}).click();
+  await expect(review.getByRole("status")).toContainText("Impronte e baseline confermate");
+  await review.getByLabel("Stato storico da esaminare").selectOption("after");
+  await expect(plan).toHaveCount(0);
+  await expect(review).not.toContainText("BOZZA_CORRETTIVA_PRIVATA_NON_INVIARE");
+  await review.getByRole("button",{name:"Genera preflight del piano storico"}).click();
+  await expect(plan).toContainText("stato DOPO del task");
   await expect(panel).not.toContainText("TESTO_STORICO_SEGRETO");
   await focused.getByRole("button",{name:"Task successivo"}).click();
+  await expect(review).toHaveCount(0);
   await expect(impact).toHaveCount(0);
   await panel.getByRole("button",{name:"Analizza differenze narrative storiche"}).click();
   await expect(impact).toContainText("Differenze storiche del task");
+  await review.getByRole("button",{name:"Genera preflight del piano storico"}).click();
+  await expect(plan).toBeVisible();
+  // A concurrent author edit makes the review baseline stale.
+  await page.evaluate(async id=>{
+    const {getBook,saveBook}=await import("/src/infrastructure/db.ts");
+    const book=await getBook(id);
+    if(!book)throw Error("Libro non trovato");
+    const newer=structuredClone(book);
+    newer.brief+=" CAMBIAMENTO_PRIVATO_DOPO_PIANO";
+    await saveBook(newer,false,book.updatedAt);
+  },bookA);
+  await plan.getByRole("button",{name:"Riconvalida impronte e revisione"}).click();
+  await expect(plan).toHaveCount(0);
+  await expect(review.getByRole("status")).toContainText("Baseline non più verificabile");
   await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookB);
   await expect(impact).toHaveCount(0);
   await expect(panel).toContainText("Stato consenso integrale: disattivato");

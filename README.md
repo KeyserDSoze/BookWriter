@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Bozza di piano storico di revisione (#174, non ancora release numerata):** dopo il confronto narrativo #173, scegli **Prima** o **Dopo il task** e premi **Genera preflight del piano storico**. Il browser rileva in un'unica lettura locale consenso, snapshot, libro e task, calcola impronte **SHA-256** della versione narrativa scelta e dello stato corrente (senza remote GitHub), segnala variazione della revisione, capitoli candidati e **tutti i prerequisiti ancora non soddisfatti**. Puoi annotare una **istruzione correttiva solo temporanea**, che non viene salvata né inviata all'AI, e premere **Riconvalida impronte e revisione**: un cambiamento scarta il piano. È **soltanto una bozza non eseguibile**, non un restore, undo, fork storico, backup certificato o approvazione. [ADR 0148](ADR/0148-historical-rewind-review-plan.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Anteprima storica narrativa e capitoli candidati a revisione (#173, non ancora release numerata).** In **Attività**, per un task con checkpoint narrativi integrali opt-in #172, puoi premere **Analizza differenze narrative storiche**: conta capitoli/scene (comprese bozze) aggiunti, rimossi o modificati, freeze, memoria, variazioni globali e riordini, **senza mostrare titoli, prosa o segreti**. Segnala la revisione corrente e propone **solo a titolo prudenziale** i numeri dei capitoli da rileggere (max 20 mostrati, più conteggio dei restanti). Non è un grafo di dipendenze, non corregge alcunché e non attiva un rewind. [ADR 0147](ADR/0147-historical-narrative-diff-preflight.md) · [Guida](docs/ai-task-inspection.md).
 
 

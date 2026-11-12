@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #174 (bozza piano storico read-only, SHA-256 e prerequisiti non soddisfatti)
+
+- In **Attività → scheda task**, dopo l'analisi differenze narrative #173, un controllo separato permette di selezionare il checkpoint integrale #172 **prima** oppure **dopo** il task e generare **solo su richiesta** una bozza di piano storico. Una transazione readonly `books+activities+meta` legge consenso, task `succeeded`, snapshot e libro corrente; segnala task in esecuzione, remote GitHub configurato e revisione attuale distinta. Digest SHA-256 dei due contenuti narrativi (remote escluso), revisioni, conteggi di scene/freeze e candidati a rilettura, senza esporre testi, segreti o titoli.
+- I **blocchi per un vero rewind** restano sempre visibili: file di backup esterno non attestato, fork storico non implementato, autorizzazioni editoriali e recheck downstream mancanti, eventuale writer running e remote lease non verificato. Nessuna valutazione `readyToRestore`, nessuna modifica canon, undo, fork, POST AI o upload. L'autore può scrivere una bozza di istruzione correttiva **effimera** (max 2.000 caratteri), non persistita/loggata.
+- **Riconvalida impronte e revisione** rilegge l'origine e scarta piano/bozza quando hash, revisioni, task running o blocker cambiano; reset anche su target, libro, task, consenso revocato e unmount. Test unitari/fake-IDB e browser desktop/mobile, ADR 0148. #158 aperta: la prova SHA non equivale a backup, lock distribuito o permesso di recovery. [ADR 0148](../ADR/0148-historical-rewind-review-plan.md).
+
 ## Non rilasciato — #173 (preflight narrativo storico e candidati downstream)
 
 - In **Attività**, nuova analisi **manuale, metadata-only** dei checkpoint narrativi integrali #172: confronta prima/dopo di un singolo task e mostra conteggi capitoli e scene (incluse bozze) aggiunti/rimossi/modificati, freeze, memoria, campi narrativi globali e riordini, senza mostrare titoli/prosa/segreti o contenuti delle richieste AI.

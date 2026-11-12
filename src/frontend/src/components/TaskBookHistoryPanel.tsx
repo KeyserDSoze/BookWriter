@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
+import { HistoricalReviewPlanPanel } from "./HistoricalReviewPlanPanel";
 import {
   TASK_BOOK_PAIR_LIMIT_BYTES, TASK_BOOK_TOTAL_LIMIT_BYTES,
   type TaskBookCheckpointSummary,
@@ -252,6 +253,10 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
                   di dipendenze, una diagnosi editoriale o un'autorizzazione
                   a riscrivere. Nessun ripristino/undo/fork storico disponibile.</p>
               </div>}
+            {impact&&impact.bookId===bookId&&impact.activityId===focusedTaskId&&
+              <HistoricalReviewPlanPanel
+                key={bookId+":"+focusedTaskId+":"+impact.currentRevision}
+                bookId={bookId} activityId={focusedTaskId}/>}
             {impactMessage&&<p role="status" className="text-xs">{impactMessage}</p>}
           </div>
         </div>}
