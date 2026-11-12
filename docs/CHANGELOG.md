@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #167 (copie della prosa canonica opt-in)
+
+- **Attività → Copie locali della prosa canonica:** consenso disattivato per default, attivazione esplicita per libro con avviso su privacy e spazio. Solo i **task riusciti dopo l'attivazione** registrano una coppia di copie integrali, non troncate, delle scene `canon` prima/dopo, nella stessa transazione IndexedDB CAS di canone/attività/outbox/checkpoint strutturale. `meta.add` protegge dalle collisioni.
+- **Attività → scheda task → Carica confronto della prosa canonica:** conteggi scene pre/post e scene aggiunte/rimosse/con testo diverso; lettura manuale, senza esposizione automatica della prosa e senza ripristino. Revoca per libro cancella **atomically** copie solo del libro, senza toccare il canone o i checkpoint strutturali.
+- Mai in ZIP full/content, sync GitHub, outbox, backup o provider AI; esclusi draft/planned, titoli, memory, segreti, output e reasoning. Test domain, fake-indexeddb, Playwright desktop/mobile. **Non** include diff testuale granulare, undo/fork, restore, backup/retention: #158 resta aperta. [ADR 0141](../ADR/0141-opt-in-canonical-prose-snapshots.md).
+
 ## Non rilasciato — #166 (checkpoint strutturali atomici per task)
 
 - Ogni nuovo task **riuscito** salvato con `saveBookAndActivity` può produrre una coppia **pre/post** in IndexedDB locale `meta`, schema v1, scritta nella stessa transazione CAS del libro, attività e outbox. Un ID di task duplicato non sovrascrive la storia; rollback atomico in caso di errore.

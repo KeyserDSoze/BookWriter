@@ -3,6 +3,8 @@ import type { Activity, AppSettings, BookProject } from "../domain/types";
 import { DEFAULT_SETTINGS } from "../domain/types";
 import { enqueueCheckpoint } from "./outbox";
 import { createTaskStructuralCheckpoint } from "../domain/task-structural-checkpoint";
+import { createTaskProseCheckpoint } from "../domain/task-prose-checkpoint";
+import { taskProseConsentKey, taskProseKey } from "./task-prose-checkpoint";
 
 const DB_NAME = "bookwriter";
 const DB_VERSION = 2;
@@ -113,10 +115,14 @@ export async function saveBookAndActivity(
   // No prose, memory, prompts, reasoning or secrets are copied.
   if (activity.status === "succeeded" && stored &&
       activity.bookId === book.id) {
-    await tx.objectStore("meta").add(
-      createTaskStructuralCheckpoint(stored, book, activity),
-      "task-structure:v1:" + activity.id,
-    );
+    const meta = tx.objectStore("meta");
+    await meta.add(createTaskStructuralCheckpoint(stored, book, activity),
+      "task-structure:v1:" + activity.id);
+    // Explicit consent is read inside the very same transaction as the
+    // structural witness, book, audit and outbox. An opt-out serializes here.
+    if ((await meta.get(taskProseConsentKey(book.id))) === true)
+      await meta.add(createTaskProseCheckpoint(stored, book, activity),
+        taskProseKey(book.id, activity.id));
   }
   // Keep a durable sync request in the same transaction as the narrative result.
   // Do not create a GitHub commit for every intermediate AI planning operation.

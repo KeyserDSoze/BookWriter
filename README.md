@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Copie pre/post del testo canonico su consenso esplicito (#167, non ancora release numerata):** in **Attività** puoi attivare per singolo libro un archivio **locale opt-in** delle versioni integrali del testo delle sole scene canoniche prima/dopo i **futuri task riusciti**, insieme al commit atomico del libro. La scheda task consente un confronto **di conteggi** delle scene con prosa diversa, senza mostrare automaticamente il testo. La revoca cancella tutte le copie testuali locali di quel libro (non il manoscritto); niente ZIP, outbox o GitHub. **Non è ancora il rewind**, che richiede backup/undo/approvazioni. [ADR 0141](ADR/0141-opt-in-canonical-prose-snapshots.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Checkpoint strutturali pre/post per task riusciti (#166, non ancora nella release numerata):** ogni nuovo task che applica un risultato con `saveBookAndActivity` salva localmente e nella stessa transazione una coppia di snapshot **solo strutturali** (ID capitoli/scene, stati e freeze, revisioni). In **Attività → scheda task**, «Carica confronto strutturale» presenta differenze aggregate senza leggere la prosa o copiare prompt/segreti. Task legacy non ricostruiti; nessun rollback, undo o confronto testuale possibile da questi dati. [ADR 0140](ADR/0140-atomic-task-structural-checkpoints.md) · [Guida](docs/ai-task-inspection.md).
 
 

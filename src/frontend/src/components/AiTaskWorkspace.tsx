@@ -5,6 +5,10 @@ import {
   compareBookStructure, type TaskStructuralCheckpoint,
 } from "../domain/task-structural-checkpoint";
 import { loadTaskStructuralCheckpoint } from "../infrastructure/task-structural-checkpoint";
+import { compareCanonProse, type TaskProseCheckpoint } from "../domain/task-prose-checkpoint";
+import {
+  loadTaskProseCheckpoint, loadTaskProseConsent, setTaskProseConsent,
+} from "../infrastructure/task-prose-checkpoint";
 import {
   analyzeRewindPreflight, type RewindPreflightBook,
 } from "../domain/rewind-preflight";
@@ -38,6 +42,11 @@ export function AiTaskWorkspace({
   const [trace,setTrace]=useState<AiLocalTrace|null>(null);
   const [structural,setStructural]=useState<TaskStructuralCheckpoint|null>(null);
   const [structuralMessage,setStructuralMessage]=useState("");
+  const [proseConsent,setProseConsent]=useState<{ bookId:string; enabled:boolean }|null>(null);
+  const [consentBusy,setConsentBusy]=useState(false);
+  const [consentMessage,setConsentMessage]=useState("");
+  const [proseCheckpoint,setProseCheckpoint]=useState<TaskProseCheckpoint|null>(null);
+  const [proseMessage,setProseMessage]=useState("");
   const [message,setMessage]=useState("");
   const [clock,setClock]=useState(Date.now());
   const [search,setSearch]=useState("");
@@ -51,6 +60,8 @@ export function AiTaskWorkspace({
   // another task. Never display stale local prompts or responses.
   const inspectionSequence=useRef(new AiTraceReadFence());
   const checkpointSequence=useRef(new AiTraceReadFence());
+  const proseSequence=useRef(new AiTraceReadFence());
+  const consentSequence=useRef(new AiTraceReadFence());
   const summary=useMemo(()=>summarizeTaskTimeline(activities),[activities]);
   const phaseOptions=useMemo(()=>[...new Set(activities.map(x=>x.phase))].sort(),[activities]);
   const filtered=useMemo(()=>compact?[]:filterTaskTimeline(activities,{
@@ -66,6 +77,11 @@ export function AiTaskWorkspace({
   const recent=focused?[ordered[focused.index]!]:ordered;
   const structuralChanges=structural&&focused&&structural.bookId===bookId&&
     structural.activityId===focused.id?compareBookStructure(structural):null;
+  const proseEnabled=proseConsent?.bookId===bookId&&proseConsent.enabled===true;
+  const proseReady=proseConsent?.bookId===bookId;
+  const proseDiff=proseEnabled&&proseCheckpoint&&focused&&
+    proseCheckpoint.bookId===bookId&&proseCheckpoint.activityId===focused.id
+    ?compareCanonProse(proseCheckpoint):null;
   const preflight=useMemo(()=>
     !compact&&focused&&book&&book.id===bookId
       ?analyzeRewindPreflight(book,activities,focused.id):null,
@@ -78,15 +94,31 @@ export function AiTaskWorkspace({
     return ()=>clearInterval(timer);
   },[]);
   useEffect(()=>{
+    if(compact)return;
+    const ticket=consentSequence.current.begin();
+    setProseConsent(null);setConsentBusy(false);setConsentMessage("");
+    void loadTaskProseConsent(bookId).then(enabled=>{
+      if(consentSequence.current.isCurrent(ticket))
+        setProseConsent({bookId,enabled});
+    }).catch(()=>{
+      if(consentSequence.current.isCurrent(ticket))
+        setConsentMessage("Impossibile leggere il consenso locale: copie disattivate.");
+    });
+    return ()=>{consentSequence.current.invalidate();};
+  },[bookId,compact]);
+  useEffect(()=>{
     inspectionSequence.current.invalidate();
     checkpointSequence.current.invalidate();
+    proseSequence.current.invalidate();
     setChosen("");setTrace(null);setMessage("");
     setStructural(null);setStructuralMessage("");
+    setProseCheckpoint(null);setProseMessage("");
     setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");
     setGroupByRun(false);setFocusedTaskId("");
     return ()=>{
       inspectionSequence.current.invalidate();
       checkpointSequence.current.invalidate();
+      proseSequence.current.invalidate();
     };
   },[bookId,inspectionEnabled]);
   const active=live?.bookId===bookId?live:null;
@@ -95,8 +127,47 @@ export function AiTaskWorkspace({
   const focusTask=(id:string)=>{
     inspectionSequence.current.invalidate();
     checkpointSequence.current.invalidate();
+    proseSequence.current.invalidate();
     setChosen("");setTrace(null);setMessage("");
-    setStructural(null);setStructuralMessage("");setFocusedTaskId(id);
+    setStructural(null);setStructuralMessage("");
+    setProseCheckpoint(null);setProseMessage("");
+    setFocusedTaskId(id);
+  };
+  const changeProseConsent=async(enabled:boolean)=>{
+    const ticket=consentSequence.current.begin();
+    setConsentBusy(true);setConsentMessage("");
+    // Revocation must hide any previously loaded comparison immediately.
+    proseSequence.current.invalidate();
+    setProseCheckpoint(null);setProseMessage("");
+    try{
+      await setTaskProseConsent(bookId,enabled);
+      if(!consentSequence.current.isCurrent(ticket))return;
+      setProseConsent({bookId,enabled});
+      setConsentMessage(enabled
+        ?"Consenso attivo per questo libro: copie complete delle sole scene canoniche dai prossimi task riusciti."
+        :"Consenso revocato: copie locali della prosa di questo libro eliminate.");
+    }catch{
+      if(consentSequence.current.isCurrent(ticket)){
+        setProseConsent(null);
+        setConsentMessage("Impossibile aggiornare il consenso. Stato sconosciuto: ricarica la pagina prima di riprovare.");
+      }
+    }finally{
+      if(consentSequence.current.isCurrent(ticket))setConsentBusy(false);
+    }
+  };
+  const inspectProse=async(id:string)=>{
+    const ticket=proseSequence.current.begin();
+    setProseCheckpoint(null);setProseMessage("");
+    if(!proseEnabled)return;
+    try{
+      const stored=await loadTaskProseCheckpoint(bookId,id);
+      if(!proseSequence.current.isCurrent(ticket))return;
+      if(stored)setProseCheckpoint(stored);
+      else setProseMessage("Nessuna copia testuale locale disponibile per questo task: il consenso non era attivo al commit, il task è legacy o le copie sono state eliminate.");
+    }catch{
+      if(proseSequence.current.isCurrent(ticket))
+        setProseMessage("Impossibile leggere la copia locale della prosa.");
+    }
   };
   const inspectStructure=async(id:string)=>{
     const ticket=checkpointSequence.current.begin();
@@ -191,6 +262,24 @@ export function AiTaskWorkspace({
       </div>}
       {!inspectionEnabled && <p className="muted text-xs">Per vedere i token e i prompt completi abilita «Ispezione locale richieste AI» nelle Impostazioni. Contiene dati potenzialmente riservati.</p>}
     </div>}
+    {!compact&&<section aria-label="Consenso copie testuali per il rewind"
+      className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3 text-sm">
+      <p className="font-semibold">Copie locali della prosa canonica per task (opt-in)</p>
+      <p className="muted text-xs">Disattivato per impostazione predefinita.
+        Se lo attivi, ogni futuro task riuscito salva in IndexedDB una copia
+        integrale, non troncata, del testo delle scene canoniche prima e dopo
+        il commit. Duplica contenuti riservati e può occupare molto spazio.
+        Nessun backup ZIP o GitHub contiene queste copie. Non è un ripristino.</p>
+      <p className="text-xs">Stato per questo libro: {proseReady
+        ?proseEnabled?"attivo":"disattivato"
+        :"in caricamento o non verificabile"}.</p>
+      <button type="button" disabled={!proseReady||consentBusy}
+        className="rounded-lg border border-amber-600 px-3 py-2 text-sm disabled:opacity-40"
+        onClick={()=>void changeProseConsent(!proseEnabled)}>
+        {proseEnabled?"Revoca consenso ed elimina tutte le copie testuali del libro"
+          :"Attiva copie testuali locali per questo libro"}</button>
+      {consentMessage&&<p role="status" className="muted text-xs">{consentMessage}</p>}
+    </section>}
     <p className="muted mt-3 text-sm">Ogni attività è separata e ispezionabile. Un output in streaming non modifica il libro finché non supera i controlli di validazione e viene confermato come canonico.</p>
     {!compact&&focused&&<div role="region" aria-label="Scheda task dedicata"
       className="mt-4 space-y-3 rounded-xl border border-slate-400/50 p-4">
@@ -267,6 +356,34 @@ export function AiTaskWorkspace({
           <p className="muted">Anche con zero differenze strutturali, il testo
             potrebbe essere cambiato: questa vista non confronta la prosa,
             le istruzioni o le dipendenze narrative.</p>
+        </div>}
+      </section>
+      <section aria-label="Confronto prosa canonica locale"
+        className="space-y-2 rounded-lg border border-amber-500/40 p-3 text-sm">
+        <h4 className="font-semibold">Confronto del testo canonico (opt-in, sola lettura)</h4>
+        <p className="muted text-xs">La copia pre/post di tutte le scene canoniche
+          è locale e disponibile soltanto se hai autorizzato la registrazione
+          prima del commit del task. Il confronto conta le scene con testo
+          differente, aggiunte o rimosse; non ripristina nulla e non mostra
+          automaticamente il testo privato.</p>
+        <button type="button" disabled={!proseEnabled}
+          className="rounded-lg border border-slate-400 px-3 py-2 text-sm disabled:opacity-40"
+          onClick={()=>{if(focused)void inspectProse(focused.id);}}>
+          Carica confronto della prosa canonica</button>
+        {!proseEnabled&&<p className="muted text-xs">Consenso non attivo: il confronto
+          testuale locale non è disponibile.</p>}
+        {proseMessage&&<p role="status" className="muted text-xs">{proseMessage}</p>}
+        {proseDiff&&proseCheckpoint&&<div className="space-y-1 text-xs"
+          aria-label="Differenze della prosa canonica">
+          <p>Revisioni: {proseCheckpoint.before.revision} → {proseCheckpoint.after.revision}.</p>
+          <p>Scene canoniche: {proseDiff.beforeCount} prima,
+            {" "}{proseDiff.afterCount} dopo.
+            {" "}{proseDiff.added.length} aggiunte,
+            {" "}{proseDiff.removed.length} rimosse,
+            {" "}{proseDiff.modified.length} con testo modificato.</p>
+          <p className="muted">Si confronta esattamente il testo delle scene
+            con lo stesso ID e capitolo. Non si ricostruiscono dipendenze,
+            revisioni intermedie o una versione ripristinabile del libro.</p>
         </div>}
       </section>
       <div className="flex flex-wrap gap-2" aria-label="Navigazione task">

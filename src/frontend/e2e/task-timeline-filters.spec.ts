@@ -215,6 +215,76 @@ test("checkpoint strutturale salvato insieme al task: confronto locale e nessun 
   expect(saved).toBe("prose");
 });
 
+test("copie canoniche opt-in: confronto esatto e revoca locale, desktop/mobile",async({page})=>{
+  await page.goto("/");
+  const bookId=await createBook(page,"Libro con copie canoniche consensuali");
+  const nav=page.getByRole("navigation",{
+    name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
+  });
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const timeline=page.getByRole("region",{name:"Timeline task AI"});
+  const consent=timeline.getByRole("region",{name:"Consenso copie testuali per il rewind"});
+  await expect(consent).toContainText("Stato per questo libro: disattivato");
+  await consent.getByRole("button",{name:"Attiva copie testuali locali per questo libro"}).click();
+  await expect(consent).toContainText("Stato per questo libro: attivo");
+  await page.evaluate(async(id)=>{
+    const {getBook,saveBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
+    const initial=await getBook(id);
+    if(!initial)throw Error("Libro mancante");
+    const withCanon=structuredClone(initial);
+    withCanon.chapters=[{id:"chapter-optin",number:1,title:"Soggetto sintetico",
+      purpose:"Scena",scenes:[{id:"scene-optin",number:1,
+        title:"Scena",objective:"Raccontare",status:"canon",
+        text:"PROSA_ANTE_OPERAZIONE_PRIVATA"}]}];
+    await saveBook(withCanon,false,initial.updatedAt);
+    const before=await getBook(id);
+    if(!before)throw Error("Libro non salvato");
+    const after=structuredClone(before);
+    after.chapters[0].scenes[0].text="PROSA_DOPO_OPERAZIONE_PRIVATA";
+    await saveBookAndActivity(after,{
+      id:"task-optin-"+id,bookId:id,runId:"session-optin",
+      phase:"prose",title:"Task con prosa consentita",reason:"Scrivi",
+      nextStep:"Verifica",status:"succeeded",
+      createdAt:"2026-11-12T10:00:00.000Z",
+      endedAt:"2026-11-12T10:00:05.000Z",
+      output:"OUTPUT_AI_PRIVATO_NON_COPIATO",
+    },before.updatedAt);
+  },bookId);
+  await page.reload();
+  await nav.getByRole("button",{name:"Attività"}).click();
+  await expect(consent).toContainText("Stato per questo libro: attivo");
+  await timeline.getByRole("button",{name:"Apri scheda task"}).click();
+  const focus=timeline.getByRole("region",{name:"Scheda task dedicata"});
+  const prose=focus.getByRole("region",{name:"Confronto prosa canonica locale"});
+  await prose.getByRole("button",{name:"Carica confronto della prosa canonica"}).click();
+  const diff=prose.getByLabel("Differenze della prosa canonica");
+  await expect(diff).toContainText("Scene canoniche: 1 prima, 1 dopo");
+  await expect(diff).toContainText("1 con testo modificato");
+  await expect(prose).not.toContainText("PROSA_ANTE_OPERAZIONE_PRIVATA");
+  await expect(prose).not.toContainText("PROSA_DOPO_OPERAZIONE_PRIVATA");
+  await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
+  await consent.getByRole("button",{
+    name:"Revoca consenso ed elimina tutte le copie testuali del libro",
+  }).click();
+  await expect(consent).toContainText("Stato per questo libro: disattivato");
+  await timeline.getByRole("button",{name:"Apri scheda task"}).click();
+  await expect(prose.getByRole("button",{
+    name:"Carica confronto della prosa canonica",
+  })).toBeDisabled();
+  const local=await page.evaluate(async(id)=>{
+    const {getDb}=await import("/src/infrastructure/db.ts");
+    const db=await getDb();
+    return {
+      prose:await db.get("meta","task-prose:v1:"+id+":task-optin-"+id),
+      structural:await db.get("meta","task-structure:v1:task-optin-"+id),
+      book:await db.get("books",id),
+    };
+  },bookId);
+  expect(local.prose).toBeUndefined();
+  expect(local.structural).toBeDefined();
+  expect(local.book.chapters[0].scenes[0].text).toBe("PROSA_DOPO_OPERAZIONE_PRIVATA");
+});
+
 test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{
   await page.goto("/");
   const bookA=await createBook(page,"Libro A privato");
