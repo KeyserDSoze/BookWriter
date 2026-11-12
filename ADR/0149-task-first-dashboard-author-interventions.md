@@ -1,4 +1,4 @@
-# ADR 0146 — Dashboard orientata al task, interventi registrati dell'autore e avvio da sinossi
+# ADR 0149 — Dashboard orientata al task, interventi registrati dell'autore e avvio da sinossi
 
 - Stato: accettato
 - Data: 2026-11-12

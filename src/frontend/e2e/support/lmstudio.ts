@@ -83,9 +83,9 @@ export async function configureLmStudio(page: Page, lm: LmStudioTarget, projectN
 function escapeRegExp(text: string): string { return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
 export type StoredAi = {
-  status: string; phase: string;
+  status: string; phase: string; previousError?: string;
   interventions: Array<{ scope: string; instruction: string; appliedAt?: string }>;
-  activities: Array<{ title: string; status: string; aiRequested?: boolean; output?: string;
+  activities: Array<{ title: string; status: string; aiRequested?: boolean; output?: string; error?: string;
     inputTokens?: number; outputTokens?: number; appliedInterventionIds?: string[] }>;
 };
 export function readStored(page: Page): Promise<StoredAi> {
@@ -99,8 +99,10 @@ export function readStored(page: Page): Promise<StoredAi> {
       const activities = tx.objectStore("activities").getAll();
       tx.onerror = () => reject(tx.error);
       tx.oncomplete = () => {
-        const book = books.result[0] as { status: string; phase: string; authorInterventions?: StoredAi["interventions"] };
-        resolve({ status: book.status, phase: book.phase, interventions: book.authorInterventions ?? [],
+        const book = books.result[0] as { status: string; phase: string; previousError?: string;
+          authorInterventions?: StoredAi["interventions"] };
+        resolve({ status: book.status, phase: book.phase, previousError: book.previousError,
+          interventions: book.authorInterventions ?? [],
           activities: activities.result as StoredAi["activities"] });
         db.close();
       };

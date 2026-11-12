@@ -53,10 +53,12 @@ test("LM Studio reale: intervento registrato durante il lavoro, applicato alla r
   expect(requests[interrupted]!.userPrompt).toContain(note);
 
   await page.getByRole("button", { name: "Ferma a fine task" }).click();
-  await expect(page.locator(".status-bar")).toContainText("In pausa", { timeout: lm.taskTimeoutMs });
+  await expect(page.locator(".status-bar")).toContainText(/In pausa|Errore/, { timeout: lm.taskTimeoutMs });
+  const stored = await readStored(page);
+  const failed = stored.activities.filter(a => a.status === "failed").map(a => a.error);
+  expect(stored.status, `Il task reale è finito in errore: ${stored.previousError ?? failed.join(" | ")}`).toBe("paused");
   await expect(page.getByText(/Autopilot in pausa: il task in corso è stato completato e salvato/)).toBeVisible();
 
-  const stored = await readStored(page);
   const done = stored.activities.find(a => a.status === "succeeded" && a.aiRequested);
   expect(done?.output?.trim().length ?? 0).toBeGreaterThan(0);
   expect(done?.appliedInterventionIds).toHaveLength(1);
