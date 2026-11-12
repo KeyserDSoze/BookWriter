@@ -40,7 +40,7 @@ describe("Ricerca semantica: solo scene canoniche, dati minimizzati",()=>{
     expect(()=>relatedSemanticScenes(scenes,vectors,"inesistente")).toThrow(/non presente/);
     expect(()=>relatedSemanticScenes(scenes,vectors.slice(1),"ponte")).toThrow(/incoerente/);
     expect(()=>relatedSemanticScenes(scenes,[[0,0,0],...vectors.slice(1)],"ponte"))
-      .toThrow(/non valido/);
+      .toThrow(/vettore della domanda vuoto/);
     expect(relatedSemanticScenes([scene("sola")],[[1,2]],"sola")).toEqual([]);
   });
   it("ordina per coseno senza risposte inventate",()=>{
