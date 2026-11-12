@@ -576,11 +576,16 @@ export class AutopilotRunner {
             endpointId:assignment.endpointId,modelId:assignment.modelId,
             inspect:settings.inspectAiRequests === true,
           });
-          const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,{
-            ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
-            onHeaders:()=>markAiHeader(started.id),
-            onProgress:delta=>addAiDelta(started.id,delta),
-          });
+          const inspectStream = settings.inspectAiRequests===true ||
+            settings.endpoints.find(e=>e.id===assignment.endpointId)?.streamMode==="sse";
+          const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,
+            preflight || inspectStream ? {
+              ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
+              ...(inspectStream ? {
+                onHeaders:()=>markAiHeader(started.id),
+                onProgress:(delta:import("../infrastructure/ai-stream").AiStreamDelta)=>addAiDelta(started.id,delta),
+              } : {}),
+            } : undefined);
           // A provider reply may carry usage even when the editorial schema,
           // freshness gate or writer lease rejects its text. Capture the
           // observed counts before validation so the failed/cancelled Activity
