@@ -36,7 +36,8 @@ export function sampleSemanticPassages(text: string): ScenePassageSample {
     spans.length=0;
     const starts=[0,Math.floor((source.length-size)/2),source.length-size];
     for(const originalStart of starts) {
-      let start=originalStart;
+      // Never overlap the preceding sampled range even at UTF-16 boundaries.
+      let start=Math.max(originalStart,spans.at(-1)?.[1]??0);
       if(start>0 && lowSurrogate(source.charCodeAt(start)))start++;
       let end=Math.min(start+size,source.length);
       if(end<source.length && highSurrogate(source.charCodeAt(end-1)))end--;

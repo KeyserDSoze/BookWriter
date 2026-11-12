@@ -47,6 +47,19 @@ describe("Campionamento controllato di scene per embedding locale",()=>{
       expect(passage.length).toBeLessThanOrEqual(MAX_SCENE_EMBED_CHARS);
     }
   });
+  it("ai confini UTF-16 più difficili non supera tre passaggi e non duplica campioni",()=>{
+    const value="a".repeat(1399)+"🌲"+"b".repeat(1399)+"🌲"+"c".repeat(1398);
+    expect(value.length).toBe(MAX_SCENE_EMBED_CHARS*MAX_SCENE_EMBED_PASSAGES);
+    const result=sampleSemanticPassages(value);
+    expect(result.passages).toHaveLength(3);
+    expect(result.passages.every(p=>p.length<=MAX_SCENE_EMBED_CHARS)).toBe(true);
+    expect(result.uncoveredCharacters+
+      result.passages.reduce((sum,p)=>sum+p.length,0)).toBe(value.length);
+    for(const passage of result.passages){
+      expect(passage).not.toMatch(/^[\\uDC00-\\uDFFF]/u);
+      expect(passage).not.toMatch(/[\\uD800-\\uDBFF]$/u);
+    }
+  });
   it("mantiene solo canon, esclude segreti e limita numero di scene/vettori",()=>{
     const book=newBook("brief privato","Titolo","Genere","Adulti");
     book.memory.secrets["secret"]="TOP SECRET MEMORY";
