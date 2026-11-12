@@ -112,6 +112,22 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
   await expect(list.nth(1)).toContainText("Scrittura scena");
   await timeline.getByRole("button",{name:"Azzera filtri"}).click();
   await expect(timeline.getByRole("group",{name:"Sessione run-one"})).toHaveCount(0);
+
+  await list.first().getByRole("button",{name:"Apri scheda task"}).click();
+  const focus=timeline.getByRole("region",{name:"Scheda task dedicata"});
+  await expect(focus).toContainText("1 di 3");
+  await expect(list).toHaveCount(1);
+  await expect(list.first()).toContainText("Revisione conclusiva");
+  await expect(focus.getByRole("button",{name:"Task precedente"})).toBeDisabled();
+  await focus.getByRole("button",{name:"Task successivo"}).click();
+  await expect(focus).toContainText("2 di 3");
+  await expect(list.first()).toContainText("Scrittura scena");
+  await focus.getByRole("button",{name:"Task successivo"}).click();
+  await expect(list.first()).toContainText("Brainstorming iniziale");
+  await expect(focus.getByRole("button",{name:"Task successivo"})).toBeDisabled();
+  await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
+  await expect(focus).toHaveCount(0);
+  await expect(list).toHaveCount(3);
 });
 
 test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{
@@ -156,6 +172,13 @@ test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{
     .evaluate((element:HTMLDetailsElement)=>{element.open=true;});
   await list.first().getByRole("button",{name:"Ispeziona richiesta e risposta"}).click();
   await expect(list.first().getByText("Messaggio system inviato")).toBeVisible();
+  await list.first().getByText("Messaggio system inviato").click();
+  await expect(list.first()).toContainText("SEGRETO_SYSTEM_LIBRO_A");
+  await list.first().getByRole("button",{name:"Apri scheda task"}).click();
+  await expect(page.getByRole("region",{name:"Scheda task dedicata"})).toBeVisible();
+  // Focus changes revoke the previously loaded private trace: no automatic read.
+  await expect(page.getByText("SEGRETO_SYSTEM_LIBRO_A")).toHaveCount(0);
+  await list.first().getByRole("button",{name:"Ispeziona richiesta e risposta"}).click();
   await list.first().getByText("Messaggio system inviato").click();
   await expect(list.first()).toContainText("SEGRETO_SYSTEM_LIBRO_A");
   await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookB);

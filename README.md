@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Scheda task dedicata (#164, incremento non ancora nella release numerata):** in Attività, «Apri scheda task» isola un'attività in una vista a tutta pagina con navigazione fra i soli task filtrati, mantenendo l'ordine scelto e gli eventuali raggruppamenti. Cambio selezione/ritorno invalidano le trascrizioni private in volo; nessuna lettura sensibile automatica, richiesta AI o rewind del canone. [ADR 0138](ADR/0138-focused-task-inspection.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Release applicativa 0.11.91 (#155):** consolidati #154 (scene lunghe campionate), #156/#157 (streaming/ispezione task), #160/#161 (LM Studio nativo opt-in e reasoning per task), #162 (timeline), #163 (raggruppamento per sessione). [Runner npm ufficiale #43202678607](https://github.com/KeyserDSoze/BookWriter/actions/runs/43202678607) con 2 installazioni pulite, 899 Vitest per ciclo e lockfile v3 a 235 voci senza drift; `private:true`, pubblicazione applicativa su GitHub Pages e **non** nel registro npm. Test fisici LM Studio/Nomic ancora in #159/#148. [Changelog](docs/CHANGELOG.md) · [Runbook](docs/npm-lockfile-releases.md).
 
 

@@ -2,7 +2,7 @@ import { describe,expect,it } from "vitest";
 import { type Activity } from "./types";
 import {
   completedTaskDurationSeconds,estimatedTaskCostEur,filterTaskTimeline,
-  formatTaskDuration,groupTaskTimelineByRun,summarizeTaskTimeline,
+  formatTaskDuration,groupTaskTimelineByRun,resolveTaskFocus,summarizeTaskTimeline,
 } from "./task-timeline";
 const t=(id:string,override:Partial<Activity>={}):Activity=>({
   id,bookId:"book",runId:"run-1",phase:"brainstorm",title:"Brainstorming "+id,
@@ -62,6 +62,33 @@ describe("Timeline task: filtri, durata e stime verificabili",()=>{
     expect(groupTaskTimelineByRun(filterTaskTimeline(entries,{
       query:"",status:"failed",phase:"",order:"oldest",
     })).map(group=>group.activities[0]!.id)).toEqual(["b"]);
+  });
+  it("scheda dedicata segue esattamente l'ordine visibile, senza leggere output",()=>{
+    const entries=[
+      t("first",{createdAt:"2026-11-12T07:00:00Z",runId:"x",
+        output:"CONTENUTO_RISERVATO"}),
+      t("middle",{createdAt:"2026-11-12T08:00:00Z",runId:"y",status:"failed"}),
+      t("last",{createdAt:"2026-11-12T09:00:00Z",runId:"x"}),
+    ];
+    const sorted=filterTaskTimeline(entries,{query:"",status:"all",phase:"",
+      order:"newest"});
+    expect(resolveTaskFocus(sorted,"last")).toEqual({
+      id:"last",index:0,total:3,nextId:"middle",
+    });
+    const grouped=groupTaskTimelineByRun(sorted).flatMap(group=>group.activities);
+    expect(grouped.map(task=>task.id)).toEqual(["last","first","middle"]);
+    expect(resolveTaskFocus(grouped,"first")).toEqual({
+      id:"first",index:1,total:3,previousId:"last",nextId:"middle",
+    });
+    const failedOnly=filterTaskTimeline(entries,{query:"",status:"failed",phase:"",
+      order:"newest"});
+    expect(resolveTaskFocus(failedOnly,"middle")).toEqual({
+      id:"middle",index:0,total:1,
+    });
+    expect(resolveTaskFocus(failedOnly,"last")).toBeUndefined();
+    expect(resolveTaskFocus(grouped,"missing")).toBeUndefined();
+    expect(resolveTaskFocus(grouped,"")).toBeUndefined();
+    expect(entries.map(task=>task.id)).toEqual(["first","middle","last"]);
   });
   it("distingue durata reale e tempi mancanti o corrotti",()=>{
     expect(completedTaskDurationSeconds(t("a"))).toBe(61);

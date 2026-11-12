@@ -1,5 +1,12 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## Scheda dedicata di un singolo task — #164
+
+Nella pagina **Attività** scegli **Apri scheda task** su una riga. La lista lascia spazio a un solo task, con dati già registrati, risposta confermata (se presente) e pulsante per ispezionare richiesta e risposta. Il titolo della scheda mostra la posizione nella vista corrente; **Task precedente** e **Task successivo** percorrono soltanto gli elementi risultanti dalla ricerca, dai filtri e dall'ordinamento scelti, anche quando è attivo il raggruppamento per run. **Torna al registro dei task** ripristina l'elenco preservando filtri e gruppi, senza modificare l'attività.
+
+Entrando, uscendo o cambiando task, un'eventuale ispezione IndexedDB del task precedente viene annullata logicamente: nessun prompt, reasoning o risposta privata viene trasferito alla nuova scheda. Occorre premere nuovamente **Ispeziona richiesta e risposta** con il consenso locale già abilitato per leggere una traccia disponibile. Il testo confermato nell'attività resta distinto dalla risposta in streaming provvisoria. La scheda è **sola lettura**, non è ripristino della storia, non salva un checkpoint e non invia richieste AI. Il vero rewind supervisionato rimane #158. [ADR 0138](../ADR/0138-focused-task-inspection.md).
+
+
 ## Raggruppare task della stessa sessione — #163
 
 In **Attività**, oltre ai filtri, puoi scegliere **Raggruppa per sessione (run)**. I task con lo stesso `runId` appaiono vicini, preservando internamente l'ordine cronologico scelto; le sessioni sono ordinate dalla prima attività visibile. Vecchie attività senza `runId` rimangono separate. Il raggruppamento avviene **dopo** i filtri, senza modificare il libro né inviare richieste AI; viene disattivato con **Azzera filtri** o cambiando libro.

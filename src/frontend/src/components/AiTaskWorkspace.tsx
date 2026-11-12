@@ -3,7 +3,7 @@ import type { Activity } from "../domain/types";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import {
   completedTaskDurationSeconds, estimatedTaskCostEur, filterTaskTimeline,
-  groupTaskTimelineByRun,
+  groupTaskTimelineByRun, resolveTaskFocus,
   formatTaskDuration, summarizeTaskTimeline,
   type TimelineOrder, type TimelineStatus,
 } from "../domain/task-timeline";
@@ -35,6 +35,8 @@ export function AiTaskWorkspace({
   const [phaseFilter,setPhaseFilter]=useState("");
   const [order,setOrder]=useState<TimelineOrder>("newest");
   const [groupByRun,setGroupByRun]=useState(false);
+  const [focusedTaskId,setFocusedTaskId]=useState("");
+  const focusHeadingRef=useRef<HTMLHeadingElement>(null);
   // A request may settle after changing books, hiding inspection or choosing
   // another task. Never display stale local prompts or responses.
   const inspectionSequence=useRef(new AiTraceReadFence());
@@ -46,6 +48,14 @@ export function AiTaskWorkspace({
   const runGroups=useMemo(()=>!compact&&groupByRun
     ?groupTaskTimelineByRun(filtered):[],[compact,groupByRun,filtered]);
   const runHeaders=new Map(runGroups.map(group=>[group.activities[0]!.id,group]));
+  const ordered=useMemo(()=>compact?activities.slice(0,8):
+    groupByRun?runGroups.flatMap(group=>group.activities):filtered,
+  [activities,compact,groupByRun,runGroups,filtered]);
+  const focused=compact?undefined:resolveTaskFocus(ordered,focusedTaskId);
+  const recent=focused?[ordered[focused.index]!]:ordered;
+  useEffect(()=>{
+    if(focused)focusHeadingRef.current?.focus();
+  },[focused?.id,bookId]);
   useEffect(()=>{
     const timer=setInterval(()=>setClock(Date.now()),1000);
     return ()=>clearInterval(timer);
@@ -54,13 +64,16 @@ export function AiTaskWorkspace({
     inspectionSequence.current.invalidate();
     setChosen("");setTrace(null);setMessage("");
     setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");
-    setGroupByRun(false);
+    setGroupByRun(false);setFocusedTaskId("");
     return ()=>{inspectionSequence.current.invalidate();};
   },[bookId,inspectionEnabled]);
-  const recent=compact?activities.slice(0,8):
-    groupByRun?runGroups.flatMap(group=>group.activities):filtered;
   const active=live?.bookId===bookId?live:null;
   const elapsed=active?Math.max(0,Math.floor(((active.endedAt??clock)-active.startedAt)/1000)):0;
+  // Switching a focused task always revokes any in-flight IndexedDB inspection.
+  const focusTask=(id:string)=>{
+    inspectionSequence.current.invalidate();
+    setChosen("");setTrace(null);setMessage("");setFocusedTaskId(id);
+  };
   const inspect=async(id:string)=>{
     const ticket=inspectionSequence.current.begin();
     setChosen(id);setTrace(null);setMessage("");
@@ -142,7 +155,26 @@ export function AiTaskWorkspace({
       {!inspectionEnabled && <p className="muted text-xs">Per vedere i token e i prompt completi abilita «Ispezione locale richieste AI» nelle Impostazioni. Contiene dati potenzialmente riservati.</p>}
     </div>}
     <p className="muted mt-3 text-sm">Ogni attività è separata e ispezionabile. Un output in streaming non modifica il libro finché non supera i controlli di validazione e viene confermato come canonico.</p>
-    {!compact&&<div className="mt-4 space-y-2 rounded-lg border border-slate-400/30 p-3" aria-label="Filtri timeline">
+    {!compact&&focused&&<div role="region" aria-label="Scheda task dedicata"
+      className="mt-4 space-y-3 rounded-xl border border-slate-400/50 p-4">
+      <h3 ref={focusHeadingRef} tabIndex={-1} className="text-lg font-semibold">
+        Scheda del task · {focused.index+1} di {focused.total}
+      </h3>
+      <p className="muted text-sm">Visualizzazione singola di sola lettura,
+        nel medesimo ordine dei filtri e dei raggruppamenti selezionati.
+        Nessun ripristino del libro o invio di richieste AI.</p>
+      <div className="flex flex-wrap gap-2" aria-label="Navigazione task">
+        <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
+          onClick={()=>focusTask("")}>Torna al registro dei task</button>
+        <button type="button" disabled={!focused.previousId}
+          className="rounded-lg border border-slate-400 px-3 py-2 text-sm disabled:opacity-40 dark:border-slate-700"
+          onClick={()=>{if(focused.previousId)focusTask(focused.previousId);}}>Task precedente</button>
+        <button type="button" disabled={!focused.nextId}
+          className="rounded-lg border border-slate-400 px-3 py-2 text-sm disabled:opacity-40 dark:border-slate-700"
+          onClick={()=>{if(focused.nextId)focusTask(focused.nextId);}}>Task successivo</button>
+      </div>
+    </div>}
+    {!compact&&!focused&&<div className="mt-4 space-y-2 rounded-lg border border-slate-400/30 p-3" aria-label="Filtri timeline">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">Cerca nei task
           <input className="field mt-1" type="search" aria-label="Cerca nei task"
@@ -186,7 +218,7 @@ export function AiTaskWorkspace({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p role="status" className="muted text-xs">{filtered.length} task trovati su {activities.length}</p>
         <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-xs dark:border-slate-700"
-          onClick={()=>{setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");setGroupByRun(false);}}>
+          onClick={()=>{setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");setGroupByRun(false);focusTask("");}}>
           Azzera filtri
         </button>
       </div>
@@ -194,7 +226,7 @@ export function AiTaskWorkspace({
     {!activities.length ? <p className="muted mt-3 text-sm">Nessun task ancora eseguito per questo libro.</p> :
       <ol className="mt-4 space-y-2" aria-label="Storico task">
         {recent.map((item,index)=>{
-          const group=runHeaders.get(item.id);
+          const group=focused?undefined:runHeaders.get(item.id);
           return <li key={item.id}>
           {group&&<div role="group" aria-label={`Sessione ${group.runId??"senza identificativo"}`}
             className="mb-2 rounded-lg border border-slate-400/50 p-3 text-sm">
@@ -210,7 +242,11 @@ export function AiTaskWorkspace({
               Non è una fattura né una stima del totale reale.
             </p>
           </div>}
-          <details className="rounded-lg border border-slate-300 p-3 dark:border-slate-700" open={item.status==="running"}>
+          {!compact&&!focused&&<button type="button"
+            className="mb-2 rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
+            onClick={()=>focusTask(item.id)}>Apri scheda task</button>}
+          <details className="rounded-lg border border-slate-300 p-3 dark:border-slate-700"
+            open={!!focused||item.status==="running"}>
             <summary className="cursor-pointer text-sm">
               <span className="font-semibold">{index+1}. {item.title}</span>
               <span className="muted ml-2 text-xs">{status(item.status)} · {new Date(item.createdAt).toLocaleString("it-IT")}</span>
@@ -233,7 +269,7 @@ export function AiTaskWorkspace({
               {item.inputTokens!==undefined&&<p className="text-xs">Token input: {item.inputTokens}, output: {item.outputTokens??"N/D"}</p>}
               {item.requestedReasoningEffort&&<p className="text-xs">Reasoning richiesto: {item.requestedReasoningEffort} (non certifica il valore effettivo usato dal provider)</p>}
               {item.error&&!compact&&<p className="text-sm text-red-600 dark:text-red-300">{item.error}</p>}
-              {item.output&&<details className="rounded border border-slate-400/30 p-2">
+              {item.output&&<details className="rounded border border-slate-400/30 p-2" open={!!focused}>
                 <summary className="cursor-pointer text-sm font-semibold">Risposta AI confermata</summary>
                 <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{item.output}</pre>
               </details>}

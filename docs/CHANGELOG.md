@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #164 (scheda task dedicata)
+
+- In **Attività**, apertura di una singola scheda task con navigazione precedente/successivo dentro la vista filtrata, anche con raggruppamenti per run. Ritorno al registro senza perdere filtri; Dashboard compatta invariata.
+- Isolamento delle trascrizioni private: cambiare scheda o tornare alla lista invalida letture IndexedDB pendenti e svuota il contenuto già ispezionato. Nessuna nuova lettura senza clic/consenso, nuova POST AI, ripristino checkpoint o modifica del canone.
+- Test Vitest del cursore e Playwright desktop/mobile su navigazione e privacy. [ADR 0138](../ADR/0138-focused-task-inspection.md) · [guida](ai-task-inspection.md).
+
 ## 0.11.91 — 2026-11-12 (main, issue #155)
 
 **Release riproducibile:** runner npm ufficiale [#43202678607](https://github.com/KeyserDSoze/BookWriter/actions/runs/43202678607) `completed/success`, Node 22/npm 10, registry ufficiale. Manifest e lock prodotti da `npm version 0.11.91 --no-git-tag-version --ignore-scripts` e `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`. Lockfile v3 con **235 voci**: solo i due campi versione root passano da 0.11.90 a 0.11.91; nessuna modifica a dipendenze, `resolved`, `integrity`. Due `npm ci` puliti, **899 Vitest in 151 file**, 9 smoke, typecheck e build per ciclo. SHA-256 manifest `d33a119d324a4f1db0063b3a1cc356ef6a85265e4691fe6f0989ef958f2f856d`; lock `2e8563bc86a5c2222357dc75d4b0e2319fa66a6d2d8cd547e5cf1eb9e595abd5`. Originali acquisiti dall'artifact e da chunk di log indicizzati, mai editati a mano.

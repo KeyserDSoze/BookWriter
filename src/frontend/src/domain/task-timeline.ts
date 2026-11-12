@@ -106,6 +106,26 @@ export function groupTaskTimelineByRun(rows:readonly Activity[]):TaskRunGroup[]{
   }));
 }
 
+/** Cursor over already-filtered, already-ordered task metadata, never private content. */
+export interface TaskFocusNavigation {
+  id:string;
+  index:number;
+  total:number;
+  previousId?:string;
+  nextId?:string;
+}
+export function resolveTaskFocus(
+  rows:readonly Activity[],selectedId:string,
+):TaskFocusNavigation|undefined {
+  if(!selectedId)return undefined;
+  const index=rows.findIndex(activity=>activity.id===selectedId);
+  if(index<0)return undefined;
+  return {
+    id:selectedId,index,total:rows.length,
+    previousId:rows[index-1]?.id,nextId:rows[index+1]?.id,
+  };
+}
+
 export function formatTaskDuration(seconds:number):string {
   if(!Number.isSafeInteger(seconds)||seconds<0)throw new Error("Durata task non valida.");
   if(seconds<60)return seconds+" s";

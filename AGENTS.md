@@ -2,6 +2,12 @@
 
 Queste regole valgono per **tutta** la repository. Leggi README, documentazione, ADR e feature prima di modificare codice. Interfaccia, documentazione, ADR e messaggi destinati all'autore sono in **italiano**; identificatori del codice in inglese.
 
+## Scheda task dedicata a sola lettura — #164 / ADR 0138
+
+- In Attività il focus su un solo task mantiene i metadati ordinati/filtrati, compresi i gruppi run, e consente precedente/successivo **solo** fra gli elementi della vista visibile. Il ritorno alla lista conserva filtri e raggruppamento. Dashboard compatta invariata.
+- `resolveTaskFocus` calcola il cursore da ID e ordine della lista senza leggere `Activity.output`, prompt, reasoning o tracce; nessuna persistenza, nuova chiamata AI o modificazione del libro. Dettagli confermati sempre distinti dal testo streaming provvisorio.
+- Entrata, cambio task e uscita invalidano subito i ticket di lettura `AiLocalTrace`, azzerano scelta e dati privati; la nuova trascrizione è letta **solo su clic esplicito con consenso**, con bookId/activityId fencing e opt-in preesistenti. Chiusura solo con Vitest, Playwright desktop/mobile, EPUBCheck, Pages e cleanup verdi sulla stessa HEAD. [ADR 0138](ADR/0138-focused-task-inspection.md) · [Guida](docs/ai-task-inspection.md).
+
 ## Release riproducibile 0.11.91 — #155
 
 - Runner npm read-only [#43202678607](https://github.com/KeyserDSoze/BookWriter/actions/runs/43202678607), Node22/npm10, registro ufficiale: bump 0.11.90→0.11.91 generato da npm. Lock npm v3 **235 voci**, dipendenze/`resolved`/`integrity`/transitive invariati. Manifest SHA-256 `d33a119d324a4f1db0063b3a1cc356ef6a85265e4691fe6f0989ef958f2f856d`, lock SHA-256 `2e8563bc86a5c2222357dc75d4b0e2319fa66a6d2d8cd547e5cf1eb9e595abd5`; artifact originale e chunk indicizzati convalidati.
