@@ -56,8 +56,8 @@ describe("Campionamento controllato di scene per embedding locale",()=>{
     expect(result.uncoveredCharacters+
       result.passages.reduce((sum,p)=>sum+p.length,0)).toBe(value.length);
     for(const passage of result.passages){
-      expect(passage).not.toMatch(/^[\\uDC00-\\uDFFF]/u);
-      expect(passage).not.toMatch(/[\\uD800-\\uDBFF]$/u);
+      expect(passage).not.toMatch(/^[\uDC00-\uDFFF]/u);
+      expect(passage).not.toMatch(/[\uD800-\uDBFF]$/u);
     }
   });
   it("mantiene solo canon, esclude segreti e limita numero di scene/vettori",()=>{
