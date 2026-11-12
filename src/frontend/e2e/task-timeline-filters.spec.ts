@@ -93,13 +93,13 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
   await expect(list.first()).toContainText("1 min 1 s");
   await expect(list.first()).toContainText("0,0004 €");
   await timeline.getByRole("combobox",{name:"Filtra fase task"}).selectOption("");
-  await timeline.getByRole("textbox",{name:"Cerca nei task"}).fill("SEGRETO-DA-NON-USARE");
+  await timeline.getByRole("searchbox",{name:"Cerca nei task"}).fill("SEGRETO-DA-NON-USARE");
   await expect(list).toHaveCount(0);
   await expect(timeline.getByText("Nessun task corrisponde ai filtri attivi.")).toBeVisible();
   await timeline.getByRole("button",{name:"Azzera filtri"}).click();
   await timeline.getByRole("combobox",{name:"Ordina task"}).selectOption("oldest");
   await expect(list.first()).toContainText("Brainstorming iniziale");
-  await timeline.getByRole("textbox",{name:"Cerca nei task"}).fill("meta/muse-glimmer");
+  await timeline.getByRole("searchbox",{name:"Cerca nei task"}).fill("meta/muse-glimmer");
   await expect(list).toHaveCount(3);
 });
 
