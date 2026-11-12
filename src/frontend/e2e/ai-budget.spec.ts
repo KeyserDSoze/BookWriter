@@ -56,6 +56,7 @@ test("budget desktop/mobile: prevent provider spend and stop after missing usage
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await nav.getByRole("button",{name:"Dashboard"}).click();
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const panel=page.getByRole("region",{name:"Budget AI"});
   await expect(panel.getByRole("heading",{name:"Budget AI del libro"})).toBeVisible();
   await panel.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");

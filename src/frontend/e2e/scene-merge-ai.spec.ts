@@ -143,7 +143,7 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
   // Wait for WebCrypto + IndexedDB; clicking does not await the async handler.
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
-  await nav.getByRole("button", { name: "Dashboard" }).click();
+  await nav.getByRole("button", { name: "Costi", exact: true }).click();
   const budget = page.getByRole("region", { name: "Budget AI" });
   await budget.getByRole("spinbutton", { name: "Prezzo input per milione" }).fill("3");
   await budget.getByRole("spinbutton", { name: "Prezzo output per milione" }).fill("9");
@@ -198,7 +198,7 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
     inputTokens:321,outputTokens:48,
     priceRateSnapshot:{endpointId:"openai",modelId:"demo-merge-model",
       inputEurPerMillion:3,outputEurPerMillion:9}});
-  await nav.getByRole("button", { name: "Dashboard" }).click();
+  await nav.getByRole("button", { name: "Costi", exact: true }).click();
   const ledger=page.getByRole("region",{name:"Budget AI"});
   await expect(ledger.getByText(/Spesa stimata da usage noto:/).locator(".."))
     .toContainText("0,0014");
@@ -210,6 +210,7 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await ledger.getByRole("button",{name:"Salva tariffa del modello"}).click();
   await expect(ledger.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await page.reload();
+  await page.getByRole("button", { name: "Costi", exact: true }).click();
   const restored=page.getByRole("region",{name:"Budget AI"});
   await expect(restored.getByText(/Spesa stimata da usage noto:/).locator(".."))
     .toContainText("0,0014");

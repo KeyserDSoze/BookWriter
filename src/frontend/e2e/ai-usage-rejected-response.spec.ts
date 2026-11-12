@@ -61,6 +61,7 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const panel=page.getByRole("region",{name:"Budget AI"});
   await expect(panel.getByRole("heading",{name:"Budget AI del libro"})).toBeVisible();
   await panel.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
@@ -113,6 +114,7 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   // The stored Activity is definitive; reload to also verify the dashboard
   // rebuilds its estimate from disk rather than matching JSX punctuation.
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const ledger = page.getByRole("region",{name:"Budget AI"});
   // getByText otherwise resolves to the nested <b> label, not the
   // containing <p> with the monetary value.
@@ -127,6 +129,7 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   await ledger.getByRole("button",{name:"Salva tariffa del modello"}).click();
   await expect(ledger.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const refreshed=page.getByRole("region",{name:"Budget AI"});
   await expect(refreshed.getByText(/Spesa stimata da usage noto:/).locator(".."))
     .toContainText("0,0014");

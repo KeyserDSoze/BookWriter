@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen, BrainCircuit, CheckCircle2, Database,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
-  RefreshCw, Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive,
+  RefreshCw, Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { AutopilotRunner } from "./application/autopilot";
@@ -27,6 +27,7 @@ import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
 import { AiBudgetPanel } from "./components/AiBudgetPanel";
+import { CostGlance } from "./components/CostGlance";
 import { ModelCapabilitiesPanel } from "./components/ModelCapabilitiesPanel";
 import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
 import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
@@ -37,10 +38,11 @@ import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
 
-type Page = "dashboard" | "activities" | "reader" | "atlas" | "settings" | "export";
+type Page = "dashboard" | "activities" | "costs" | "reader" | "atlas" | "settings" | "export";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "activities", label: "Attività", icon: ListChecks },
+  { id: "costs", label: "Costi", icon: Wallet },
   { id: "reader", label: "Libro", icon: BookOpen },
   { id: "atlas", label: "Memoria", icon: Database },
   { id: "settings", label: "Impostazioni", icon: Settings2 },
@@ -510,6 +512,7 @@ export default function App() {
         <label className="text-sm font-semibold" htmlFor="book-select">Libro attivo</label>
         <select id="book-select" className="field max-w-xs" value={selectedId} onChange={e => {
           creatingNewBook.current = e.target.value === "";
+          if (e.target.value === "") setPage("dashboard"); // the new-book form lives there
           setSelectedId(e.target.value);
         }}>
           <option value="">{books.length ? "+ Nuovo libro" : "Nessun libro"}</option>
@@ -540,20 +543,33 @@ export default function App() {
 
       {page === "dashboard" && <div className="space-y-4">
         {ready && !current && <NewBookPanel onCreate={createProject}/>}
-        {current && <>
-          <AutopilotFocusPanel book={current} activities={activities} live={liveAi}
-            inspectionEnabled={settings.inspectAiRequests===true} runningHere={runningHere}
-            modelWarning={modelWarning} onOpenReader={() => setPage("reader")} onOpenSettings={() => setPage("settings")}/>
-          <AuthorInterventionPanel book={current} draft={intervention} onDraftChange={setIntervention}
-            scope={interventionScope} onScopeChange={setInterventionScope} runningHere={runningHere}
-            busy={interventionBusy} onSubmit={mode => void submitIntervention(mode)} textareaRef={interventionRef}/>
-          <AiTaskWorkspace bookId={current.id} activities={activities}
-            live={liveAi} inspectionEnabled={settings.inspectAiRequests===true}
-            onPrepareRevision={prepareActivityRevision} onOpenFull={()=>setPage("activities")} compact/>
-        </>}
+        {current && <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
+          <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
+            <div className="order-1 min-w-0 xl:order-none">
+              <AutopilotFocusPanel book={current} activities={activities} live={liveAi}
+                inspectionEnabled={settings.inspectAiRequests===true} runningHere={runningHere}
+                modelWarning={modelWarning} onOpenReader={() => setPage("reader")} onOpenSettings={() => setPage("settings")}/>
+            </div>
+            <div className="order-4 min-w-0 xl:order-none">
+              <AiTaskWorkspace bookId={current.id} activities={activities}
+                live={liveAi} inspectionEnabled={settings.inspectAiRequests===true}
+                onPrepareRevision={prepareActivityRevision} onOpenFull={()=>setPage("activities")} compact/>
+            </div>
+          </div>
+          <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
+            <div className="order-2 min-w-0 xl:order-none">
+              <AuthorInterventionPanel book={current} draft={intervention} onDraftChange={setIntervention}
+                scope={interventionScope} onScopeChange={setInterventionScope} runningHere={runningHere}
+                busy={interventionBusy} onSubmit={mode => void submitIntervention(mode)} textareaRef={interventionRef}/>
+            </div>
+            <div className="order-3 min-w-0 xl:order-none">
+              <CostGlance book={current} activities={activities} settings={settings} onOpen={() => setPage("costs")}/>
+            </div>
+          </div>
+        </div>}
         {current && <details open={current.status!=="running"} className="min-w-0">
           <summary className="mb-3 cursor-pointer rounded-lg border border-slate-400/40 p-3 text-sm font-semibold">
-            Brief, redazione, costi, memoria e sincronizzazione
+            Brief, redazione, memoria e sincronizzazione
           </summary>
         <div className="grid min-w-0 gap-4 xl:grid-cols-[1.65fr_1fr]">
         <div className="space-y-4">
@@ -577,9 +593,6 @@ export default function App() {
         </div>
         <div className="space-y-4">
           <EditorialBoardPanel book={current} onRefresh={refresh}/>
-          <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>
-          <AiBudgetPanel key={current.id} book={current} settings={settings}
-            activities={activities} onSaveSettings={persistSettings} onRefresh={refresh}/>
           <Section title="Memoria narrativa" description="Dettagli completi nella pagina Memoria.">
             <div className="grid grid-cols-2 gap-2 text-sm">
               {[
@@ -614,6 +627,14 @@ export default function App() {
             setNotice("Fork locale separato creato dallo ZIP verificato: selezionato il nuovo libro in pausa. L'originale è invariato; controlla capitoli, freeze, dipendenze e modelli prima di riprendere.");
           }}/>
         : <Section title="Registro delle attività"><Empty>Seleziona un libro per ispezionare le attività.</Empty></Section>)}
+
+      {page === "costs" && (current ?
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start">
+          <AiBudgetPanel key={current.id} book={current} settings={settings}
+            activities={activities} onSaveSettings={persistSettings} onRefresh={refresh}/>
+          <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>
+        </div>
+        : <Section title="Costi AI"><Empty>Seleziona un libro per vedere consumi e budget.</Empty></Section>)}
 
       {page === "reader" && <div className="space-y-4">
         {current && <>

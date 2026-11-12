@@ -70,6 +70,7 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
   await page.reload();
 
 
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const budget=page.getByRole("region",{name:"Budget AI"});
   await budget.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
   await budget.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("9");
@@ -138,6 +139,7 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
   expect(flags.calls).toBe(2); // one per supervised attempt; no automatic retry
   expect(flags.aborted).toBe(2);
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const ledger=page.getByRole("region",{name:"Budget AI"});
   await expect(ledger.getByText(/Consumi incerti/)).toBeVisible();
   await expect(ledger.getByText(/Spesa stimata da usage noto:/).locator("..")).toContainText("0,00");

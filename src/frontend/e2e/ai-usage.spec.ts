@@ -43,6 +43,7 @@ test("dashboard desktop/mobile: distingue uso misurato, parziale, mancato e dive
     });
   });
   await page.reload();
+  await page.getByRole("button", { name: "Costi", exact: true }).click();
   const panel = page.getByRole("region", { name: "Consumi AI" });
   await expect(panel.getByRole("heading", { name: "Consumi AI registrati" })).toBeVisible();
   await expect(panel.getByText("190", { exact: true })).toBeVisible();
@@ -59,6 +60,7 @@ test("dashboard desktop/mobile: distingue uso misurato, parziale, mancato e dive
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Altro manoscritto");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" }).fill("Altro libro senza AI.");
   await page.getByRole("button", { name: "Crea libro" }).click();
+  await page.getByRole("button", { name: "Costi", exact: true }).click();
   const freshPanel = page.getByRole("region", { name: "Consumi AI" });
   await expect(freshPanel.getByText(/Non sono ancora disponibili consumi AI/)).toBeVisible();
   await expect(freshPanel.getByText("235", { exact: true })).toHaveCount(0);

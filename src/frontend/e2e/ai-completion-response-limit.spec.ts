@@ -86,6 +86,7 @@ test("POST AI " + caseName + ": nessun canone e usage sconosciuto (desktop/mobil
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
 
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const budget=page.getByRole("region",{name:"Budget AI"});
   await budget.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
   await budget.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("9");
@@ -143,6 +144,7 @@ test("POST AI " + caseName + ": nessun canone e usage sconosciuto (desktop/mobil
   if(caseName==="stream oltre il limite") expect(flags.canceled).toBe(true);
 
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const ledger=page.getByRole("region",{name:"Budget AI"});
   await expect(ledger.getByText(/Consumi incerti/)).toBeVisible();
   // The UI formats an exactly-zero *known* spend as 0,00 €, unlike

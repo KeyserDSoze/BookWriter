@@ -47,6 +47,7 @@ test("avvisi preventivi 80% per libro e sessione, costi incerti e isolamento lib
     };
   }));
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const panel = page.getByRole("region",{name:"Budget AI"});
   await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo libro/})).toBeVisible();
   await expect(panel.getByRole("alert").filter({hasText:/Avviso preventivo sessione/})).toBeVisible();
@@ -86,6 +87,7 @@ test("avvisi preventivi 80% per libro e sessione, costi incerti e isolamento lib
     };
   }));
   await page.reload();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   await expect(panel.getByRole("alert").filter({hasText:/Consumi incerti del libro/})).toBeVisible();
   await expect(panel.getByRole("alert").filter({hasText:/Consumi incerti della sessione/})).toBeVisible();
   await expect(panel.locator("p").filter({hasText:"Margine stimato noto del libro:"})).toHaveCount(0);
@@ -98,6 +100,7 @@ test("avvisi preventivi 80% per libro e sessione, costi incerti e isolamento lib
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Un libro nuovo senza richieste ai modelli.");
   await page.getByRole("button",{name:"Crea libro"}).click();
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const other = page.getByRole("region",{name:"Budget AI"});
   await expect(other.getByRole("alert")).toHaveCount(0);
   await expect(other.getByText(/Margine stimato noto/)).toHaveCount(0);

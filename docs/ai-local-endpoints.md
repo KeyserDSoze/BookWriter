@@ -35,6 +35,7 @@ I test Playwright normali usano mock deterministici e non provano il modello rea
 | `LMSTUDIO_BASE_URL` | Base URL, solo `http://localhost` o `127.0.0.1` (default `http://localhost:1234/v1`). |
 | `LMSTUDIO_TASK_TIMEOUT_MS` | Attesa massima per un task del modello (default 600000). |
 | `LMSTUDIO_REQUIRED=1` | Se LM Studio non è pronto il test fallisce invece di essere saltato. |
+| `LMSTUDIO_FULL_TASK=1` | Attiva anche il test che attende un task completo (nota applicata nel commit, usage comunicato), con attesa streaming di 3600 s. |
 
 Prima di ogni test viene fatta una sonda reale su `GET /models`: server raggiungibile e modello elencato, altrimenti il test è saltato con il motivo. Con CORS attivo in LM Studio:
 
@@ -43,7 +44,7 @@ $env:LMSTUDIO_MODEL="meta/muse-glimmer"; $env:LMSTUDIO_BASE_URL="http://localhos
 npm run test:e2e:live
 ```
 
-I test configurano l'endpoint dall'interfaccia (compreso «Leggi /models»), attivano streaming SSE e ispezione, verificano che il testo arrivi in tempo reale, che «Pausa» non applichi nulla e che un intervento registrato compaia nel prompt realmente inviato. Con le variabili impostate anche `npm run test:e2e` li esegue (solo desktop). L'output di un modello reale non è deterministico: i test non verificano il contenuto narrativo.
+I test configurano l'endpoint dall'interfaccia (compreso «Leggi /models»), attivano streaming SSE e ispezione, verificano che il testo arrivi in tempo reale, che «Pausa» non applichi nulla e che un intervento registrato compaia nel prompt realmente inviato. Con le variabili impostate anche `npm run test:e2e` li esegue (solo desktop). L'output di un modello reale non è deterministico: i test non verificano il contenuto narrativo. Un modello con reasoning lungo (es. `meta/muse-glimmer`) può restare oltre 10 minuti nella fase «Il modello sta ragionando» senza scrivere testo: con il limite streaming predefinito (600 s) il task termina in errore e nessun testo viene applicato. Per i libri reali alza «Tempo massimo lettura streaming» nelle Impostazioni o abbassa il reasoning effort.
 
 ## Versione
 

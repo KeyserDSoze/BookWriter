@@ -70,6 +70,7 @@ test("parametro output scelto: persistito e inviato una volta senza fallback su 
     .toHaveValue("max_completion_tokens");
   await nav2.getByRole("button",{name:"Dashboard"}).click();
 
+  await page.getByRole("button",{name:"Costi",exact:true}).click();
   const budget=page.getByRole("region",{name:"Budget AI"});
   await budget.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
   await budget.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("9");

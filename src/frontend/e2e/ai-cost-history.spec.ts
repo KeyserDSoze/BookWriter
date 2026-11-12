@@ -55,6 +55,7 @@ test("storico costi AI desktop/mobile: dieci righe, filtro incerti, altri task e
   }));
   await page.reload();
 
+  await page.getByRole("button", { name: "Costi", exact: true }).click();
   const panel = page.getByRole("region", { name: "Storico costi AI per task" });
   await expect(panel.getByRole("heading", { name: "Storico dei costi per task AI" })).toBeVisible();
   await expect(panel.locator("ol > li")).toHaveCount(10);
@@ -82,6 +83,7 @@ test("storico costi AI desktop/mobile: dieci righe, filtro incerti, altri task e
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Secondo libro isolato");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" }).fill("Nessun consumo AI.");
   await page.getByRole("button", { name: "Crea libro" }).click();
+  await page.getByRole("button", { name: "Costi", exact: true }).click();
   const next = page.getByRole("region", { name: "Storico costi AI per task" });
   await expect(next.getByText("Nessun tentativo AI registrato per questo libro.")).toBeVisible();
   await expect(next.getByText("Revisore AI 12")).toHaveCount(0);

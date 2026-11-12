@@ -53,6 +53,7 @@ test("ledger CSV desktop/mobile: download locale, costo stimato e dati privati e
     };
   }));
   await page.reload();
+  await page.getByRole("button", { name: "Costi", exact: true }).click();
   const panel = page.getByRole("region", { name: "Budget AI" });
   await expect(panel.getByRole("button", { name: "Esporta ledger CSV" })).toBeEnabled();
   const downloading = page.waitForEvent("download");
