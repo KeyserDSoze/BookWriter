@@ -9,7 +9,7 @@ import { AutopilotRunner, requestRevision } from "./application/autopilot";
 import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
 import { clearAiTraces, currentLiveAi, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
 import { confirmEditorialScene } from "./application/editorial-review";
-import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind } from "./domain/types";
+import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind, type TaskReasoning } from "./domain/types";
 import { declaredModelCapabilities } from "./domain/model-capabilities";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
@@ -27,7 +27,7 @@ import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
 import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
-import { updateBookModelRoute } from "./application/book-settings";
+import { updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
@@ -298,6 +298,19 @@ export default function App() {
     }
   }
 
+
+  async function updateBookReasoning(kind:TaskKind,value:TaskReasoning|undefined){
+    if(!current)return;
+    const {id,updatedAt}=current;
+    try{
+      await updateBookTaskReasoning(id,updatedAt,kind,value);
+      await refresh();
+      setNotice("Reasoning del task aggiornato per questo libro.");
+    }catch(error){
+      await refresh();
+      setNotice(error instanceof Error?error.message:"Reasoning del task non salvato.");
+    }
+  }
 
   async function makeBackup() {
     if (busy) return;
@@ -703,6 +716,23 @@ export default function App() {
                   </select>
                   <input className="field" aria-label={`Modello per ${LABELS[kind]}`} value={route?.modelId ?? ""} onChange={e => setSettings(s => ({...s,taskRoutes:{...s.taskRoutes,[kind]:{endpointId:route?.endpointId||s.defaultRoute.endpointId,modelId:e.target.value}}}))} placeholder="Default" />
                 </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-xs font-semibold" htmlFor={`task-reasoning-${kind}`}>Reasoning di {LABELS[kind]}</label>
+                  <select id={`task-reasoning-${kind}`} className="field" value={settings.taskReasoningEfforts?.[kind]??""}
+                    onChange={e=>setSettings(s=>{
+                      const next={...s.taskReasoningEfforts};
+                      if(!e.target.value)delete next[kind];
+                      else next[kind]=e.target.value as TaskReasoning;
+                      return {...s,taskReasoningEfforts:next};
+                    })}>
+                    <option value="">Eredita dall'endpoint</option>
+                    <option value="automatic">Automatico: ometti il parametro</option>
+                    <option value="low">Low — rapido</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="xhigh">Extra high (xhigh) — molto lento</option>
+                  </select>
+                </div>
               </div>;
             })}
           </div>
@@ -726,6 +756,20 @@ export default function App() {
                   }}
                   placeholder="Modello per questo libro"
                 />
+                <label className="block text-xs font-semibold">Reasoning di {LABELS[kind]} nel libro
+                  <select className="field mt-1" aria-label={`Reasoning libro per ${LABELS[kind]}`}
+                    disabled={current.status==="running"}
+                    value={current.taskReasoningEfforts?.[kind]??""}
+                    onChange={e=>void updateBookReasoning(kind,
+                      e.target.value?e.target.value as TaskReasoning:undefined)}>
+                    <option value="">Eredita dal task globale/endpoint</option>
+                    <option value="automatic">Automatico: non inviare effort</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="xhigh">Extra high (xhigh)</option>
+                  </select>
+                </label>
               </div>;
             })}
           </div>
