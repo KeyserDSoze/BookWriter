@@ -161,7 +161,7 @@ export async function readLmStudioNativeStream(
       "Timeout dello streaming LM Studio nativo: nessun testo applicato. Prova Reasoning Low o aumenta l'attesa."
     );
     if(error instanceof ProviderResponseReadError)throw error;
-    fail();
+    throw new ProviderResponseReadError("Risposta LM Studio nativa incompleta: nessun testo applicato.");
   }finally{
     if(timer!==undefined)clearTimeout(timer);
     if(onAbort)signal.removeEventListener("abort",onAbort);
