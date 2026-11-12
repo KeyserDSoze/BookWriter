@@ -7,6 +7,14 @@ import { createTaskProseCheckpoint } from "../domain/task-prose-checkpoint";
 import { taskProseConsentKey, taskProseKey, taskProseUsageKey } from "./task-prose-checkpoint";
 import { taskProseLimitKey } from "./task-prose-storage";
 import {
+  taskBookConsentKey, taskBookKey, taskBookUsageKey,
+} from "./task-book-checkpoint";
+import {
+  createTaskBookCheckpoint, estimatedTaskBookBytes,
+  TASK_BOOK_PAIR_LIMIT_BYTES, TASK_BOOK_TOTAL_LIMIT_BYTES,
+  TaskBookStorageLimitExceeded, validTaskBookUsage,
+} from "../domain/task-book-checkpoint";
+import {
   estimateProsePayloadBytes, TaskProseQuotaExceeded, PROSE_MIB,
   validProseLimitMiB, validTaskProseUsageLedger,
   type TaskProseUsageLedger,
@@ -184,6 +192,31 @@ export async function saveBookAndActivity(
         // An app-level quota error is not an IndexedDB request failure:
         // explicitly abort so earlier book/audit/structure puts cannot commit.
         try { tx.abort(); } catch { /* an IDB request may already have aborted */ }
+        throw error;
+      }
+    }
+    // Separate, explicit opt-in for WHOLE narrative BookProject pre/post.
+    // This is not the narrower canonical-prose consent (#167). All checks
+    // and the ledger update occur in the same IDB transaction as book/audit.
+    if ((await meta.get(taskBookConsentKey(book.id))) === true) {
+      try {
+        const checkpoint=createTaskBookCheckpoint(stored,book,activity);
+        const incoming=estimatedTaskBookBytes(checkpoint);
+        if(incoming>TASK_BOOK_PAIR_LIMIT_BYTES)
+          throw new TaskBookStorageLimitExceeded(incoming,TASK_BOOK_PAIR_LIMIT_BYTES);
+        const ledger=await meta.get(taskBookUsageKey(book.id)) as unknown;
+        if(!validTaskBookUsage(ledger,book.id))
+          throw new Error("Contatore checkpoint narrativi non verificabile: task rifiutato.");
+        const total=ledger.estimatedBytes+incoming;
+        if(total>TASK_BOOK_TOTAL_LIMIT_BYTES)
+          throw new TaskBookStorageLimitExceeded(total,TASK_BOOK_TOTAL_LIMIT_BYTES);
+        await meta.add(checkpoint,taskBookKey(book.id,activity.id));
+        await meta.put({...ledger,estimatedBytes:total,records:ledger.records+1},
+          taskBookUsageKey(book.id));
+      }catch(error){
+        // A failed application quota is not an IDB request error: without
+        // explicit abort earlier books/activities/checkpoints could commit.
+        try{tx.abort();}catch{/* an IDB request may have aborted already */}
         throw error;
       }
     }
