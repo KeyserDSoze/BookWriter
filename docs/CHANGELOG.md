@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #160/#161 (LM Studio nativo, timeout e reasoning per task)
+
+- Streaming SSE con limite per endpoint 600–3600 s (default storico 600). Diagnostica eventi/byte/fasi reali, errori espliciti, timer congelato al termine, nessuna applicazione al canone se il provider genera solo ragionamento senza risposta finale.
+- Protocollo LM Studio nativo **opt-in e solo loopback** su `POST /api/v1/chat` (`store:false`, no tools), progressi reali di caricamento, prompt, reasoning e messaggio. Protocollo OpenAI-compatible resta il default; mai retry automatico.
+- Reasoning per 15 attività nella sezione Router, con priorità override libro → task globale → endpoint, possibilità `automatic` di omettere il parametro; in nativo solo `low/medium/high`, `xhigh` rifiutato. ZIP e CAS/Web Lock convalidati. [ADR 0135](../ADR/0135-native-lmstudio-task-reasoning.md) · [Guida](ai-task-inspection.md).
+
+
 ## Non rilasciato — #156 / #157 (task AI osservabili)
 
 - **Trasparenza dell'autopilot:** via Chat Completions SSE per endpoint esplicitamente compatibili, anteprima in diretta dei delta e del reasoning che il provider realmente espone, timer e status; nessun output provvisorio promosso automaticamente nel canone. Modalità JSON legacy preservata, nessun retry automatico.

@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### LM Studio native, streaming lento e reasoning per task — #160/#161 / ADR 0135
+
+- Il server LM Studio può generare reasoning per minuti prima del primo testo visibile. La deadline SSE per endpoint è configurabile 600–3600 secondi (default 600), separata dai timeout header/JSON. Vietato assumere che 0 caratteri equivalga a 0 token; contatori eventi/byte e fase devono provenire dalla rete. Senza testo finale il canone non è modificato.
+- `apiProtocol:"lmstudio_native"` è un'opzione **esplicita** su base URL literal loopback `localhost/127.0.0.1` con path esatto `/v1`: una sola POST su `/api/v1/chat` con `model`, `system_prompt`, `input`, `stream:true`, `store:false`, eventuali `max_output_tokens`, `reasoning:low|medium|high`. Mai tool, integrations, replay, retry o fallback silenzioso. `xhigh` è rifiutato prima della POST in modalità nativa. Validazione rigorosa eventi `chat.start` e `chat.end`, 2 MB massimi, errori, abort; tool call del provider non eseguibili.
+- Reasoning task: `BookProject.taskReasoningEfforts[TaskKind]` precede `AppSettings.taskReasoningEfforts[TaskKind]`, che precede `EndpointProfile.reasoningEffort`. `automatic` omette il campo anche con default endpoint presente; `undefined` eredita. Validare su save/runtime/import ZIP; override libro solo in pausa con Web Lock e CAS. `Activity.requestedReasoningEffort` è solo una richiesta, **non** certifica l'effort applicato da LM Studio.
+- Il Dashboard può mostrare solo percentuali *fornite* da `model_load.progress`/`prompt_processing.progress`, reasoning fornito da `reasoning.delta`, messaggi da `message.delta`; nient'altro è inventato. Le tracce sensibili richiedono ancora opt-in e non entrano in ZIP/GitHub. I test mock non attestano il modello fisico: prova reale in #159. [ADR 0135](ADR/0135-native-lmstudio-task-reasoning.md) · [guida](docs/ai-task-inspection.md).
+
 ### Streaming, reasoning e tracciabilità task — #156/#157 / ADR 0134
 
 - La chiamata legacy `POST /v1/chat/completions` resta JSON per impostazione predefinita; ogni endpoint può optare per `streamMode:sse` (OpenAI-compatible `stream:true`, `stream_options.include_usage:true`) e per `reasoningEffort` opzionale `low/medium/high/xhigh`. Valori non dichiarati non si inviano. **Nessun retry automatico** se un provider rifiuta parametri/stream o dopo un possibile addebito; validare prima di decrittare e chiamare la rete. SSE richiede `[DONE]`, limiti di 2 MB e deadline di dieci minuti, abort e corpo completo prima del commit canonico, con HTTP 2xx e verifica envelope/usage finale. Solo il **reasoning emesso realmente dal provider** è visualizzato: non ricostruire o inventare catene di pensiero del modello.

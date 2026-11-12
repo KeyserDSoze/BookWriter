@@ -1,5 +1,18 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## 0. LM Studio e modelli lenti: perché 0 caratteri non significa fermo
+
+Muse Glimmer può produrre molti token di reasoning prima di una risposta leggibile. In questo periodo il browser può mostrare 0 caratteri; allo scadere del vecchio timeout SSE di dieci minuti LM Studio può scrivere “Client disconnected”, senza che il modello fosse davvero inattivo.
+
+**Soluzione da provare:** in Impostazioni → Endpoint, mantenendo `http://localhost:1234/v1`, seleziona **Protocollo AI per le richieste Chat → LM Studio nativo /api/v1/chat**. Il protocollo nativo è solo su hostname letterale localhost/127.0.0.1 con path /v1. Usa `stream:true`, `store:false`, nessun tool o plugin; il browser mostra i progressi realmente emessi da LM Studio, compresi model load, prompt-processing, reasoning e messaggio. Non è selezionato automaticamente in caso di errori dell'altra API e non esegue doppi POST. L'endpoint OpenAI-compatible rimane disponibile come default per altri provider.
+
+In **Tempo massimo lettura streaming** puoi impostare 600–3600 secondi, ad esempio 1800 per una macchina con generazione lenta, indipendentemente dall'attesa degli header. Un limite più alto non migliora la velocità né garantisce testo finale. Puoi sempre premere Pausa.
+
+**Reasoning diverso per ogni attività:** nella sezione **Router dei modelli** scegli per Brainstorming, Validazione, Scrittura, Revisioni, specialisti ecc. Eredita dall'endpoint, Automatico (omette il parametro), Low, Medium, High, Extra high. Salva le impostazioni. In **Override del libro** puoi cambiare la stessa scelta per il libro corrente, solo a generazione ferma. Priorità: override libro, poi task globale, infine endpoint. In nativo viene inviato il campo `reasoning` (solo Low/Medium/High; xhigh non supportato); nel protocollo OpenAI-compatible viene inviato `reasoning_effort`, che LM Studio può ignorare a seconda di modello e motore. “Reasoning richiesto” indica ciò che BookWriter invia, non una certificazione del provider.
+
+Il Dashboard mostra i byte e gli eventi SSE arrivati, la fase corrente e una percentuale di analisi del prompt **solo se fornita dal provider**. Non inventa token o ragionamenti non trasmessi. Se lo stream finisce senza `chat.end`, con `tool_call` non autorizzato o senza testo finale, il canone non cambia; usa i dettagli di errore per capire perché. [ADR 0135](../ADR/0135-native-lmstudio-task-reasoning.md).
+
+
 ## 1. Configurare LM Studio
 
 In **Impostazioni → Endpoint OpenAI-compatible** seleziona il server `http://localhost:1234/v1`, scegli **Nessuna autenticazione (solo localhost)** e l'ID Chat corretto, ad esempio `meta/muse-glimmer` se presente nel catalogo. Abilita CORS nel server LM Studio.

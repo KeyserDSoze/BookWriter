@@ -12,6 +12,11 @@ BookWriter è una SPA: parla **direttamente dal browser** con server OpenAI-comp
 
 ## Sicurezza, compatibilità e limiti
 
+### Modalità nativa e reasoning per attività
+
+Dopo la configurazione base, puoi selezionare **Protocollo AI: LM Studio nativo**. L'app deriva l'URL `/api/v1/chat` dal Base URL locale `http://localhost:1234/v1`; invia `store:false`, `stream:true`, senza plugin o tool, e visualizza eventi reali di prompt e risposta. Puoi impostare l'attesa SSE 600–3600 secondi e il reasoning per ogni tipo di attività nel router, con override per libro in pausa. In nativo sono supportati Low, Medium, High: per Extra high cambia consapevolmente modalità o seleziona un livello supportato. La prova fisica con Muse Glimmer non è sostituita dai test mock. [Guida](ai-task-inspection.md) · [ADR 0135](../ADR/0135-native-lmstudio-task-reasoning.md).
+
+
 - **Solo** gli hostname letterali `localhost` e `127.0.0.1` accettano modalità no-auth; altri hostname, DNS alias e server remoti richiedono API key. Le impostazioni precedenti senza campo `authMode` rimangono autenticate.
 - Non esporre il server senza credenziali su `0.0.0.0` o reti condivise. Abilitare CORS da altri siti può esporre prompt/modelli: applica le restrizioni di origine disponibili, mantieni il bind in loopback e valuta l'uso di token.
 - `localhost` è il dispositivo su cui gira **il browser**. BookWriter aperto da smartphone o tablet non raggiunge LM Studio sul PC tramite `localhost`; non è presente un proxy. Browser, CORS, mixed content e permessi di rete locale possono limitare il collegamento.

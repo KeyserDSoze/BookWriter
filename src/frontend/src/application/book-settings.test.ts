@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newBook } from "../domain/types";
 import { BookRevisionConflict, getBook, getDb, saveBook } from "../infrastructure/db";
 import { getOutbox } from "../infrastructure/outbox";
-import { updateBookModelRoute } from "./book-settings";
+import { updateBookModelRoute,updateBookTaskReasoning } from "./book-settings"; 
+
 
 const locksUnavailable = new Set<string>();
 const request = vi.fn(async (
@@ -24,6 +25,39 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe("Reasoning per libro: CAS, writer lock e isolamento del canone",()=>{
+  it("salva soltanto l'override del task e preserva le route esistenti",async()=>{
+    const book=newBook("Una trama","Titolo","Prosa","Bambini");
+    book.taskReasoningEfforts={prose:"medium"};
+    book.modelRoutes={brainstorm:{endpointId:"e",modelId:"m"}};
+    await saveBook(book,false);
+    await updateBookTaskReasoning(book.id,book.updatedAt,"brainstorm","low");
+    const saved=(await getBook(book.id))!;
+    expect(saved.taskReasoningEfforts).toEqual({prose:"medium",brainstorm:"low"});
+    expect(saved.modelRoutes).toEqual(book.modelRoutes);
+    expect(saved.brief).toBe(book.brief);
+    expect(saved.updatedAt).not.toBe(book.updatedAt);
+    await updateBookTaskReasoning(book.id,saved.updatedAt,"brainstorm",undefined);
+    expect((await getBook(book.id))?.taskReasoningEfforts?.brainstorm).toBeUndefined();
+  });
+  it("rifiuta valori non validi, revisioni stale, lock occupato e running",async()=>{
+    const book=newBook("Una trama","Titolo","Prosa","Bambini");
+    await saveBook(book,false);
+    await expect(updateBookTaskReasoning(book.id,book.updatedAt,"brainstorm",
+      "inventato" as "low")).rejects.toThrow(/reasoning del task/);
+    locksUnavailable.add("bookwriter:writer:"+book.id);
+    await expect(updateBookTaskReasoning(book.id,book.updatedAt,"brainstorm","high"))
+      .rejects.toThrow(/Un'altra scheda/);
+    locksUnavailable.clear();
+    const updated=(await getBook(book.id))!;
+    updated.title="Aggiornato altrove";await saveBook(updated,false);
+    await expect(updateBookTaskReasoning(book.id,book.updatedAt,"brainstorm","low"))
+      .rejects.toBeInstanceOf(BookRevisionConflict);
+    updated.status="running";await saveBook(updated,false);
+    await expect(updateBookTaskReasoning(book.id,updated.updatedAt,"brainstorm","low"))
+      .rejects.toThrow(/Metti prima in pausa/);
+  });
+});
 describe("Override modello: fencing manuale e CAS IndexedDB", () => {
   it("modifica soltanto la rotta del task e preserva canone e altri override", async () => {
     const book = newBook("Trama", "Romanzo", "", "");

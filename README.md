@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **LM Studio nativo e reasoning per task (#160/#161):** protocollo locale `/api/v1/chat` selezionabile, eventi di prompt/reasoning/scrittura dal provider, timeout stream 10–60 minuti, reasoning Low/Medium/High per attività e override specifici per libro, controllo Web Lock/CAS. Default OpenAI-compatible invariato; nessun tool chiamato automaticamente. [Guida](docs/ai-task-inspection.md) · [ADR 0135](ADR/0135-native-lmstudio-task-reasoning.md).
+
+
 - **Task AI osservabili (#156/#157, ancora non inclusi nella release npm numerata):** Dashboard con timeline per task, streaming Chat Completions SSE facoltativo (LM Studio), scelta di reasoning effort per endpoint, visualizzazione dei delta e del reasoning **solo se il provider lo invia**, ispezione consentita di input/output in IndexedDB locale senza sync/backup e azione di preparazione revisione supervisionata. Non è ancora un vero rewind a snapshot passato (#158). [Guida pratica](docs/ai-task-inspection.md) · [ADR 0134](ADR/0134-task-observability-streaming.md).
 
 
