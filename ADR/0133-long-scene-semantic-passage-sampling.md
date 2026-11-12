@@ -17,6 +17,10 @@ Il MVP #148 indicizzava i soli primi 1.400 caratteri per ciascuna scena canonica
 4. Prima di usare l'indice validare count di scene/passaggi e vettori, dimensioni coerenti, numeri finiti e norma positiva. Una risposta incompleta non viene consolidata. Abort o cambio libro/revisione/endpoint invalida richieste e stato; il fencing impedisce reset tardivi di nuove operazioni.
 5. Invariati: backup ZIP, dati canonici, IndexedDB, GitHub, Activity, budget autopilot, sessioni e adapter TTS. Le query utente continuano a generare un unico embedding per ricerca. Valutare in #148 ulteriore copertura incrementale o un indice persistente con consenso; non introdurli in questo intervento.
 
+## Consolidamento nella release 0.11.91 — #155
+
+Il contratto di campionamento è incluso nella release applicativa 0.11.91: il runner npm [#43202678607](https://github.com/KeyserDSoze/BookWriter/actions/runs/43202678607) ha verificato due `npm ci` puliti, 899 Vitest e 9 smoke per ciclo, senza drift delle dipendenze dalla 0.11.90. La copertura di scene lunghe rimane **parziale**: il retrieval non garantisce assenza di informazioni fuori dai passaggi campionati. Test reali del modello in #148/#159.
+
 ## Verifiche
 
 Vitest: copertura breve/lunga, Unicode, limite, privacy, ranking del finale, confronto zero-fetch e vettori malformati. Playwright desktop/mobile mock: un elemento introdotto nel finale di una scena lunga deve essere trovato e il confronto non deve inviare POST aggiuntive. Chiusura #154 subordinata a Frontend CI tutti sei job, Pages e cleanup **completed/success sulla stessa HEAD**; i mock non sono prova del modello fisico sul PC dell'autore.

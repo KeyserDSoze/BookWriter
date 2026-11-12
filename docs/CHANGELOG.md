@@ -1,20 +1,32 @@
 # Changelog — BookWriter
 
-## Non rilasciato — #162 (registro task interrogabile e costi trasparenti)
+## 0.11.91 — 2026-11-12 (main, issue #155)
+
+**Release riproducibile:** runner npm ufficiale [#43202678607](https://github.com/KeyserDSoze/BookWriter/actions/runs/43202678607) `completed/success`, Node 22/npm 10, registry ufficiale. Manifest e lock prodotti da `npm version 0.11.91 --no-git-tag-version --ignore-scripts` e `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`. Lockfile v3 con **235 voci**: solo i due campi versione root passano da 0.11.90 a 0.11.91; nessuna modifica a dipendenze, `resolved`, `integrity`. Due `npm ci` puliti, **899 Vitest in 151 file**, 9 smoke, typecheck e build per ciclo. SHA-256 manifest `d33a119d324a4f1db0063b3a1cc356ef6a85265e4691fe6f0989ef958f2f856d`; lock `2e8563bc86a5c2222357dc75d4b0e2319fa66a6d2d8cd547e5cf1eb9e595abd5`. Originali acquisiti dall'artifact e da chunk di log indicizzati, mai editati a mano.
+
+**Funzionalità consolidate:** #154 scene lunghe campionate (non indicizzazione integrale); #156/#157 streaming/ispezione task; #160/#161 protocollo LM Studio nativo opt-in e reasoning per attività/libro; #162 ricerca/filtri/costi/durate task; #163 raggruppamento run con stima parziale. Non include validazione sul provider fisico (#148/#159), rewind (#158), tool calling (#150) o fatturazione reale (#17).
+
+**Release applicativa Pages**, non pubblicazione nel registro npm (`private:true`). Prima di chiudere #155 verificare sulla HEAD del commit finale Frontend CI con quattro shard Playwright desktop/mobile, EPUBCheck 4 EPUB, Pages e cleanup tutti `completed/success`.
+
+### #163 — Raggruppamento sessioni nel registro Attività
+
+- Raggruppamento opt-in dei task filtrati per `runId`, con ordine di sessioni e task preservato, nessun gruppo fittizio per task legacy senza run. Report costi **parziali** e tentativi incerti per sessione, senza leggere prompt/output/tracce sensibili o alterare il canone; Vitest e Playwright desktop/mobile. [ADR 0137](../ADR/0137-task-run-grouping.md).
+
+### #162 (registro task interrogabile e costi trasparenti)
 
 - **Registro Attività:** ricerca limitata ai metadati (mai prompt/output sensibili), filtri stato/fase, ordinamento da nuovo a vecchio o viceversa, conteggio risultati e azzeramento rapido. Dashboard resta compatto e apre il registro completo.
 - **Durata e costo per task:** durata solo da timestamp persistiti validi; stima € solo se `priceRateSnapshot` storica valida e usage input/output entrambi comunicati dal provider, con numero di report stimabili e tentativi a costo incerto. I costi non rappresentano fatture o saldo crediti, nemmeno quando la chiamata è fallita.
 - **Privacy:** le letture asincrone di trascrizioni IndexedDB sono invalidate al cambio libro/consenso/selezione/unmount e ciascuna traccia richiede corrispondenza esatta bookId/activityId. Nessun nuovo upload, network, replay o tool. [ADR 0136](../ADR/0136-task-timeline-filters-accounting.md).
 
 
-## Non rilasciato — #160/#161 (LM Studio nativo, timeout e reasoning per task)
+### #160/#161 (LM Studio nativo, timeout e reasoning per task)
 
 - Streaming SSE con limite per endpoint 600–3600 s (default storico 600). Diagnostica eventi/byte/fasi reali, errori espliciti, timer congelato al termine, nessuna applicazione al canone se il provider genera solo ragionamento senza risposta finale.
 - Protocollo LM Studio nativo **opt-in e solo loopback** su `POST /api/v1/chat` (`store:false`, no tools), progressi reali di caricamento, prompt, reasoning e messaggio. Protocollo OpenAI-compatible resta il default; mai retry automatico.
 - Reasoning per 15 attività nella sezione Router, con priorità override libro → task globale → endpoint, possibilità `automatic` di omettere il parametro; in nativo solo `low/medium/high`, `xhigh` rifiutato. ZIP e CAS/Web Lock convalidati. [ADR 0135](../ADR/0135-native-lmstudio-task-reasoning.md) · [Guida](ai-task-inspection.md).
 
 
-## Non rilasciato — #156 / #157 (task AI osservabili)
+### #156 / #157 (task AI osservabili)
 
 - **Trasparenza dell'autopilot:** via Chat Completions SSE per endpoint esplicitamente compatibili, anteprima in diretta dei delta e del reasoning che il provider realmente espone, timer e status; nessun output provvisorio promosso automaticamente nel canone. Modalità JSON legacy preservata, nessun retry automatico.
 - **Reasoning configurabile:** Impostazioni → Endpoint → Reasoning effort AI (Automatico/Low/Medium/High/Extra high). Il campo `reasoning_effort` è opzionale, il provider può rifiutarlo. `stream:true` con `stream_options.include_usage:true` solo quando selezionato dall'autore. SSE con deadline e limiti anti-risposta ostile.
@@ -22,7 +34,7 @@
 - **Interventi contestuali:** si prepara una revisione collegata al task scelto ma **non** si ripristina automaticamente una snapshot storica. Rewind e strumenti editoriali con approvazione sono issue #158/#150. [ADR 0134](../ADR/0134-task-observability-streaming.md) · [guida](ai-task-inspection.md).
 
 
-## Non rilasciato — issue #154
+### issue #154
 
 - **Embedding: inizio, centro e finale delle scene lunghe.** Il limite precedente di 1.400 caratteri iniziali diventa una selezione di max tre passaggi non duplicati per scena canonica; fino a 80 scene e max **240** embedding per indicizzazione esplicita su localhost. Il testo non coperto è dichiarato. Le scene brevi vengono indicizzate integralmente.
 - Ricerca per domanda e confronto scena-scena ora scelgono **il passaggio più vicino** per ciascuna scena, riportando estratto e posizione; il confronto usa soltanto vettori RAM, senza nuove POST. Validazione e fencing su risposte/cancellazioni, test Vitest e browser desktop/mobile. Nessun provider remoto, salvataggio o modifica del canone; qualità semantica reale su LM Studio ancora da verificare. [ADR 0133](../ADR/0133-long-scene-semantic-passage-sampling.md).

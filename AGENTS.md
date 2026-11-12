@@ -2,6 +2,12 @@
 
 Queste regole valgono per **tutta** la repository. Leggi README, documentazione, ADR e feature prima di modificare codice. Interfaccia, documentazione, ADR e messaggi destinati all'autore sono in **italiano**; identificatori del codice in inglese.
 
+## Release riproducibile 0.11.91 — #155
+
+- Runner npm read-only [#43202678607](https://github.com/KeyserDSoze/BookWriter/actions/runs/43202678607), Node22/npm10, registro ufficiale: bump 0.11.90→0.11.91 generato da npm. Lock npm v3 **235 voci**, dipendenze/`resolved`/`integrity`/transitive invariati. Manifest SHA-256 `d33a119d324a4f1db0063b3a1cc356ef6a85265e4691fe6f0989ef958f2f856d`, lock SHA-256 `2e8563bc86a5c2222357dc75d4b0e2319fa66a6d2d8cd547e5cf1eb9e595abd5`; artifact originale e chunk indicizzati convalidati.
+- Due `npm ci` puliti con typecheck, **899 Vitest/151 file**, 9 smoke e build per ciclo. Workflow temporaneo `npm-release-reproduce-155.yml` rimosso **nello stesso commit** di manifest/lock/documentazione. Release dell'app Pages, **non** pubblicazione su npm (`private:true`).
+- Prima di chiudere #155 verificare sulla HEAD finale Frontend CI (4 shard Playwright desktop/mobile, 4 EPUBCheck), Pages e cleanup `completed/success`. Scene lunghe solo campionate: max 3 passaggi da 1.400 code unit/scene, mai copertura integrale presunta. LM Studio fisico #159, Nomic reale #148, billing #17 e rewind #158 restano separati. [Runbook](docs/npm-lockfile-releases.md) · [Changelog](docs/CHANGELOG.md).
+
 ## Raggruppamento sessioni task — #163 / ADR 0137
 
 - Nel registro Attività completo, il raggruppamento facoltativo per `runId` segue i filtri e l'ordine correnti, senza modificare gli oggetti `Activity`. Gruppi ordinati dalla prima occorrenza, ordine interno preservato; task legacy senza run non aggregati.

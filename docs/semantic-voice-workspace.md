@@ -10,6 +10,10 @@ Il pannello usa la **Web Speech API del browser**, non il modello `voice` selezi
 
 **Lingua:** per una scena in italiano, scegli se disponibile una voce di sistema `it-IT`; la voce predefinita usa `it-IT`. Il modello Phonon 40M multilingual pubblicato da Gradium supporta ufficialmente inglese, francese, tedesco, spagnolo e portoghese, non l'italiano; è quindi importante non associarlo automaticamente a una lettura italiana. È necessario verificare disponibilità e condizioni di licenza per il proprio uso.
 
+## Disponibilità nella release applicativa 0.11.91 — #155
+
+Il campionamento multi-passaggio della #154 è incluso nella release applicativa **0.11.91**, con test Vitest e Playwright mock e runner npm riproducibile. Le scene brevi sono coperte integralmente, quelle lunghe **solo campionate** in massimo tre estratti (inizio, centro e finale): i caratteri esclusi non attestano l'assenza di un evento. L'indice RAM non equivale a un RAG integrale o persistente. Per l'effettiva compatibilità di Nomic e CORS su LM Studio del PC autore resta necessaria la prova separata #148/#159.
+
 ## Ricerca semantica con il modello Embedding
 
 1. In **Impostazioni → Ruoli dei modelli AI**, assegna il tag **Embedding** al modello che in LM Studio supporta davvero l'endpoint embedding e sceglilo in **Predefinito Embedding**. Salva.

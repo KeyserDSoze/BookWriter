@@ -6,7 +6,10 @@
 
 ## Funzionalità disponibili
 
-- **Sessioni task raggruppabili (#163, prima della release numerata):** in Attività si possono raggruppare su richiesta i task per sessione `runId`, mantenendo filtri, stime *parziali* e tentativi incerti; attività prive di ID restano separate. Nessuna richiesta aggiuntiva al provider e nessuna modifica del canone. [ADR 0137](ADR/0137-task-run-grouping.md) · [Guida](docs/ai-task-inspection.md).
+- **Release applicativa 0.11.91 (#155):** consolidati #154 (scene lunghe campionate), #156/#157 (streaming/ispezione task), #160/#161 (LM Studio nativo opt-in e reasoning per task), #162 (timeline), #163 (raggruppamento per sessione). [Runner npm ufficiale #43202678607](https://github.com/KeyserDSoze/BookWriter/actions/runs/43202678607) con 2 installazioni pulite, 899 Vitest per ciclo e lockfile v3 a 235 voci senza drift; `private:true`, pubblicazione applicativa su GitHub Pages e **non** nel registro npm. Test fisici LM Studio/Nomic ancora in #159/#148. [Changelog](docs/CHANGELOG.md) · [Runbook](docs/npm-lockfile-releases.md).
+
+
+- **Sessioni task raggruppabili (#163, incluse in 0.11.91):** in Attività si possono raggruppare su richiesta i task per sessione `runId`, mantenendo filtri, stime *parziali* e tentativi incerti; attività prive di ID restano separate. Nessuna richiesta aggiuntiva al provider e nessuna modifica del canone. [ADR 0137](ADR/0137-task-run-grouping.md) · [Guida](docs/ai-task-inspection.md).
 
 
 - **Registro task avanzato (#162):** in Attività cerca per titolo, fase, motivo, endpoint/modello e run; filtra per stato/fase, ordina cronologicamente e consulta durate registrate, stime indicative solo con tariffa storica e usage completo, con conteggio dei tentativi incerti. Il caricamento asincrono di prompt e risposte locali è isolato tra libri. [Guida](docs/ai-task-inspection.md) · [ADR 0136](ADR/0136-task-timeline-filters-accounting.md).
@@ -15,10 +18,10 @@
 - **LM Studio nativo e reasoning per task (#160/#161):** protocollo locale `/api/v1/chat` selezionabile, eventi di prompt/reasoning/scrittura dal provider, timeout stream 10–60 minuti, reasoning Low/Medium/High per attività e override specifici per libro, controllo Web Lock/CAS. Default OpenAI-compatible invariato; nessun tool chiamato automaticamente. [Guida](docs/ai-task-inspection.md) · [ADR 0135](ADR/0135-native-lmstudio-task-reasoning.md).
 
 
-- **Task AI osservabili (#156/#157, ancora non inclusi nella release npm numerata):** Dashboard con timeline per task, streaming Chat Completions SSE facoltativo (LM Studio), scelta di reasoning effort per endpoint, visualizzazione dei delta e del reasoning **solo se il provider lo invia**, ispezione consentita di input/output in IndexedDB locale senza sync/backup e azione di preparazione revisione supervisionata. Non è ancora un vero rewind a snapshot passato (#158). [Guida pratica](docs/ai-task-inspection.md) · [ADR 0134](ADR/0134-task-observability-streaming.md).
+- **Task AI osservabili (#156/#157, inclusi in 0.11.91):** Dashboard con timeline per task, streaming Chat Completions SSE facoltativo (LM Studio), scelta di reasoning effort per endpoint, visualizzazione dei delta e del reasoning **solo se il provider lo invia**, ispezione consentita di input/output in IndexedDB locale senza sync/backup e azione di preparazione revisione supervisionata. Non è ancora un vero rewind a snapshot passato (#158). [Guida pratica](docs/ai-task-inspection.md) · [ADR 0134](ADR/0134-task-observability-streaming.md).
 
 
-- **Indicizzazione semantica di scene lunghe (#154, non ancora in release numerata):** da Libro → Ricerca semantica, scene canoniche lunghe vengono campionate in **inizio, centro e finale**, fino a tre estratti per scena e massimo 240 vettori per libro. I risultati mostrano il passaggio corrispondente; la continuità riusa l'indice senza nuove chiamate, avvertendo delle parti non coperte. [Guida](docs/semantic-voice-workspace.md) · [ADR 0133](ADR/0133-long-scene-semantic-passage-sampling.md).
+- **Indicizzazione semantica di scene lunghe (#154, inclusa in 0.11.91):** da Libro → Ricerca semantica, scene canoniche lunghe vengono campionate in **inizio, centro e finale**, fino a tre estratti per scena e massimo 240 vettori per libro. I risultati mostrano il passaggio corrispondente; la continuità riusa l'indice senza nuove chiamate, avvertendo delle parti non coperte. [Guida](docs/semantic-voice-workspace.md) · [ADR 0133](ADR/0133-long-scene-semantic-passage-sampling.md).
 
 
 - **Release locale-first 0.11.90 (#145)**: Node 22/npm 10, doppio `npm ci` e 866 Vitest per ciclo. Include gate dossier storico #144, LM Studio no-key #146, ruoli AI #147, embedding locali #148 e scene collegate #153, lettura browser #149/#151 e CI sharded #152. [runner ufficiale npm #43130023179](https://github.com/KeyserDSoze/BookWriter/actions/runs/43130023179). Il frontend è `private:true`: release del sito Pages, **non** pubblicazione al registro npm.
