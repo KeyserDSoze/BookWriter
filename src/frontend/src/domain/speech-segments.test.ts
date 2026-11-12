@@ -29,7 +29,7 @@ describe("Segmentazione reversibile per la lettura integrale delle scene canonic
   });
   it("ignora input vuoto, limita scene estreme e parametri ostili senza troncare",()=>{
     expect(speechSegments("  \n")).toEqual([]);
-    expect(speechSegments("a".repeat(SPEECH_MAX_SCENE_CHARACTERS+1)))
+    expect(()=>speechSegments("a".repeat(SPEECH_MAX_SCENE_CHARACTERS+1)))
       .toThrow(/Scena troppo lunga/);
     for(const size of [0,12,2.5,Infinity,5000])
       expect(()=>speechSegments("testo",size)).toThrow(/Dimensione del blocco/);
