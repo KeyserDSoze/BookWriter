@@ -636,12 +636,26 @@ export default function App() {
                 <Field label="Modelli rilevati / manuali">
                   <input className="field" value={endpoint.models.join(", ")} onChange={e => updateEndpoint(endpoint.id, { models: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })} placeholder="es. model-a, model-b" />
                 </Field>
+                <Field label="Protocollo AI per le richieste Chat">
+                  <select className="field" value={endpoint.apiProtocol??"openai"}
+                    onChange={e=>updateEndpoint(endpoint.id,
+                      {apiProtocol:e.target.value as "openai"|"lmstudio_native"})}>
+                    <option value="openai">OpenAI-compatible /v1/chat/completions</option>
+                    <option value="lmstudio_native">LM Studio nativo /api/v1/chat (solo localhost)</option>
+                  </select>
+                </Field>
                 <Field label="Streaming Chat Completions">
                   <select className="field" value={endpoint.streamMode??"off"}
                     onChange={e=>updateEndpoint(endpoint.id,{streamMode:e.target.value as "off"|"sse"})}>
                     <option value="off">Compatibilità JSON (nessuno streaming)</option>
                     <option value="sse">Streaming SSE (provider compatibile)</option>
                   </select>
+                </Field>
+                <Field label="Tempo massimo lettura streaming (secondi)">
+                  <input className="field" type="number" min={600} max={3600} step={300}
+                    value={endpoint.streamTimeoutSeconds??600}
+                    onChange={e=>updateEndpoint(endpoint.id,{
+                      streamTimeoutSeconds:Number(e.target.value)})}/>
                 </Field>
                 <Field label="Reasoning effort AI">
                   <select className="field" value={endpoint.reasoningEffort??""}
@@ -656,6 +670,12 @@ export default function App() {
                     <option value="xhigh">Extra high (xhigh)</option>
                   </select>
                 </Field>
+                {endpoint.apiProtocol==="lmstudio_native" && <p className="muted text-xs sm:col-span-2">
+                  Modalità nativa: BookWriter usa un'unica richiesta SSE a /api/v1/chat con store:false
+                  e mostra caricamento modello, avanzamento prompt e reasoning solo quando trasmessi da LM Studio.
+                  Il parametro richiesto è reasoning (Low/Medium/High); xhigh non è supportato da questa API.
+                  Non sono attivati tool, plugin o salvataggi della conversazione.
+                </p>}
                 <Field label="Parametro limite output API">
                   <select className="field" value={endpoint.outputTokenParameter ?? "max_tokens"}
                     onChange={e => updateEndpoint(endpoint.id, {
@@ -672,7 +692,7 @@ export default function App() {
                     onChange={e => updateEndpoint(endpoint.id, { headerTimeoutSeconds: Number(e.target.value) })} />
                 </Field>
               </div>
-              <p className="muted text-xs">Per LM Studio imposta http://localhost:1234/v1 e «Nessuna autenticazione» (solo localhost/127.0.0.1). Questa modalità elimina la chiave precedente al salvataggio e omette Authorization. Abilita CORS nel server locale per il browser; non esporre un server senza autenticazione in rete. Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s e lo stream SSE un limite di dieci minuti; un timeout non esclude addebiti. Attiva SSE solo se supportato dall'endpoint: non eseguiamo retry automatici dopo un errore. Il campo reasoning_effort è facoltativo e può essere rifiutato da modelli non compatibili. Il browser comunica direttamente con localhost; verifica il Network della scheda che ospita BookWriter, non quello di altre applicazioni.</p>
+              <p className="muted text-xs">Per LM Studio imposta http://localhost:1234/v1 e «Nessuna autenticazione» (solo localhost/127.0.0.1). Questa modalità elimina la chiave precedente al salvataggio e omette Authorization. Abilita CORS nel server locale per il browser; non esporre un server senza autenticazione in rete. Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s e lo stream SSE un limite di dieci minuti; un timeout non esclude addebiti. Attiva SSE solo se supportato dall'endpoint: non eseguiamo retry automatici dopo un errore. Il campo reasoning_effort OpenAI-compatible è facoltativo e può essere rifiutato o ignorato da modelli non compatibili. La API LM Studio nativa usa invece il campo reasoning (non supporta xhigh), restituisce eventi concreti per caricamento/prompt e usa il limite SSE configurabile da 600 a 3600 secondi, con stop manuale sempre disponibile. Il browser comunica direttamente con localhost; verifica il Network della scheda che ospita BookWriter, non quello di altre applicazioni.</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => void discoverModels(endpoint.id)}><RefreshCw size={16} /> Leggi /models</Button>
                 {settings.endpoints.length > 1 && <Button variant="destructive" onClick={() => setSettings(s => ({...s, endpoints:s.endpoints.filter(x => x.id !== endpoint.id)}))}>Rimuovi</Button>}
@@ -682,7 +702,7 @@ export default function App() {
           </div>
         </Section>
         <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
-        <Section title="Router dei modelli" description="Predefinito Chat / scrittura per l'autopilot, più override per ogni attività. Modelli embedding/voce non vengono richiamati dall'autopilot.">
+        <Section title="Router dei modelli" description="Predefinito Chat e modello per ogni attività. Per ogni task puoi scegliere il reasoning: eredita dall'endpoint, Automatico (non invia il parametro), Low, Medium, High o Extra high. Il libro può avere override propri in pausa. LM Studio può ignorare la richiesta OpenAI-compatible.">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Endpoint predefinito"><select className="field" value={settings.defaultRoute.endpointId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,endpointId:e.target.value}}))}>
               {settings.endpoints.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
