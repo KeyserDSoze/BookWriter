@@ -137,7 +137,8 @@ export function RewindSafetyBackupPanel({
       </label>
       <p aria-label="Stato verifica file scaricato">
         {verified?"File scaricato verificato":"File scaricato non ancora verificato"}</p>
-      {verified&&verifiedFile&&onForkCreated&&<div className="space-y-2 border-t border-amber-600/40 pt-2"
+      {verified&&verifiedFile&&onForkCreated&&<div role="region"
+        className="space-y-2 border-t border-amber-600/40 pt-2"
         aria-label="Fork locale supervisionato">
         <p className="text-xs">Puoi creare un nuovo libro indipendente
           solo come copia dello stato attuale verificato: il nuovo libro

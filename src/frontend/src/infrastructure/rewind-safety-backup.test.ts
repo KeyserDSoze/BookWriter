@@ -140,6 +140,7 @@ describe("Copia di sicurezza del solo libro per rewind futuro (#170)",()=>{
 
   it("fork non procede con file alterato, writer occupato o Web Locks mancanti",async()=>{
     const {book,task}=await fixture();
+    const existingCount=(await listBooks()).length;
     const archive=await prepareBookSafetyBackup(book.id,book.updatedAt,task.id);
     const bytes=new Uint8Array(await archive.blob.arrayBuffer());
     const mutated=bytes.slice();
@@ -156,11 +157,12 @@ describe("Copia di sicurezza del solo libro per rewind futuro (#170)",()=>{
     }});
     await expect(createLocalForkFromVerifiedSafetyBackup(archive.blob as File,archive))
       .rejects.toThrow(/in uso da un'altra scheda/);
-    expect(await listBooks()).toHaveLength(1);
+    expect(await listBooks()).toHaveLength(existingCount);
   });
 
   it("ID nuovo collisionato fa fallire tutta la transazione senza sovrascrivere l'originale",async()=>{
     const {book,task}=await fixture();
+    const existingCount=(await listBooks()).length;
     const archive=await prepareBookSafetyBackup(book.id,book.updatedAt,task.id);
     const before=structuredClone((await getBook(book.id))!);
     const log=structuredClone(await (await getDb()).get("activities",task.id));
@@ -169,7 +171,7 @@ describe("Copia di sicurezza del solo libro per rewind futuro (#170)",()=>{
       .rejects.toThrow();
     expect(await getBook(book.id)).toEqual(before);
     expect(await (await getDb()).get("activities",task.id)).toEqual(log);
-    expect(await listBooks()).toHaveLength(1);
+    expect(await listBooks()).toHaveLength(existingCount);
   });
 
   it("un task sorgente in esecuzione impedisce ogni fork anche con libro paused",async()=>{
