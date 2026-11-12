@@ -475,6 +475,7 @@ export default function App() {
             {current ? <SyncStatusSummary book={current} openArchive={() => setPage("export")}/> : <Empty>Crea un libro per collegare GitHub.</Empty>}
           </Section>
         </div>
+        </div>
         </details>
       </div>}
 
