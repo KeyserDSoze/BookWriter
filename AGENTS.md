@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Lettura integrale delle scene canoniche — issue #151 / ADR 0130
+
+- `speechSegments` segmenta `scene.text.trim()` in blocchi fino a 700 codepoint Unicode, preferendo confini frase/parola e preservando esattamente `chunks.join("") === original.trim()`. Oltre 280.000 codepoint rifiutare esplicitamente, mai troncare senza avviso. Solo scene canoniche.
+- `VoiceReaderPanel` accoda una sola utterance per volta. Il contatore di generazione invalida callback `onend/onerror` dopo stop, cambio scena/voce/libro/revisione o unmount; pausa/riprendi e progress blocchi. Non chiamare modelli TTS né attribuire capacità non documentate al provider. Il browser/OS potrebbe usare servizi online per la sintesi.
+- Test Vitest per segmentazione integrale e Unicode, Playwright desktop/mobile mock per progressione, pausa/ripresa, stop e non-canon. AGENTS, [guida](docs/semantic-voice-workspace.md) e [ADR 0130](ADR/0130-browser-speech-complete-scene.md) vincolano il comportamento; nessun bump manuale npm.
+
+
 ### Lettura ad alta voce e ricerca semantica delle scene — issue #148/#149 / ADR 0129
 
 - Nel lettore del libro `VoiceReaderPanel` usa **Web Speech API** per leggere **solo scene canoniche**, con play/pause/riprendi/stop, voce e velocità selezionate; la sintesi del browser può usare il sistema operativo o una voce online. Non attribuire al modello `voice` configurato chiamate TTS: LM Studio OpenAI compatibility non documenta `/v1/audio/speech`, e in questa fase BookWriter non invia il testo a tale modello.

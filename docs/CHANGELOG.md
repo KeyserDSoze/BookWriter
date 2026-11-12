@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #151
+
+- **Ascolto integrale** delle scene canoniche con Web Speech API, segmentazione di massimo 700 codepoint, confini di frase/parola e conservazione senza perdite. Callback obsolete ignorate dopo stop, cambio scena/voce/libro; controllo blocchi, pausa/ripresa e stop.
+- Nessun invio a TTS esterni da BookWriter, nessuna modifica al canone, limitazione esplicita per scene oltre 280.000 codepoint. Test unitari/Playwright e [ADR 0130](../ADR/0130-browser-speech-complete-scene.md). Versione npm invariata finché release non certificata.
+
+
 ## Non rilasciato — issue #148 e #149 (epic #6)
 
 **Prime funzionalità reali per embedding e ascolto della prosa — #148/#149**

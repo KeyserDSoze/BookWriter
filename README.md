@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Voce integrale (#151, ancora da rilasciare con versione npm):** la lettura tramite browser raggiunge l'intera scena canonica con sequenza di blocchi, avanzamento, pausa/ripresa/stop, senza più il taglio ai primi 5.000 caratteri. Non è un adapter TTS di LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0130](ADR/0130-browser-speech-complete-scene.md).
+
+
 - **Laboratorio editoriale con voce e ricerca semantica (#148/#149, non ancora in release npm):** nella scheda Libro puoi ascoltare singole scene canoniche con Web Speech API, interrompere/riprendere e regolare la voce; la ricerca semantica indicizza su comando fino a 80 scene canoniche con il modello embedding locale e ordina i risultati per similitudine coseno. I vettori restano in RAM, nessuna richiesta automatica a provider remoti. Il modello TTS configurato **non** viene chiamato finché manca un adapter audio supportato dal server LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0129](ADR/0129-opt-in-editorial-voice-semantic-workspace.md).
 
 
