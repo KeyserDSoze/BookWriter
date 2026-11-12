@@ -53,6 +53,20 @@ jobs:
           NODE
           sha256sum package.json package-lock.json
           sha256sum package-lock.json > "$RUNNER_TEMP/bookwriter-release-lock.sha256"
+      - name: Stage release heading for version-aware smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = "../../docs/CHANGELOG.md";
+          const source = fs.readFileSync(path,"utf8");
+          const heading = "# Changelog — BookWriter\n";
+          if(!source.startsWith(heading))throw new Error("Unexpected changelog heading");
+          fs.writeFileSync(path, source.replace(heading,
+            heading+"\n## 0.11.90 — 2026-11-12 (issue #145)\n\n"+
+            "- Release preparata con npm ufficiale; documentazione completa nel commit atomico.\n"));
+          NODE
       - name: First clean npm ci and all non-browser gates
         shell: bash
         run: |
