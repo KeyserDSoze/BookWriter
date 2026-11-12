@@ -11,7 +11,8 @@ import {
 } from "./db";
 import { createBackup } from "./backup";
 import {
-  inspectTaskBookCheckpoint, loadTaskBookConsent, loadTaskBookInventory,
+  inspectNarrativeTaskHistoryImpact, inspectTaskBookCheckpoint,
+  loadTaskBookConsent, loadTaskBookInventory,
   setTaskBookConsent, taskBookConsentKey, taskBookKey, taskBookUsageKey,
 } from "./task-book-checkpoint";
 import { setTaskProseConsent, taskProseKey } from "./task-prose-checkpoint";
@@ -194,6 +195,47 @@ describe("Checkpoint narrativi integrali locali, consenso separato #172",()=>{
     expect(serialized).not.toContain(taskBookUsageKey(book.id));
     expect(JSON.stringify(await inspectTaskBookCheckpoint(book.id,id)))
       .not.toContain("PROSA_POST");
+  });
+
+  it("analisi storica è solo metadata e usa la revisione del libro corrente",async()=>{
+    const book=await fixture();
+    await setTaskBookConsent(book.id,true);
+    const id=crypto.randomUUID();
+    const after=await commit(book,id);
+    const result=await inspectNarrativeTaskHistoryImpact(book.id,id);
+    expect(result).toMatchObject({
+      bookId:book.id,activityId:id,revisionBefore:book.updatedAt,
+      revisionAfter:after.updatedAt,currentRevision:after.updatedAt,
+      currentRevisionEqualsRecordedAfter:true,
+      chaptersChanged:1,scenesChanged:2,
+      frozenRemoved:1,globalNarrativeChange:true,memoryChanged:true,
+      candidateChapterCount:1,candidateChapterNumbers:[1],
+    });
+    for(const secret of ["PROSA_PRE","PROSA_POST","BOZZA_PRIVATA",
+      "SEGRETO_MEMORIA","BRIEF_AUTORE","account-privato"])
+      expect(JSON.stringify(result)).not.toContain(secret);
+    const latest=structuredClone(after);
+    latest.brief="NUOVA_ISTRUZIONE_PRIVATA";
+    await saveBook(latest,false,after.updatedAt);
+    const changed=await inspectNarrativeTaskHistoryImpact(book.id,id);
+    expect(changed?.currentRevisionEqualsRecordedAfter).toBe(false);
+    expect(changed?.revisionAfter).toBe(after.updatedAt);
+  });
+
+  it("no dati se task cross-book, consenso revocato o checkpoint corrotto",async()=>{
+    const a=await fixture(),b=await fixture();
+    await setTaskBookConsent(a.id,true);
+    const id=crypto.randomUUID();
+    await commit(a,id);
+    expect(await inspectNarrativeTaskHistoryImpact(b.id,id)).toBeNull();
+    expect(await inspectNarrativeTaskHistoryImpact(a.id,id)).toBeTruthy();
+    await setTaskBookConsent(a.id,false);
+    expect(await inspectNarrativeTaskHistoryImpact(a.id,id)).toBeNull();
+    await setTaskBookConsent(a.id,true);
+    await (await getDb()).put("meta",{schemaVersion:1,bookId:a.id,activityId:id,
+      before:{id:a.id,chapters:[]},after:{id:a.id,chapters:[]}},
+      taskBookKey(a.id,id));
+    expect(await inspectNarrativeTaskHistoryImpact(a.id,id)).toBeNull();
   });
 
   it("checkpoint corrotto o senza bookId esatto non rivela metadati",async()=>{

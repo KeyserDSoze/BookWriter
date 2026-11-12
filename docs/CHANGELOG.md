@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #173 (preflight narrativo storico e candidati downstream)
+
+- In **Attività**, nuova analisi **manuale, metadata-only** dei checkpoint narrativi integrali #172: confronta prima/dopo di un singolo task e mostra conteggi capitoli e scene (incluse bozze) aggiunti/rimossi/modificati, freeze, memoria, campi narrativi globali e riordini, senza mostrare titoli/prosa/segreti o contenuti delle richieste AI.
+- Lista **prudenziale** dei capitoli **attuali** da rivalutare: cambi narrativi globali → tutti; altrimenti dal primo capitolo modificato/riordinato in poi, incluso il primo. Massimo 20 numeri renderizzati e contatore dei restanti; la lista **non dimostra legami causali** e non invalida automaticamente nulla. Se ci sono numeri/ID ambigui o copie non disponibili il confronto fallisce chiuso. Segnalata la revisione attuale rispetto alla post-task registrata, senza confonderle.
+- Accesso consenso+snapshot+libro corrente in **un'unica transazione readonly**, letture con fencing su cambio task/libro/revoca e vista cancellata immediatamente; nessun restore, fork storico, editor di merge, nuovo prompt o POST AI. Vitest/fake IDB, Playwright desktop/mobile, ADR 0147. Parent #158 ancora aperta. [ADR 0147](../ADR/0147-historical-narrative-diff-preflight.md).
+
 ## Non rilasciato — #172 (checkpoint integrali narrativi opt-in per futuri task)
 
 - Nuovo consenso **per libro, separato** dalle copie di sola prosa #167 e disattivato per default: ogni nuovo `saveBookAndActivity` riuscito registra **prima/dopo** la totalità del contenuto narrativo BookProject, incluse bozze, testo canonico, brief, memoria, segreti narrativi, freeze e decisioni autoriali, ma **non** i permessi `remote` GitHub o l'output dei task. Lettura consenso e `meta.add` sono dentro il transaction CAS di book/activity/outbox; duplicati e errori falliscono senza commit parziali.

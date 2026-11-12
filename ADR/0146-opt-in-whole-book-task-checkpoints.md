@@ -16,6 +16,10 @@ I checkpoint strutturali #166 e le coppie di sola prosa canonica #167 non ricost
 4. **Ispezione di soli metadati.** `inspectTaskBookCheckpoint` legge flag e coppia in un'unica readonly transaction serializzata con revoca, verifica bookId/activityId/schema e restituisce solo conteggi delle scene/capitoli/freeze e revisioni; mai prosa, prompt o memoria. `loadTaskBookInventory` restituisce dal contatore solo uso stimato e numero coppie. La UI non rende mai i testi integrali e applica fencing asincrono su task/libro/revoca/unmount. Nessun ZIP, sync GitHub, outbox, esportazione o provider contiene queste coppie, che restano in `meta`. Non propagare il consenso al fork #171.
 5. **Nessun rewind in questo passaggio.** La coppia testimonia uno stato narrativo per task opt-in, ma non è una copia di tutto il browser, delle autorizzazioni remote o del contesto tool. Non tocca il canone corrente e non concede alcun restore, approval, merge, nuovo prompt correttivo, sblocco automatico di freeze, validazione dei capitoli a valle o protezione distribuita tra dispositivi. #158 resta aperta.
 
+## Evoluzione di sola lettura — ADR 0147 / #173
+
+I checkpoint integrali #172 sono la base per il [preflight di differenze narrative e candidati editoriali #173](0147-historical-narrative-diff-preflight.md). Esso legge la copia e il libro corrente sotto consenso senza esporre la prosa e **non** attribuisce dipendenze causali né consente restore.
+
 ## Verifica
 
 - Vitest/fake-IDB default-off, contenuto prima/dopo (scene in bozza e canon, memoria e segreti, freeze, remote escluso), serializzazione e ledger, limite cumulativo e collisione con abort libro/activity/outbox/checkpoint, revoca per libro e consensi indipendenti, ZIP senza meta, task legacy/falliti e schemi corrotti. Playwright desktop/mobile per consenso, cattura di un task succeeded, inventario, sola metadata e revoca a due clic. Typecheck/build/smoke, 4 shard desktop/mobile, EPUBCheck quattro EPUB, Pages e cleanup **completed/success sulla stessa HEAD** prima della chiusura #172.

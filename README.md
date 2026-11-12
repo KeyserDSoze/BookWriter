@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Anteprima storica narrativa e capitoli candidati a revisione (#173, non ancora release numerata).** In **Attività**, per un task con checkpoint narrativi integrali opt-in #172, puoi premere **Analizza differenze narrative storiche**: conta capitoli/scene (comprese bozze) aggiunti, rimossi o modificati, freeze, memoria, variazioni globali e riordini, **senza mostrare titoli, prosa o segreti**. Segnala la revisione corrente e propone **solo a titolo prudenziale** i numeri dei capitoli da rileggere (max 20 mostrati, più conteggio dei restanti). Non è un grafo di dipendenze, non corregge alcunché e non attiva un rewind. [ADR 0147](ADR/0147-historical-narrative-diff-preflight.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Checkpoint storici narrativi integrali per task (#172, non ancora release numerata):** consenso **separato e disattivato di default**, attivabile in Attività per il solo libro scelto. I successivi task riusciti conservano in IndexedDB una coppia **pre/post** dell'intero contenuto narrativo del libro (canon, bozze, brief, memoria, decisioni e freeze), **senza remote GitHub, credenziali, settings o output Activity**. Un limite obbligatorio di **32 MiB per coppia e 128 MiB per libro**, calcolato su stima JSON UTF-8, blocca atomically il commit se superato: nessun testo troncato e nessuna cancellazione automatica. Inventario e controllo task espongono **solo conteggi e revisioni**; la revoca richiede due clic ed elimina tutte le copie integrali del libro, senza toccare manoscritto o audit. Non sono in ZIP/cloud, **non** sono copie retroattive, e **non** consentono ancora undo/rewind. [ADR 0146](ADR/0146-opt-in-whole-book-task-checkpoints.md) · [Guida](docs/ai-task-inspection.md).
 
 

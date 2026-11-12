@@ -5,6 +5,9 @@ import {
   type TaskBookUsage,
 } from "../domain/task-book-checkpoint";
 import { getDb } from "./db";
+import {
+  compareNarrativeTaskHistory, type NarrativeHistoryImpact,
+} from "../domain/narrative-task-history-impact";
 
 export function taskBookConsentKey(bookId: string): string {
   return "task-book-consent:v1:" + bookId;
@@ -120,4 +123,22 @@ export async function inspectTaskBookCheckpoint(
   const value=consent===true?await meta.get(taskBookKey(bookId,activityId)):null;
   await tx.done;
   return consent===true?summarizeTaskBookCheckpoint(value,bookId,activityId):null;
+}
+
+/** An explicit metadata-only analysis of a historical opt-in task and the
+ * CURRENT book, read in one transaction with consent and checkpoint.
+ * No prose or BookProject object crosses the storage/UI boundary. */
+export async function inspectNarrativeTaskHistoryImpact(
+  bookId:string,activityId:string,
+):Promise<NarrativeHistoryImpact|null>{
+  if(!bookId||!activityId)return null;
+  const db=await getDb();
+  const tx=db.transaction(["books","meta"],"readonly");
+  const book=await tx.objectStore("books").get(bookId) as BookProject|undefined;
+  const meta=tx.objectStore("meta");
+  const allowed=await meta.get(taskBookConsentKey(bookId))===true;
+  const raw=book&&allowed?await meta.get(taskBookKey(bookId,activityId)):null;
+  await tx.done;
+  if(!book||!allowed||!raw)return null;
+  return compareNarrativeTaskHistory(raw,bookId,activityId,book);
 }

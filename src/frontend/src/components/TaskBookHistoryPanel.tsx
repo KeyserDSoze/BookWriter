@@ -4,8 +4,10 @@ import {
   TASK_BOOK_PAIR_LIMIT_BYTES, TASK_BOOK_TOTAL_LIMIT_BYTES,
   type TaskBookCheckpointSummary,
 } from "../domain/task-book-checkpoint";
+import type { NarrativeHistoryImpact } from "../domain/narrative-task-history-impact";
 import {
-  inspectTaskBookCheckpoint, loadTaskBookConsent, loadTaskBookInventory,
+  inspectTaskBookCheckpoint, inspectNarrativeTaskHistoryImpact,
+  loadTaskBookConsent, loadTaskBookInventory,
   setTaskBookConsent, type TaskBookInventory,
 } from "../infrastructure/task-book-checkpoint";
 
@@ -21,8 +23,11 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
   const [inventory,setInventory]=useState<TaskBookInventory|null>(null);
   const [checkpoint,setCheckpoint]=useState<TaskBookCheckpointSummary|null>(null);
   const [inspectMessage,setInspectMessage]=useState("");
+  const [impact,setImpact]=useState<NarrativeHistoryImpact|null>(null);
+  const [impactMessage,setImpactMessage]=useState("");
   const consentFence=useRef(new AiTraceReadFence());
   const inspectFence=useRef(new AiTraceReadFence());
+  const impactFence=useRef(new AiTraceReadFence());
 
   useEffect(()=>{
     const ticket=consentFence.current.begin();
@@ -37,15 +42,19 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
     return ()=>{consentFence.current.invalidate();};
   },[bookId]);
   useEffect(()=>{
-    inspectFence.current.invalidate();
+    inspectFence.current.invalidate();impactFence.current.invalidate();
     setCheckpoint(null);setInspectMessage("");
-    return ()=>{inspectFence.current.invalidate();};
+    setImpact(null);setImpactMessage("");
+    return ()=>{
+      inspectFence.current.invalidate();impactFence.current.invalidate();
+    };
   },[bookId,focusedTaskId]);
 
   const change=async(enabled:boolean)=>{
     const ticket=consentFence.current.begin();
-    inspectFence.current.invalidate();
+    inspectFence.current.invalidate();impactFence.current.invalidate();
     setCheckpoint(null);setInspectMessage("");setInventory(null);
+    setImpact(null);setImpactMessage("");
     setBusy(true);setMessage("");setRevokePending(false);
     try{
       await setTaskBookConsent(bookId,enabled);
@@ -92,6 +101,22 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
     }catch{
       if(inspectFence.current.isCurrent(ticket))
         setInspectMessage("Lettura locale non riuscita: nessuna copia mostrata.");
+    }
+  };
+  const inspectImpact=async()=>{
+    if(!focusedTaskId||consent!==true)return;
+    const id=focusedTaskId;
+    const ticket=impactFence.current.begin();
+    setImpact(null);setImpactMessage("");
+    try{
+      const result=await inspectNarrativeTaskHistoryImpact(bookId,id);
+      if(!impactFence.current.isCurrent(ticket))return;
+      if(result)setImpact(result);
+      else setImpactMessage("Impossibile confrontare i checkpoint narrativi: " +
+        "storico assente, consenso revocato oppure identità di capitoli/scene ambigue.");
+    }catch{
+      if(impactFence.current.isCurrent(ticket))
+        setImpactMessage("Confronto storico non verificabile: nessun dato mostrato.");
     }
   };
   return <section role="region" aria-label="Checkpoint narrativi integrali per rewind"
@@ -173,6 +198,62 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
                 {" "}{checkpoint.frozenAfter} dopo.</p>
             </div>}
           {inspectMessage&&<p role="status" className="text-xs">{inspectMessage}</p>}
+          <div className="border-t border-slate-400/30 pt-2 space-y-2">
+            <p className="muted text-xs">Confronta su richiesta il prima/dopo del task
+              e ricava solo <b>conteggi</b> di capitoli, scene e memoria modificati.
+              La lista dei capitoli correnti da riesaminare è prudenziale:
+              <b> non dimostra legami causali</b>, non sblocca freeze e non modifica nulla.</p>
+            <button type="button" disabled={busy}
+              className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
+              onClick={()=>void inspectImpact()}>
+              Analizza differenze narrative storiche
+            </button>
+            {impact&&impact.bookId===bookId&&impact.activityId===focusedTaskId&&
+              <div role="region" aria-label="Anteprima impatto narrativo storico"
+                className="space-y-1 rounded-lg border border-slate-400/30 p-2 text-xs">
+                <p className="font-semibold">Differenze storiche del task (sola lettura)</p>
+                <p>Revisione prima: {impact.revisionBefore}; dopo: {impact.revisionAfter}.</p>
+                <p>Capitoli aggiunti: {impact.chaptersAdded};
+                  {" "}rimossi: {impact.chaptersRemoved};
+                  {" "}modificati: {impact.chaptersChanged}.</p>
+                <p>Scene (anche bozze) aggiunte: {impact.scenesAdded};
+                  {" "}rimosse: {impact.scenesRemoved};
+                  {" "}modificate: {impact.scenesChanged}.</p>
+                <p>Freeze aggiunti: {impact.frozenAdded};
+                  {" "}rimossi: {impact.frozenRemoved}.</p>
+                <p>Ordine dei capitoli cambiato: {impact.chapterOrderChanged?"sì":"no"};
+                  {" "}capitoli con ordine delle scene diverso:
+                  {" "}{impact.sceneOrderChangedChapters}.</p>
+                <p>Campi narrativi globali modificati: {impact.narrativeFieldsChanged};
+                  {" "}memoria cambiata: {impact.memoryChanged?"sì":"no"};
+                  {" "}fase cambiata: {impact.phaseChanged?"sì":"no"}.</p>
+                <p>Revisione del libro attuale: {impact.currentRevision}.
+                  {" "}{impact.currentRevisionEqualsRecordedAfter
+                    ?"Coincide con la revisione post-task registrata."
+                    :"È diversa dalla revisione post-task: potrebbero esserci sviluppi successivi."}</p>
+                <p className="font-semibold">Capitoli correnti candidati a revisione:
+                  {" "}{impact.candidateChapterCount}.</p>
+                {impact.globalNarrativeChange
+                  ?<p>Variazioni narrative globali: tutti i capitoli correnti
+                    sono considerati candidati, non soltanto i successivi.</p>
+                  :impact.firstChangedChapterNumber!==null
+                    ?<p>Dal capitolo numero {impact.firstChangedChapterNumber}
+                      in poi, inclusa l'area cambiata (senza causalità accertata).</p>
+                    :<p>Non risultano variazioni di capitolo o campi narrativi
+                      considerate da questa euristica. Non prova continuità.</p>}
+                <p aria-label="Numeri dei capitoli candidati">
+                  {impact.candidateChapterNumbers.length
+                    ?"Numeri: "+impact.candidateChapterNumbers.join(", ")+"."
+                    :"Nessun numero di capitolo candidato da mostrare."}
+                  {impact.candidateChapterNumbersOmitted>0
+                    ?` Altri ${impact.candidateChapterNumbersOmitted} non visualizzati.`:""}
+                </p>
+                <p className="muted">La selezione è conservativa, non un grafo
+                  di dipendenze, una diagnosi editoriale o un'autorizzazione
+                  a riscrivere. Nessun ripristino/undo/fork storico disponibile.</p>
+              </div>}
+            {impactMessage&&<p role="status" className="text-xs">{impactMessage}</p>}
+          </div>
         </div>}
       </>}
     {message&&<p role="status" className="text-xs">{message}</p>}

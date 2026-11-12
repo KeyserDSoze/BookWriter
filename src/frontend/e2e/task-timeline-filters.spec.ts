@@ -375,6 +375,19 @@ test("checkpoint narrativo integrale opt-in: capture locale, metadati e revoca, 
   await expect(summary).toContainText("Checkpoint integrale locale presente");
   await expect(summary).toContainText("Scene (incluse bozze): 2 prima, 2 dopo");
   await expect(summary).toContainText("Capitoli congelati: 1 prima, 0 dopo");
+  const impactButton=panel.getByRole("button",{
+    name:"Analizza differenze narrative storiche",
+  });
+  const impact=panel.getByRole("region",{name:"Anteprima impatto narrativo storico"});
+  await expect(impact).toHaveCount(0);
+  await impactButton.click();
+  await expect(impact).toContainText("Differenze storiche del task");
+  await expect(impact).toContainText("Capitoli aggiunti: 0; rimossi: 0; modificati: 1");
+  await expect(impact).toContainText("Scene (anche bozze) aggiunte: 0; rimosse: 0; modificate: 2");
+  await expect(impact).toContainText("Freeze aggiunti: 0; rimossi: 1");
+  await expect(impact).toContainText("memoria cambiata: sì");
+  await expect(impact).toContainText("Capitoli correnti candidati a revisione: 1");
+  await expect(impact).toContainText("non un grafo");
   for(const secret of ["SEGRETO_INTEGRALE","TESTO_PRIVATO",
     "OUTPUT_AI_PRIVATO_NO_SNAPSHOT"])
     await expect(panel).not.toContainText(secret);
@@ -395,6 +408,7 @@ test("checkpoint narrativo integrale opt-in: capture locale, metadati e revoca, 
   }).click();
   await expect(panel).toContainText("Stato consenso integrale: disattivato");
   await expect(summary).toHaveCount(0);
+  await expect(impact).toHaveCount(0);
   const persisted=await page.evaluate(async(id)=>{
     const {getDb,getBook}=await import("/src/infrastructure/db.ts");
     const db=await getDb();
@@ -410,6 +424,75 @@ test("checkpoint narrativo integrale opt-in: capture locale, metadati e revoca, 
   expect(persisted.structural).toBeDefined();
   expect(persisted.activity).toBeDefined();
   expect(persisted.text).toBe("TESTO_PRIVATO_CANON_POST");
+});
+
+test("analisi narrativa: cambio task e libro nasconde i metadati storici, desktop/mobile",async({page})=>{
+  await page.goto("/");
+  const bookA=await createBook(page,"Storico differenze per task");
+  const bookB=await page.evaluate(async()=>{
+    const {newBook}=await import("/src/domain/types.ts");
+    const {saveBook}=await import("/src/infrastructure/db.ts");
+    const book=newBook("Altro libro sintetico","Altro libro","Narrativo","Adulti");
+    await saveBook(book,false);
+    return book.id;
+  });
+  await page.reload();
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookA);
+  const nav=page.getByRole("navigation",{
+    name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
+  });
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const panel=page.getByRole("region",{name:"Checkpoint narrativi integrali per rewind"});
+  await panel.getByRole("button",{
+    name:"Attiva checkpoint narrativi integrali per questo libro",
+  }).click();
+  await expect(panel).toContainText("Stato consenso integrale: attivo");
+  await page.evaluate(async id=>{
+    const {getBook,saveBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
+    const original=await getBook(id);
+    if(!original)throw Error("Libro iniziale mancante");
+    const prepared=structuredClone(original);
+    prepared.chapters=[{id:"chapter-history",number:1,title:"Prima",
+      purpose:"Test",scenes:[{id:"scene-history",number:1,title:"Scena",
+        objective:"Confronto",status:"draft",text:"TESTO_STORICO_SEGRETO_PRIMA"}]}];
+    await saveBook(prepared,false,original.updatedAt);
+    let current=await getBook(id);
+    if(!current)throw Error("Non salvato");
+    for(const [index,value] of [
+      "TESTO_STORICO_SEGRETO_DOPO_PRIMO",
+      "TESTO_STORICO_SEGRETO_DOPO_SECONDO",
+    ].entries()){
+      const updated=structuredClone(current);
+      updated.chapters[0].scenes[0].text=value;
+      await saveBookAndActivity(updated,{
+        id:"task-history-"+index+"-"+id,bookId:id,runId:"test-run",
+        phase:"prose",title:"Storico "+index,reason:"Prova",
+        nextStep:"Rivedi",status:"succeeded",
+        createdAt:index===0?"2026-11-12T10:00:00.000Z":"2026-11-12T10:01:00.000Z",
+      },current.updatedAt);
+      current=await getBook(id);
+      if(!current)throw Error("Perso canone");
+    }
+  },bookA);
+  await page.reload();
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const timeline=page.getByRole("region",{name:"Timeline task AI"});
+  await expect(timeline.getByRole("list",{name:"Storico task"}).getByRole("listitem"))
+    .toHaveCount(2);
+  await timeline.getByRole("button",{name:"Apri scheda task"}).first().click();
+  const focused=timeline.getByRole("region",{name:"Scheda task dedicata"});
+  const impact=panel.getByRole("region",{name:"Anteprima impatto narrativo storico"});
+  await expect(impact).toHaveCount(0);
+  await panel.getByRole("button",{name:"Analizza differenze narrative storiche"}).click();
+  await expect(impact).toContainText("Capitoli correnti candidati a revisione: 1");
+  await expect(panel).not.toContainText("TESTO_STORICO_SEGRETO");
+  await focused.getByRole("button",{name:"Task successivo"}).click();
+  await expect(impact).toHaveCount(0);
+  await panel.getByRole("button",{name:"Analizza differenze narrative storiche"}).click();
+  await expect(impact).toContainText("Differenze storiche del task");
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookB);
+  await expect(impact).toHaveCount(0);
+  await expect(panel).toContainText("Stato consenso integrale: disattivato");
 });
 
 test("copie canoniche opt-in: confronto esatto e revoca locale, desktop/mobile",async({page})=>{
