@@ -1,0 +1,143 @@
+import { MAX_CHAT_COMPLETION_BYTES, ProviderResponseReadError } from "./ai-completion-response";
+
+/** Streaming is only enabled when explicitly configured per endpoint.
+ * All deltas are provisional, not canonical book text. */
+export type AiStreamDelta = { kind: "text" | "reasoning"; text: string };
+export interface StreamCompletion {
+  choices: Array<{ message: { content: string } }>;
+  usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+}
+
+export const CHAT_STREAM_TIMEOUT_MS = 600_000;
+const invalid = () => new ProviderResponseReadError(
+  "Stream AI non valido o incompleto: nessun testo applicato. Verifica il supporto SSE del provider."
+);
+const timeout = () => new ProviderResponseReadError(
+  "Tempo scaduto durante lo streaming AI. Nessun testo applicato: il provider potrebbe avere consumato token."
+);
+
+export function chatReasoningEffort(value: unknown): "low" | "medium" | "high" | "xhigh" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "low" || value === "medium" || value === "high" || value === "xhigh") return value;
+  throw new Error("Reasoning effort AI non valido: scegli Automatico, Low, Medium, High o Extra high.");
+}
+export function chatStreamMode(value: unknown): "off" | "sse" {
+  if (value === undefined || value === "off") return "off";
+  if (value === "sse") return "sse";
+  throw new Error("Modalità streaming AI non valida.");
+}
+
+export async function readChatCompletionStream(
+  response: Response,
+  signal: AbortSignal,
+  onDelta?: (delta: AiStreamDelta) => void,
+  readTimeoutMs = CHAT_STREAM_TIMEOUT_MS,
+): Promise<StreamCompletion> {
+  if (signal.aborted) throw new DOMException("Generazione interrotta.", "AbortError");
+  const type = response.headers.get("content-type") ?? "";
+  if (!/^text\/event-stream\b/i.test(type)) throw invalid();
+  const length = response.headers.get("content-length");
+  if (length !== null && (!/^\d+$/.test(length.trim()) ||
+    Number(length) > MAX_CHAT_COMPLETION_BYTES)) throw invalid();
+  const reader = response.body?.getReader();
+  if (!reader) throw invalid();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let text = "";
+  let reasoning = "";
+  let usage:StreamCompletion["usage"];
+  let pending = "";
+  let bytes = 0;
+  let done = false;
+  let completed = false;
+  let abortHandler: (() => void) | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let expired = false;
+  const cancelled = new Promise<never>((_,reject)=>{
+    abortHandler = ()=>reject(new DOMException("Generazione interrotta.", "AbortError"));
+    signal.addEventListener("abort",abortHandler,{once:true});
+    timer=setTimeout(()=>{expired=true;reject(timeout());},readTimeoutMs);
+  });
+  const acceptEvent = (data:string) => {
+    const value=data.trim();
+    if (value === "[DONE]") { done = true; return; }
+    if (!value) return;
+    let parsed:unknown;
+    try{parsed=JSON.parse(value);}catch{throw invalid();}
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw invalid();
+    const envelope=parsed as {
+      choices?: unknown;
+      usage?: unknown;
+      error?: unknown;
+    };
+    if (envelope.error !== undefined) throw invalid();
+    if (envelope.usage && typeof envelope.usage === "object" &&
+      !Array.isArray(envelope.usage)) usage=envelope.usage as StreamCompletion["usage"];
+    if (envelope.choices !== undefined) {
+      if(!Array.isArray(envelope.choices))throw invalid();
+      for (const choice of envelope.choices) {
+        if (!choice || typeof choice !== "object" || Array.isArray(choice))throw invalid();
+        const c=choice as { index?:unknown; delta?:unknown };
+        if(c.index!==undefined && c.index!==0) continue;
+        if(c.delta===null||c.delta===undefined) continue;
+        if(typeof c.delta!=="object"||Array.isArray(c.delta))throw invalid();
+        const d=c.delta as {content?:unknown;reasoning_content?:unknown;reasoning?:unknown};
+        if(d.content!==undefined && d.content!==null){
+          if(typeof d.content!=="string")throw invalid();
+          text+=d.content;
+          if(text.length>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+          try{onDelta?.({kind:"text",text:d.content});}catch{/* observer cannot affect canonical output */ }
+        }
+        const reason=d.reasoning_content??d.reasoning;
+        if(reason!==undefined && reason!==null){
+          if(typeof reason!=="string")throw invalid();
+          reasoning+=reason;
+          if(reasoning.length>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+          try{onDelta?.({kind:"reasoning",text:reason});}catch{/* observer only */ }
+        }
+      }
+    }
+  };
+  const consume = (chunk:string) => {
+    pending+=chunk.replace(/\r\n/g,"\n");
+    if(pending.length>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+    let cursor:number;
+    while((cursor=pending.indexOf("\n\n"))>=0) {
+      const event=pending.slice(0,cursor);
+      pending=pending.slice(cursor+2);
+      const data=event.split("\n").filter(line=>line.startsWith("data:"))
+        .map(line=>line.slice(5).trimStart()).join("\n");
+      if(done && data.trim())throw invalid();
+      if(data)acceptEvent(data);
+    }
+  };
+  try {
+    while(!done) {
+      const chunk=await Promise.race([reader.read(),cancelled]);
+      if(signal.aborted)throw new DOMException("Generazione interrotta.", "AbortError");
+      if(chunk.done)break;
+      bytes+=chunk.value.byteLength;
+      if(bytes>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+      consume(decoder.decode(chunk.value,{stream:true}));
+    }
+    if(!done) {
+      consume(decoder.decode());
+      // A terminated connection without [DONE] is not an accepted result.
+      if(!done)throw invalid();
+    }
+    if(!text.trim())throw invalid();
+    completed=true;
+    return {choices:[{message:{content:text}}],usage};
+  } catch(e){
+    if(signal.aborted)throw new DOMException("Generazione interrotta.", "AbortError");
+    if(expired)throw timeout();
+    if(e instanceof ProviderResponseReadError)throw e;
+    throw invalid();
+  } finally {
+    if(timer!==undefined)clearTimeout(timer);
+    if(abortHandler)signal.removeEventListener("abort",abortHandler);
+    if(!completed){
+      try{void reader.cancel().catch(()=>{});}catch{/* ignore */ }
+    }
+    try{reader.releaseLock();}catch{/* ignore pending */ }
+  }
+}
