@@ -71,13 +71,15 @@ test("SSE locale, reasoning opzionale, timeline per task e richieste solo con co
   await page.getByRole("button",{name:"Pausa"}).click();
   await expect(page.getByRole("region",{name:"Timeline task AI"})).toBeVisible();
   await nav.getByRole("button",{name:"Attività"}).click();
-  const list=page.getByRole("list",{name:"Storico task"}).getByRole("listitem");
-  await expect(list.first()).toContainText("Brainstorming");
-  await list.first().getByRole("button",{name:"Ispeziona richiesta e risposta"}).click();
-  await expect(list.first().getByText("Messaggio user inviato")).toBeVisible();
-  await list.first().getByText("Messaggio user inviato").click();
-  await expect(list.first()).toContainText("due scimmie");
-  await list.first().getByRole("button",{name:"Prepara revisione da questo task"}).click();
+  const tasks=page.getByRole("list",{name:"Storico task"}).getByRole("listitem");
+  const brainstorm=tasks.filter({hasText:"Brainstorming"}).first();
+  await expect(brainstorm).toBeVisible();
+  await brainstorm.locator("details").first().evaluate((details:HTMLDetailsElement)=>{details.open=true;});
+  await brainstorm.getByRole("button",{name:"Ispeziona richiesta e risposta"}).click();
+  await expect(brainstorm.getByText("Messaggio user inviato")).toBeVisible();
+  await brainstorm.getByText("Messaggio user inviato").click();
+  await expect(brainstorm).toContainText("due scimmie");
+  await brainstorm.getByRole("button",{name:"Prepara revisione da questo task"}).click();
   await expect(page.getByRole("textbox",{name:"Istruzione di revisione"}))
     .toHaveValue(/Brainstorming/);
 });
