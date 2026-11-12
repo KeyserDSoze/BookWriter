@@ -4,6 +4,14 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Timeline interrogabile, metriche verificabili e isolamento locale — #162 / ADR 0136
+
+- Il **registro Attività** usa solo metadati delle `Activity` per ricerca, filtro stato/fase e ordinamento, non cerca mai dentro `output`, prompt system/user, reasoning, credenziali o segreti. Il Dashboard conserva una timeline compatta (ultimi otto task), dalla quale si entra nel registro completo.
+- Durata per task: differenza tra timestamp `createdAt` e `endedAt` validi, mai derivata da polling/UI in assenza di `endedAt`. **Stima €**: solo se la tariffa `priceRateSnapshot` è valida, corrisponde a `endpointId/modelId` e il provider ha comunicato **entrambi** i contatori token. Tentativi senza dati sono `incerti`, mai zero € o 0 token inventati; anche falliti/interrotti possono essere addebitati. Nessun repricing con tariffe correnti.
+- Ispezione IndexedDB dei messaggi sensibili: fencing per ticket che invalida completamenti obsoleti dopo click su altro task, cambio libro, disattivazione consenso o unmount; rendere contenuto solo se il `bookId` e `activityId` della traccia corrispondono esattamente a quelli della scheda corrente. `AiLocalTrace` resta locale e opt-in, non compare in ricerca, ZIP o GitHub. I test E2E desktop/mobile provano isolamento cross-book con dati sintetici.
+- Il filtro non modifica alcun libro o attività, non genera nuove POST AI e non concede rollback. I costi sono solo stime informative: il ledger fatturazione completo è #17, il rewind supervisionato #158. [ADR 0136](ADR/0136-task-timeline-filters-accounting.md) · [Guida](docs/ai-task-inspection.md).
+
+
 ### LM Studio native, streaming lento e reasoning per task — #160/#161 / ADR 0135
 
 - Il server LM Studio può generare reasoning per minuti prima del primo testo visibile. La deadline SSE per endpoint è configurabile 600–3600 secondi (default 600), separata dai timeout header/JSON. Vietato assumere che 0 caratteri equivalga a 0 token; contatori eventi/byte e fase devono provenire dalla rete. Senza testo finale il canone non è modificato.

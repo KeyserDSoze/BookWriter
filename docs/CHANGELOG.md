@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #162 (registro task interrogabile e costi trasparenti)
+
+- **Registro Attività:** ricerca limitata ai metadati (mai prompt/output sensibili), filtri stato/fase, ordinamento da nuovo a vecchio o viceversa, conteggio risultati e azzeramento rapido. Dashboard resta compatto e apre il registro completo.
+- **Durata e costo per task:** durata solo da timestamp persistiti validi; stima € solo se `priceRateSnapshot` storica valida e usage input/output entrambi comunicati dal provider, con numero di report stimabili e tentativi a costo incerto. I costi non rappresentano fatture o saldo crediti, nemmeno quando la chiamata è fallita.
+- **Privacy:** le letture asincrone di trascrizioni IndexedDB sono invalidate al cambio libro/consenso/selezione/unmount e ciascuna traccia richiede corrispondenza esatta bookId/activityId. Nessun nuovo upload, network, replay o tool. [ADR 0136](../ADR/0136-task-timeline-filters-accounting.md).
+
+
 ## Non rilasciato — #160/#161 (LM Studio nativo, timeout e reasoning per task)
 
 - Streaming SSE con limite per endpoint 600–3600 s (default storico 600). Diagnostica eventi/byte/fasi reali, errori espliciti, timer congelato al termine, nessuna applicazione al canone se il provider genera solo ragionamento senza risposta finale.

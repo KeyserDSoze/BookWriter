@@ -25,6 +25,15 @@ In **Trasparenza e ispezione delle richieste AI**, attiva **Ispezione locale ric
 
 ## 2. Vedere ciò che accade
 
+### Vista task completa (issue #162)
+
+Dal Dashboard premi **Apri registro completo e filtri** (oppure usa la scheda **Attività**). Puoi cercare per titolo, motivo, prossima azione, fase, modello, endpoint e run, filtrare per stato o fase, ordinare dal più vecchio al più recente, e **Azzera filtri** per tornare alla lista completa. La ricerca non esamina il testo del romanzo, le risposte AI o i prompt riservati: per questi ultimi usa **Ispeziona richiesta e risposta** dopo il consenso locale esplicito.
+
+Ogni attività conclusa mostra la **durata rilevata** soltanto se i timestamp di avvio/fine sono disponibili e coerenti. La **stima costo task** usa esclusivamente i token input/output realmente riferiti dal provider e la tariffa inserita dall'autore **al momento della chiamata**. Se manca anche un solo elemento, compare “non determinabile”, non zero. La panoramica distingue i report con costo stimabile dai tentativi senza certezza: una richiesta fallita o interrotta può comunque avere un costo. Gli importi non sono fatture ufficiali né saldi disponibili.
+
+Quando cambi libro, disattivi l'ispezione o selezioni un task differente mentre IndexedDB sta caricando una vecchia trascrizione, BookWriter scarta il risultato obsoleto. I messaggi system/user vengono mostrati solo nella scheda esatta del libro e del task di appartenenza. Le trace non sono incluse nei backup o nella sincronizzazione GitHub. Questa vista è in sola lettura: “Prepara revisione” non ripristina checkpoint passati (#158).
+
+
 Nel **Dashboard** trovi la timeline delle attività AI e una finestra **Streaming task corrente** con fase, modello, endpoint, secondi trascorsi, stato della chiamata e caratteri ricevuti. Se è stata attivata l'ispezione, compariranno anche i frammenti di risposta in arrivo e il reasoning fornito dal provider. **Il thinking non è garantito**: alcuni provider non inviano `reasoning_content`/`reasoning` e l'assenza di delta non prova che il modello non stia elaborando. Ogni testo parziale è **provvisorio e non canonico**; solo le attività confermate sono registrate come risultati applicati.
 
 In **Attività** ogni task ha un riquadro con obiettivo, risultato, modello/endpoint, eventuali token e pulsante **Ispeziona richiesta e risposta**. I messaggi system/user e la risposta sono disponibili soltanto per richieste future in cui l'ispezione era attiva. I limiti sono 120.000 caratteri per messaggio e per risposta, 20.000 per reasoning; un contenuto troncato viene segnalato. Le tracce sono salvate nella store IndexedDB `meta` locale e **non** entrano nei backup ZIP (nemmeno full), nel canone, in attività esportate, nell'outbox o su GitHub.

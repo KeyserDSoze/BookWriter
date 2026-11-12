@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Registro task avanzato (#162):** in Attività cerca per titolo, fase, motivo, endpoint/modello e run; filtra per stato/fase, ordina cronologicamente e consulta durate registrate, stime indicative solo con tariffa storica e usage completo, con conteggio dei tentativi incerti. Il caricamento asincrono di prompt e risposte locali è isolato tra libri. [Guida](docs/ai-task-inspection.md) · [ADR 0136](ADR/0136-task-timeline-filters-accounting.md).
+
+
 - **LM Studio nativo e reasoning per task (#160/#161):** protocollo locale `/api/v1/chat` selezionabile, eventi di prompt/reasoning/scrittura dal provider, timeout stream 10–60 minuti, reasoning Low/Medium/High per attività e override specifici per libro, controllo Web Lock/CAS. Default OpenAI-compatible invariato; nessun tool chiamato automaticamente. [Guida](docs/ai-task-inspection.md) · [ADR 0135](ADR/0135-native-lmstudio-task-reasoning.md).
 
 
