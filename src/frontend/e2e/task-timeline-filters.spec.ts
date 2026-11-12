@@ -260,6 +260,22 @@ test("copie canoniche opt-in: confronto esatto e revoca locale, desktop/mobile",
   const diff=prose.getByLabel("Differenze della prosa canonica");
   await expect(diff).toContainText("Scene canoniche: 1 prima, 1 dopo");
   await expect(diff).toContainText("1 con testo modificato");
+  const editorial=diff.getByRole("region",{name:"Confronto editoriale per scena"});
+  await expect(editorial).toContainText("Confronto editoriale dei paragrafi");
+  await expect(editorial.getByRole("region",{name:"Anteprima privata confronto paragrafi"}))
+    .toHaveCount(0);
+  await editorial.getByRole("button",{
+    name:/Seleziona scena chapter-optin \/ scene-optin/,
+  }).click();
+  // Even after scene selection, the author must explicitly reveal the prose.
+  await expect(page.getByText("PROSA_ANTE_OPERAZIONE_PRIVATA")).toHaveCount(0);
+  await editorial.getByRole("button",{name:"Mostra anteprima privata dei paragrafi"}).click();
+  const preview=editorial.getByRole("region",{name:"Anteprima privata confronto paragrafi"});
+  await expect(preview).toContainText("PROSA_ANTE_OPERAZIONE_PRIVATA");
+  await expect(preview).toContainText("PROSA_DOPO_OPERAZIONE_PRIVATA");
+  await editorial.getByRole("button",{name:"Nascondi anteprima privata"}).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.getByText("PROSA_ANTE_OPERAZIONE_PRIVATA")).toHaveCount(0);
   await expect(prose).not.toContainText("PROSA_ANTE_OPERAZIONE_PRIVATA");
   await expect(prose).not.toContainText("PROSA_DOPO_OPERAZIONE_PRIVATA");
   await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
@@ -306,6 +322,73 @@ test("copie canoniche opt-in: confronto esatto e revoca locale, desktop/mobile",
   expect(local.prose).toBeUndefined();
   expect(local.structural).toBeDefined();
   expect(local.book.chapters[0].scenes[0].text).toBe("PROSA_DOPO_OPERAZIONE_PRIVATA");
+});
+
+test("diff privato: cambio task e libro elimina il testo già rivelato, desktop/mobile",async({page})=>{
+  await page.goto("/");
+  const bookA=await createBook(page,"Libro A con confronto privato");
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption("");
+  const bookB=await createBook(page,"Libro B senza confronto");
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookA);
+  const nav=page.getByRole("navigation",{
+    name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
+  });
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const consent=page.getByRole("region",{name:"Consenso copie testuali per il rewind"});
+  await consent.getByRole("button",{name:"Attiva copie testuali locali per questo libro"}).click();
+  await expect(consent).toContainText("Stato per questo libro: attivo");
+  await page.evaluate(async id=>{
+    const {getBook,saveBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
+    const initial=await getBook(id);
+    if(!initial)throw Error("Libro A mancante");
+    const prepared=structuredClone(initial);
+    prepared.chapters=[{
+      id:"chapter-private",number:1,title:"Scena test",purpose:"Confronto",
+      scenes:[{id:"scene-private",number:1,title:"Scena",
+        objective:"Controllare",text:"TESTO_SINTETICO_INIZIALE",status:"canon"}],
+    }];
+    await saveBook(prepared,false,initial.updatedAt);
+    let current=await getBook(id);
+    if(!current)throw Error("Canone mancante");
+    for(const [index,value] of ["PROSA_PRIVATA_PRIMA_SCELTA",
+      "PROSA_PRIVATA_SECONDA_SCELTA"].entries()){
+      const updated=structuredClone(current);
+      updated.chapters[0].scenes[0].text=value;
+      await saveBookAndActivity(updated,{
+        id:"private-task-"+index+"-"+id,bookId:id,runId:"private-session",
+        phase:"prose",status:"succeeded",title:"Cambio editoriale "+index,
+        reason:"Prova",nextStep:"Controlla",
+        createdAt:index===0?"2026-11-12T10:00:00.000Z":"2026-11-12T10:01:00.000Z",
+      },current.updatedAt);
+      current=await getBook(id);
+      if(!current)throw Error("Canone perso");
+    }
+  },bookA);
+  await page.reload();
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const timeline=page.getByRole("region",{name:"Timeline task AI"});
+  await expect(timeline.getByRole("list",{name:"Storico task"})
+    .getByRole("listitem")).toHaveCount(2);
+  await timeline.getByRole("button",{name:"Apri scheda task"}).first().click();
+  const focus=timeline.getByRole("region",{name:"Scheda task dedicata"});
+  const prose=focus.getByRole("region",{name:"Confronto prosa canonica locale"});
+  await prose.getByRole("button",{name:"Carica confronto della prosa canonica"}).click();
+  const editorial=prose.getByRole("region",{name:"Confronto editoriale per scena"});
+  await editorial.getByRole("button",{name:/Seleziona scena chapter-private \/ scene-private/}).click();
+  await editorial.getByRole("button",{name:"Mostra anteprima privata dei paragrafi"}).click();
+  const preview=editorial.getByRole("region",{name:"Anteprima privata confronto paragrafi"});
+  await expect(preview).toContainText("PROSA_PRIVATA_SECONDA_SCELTA");
+  await focus.getByRole("button",{name:"Task successivo"}).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.getByText("PROSA_PRIVATA_SECONDA_SCELTA")).toHaveCount(0);
+  // New task never inherits the previously revealed prose or scene selection.
+  await prose.getByRole("button",{name:"Carica confronto della prosa canonica"}).click();
+  await expect(prose.getByText(/Scena selezionata: capitolo/)).toHaveCount(0);
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookB);
+  await expect(focus).toHaveCount(0);
+  await expect(page.getByText("PROSA_PRIVATA_PRIMA_SCELTA")).toHaveCount(0);
+  await expect(page.getByText("PROSA_PRIVATA_SECONDA_SCELTA")).toHaveCount(0);
+  await expect(consent).toContainText("Stato per questo libro: disattivato");
 });
 
 test("limite copie testuali: il task oltre quota non canonizza nulla, desktop/mobile",async({page})=>{

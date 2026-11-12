@@ -1,5 +1,13 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## Anteprima editoriale privata dei paragrafi prima/dopo — #169
+
+Per i task che dispongono già delle copie testuali locali, il confronto si apre in **Attività → Apri scheda task → Carica confronto della prosa canonica**. I conteggi delle scene modificate/aggiunte/rimosse **non mostrano il testo**. Apri il pannello **Confronto editoriale dei paragrafi**, premi **Seleziona scena…** scegliendo la coppia capitolo/scena e solo dopo premi **Mostra anteprima privata dei paragrafi**. L'app ricontrolla il consenso e la disponibilità del checkpoint locale: una copia eliminata o una revoca interrompono la rivelazione. **Nascondi anteprima privata** toglie il testo dalla pagina; anche scegliere un'altra scena, task o libro oppure revocare il consenso azzera la selezione e nasconde la prosa. I testi privati non vengono inseriti in ricerca, log, ZIP, GitHub né richieste AI.
+
+La vista confronta **paragrafi esatti**, non parole, e mostra i blocchi eliminati «Prima» e aggiunti «Dopo» con le rispettive posizioni. Una riscrittura di un paragrafo conta spesso come **due** blocchi. Per contenere il carico con scene molto lunghe, il calcolo è ammesso solo fino a **160 paragrafi e 300.000 caratteri per versione**; oltre tali limiti si comunica esplicitamente che il confronto dettagliato non è eseguito. Vengono visualizzati i **primi 32 blocchi** e, per paragrafi molto lunghi, le estremità di ogni blocco con avviso «anteprima abbreviata». Se ci sono ulteriori modifiche non renderizzate, il numero viene dichiarato. Le copie integrali già archiviate in IndexedDB **non vengono troncate né modificate**.
+
+**Non è il rewind:** il confronto non è una proposta di merge, non calcola dipendenze narrative o differenze dell'intero BookProject, non salva nuovi backup né consente di modificare o ripristinare il canone. Per il recupero/undo supervisionato e le verifiche downstream resta aperta la [#158](https://github.com/KeyserDSoze/BookWriter/issues/158). [ADR 0143](../ADR/0143-opt-in-paragraph-editorial-diff.md).
+
 ## Spazio, soglia e cancellazione selettiva delle copie della prosa — #168
 
 Per un libro con **consenso copie testuali attivo** (#167), apri **Attività → Spazio e conservazione delle copie testuali**, quindi premi **Aggiorna stima spazio locale**. La tabella riporta numero dei record, byte **stimati** dei payload JSON UTF-8 conservati **solo per quel libro** e una stima della prossima coppia prima/dopo **ipotizzando che la prosa attuale non cambi**. Non è il numero di byte fisici realmente occupati da IndexedDB, non è una lettura della quota totale del browser e **non predice** quanto potrebbe crescere il testo dopo la prossima AI.

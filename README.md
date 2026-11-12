@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Confronto editoriale a paragrafi per task (#169, non ancora release numerata):** in Attività, dopo aver caricato un checkpoint di prosa **opt-in**, puoi scegliere una scena canonica modificata, aggiunta o rimossa e poi rivelare deliberatamente un'anteprima privata dei paragrafi **prima/dopo**. Il diff è locale, allineato per paragrafi, esplicitamente limitato per testi molto lunghi e può essere nascosto subito. La prosa non compare prima di un secondo clic e viene rimossa dalla vista a cambio scena, task, libro o revoca. **Non** applica patch o restore; l'undo/fork con backup resta nella #158. [ADR 0143](ADR/0143-opt-in-paragraph-editorial-diff.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Archivio locale prosa: spazio e retention supervisionati (#168, non ancora release numerata).** In **Attività**, per i libri che hanno attivato le copie canoniche #167, puoi vedere la **stima** dei byte JSON UTF-8, impostare un limite facoltativo di 1–1024 MiB, oppure lasciarlo assente conservando tutta la cronologia. Il limite è verificato atomicamente al commit: se la nuova snapshot integrale lo supera, il task non viene applicato; non ci sono troncamenti o cancellazioni automatiche. Puoi selezionare fino a 20 copie alla volta e confermare esplicitamente la loro eliminazione, con marcatore locale di cancellazione senza testo; manoscritto e checkpoint strutturali rimangono intatti. Le stime **non** rappresentano l'occupazione fisica IndexedDB. [ADR 0142](ADR/0142-task-prose-storage-retention.md) · [Guida](docs/ai-task-inspection.md).
 
 

@@ -6,6 +6,7 @@ import {
 } from "../domain/task-structural-checkpoint";
 import { loadTaskStructuralCheckpoint } from "../infrastructure/task-structural-checkpoint";
 import { compareCanonProse, type TaskProseCheckpoint } from "../domain/task-prose-checkpoint";
+import { CanonProseEditorialDiff } from "./CanonProseEditorialDiff";
 import { validProseLimitMiB, PROSE_MIB } from "../domain/task-prose-storage";
 import {
   deleteSelectedTaskProse, loadTaskProseInventory, setTaskProseLimit,
@@ -491,11 +492,13 @@ export function AiTaskWorkspace({
               di conseguenze: potrebbero esserci date ambigue, revisioni non tracciate
               o capitoli dipendenti.</p>
           </>}
-        <p className="text-xs">Non esistono snapshot storiche prima/dopo per ogni task,
-          né un diff affidabile rispetto al passato. Nessun capitolo viene ripristinato
-          o sbloccato e non vengono inviate richieste AI. Usa «Prepara revisione»
-          solo come istruzione per il libro corrente; vero rewind, backup,
-          approvazioni e controllo delle conseguenze restano nella issue #158.</p>
+        <p className="text-xs">I nuovi task possono avere checkpoint strutturali;
+          le versioni testuali canoniche esistono solo con opt-in locale.
+          Il confronto di paragrafi è una vista parziale, non un backup
+          dell'intero progetto o un diff certificato delle conseguenze narrative.
+          Nessun capitolo viene ripristinato o sbloccato, né vengono inviate
+          richieste AI. «Prepara revisione» riguarda il libro corrente;
+          vero rewind, undo, approvazioni e controllo a valle restano #158.</p>
       </section>}
       <section aria-label="Confronto strutturale salvato"
         className="space-y-2 rounded-lg border border-slate-400/40 p-3 text-sm">
@@ -552,6 +555,9 @@ export function AiTaskWorkspace({
           <p className="muted">Si confronta esattamente il testo delle scene
             con lo stesso ID e capitolo. Non si ricostruiscono dipendenze,
             revisioni intermedie o una versione ripristinabile del libro.</p>
+          <CanonProseEditorialDiff
+            key={bookId+":"+proseCheckpoint.activityId}
+            checkpoint={proseCheckpoint}/>
         </div>}
       </section>
       <div className="flex flex-wrap gap-2" aria-label="Navigazione task">

@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #169 (diff editoriale di paragrafi a rivelazione privata)
+
+- In **Attività → scheda task**, dopo il caricamento volontario della snapshot canonica opt-in #167, elenco paginato delle sole scene **aggiunte, rimosse o con prosa modificata**, identificate da coppia capitolo/scena. La scelta di scena non espone testo; il pulsante **Mostra anteprima privata dei paragrafi** richiede un secondo gesto e ricontrolla la disponibilità/consenso locale prima della rivelazione. **Nascondi**, cambio scena/task/libro, revoca e cancellazione azzerano la prosa visibile.
+- LCS esatto su paragrafi preservando spazi/separatori: blocchi prima/dopo, posizioni e conteggio delle differenze. Lavoro limitato a 160 paragrafi per lato e 300.000 caratteri per lato; altrimenti nessuna falsa comparazione. Fino a 32 blocchi renderizzati con anteprime individuali abbreviate e **conteggi espliciti** di quelli omessi. Tutto locale, senza nuova richiesta AI o manipolazione del manoscritto.
+- Test Vitest, Playwright desktop/mobile, ADR 0143 e documenti. Questo confronto **non** è word-diff, backup, merge, undo, fork o rewind autorizzato; #158 rimane aperta. [ADR 0143](../ADR/0143-opt-in-paragraph-editorial-diff.md).
+
 ## Non rilasciato — #168 (quota e retention snapshot locali)
 
 - In **Attività → Copie locali della prosa canonica**, riepilogo manuale per libro di copie e dimensione **stimata** dei payload JSON UTF-8, più preventivo di una coppia prima/dopo **a prosa invariata**; non sono misure fisiche di IndexedDB, né previsioni garantite dei testi futuri.
