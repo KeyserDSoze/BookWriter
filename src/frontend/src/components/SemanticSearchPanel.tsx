@@ -115,10 +115,10 @@ export function SemanticSearchPanel({ book, settings }: Props) {
       setMatches(results);setResultKind("query");
       setStatus(`Trovati ${results.length} passaggi ordinati per vicinanza semantica (non è un giudizio di verità).`);
     } catch(e) {
-      if (!controller.signal.aborted) setStatus(e instanceof Error ? e.message : "Ricerca non riuscita.");
+      if(!controller.signal.aborted&&abortRef.current===controller)
+        setStatus(e instanceof Error?e.message:"Ricerca non riuscita.");
     } finally {
-      if (abortRef.current === controller) abortRef.current=null;
-      setBusy(null);
+      if(abortRef.current===controller){abortRef.current=null;setBusy(null);}
     }
   };
 

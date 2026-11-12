@@ -28,7 +28,12 @@ export function sampleSemanticPassages(text: string): ScenePassageSample {
       if(end<=start)throw new Error("Impossibile suddividere una scena per la ricerca.");
       spans.push([start,end]);start=end;
     }
-  } else {
+  }
+  // UTF-16 surrogate boundaries can make a 4200-unit scene require four
+  // contiguous 1400-unit pieces. In that edge case sample three regions and
+  // declare the uncovered units rather than exceeding the request budget.
+  if(spans.length===0 || spans.length>MAX_SCENE_EMBED_PASSAGES) {
+    spans.length=0;
     const starts=[0,Math.floor((source.length-size)/2),source.length-size];
     for(const originalStart of starts) {
       let start=originalStart;
