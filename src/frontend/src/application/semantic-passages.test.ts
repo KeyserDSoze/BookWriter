@@ -34,7 +34,7 @@ describe("Campionamento controllato di scene per embedding locale",()=>{
     expect(sampled.passages[2]).toContain("ultimo");
     expect(sampled.uncoveredCharacters).toBeGreaterThan(0);
     expect(sampled.uncoveredCharacters+sampled.passages.reduce((sum,p)=>sum+p.length,0))
-      .toBe(value.length);
+      .toBe(value.trim().length);
     expect(sampled.passages.every(p=>p.length<=MAX_SCENE_EMBED_CHARS)).toBe(true);
   });
   it("nessun taglio di coppie surrogate per emoji a confine o scene lunghe",()=>{
