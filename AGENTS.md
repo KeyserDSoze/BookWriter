@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Embedding per scene lunghe: tre passaggi campionati — #154 / ADR 0133
+
+- `sampleSemanticPassages` prepara solo prosa **canonica**, max 80 scene, max **3 passaggi da 1.400 code unit UTF-16** per scena (inizio/centro/fine se supera la copertura integrale): quindi max **240 vettori** su `POST /embeddings`, lotti seriali da 8 su loopback. Non spezzare coppie surrogate; le zone non indicizzate vanno **dichiarate**, non trattate come prova d'assenza. Nessun testo di bozze, memoria, audit o segreti viene usato.
+- `rankSemanticPassages` prende la similarità migliore fra i passaggi di ciascuna scena, un solo risultato per scena, mostra l'estratto effettivamente correlato e numero del passaggio. `relatedSemanticPassages` confronta in memoria tutti i passaggi della scena di riferimento contro quelli delle altre, esclude la fonte: **zero POST aggiuntive**. Validazione rigida su vettori, conteggio e dimensione, no scoring su indice parziale.
+- Annullamento/fencing impedisce che richieste obsolete approvino indici, risultati o reset di UI successivi; vettori solo in RAM e invalidati a cambio libro/revisione/endpoint, nessun automatic RAG o giudizio di verità. Test Vitest e Playwright desktop/mobile con ricerca nel finale, limiti 240 e privacy. [ADR 0133](ADR/0133-long-scene-semantic-passage-sampling.md) · [guida](docs/semantic-voice-workspace.md).
+
+
 ### Release 0.11.90 — #145
 
 - Manifest e lockfile generati da [runner ufficiale npm #43130023179](https://github.com/KeyserDSoze/BookWriter/actions/runs/43130023179) `completed/success`: Node22/npm10, registry ufficiale; solo versione root 0.11.89→0.11.90, **235 voci** npm v3, `resolved`, `integrity` e transitive immutati. SHA-256 manifest `0e9d9e1891384d0a41d58541f30d75097e16c55a56200acd496e3241b1f27846`; lock `64093bba97d7b0167ac8108c91af0701fe200dc343e78ebe19efc5f1f3798816`.

@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #154
+
+- **Embedding: inizio, centro e finale delle scene lunghe.** Il limite precedente di 1.400 caratteri iniziali diventa una selezione di max tre passaggi non duplicati per scena canonica; fino a 80 scene e max **240** embedding per indicizzazione esplicita su localhost. Il testo non coperto è dichiarato. Le scene brevi vengono indicizzate integralmente.
+- Ricerca per domanda e confronto scena-scena ora scelgono **il passaggio più vicino** per ciascuna scena, riportando estratto e posizione; il confronto usa soltanto vettori RAM, senza nuove POST. Validazione e fencing su risposte/cancellazioni, test Vitest e browser desktop/mobile. Nessun provider remoto, salvataggio o modifica del canone; qualità semantica reale su LM Studio ancora da verificare. [ADR 0133](../ADR/0133-long-scene-semantic-passage-sampling.md).
+
+
 ## 0.11.90 — 2026-11-12 (main, issue #145)
 
 **Release riproducibile:** [runner ufficiale npm #43130023179](https://github.com/KeyserDSoze/BookWriter/actions/runs/43130023179) `completed/success`; Node 22/npm 10 su registry ufficiale, `npm version 0.11.90 --no-git-tag-version --ignore-scripts`, `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`, lockfile npm v3 **235 voci**: soltanto la versione root cambia, nessuna differenza in transitive, URL `resolved` o hash `integrity`. Due `npm ci` puliti, ognuno con 866 Vitest, 9 smoke, typecheck e build. Manifest SHA-256 `0e9d9e1891384d0a41d58541f30d75097e16c55a56200acd496e3241b1f27846`, lock SHA-256 `64093bba97d7b0167ac8108c91af0701fe200dc343e78ebe19efc5f1f3798816`.

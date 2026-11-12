@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Indicizzazione semantica di scene lunghe (#154, non ancora in release numerata):** da Libro → Ricerca semantica, scene canoniche lunghe vengono campionate in **inizio, centro e finale**, fino a tre estratti per scena e massimo 240 vettori per libro. I risultati mostrano il passaggio corrispondente; la continuità riusa l'indice senza nuove chiamate, avvertendo delle parti non coperte. [Guida](docs/semantic-voice-workspace.md) · [ADR 0133](ADR/0133-long-scene-semantic-passage-sampling.md).
+
+
 - **Release locale-first 0.11.90 (#145)**: Node 22/npm 10, doppio `npm ci` e 866 Vitest per ciclo. Include gate dossier storico #144, LM Studio no-key #146, ruoli AI #147, embedding locali #148 e scene collegate #153, lettura browser #149/#151 e CI sharded #152. [runner ufficiale npm #43130023179](https://github.com/KeyserDSoze/BookWriter/actions/runs/43130023179). Il frontend è `private:true`: release del sito Pages, **non** pubblicazione al registro npm.
 
 
