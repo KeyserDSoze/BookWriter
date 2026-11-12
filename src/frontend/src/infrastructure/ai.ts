@@ -5,6 +5,7 @@ import { validTokenCount } from "../domain/ai-usage";
 import { assertChatModelCapability } from "../domain/model-capabilities";
 import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
+import { chatReasoningEffort, chatStreamMode, readChatCompletionStream, type AiStreamDelta } from "./ai-stream";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
 
 export type ModelAnswer = {
@@ -79,7 +80,7 @@ export async function callModel(
   settings: AppSettings,
   book: BookProject,
   signal: AbortSignal,
-  options?: { maxOutputTokens?: number },
+  options?: { maxOutputTokens?: number; onProgress?: (delta: AiStreamDelta) => void; onHeaders?: () => void },
 ): Promise<ModelAnswer> {
   const assignment = routeFor(kind, settings, book);
   const endpoint = settings.endpoints.find(p => p.id === assignment.endpointId);
@@ -88,6 +89,8 @@ export async function callModel(
   assertChatModelCapability(endpoint, assignment.modelId);
   // Fail closed on malformed local/imported settings before decrypting or POST.
   const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
+  const effort = chatReasoningEffort(endpoint.reasoningEffort);
+  const streaming = chatStreamMode(endpoint.streamMode) === "sse";
   if (options?.maxOutputTokens !== undefined &&
       (!Number.isSafeInteger(options.maxOutputTokens) ||
         options.maxOutputTokens < 1 || options.maxOutputTokens > 32_768)) {
@@ -116,6 +119,8 @@ export async function callModel(
         model: assignment.modelId,
         messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
         ...(options?.maxOutputTokens !== undefined ? { [outputField]: options.maxOutputTokens } : {}),
+        ...(effort === undefined ? {} : { reasoning_effort: effort }),
+        ...(streaming ? { stream: true, stream_options: { include_usage: true } } : {}),
       }),
       credentials: "omit",
       referrerPolicy: "no-referrer",
@@ -143,7 +148,10 @@ export async function callModel(
     throw new Error(reason);
   }
 
-  const payload = await readChatCompletionJson(response, signal);
+  try{options?.onHeaders?.();}catch{/* observers are optional */}
+  const payload = streaming && /^text\/event-stream\b/i.test(response.headers.get("content-type")??"")
+    ? await readChatCompletionStream(response, signal, options?.onProgress)
+    : await readChatCompletionJson(response, signal);
   if (!payload || typeof payload !== "object") throw new Error("Risposta AI non valida.");
   const data = payload as {
     choices?: unknown;

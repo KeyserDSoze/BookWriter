@@ -39,6 +39,10 @@ export interface EndpointProfile {
   headerTimeoutSeconds?: number;
   /** OpenAI-compatible Chat Completions output cap parameter, legacy max_tokens. */
   outputTokenParameter?: "max_tokens" | "max_completion_tokens";
+  /** Explicit SSE mode for Chat Completions. */
+  streamMode?: "off" | "sse";
+  /** Optional OpenAI-compatible reasoning_effort (provider dependent). */
+  reasoningEffort?: "low" | "medium" | "high" | "xhigh";
 }
 export interface ModelRoute { endpointId: string; modelId: string; }
 /** User-entered tariff (not verified against provider invoices). */
@@ -77,6 +81,8 @@ export interface AppSettings {
   /** Selected defaults for future adapters; Chat continues to use defaultRoute. */
   capabilityRoutes?: Partial<Record<AuxiliaryModelCapability, ModelRoute>>;
   aiPriceRates?: AiPriceRate[];
+  /** Author opt-in: retain sensitive prompts/replies in local IndexedDB meta. */
+  inspectAiRequests?: boolean;
   theme: "dark" | "light" | "system";
 }
 export interface Scene {

@@ -315,6 +315,8 @@ const backupSchema = z.object({
       headerTimeoutSeconds: z.number().int().min(MIN_CHAT_HEADER_TIMEOUT_SECONDS)
         .max(MAX_CHAT_HEADER_TIMEOUT_SECONDS).optional(),
       outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
+      streamMode: z.enum(["off","sse"]).optional(),
+      reasoningEffort: z.enum(["low","medium","high","xhigh"]).optional(),
       authMode: z.enum(["api_key", "none"]).optional(),
       modelCapabilities: z.record(z.string(), z.array(
         z.enum(["chat", "tools", "embedding", "voice"]),
@@ -359,6 +361,7 @@ type BackupData = {
     theme: AppSettings["theme"];
     endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number;
       outputTokenParameter?: "max_tokens" | "max_completion_tokens"; authMode?: "api_key" | "none";
+      streamMode?: "off" | "sse"; reasoningEffort?: "low" | "medium" | "high" | "xhigh";
       modelCapabilities?: AppSettings["endpoints"][number]["modelCapabilities"] }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
@@ -477,6 +480,8 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
         modelCapabilities: endpoint.modelCapabilities,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
+        streamMode: endpoint.streamMode,
+        reasoningEffort: endpoint.reasoningEffort,
 
         authMode: endpoint.authMode,
         apiKey: endpoint.authMode === "none" ? null :
@@ -637,6 +642,8 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
         modelCapabilities: endpoint.modelCapabilities,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
+        streamMode: endpoint.streamMode,
+        reasoningEffort: endpoint.reasoningEffort,
 
         authMode: endpoint.authMode,
         secret: endpoint.authMode === "none" ? null :

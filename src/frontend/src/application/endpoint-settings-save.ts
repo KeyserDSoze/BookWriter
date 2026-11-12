@@ -1,6 +1,7 @@
 import type { AppSettings, EncryptedSecret } from "../domain/types";
 import { chatOutputTokenParameter, endpointAuthMode, normalizeEndpoint } from "../infrastructure/ai";
 import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
+import { chatReasoningEffort, chatStreamMode } from "../infrastructure/ai-stream";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
 
 export interface EndpointSettingsSnapshot {
@@ -51,6 +52,8 @@ export class EndpointSettingsSaveCoordinator {
         const baseUrl = normalizeEndpoint(profile.baseUrl);
         chatHeaderTimeoutSeconds(profile.headerTimeoutSeconds);
         chatOutputTokenParameter(profile.outputTokenParameter);
+        chatReasoningEffort(profile.reasoningEffort);
+        chatStreamMode(profile.streamMode);
         const authMode = endpointAuthMode(profile.authMode, baseUrl);
         return { profile, baseUrl, authMode };
       });
