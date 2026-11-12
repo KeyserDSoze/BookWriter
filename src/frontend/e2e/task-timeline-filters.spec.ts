@@ -106,6 +106,8 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
 test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{
   await page.goto("/");
   const bookA=await createBook(page,"Libro A privato");
+  // The new-book form is hidden while an existing book is selected.
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption("");
   const bookB=await createBook(page,"Libro B pubblico");
   await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookA);
   await page.evaluate(async({id})=>{
