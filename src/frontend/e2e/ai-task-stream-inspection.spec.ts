@@ -30,7 +30,7 @@ test("SSE locale, reasoning opzionale, timeline per task e richieste solo con co
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();complete=true;
             }catch{/* cancelled by browser */}
-          },2400);
+          },4000);
         },
         cancel(){complete=true;},
       });
@@ -79,5 +79,5 @@ test("SSE locale, reasoning opzionale, timeline per task e richieste solo con co
   await expect(list.first()).toContainText("due scimmie");
   await list.first().getByRole("button",{name:"Prepara revisione da questo task"}).click();
   await expect(page.getByRole("textbox",{name:"Istruzione di revisione"}))
-    .toContainText("Brainstorming");
+    .toHaveValue(/Brainstorming/);
 });
