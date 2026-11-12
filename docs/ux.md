@@ -4,8 +4,8 @@
 
 - **Accesso**: “Continua con Google” e “Continua con Microsoft” oppure “Modalità locale” (facoltativa, senza sync cloud), spiegando che accesso non oscura il sito statico. Le connessioni OAuth abilitano i servizi cloud.
 - **Libreria**: libri locali/remoti, ultima modifica, provider cloud, stato sync, import da repository, nuovo libro.
-- **Nuovo libro**: brief libero esteso, materiale di ricerca, temi, vincoli, lunghezza, stile, POV, audience, lingua e piano capitoli opzionale.
-- **Dashboard**: autopilot, progressi, task corrente e prossimo, costi, sincronia, criticità, suggerimenti.
+- **Nuovo libro**: due strade — da un'idea (anche solo titolo e una frase, numero di capitoli facoltativo) o da una sinossi capitolo per capitolo vincolante con anteprima dei capitoli rilevati; stile, audience e pausa facoltativa per approvare il piano.
+- **Dashboard**: pannello «Lavoro dell'autopilot» con fasi, avanzamento, cosa sta facendo/perché/poi o prossimo passo, streaming con diagnostica richiudibile; pannello «Intervieni sull'autopilot» con le tre modalità e il registro degli interventi; ultimi task; sezione richiudibile con brief, redazione, costi, memoria e sincronizzazione.
 - **Attività**: log ad albero fase > azione, summary e output, avanzamento osservabile; feedback contestuale e “correggi questo”.
 - **Libro**: reader a capitoli e scene, diff, edit, canon e anteprima EPUB/PDF/DOCX.
 - **Atlante**: personaggi, luoghi, fazioni, oggetti, timeline, segreti (author-only) e conoscenza per capitolo.

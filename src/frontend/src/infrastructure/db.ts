@@ -94,6 +94,28 @@ export async function saveActivity(activity: Activity): Promise<void> {
   await db.put("activities", activity, activity.id);
 }
 
+/** Author-side change plus its log entry, CAS-checked in one transaction.
+ * Unlike AI tasks it creates no structural/prose checkpoint: a note must
+ * never be refused because of the opt-in prose snapshot quota. */
+export async function saveBookWithAuthorActivity(
+  book: BookProject, activity: Activity, expectedUpdatedAt: string,
+): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
+  void tx.done.catch(() => {});
+  const books = tx.objectStore("books");
+  const stored = await books.get(book.id) as BookProject | undefined;
+  if (!stored || stored.updatedAt !== expectedUpdatedAt) {
+    await tx.done;
+    throw new BookRevisionConflict();
+  }
+  book.updatedAt = revisionTimestamp(stored);
+  await books.put(book, book.id);
+  await tx.objectStore("activities").put(activity, activity.id);
+  await enqueueCheckpoint(book, tx.objectStore("outbox"));
+  await tx.done;
+}
+
 export async function saveBookAndActivity(
   book: BookProject, activity: Activity, expectedUpdatedAt?: string,
 ): Promise<void> {

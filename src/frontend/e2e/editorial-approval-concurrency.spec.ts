@@ -121,7 +121,7 @@ test("due tab: la conferma della scena segue il writer lock e non duplica audit 
 
     page.once("dialog", dialog => { void dialog.accept(); });
     await page.getByRole("button", { name: "Conferma scena come canonica" }).click();
-    await expect(page.getByText("(canon)")).toBeVisible();
+    await expect(page.getByText("(canonica)")).toBeVisible();
     expect((await status(page)).audits.filter(x => x.title === "Conferma editoriale della scena"))
       .toHaveLength(1);
 

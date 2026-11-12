@@ -1,5 +1,30 @@
 # Motore autopilot e human-in-the-loop
 
+## Come si usa: partire, seguire il lavoro, fermarsi e intervenire (ADR 0146)
+
+**Partire.** In Dashboard, «Nuovo libro» offre due strade:
+
+- **Da un'idea** — basta un titolo e anche una sola frase. L'autopilot costruisce premessa, personaggi e trama (brainstorming su tre orizzonti, validazione, cinque lettori simulati, critica avversaria), poi il piano di capitoli e scene. Puoi indicare un numero di capitoli.
+- **Da una sinossi capitolo per capitolo** — scrivi cosa succede in ogni capitolo («Capitolo 1: Titolo» + testo, «Cap. II», «# Titolo», un elenco «1. …» oppure un paragrafo per capitolo separato da una riga vuota). L'anteprima mostra i capitoli rilevati prima di creare il libro. Numero, ordine e titoli sono **vincolanti**: l'ideazione arricchisce senza cambiare gli eventi, il piano deve avere esattamente quei capitoli e ogni scena riceve la sinossi del suo capitolo.
+
+Con «Fermati dopo il piano dei capitoli» l'autopilot si ferma appena il piano è pronto: lo rileggi nella pagina Libro e riprendi, oppure chiedi di rifarlo con un intervento «Rivedi anche il già scritto».
+
+**Seguire il lavoro.** Il pannello «Lavoro dell'autopilot» mostra le fasi (Ideazione → Piano → Scrittura → Redazione → Completato), scene canoniche, capitoli congelati e parole scritte. Mentre lavora dice in chiaro **su cosa sta lavorando** (es. «Scrittura della scena 2 del capitolo 3 «Il porto»» con l'obiettivo), **perché** e **cosa farà dopo**, con tempo trascorso e stato della richiesta al modello; da fermo indica il **prossimo passo** e cosa puoi fare. La barra in alto, presente in tutte le pagine, riassume stato e passo.
+
+**Fermarsi.** «Pausa» interrompe subito la richiesta in corso: niente testo viene applicato, ma il provider potrebbe addebitarla. «Ferma a fine task» lascia completare e salvare il task in corso e si ferma prima del successivo. Solo la scheda che ha avviato l'autopilot può fermarlo.
+
+**Intervenire.** Nel pannello «Intervieni sull'autopilot» scrivi un prompt e scegli come applicarlo:
+
+| Modalità | Effetto |
+| --- | --- |
+| Solo per il prossimo passo | Nota inviata al prossimo task di **scrittura** (anche se ripete quello interrotto), poi segnata come applicata. I revisori indipendenti, i cinque lettori ciechi, il direttore e le sinossi non la ricevono: se il prossimo passo è una verifica, la nota attende il primo task di scrittura o correzione. |
+| Da ora in poi | Vincolo inderogabile per tutti i task successivi (anche specialisti e direttore). Nessuna riscrittura del testo esistente. |
+| Rivedi anche il già scritto | Vincolo + analisi d'impatto, riscrittura delle scene coinvolte e delle successive, aggiornamento della memoria e nuova redazione dei capitoli toccati. Se esiste solo il piano, viene rifatto il piano. Non disponibile mentre la redazione applica correzioni o è bloccata (usa il pannello Redazione). |
+
+Mentre l'autopilot lavora puoi usare «Interrompi e registra intervento»; da fermo «Registra intervento» oppure «Registra e continua». Ogni intervento è conservato nel libro con data, passo in corso, eventuale task interrotto ed esito, compare nel registro Attività ed è incluso nei backup ZIP e nel repository GitHub (`context.md`). Una nota puntuale non è una prova né un ripristino: è un'istruzione dell'autore al modello.
+
+**Revisioni più sicure.** Se l'analisi d'impatto non trova scene già scritte da cambiare, nulla viene riscritto e la revisione si chiude senza altre chiamate AI. Due revisioni richieste di seguito vengono fuse. Dopo le riscritture la memoria narrativa viene riallineata con una vera chiamata di consolidamento.
+
 ## Nessuna canonizzazione AI dopo una scrittura concorrente (#142)
 
 Una risposta del provider può arrivare dopo che l'autore o un'altra scheda/import ha aggiornato il romanzo. L'autopilot controlla il libro prima di approvare il risultato e **verifica di nuovo la revisione dentro la transazione IndexedDB** che salva insieme prosa/canon e Activity. La transazione non può sovrascrivere il canone più recente se nel frattempo è avvenuta una modifica, anche nel piccolo intervallo tra il controllo applicativo e il commit.

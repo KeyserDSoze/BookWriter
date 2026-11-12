@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run src",
     "smoke": "node --test ./tests/*.test.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:live": "playwright test --project=live-lmstudio --reporter=list"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.3",

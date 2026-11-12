@@ -62,12 +62,18 @@ export function projectBook(book: BookProject, activities: Activity[]): Narrariu
   }) + "# " + book.title + "\n\n## Premessa\n\n" + book.brief + "\n\n## Pubblico\n\n" + book.audience + "\n";
   files["context.md"] = yaml({ type: "context", id: "context:" + book.id }) +
     "# Contesto e vincoli\n\n" + book.brief + "\n\n## Vincoli prioritari dell'autore\n\n" +
-    (book.authorConstraints?.map(x => "- " + x).join("\n") || "Nessuno") + "\n";
+    (book.authorConstraints?.map(x => "- " + x).join("\n") || "Nessuno") + "\n" +
+    ((book.authorInterventions?.length ?? 0) > 0 ? "\n## Interventi dell'autore\n\n" +
+      book.authorInterventions!.map(x => "- " + x.createdAt + " (" + x.scope + ", durante: " + x.stepLabel + "): " +
+        x.instruction.replace(/\n/g, " ")).join("\n") + "\n" : "");
   files["ghostwriters/default.md"] = yaml({ type: "ghostwriter", id: "ghostwriter:default", name: "BookWriter default" }) +
     "# Contratto stilistico\n\n" + book.writingStyle + "\n";
   files["guidelines/writing-style.md"] = "# Indicazioni vincolanti\n\n" + book.writingStyle + "\n";
   files["ideas.md"] = "# Idee e brainstorming\n\n" + (book.ideas ?? "Non ancora generato.") + "\n";
   files["story-design.md"] = "# Progetto del libro\n\n" +
+    (book.startMode === "synopsis" && book.authorChapterSynopses?.length ? "## Sinossi vincolante dell'autore\n\n" +
+      book.authorChapterSynopses.map((x, i) => (i + 1) + ". " + (x.title ? x.title + " — " : "") + x.synopsis).join("\n") +
+      "\n\n## Piano dei capitoli\n\n" : "") +
     (book.chapters.map(c => "## " + c.number + ". " + c.title + "\n\n" + c.purpose).join("\n\n") || "Pianificazione da completare.") + "\n";
   files["plot.md"] = "# Trama e avanzamento\n\n" +
     (book.chapters.map(c => "## Capitolo " + num(c.number) + " — " + c.title + "\n" +

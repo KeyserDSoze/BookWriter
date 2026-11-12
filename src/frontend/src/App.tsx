@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, BookOpen, BrainCircuit, CheckCircle2, Cloud, Database,
-  FileText, Github, LayoutDashboard, ListChecks, Moon, Pause, Play, Plus,
-  RefreshCw, Settings2, Sun, Users, WandSparkles, Download, Upload, ShieldCheck, FileArchive,
+  BookOpen, BrainCircuit, CheckCircle2, Database,
+  FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
+  RefreshCw, Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
-import { AutopilotRunner, requestRevision } from "./application/autopilot";
+import { AutopilotRunner } from "./application/autopilot";
+import { recordAuthorIntervention } from "./application/author-intervention";
 import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
+import { AutopilotFocusPanel } from "./components/AutopilotFocusPanel";
+import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSubmitMode } from "./components/AuthorInterventionPanel";
+import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
 import { clearAiTraces, currentLiveAi, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
 import { confirmEditorialScene } from "./application/editorial-review";
-import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind, type TaskReasoning } from "./domain/types";
+import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
 import { declaredModelCapabilities } from "./domain/model-capabilities";
+import { bookProgress, describeNextAutopilotStep } from "./domain/autopilot-step";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
 import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./infrastructure/ai-header-timeout";
-import { listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
+import { getBook, listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
 import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
@@ -56,6 +61,9 @@ const phaseText: Record<BookProject["phase"], string> = {
   adversarial: "Adversarial review", outline: "Outline", prose: "Scrittura scena",
   review: "Review scena", consolidate: "Consolidamento canon", chapterReview: "Redazione indipendente del capitolo", revision: "Revisione autore", completed: "Completato",
 };
+const sceneStatusText: Record<Scene["status"], string> = {
+  planned: "pianificata", draft: "bozza", canon: "canonica",
+};
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return <section className="panel min-w-0 p-4 sm:p-5">
@@ -96,11 +104,10 @@ export default function App() {
   }
   const latestModelInventoryRequest = useRef<Record<string, number>>({});
   const endpointSettingsSave = useRef(new EndpointSettingsSaveCoordinator()).current;
-  const [title, setTitle] = useState("");
-  const [brief, setBrief] = useState("");
-  const [writingStyle, setWritingStyle] = useState("Narrativa immersiva, concreta, coerente; niente cliché.");
-  const [audience, setAudience] = useState("Lettori adulti");
   const [intervention, setIntervention] = useState("");
+  const [interventionScope, setInterventionScope] = useState<AuthorInterventionScope>("next_step");
+  const [interventionBusy, setInterventionBusy] = useState(false);
+  const interventionRef = useRef<HTMLTextAreaElement>(null);
   const [notice, setNotice] = useState("");
   // On a rejected edit IndexedDB may still have the same revision as React.
   // Force only the affected uncontrolled model input to remount and display
@@ -113,11 +120,21 @@ export default function App() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const runner = useRef(new AutopilotRunner()).current;
+  // Only the tab that started the runner can pause it: track its book here.
+  const [runnerBookId, setRunnerBookId] = useState<string | null>(null);
+  const [stopAfterRequested, setStopAfterRequested] = useState(false);
+  const runPromise = useRef<Promise<void> | null>(null);
+  // "+ Nuovo libro" is an explicit choice: periodic refreshes must not undo it.
+  const creatingNewBook = useRef(false);
 
   const refresh = useCallback(async () => {
     const all = await listBooks();
     setBooks(all);
-    setSelectedId(prev => prev || all[0]?.id || "");
+    setSelectedId(prev => {
+      if (prev && all.some(book => book.id === prev)) return prev;
+      if (!prev && creatingNewBook.current) return "";
+      return all[0]?.id ?? "";
+    });
   }, []);
   useEffect(() => {
     void (async () => {
@@ -163,44 +180,128 @@ export default function App() {
   }, [settings.theme]);
 
   const current = useMemo(() => books.find(x => x.id === selectedId), [books, selectedId]);
-  const latestActivity = activities.find(x => x.status === "running") ?? activities[0];
-  const allScenes = current?.chapters.flatMap(c => c.scenes) ?? [];
-  const doneScenes = allScenes.filter(s => s.status === "canon").length;
-  const progress = allScenes.length ? Math.round(doneScenes / allScenes.length * 100) : null;
+  const runningActivity = current?.status === "running" ? activities.find(x => x.status === "running") : undefined;
+  const runningHere = !!current && runnerBookId === current.id;
+  const nextStep = useMemo(() => current ? describeNextAutopilotStep(current) : undefined, [current]);
+  const progressInfo = useMemo(() => current ? bookProgress(current) : undefined, [current]);
+  const pendingFused = current?.editorialReviewSceneIds?.length ?? 0;
+  const modelWarning = useMemo(() => {
+    const route = settings.defaultRoute;
+    const endpoint = settings.endpoints.find(e => e.id === route.endpointId);
+    if (!endpoint) return "Nessun endpoint AI predefinito: configuralo nelle Impostazioni prima di avviare.";
+    if (!route.modelId.trim()) return "Nessun modello predefinito: scegline uno nelle Impostazioni prima di avviare.";
+    try {
+      if (endpointAuthMode(endpoint.authMode, endpoint.baseUrl) === "api_key" && !endpoint.secret)
+        return "L'endpoint predefinito non ha una API key salvata: inseriscila nelle Impostazioni.";
+    } catch { return "L'endpoint predefinito non è valido: correggilo nelle Impostazioni."; }
+    return undefined;
+  }, [settings]);
+  useEffect(() => {
+    // A scope that became unavailable (e.g. book completed) switches to a usable one.
+    if (!current || !interventionScopeBlocker(current, interventionScope)) return;
+    const usable = (["next_step", "from_now", "rewrite"] as const).find(scope => !interventionScopeBlocker(current, scope));
+    if (usable) setInterventionScope(usable);
+  }, [current, interventionScope]);
 
-  async function createProject() {
-    if (!brief.trim()) { setNotice("Inserisci una descrizione iniziale del libro."); return; }
-    const book = newBook(brief, title, writingStyle, audience);
-    await saveBook(book); await refresh(); setSelectedId(book.id);
-    setBrief(""); setTitle(""); setNotice("Libro creato in IndexedDB. Configura un modello e avvia l'autopilot.");
+  async function createProject(draft: NewBookDraft): Promise<boolean> {
+    const book = newBook(draft.brief, draft.title, draft.writingStyle, draft.audience, draft.options);
+    try { await saveBook(book); }
+    catch { setNotice("Impossibile salvare il libro in IndexedDB."); return false; }
+    creatingNewBook.current = false;
+    await refresh(); setSelectedId(book.id);
+    setNotice("Libro creato in IndexedDB. Configura un modello e avvia l'autopilot.");
+    return true;
   }
-  async function execute() {
+  function startRunner(bookId: string) {
+    if (runner.running) {
+      setNotice(runnerBookId && runnerBookId !== bookId
+        ? "L'autopilot sta già lavorando su un altro libro: mettilo in pausa prima di avviarne un altro."
+        : "L'autopilot è già in esecuzione.");
+      return;
+    }
+    setRunnerBookId(bookId);
+    setStopAfterRequested(false);
+    const promise: Promise<void> = runner.run(bookId, async () => { await refresh(); void drainGitHubOutbox(); })
+      .catch(e => setNotice(e instanceof Error ? e.message : "Errore di esecuzione."))
+      .finally(async () => {
+        const gracefulStop = runner.stopAfterCurrentRequested;
+        setRunnerBookId(null);
+        setStopAfterRequested(false);
+        if (runPromise.current === promise) runPromise.current = null;
+        if (gracefulStop && (await getBook(bookId).catch(() => undefined))?.status === "paused")
+          setNotice("Autopilot in pausa: il task in corso è stato completato e salvato. Puoi intervenire o riprendere.");
+      });
+    runPromise.current = promise;
+  }
+  function execute() {
     if (!current) return;
     setNotice("");
-    void runner.run(current.id, async () => { await refresh(); void drainGitHubOutbox(); })
-      .catch(e => setNotice(e instanceof Error ? e.message : "Errore di esecuzione."));
+    startRunner(current.id);
   }
   function pause() { runner.stop(); setNotice("Pausa richiesta: arresto della chiamata in corso e salvataggio del checkpoint."); }
-  function prepareActivityRevision(item:Activity) {
-    setIntervention(`Rivedi l'attività "${item.title}" (fase ${item.phase}, ID ${item.id}). Modifica questa scelta e analizza l'impatto sulle scene e sui capitoli dipendenti: `);
-    setPage("dashboard");
-    if(current?.status==="running")setNotice("Intervento preparato. Premi prima Pausa e verifica lo stato, poi richiedi la revisione.");
-    else setNotice("Istruzione preparata. Modifica il testo prima di richiedere la revisione. Non ripristina automaticamente un checkpoint storico.");
+  function stopAfterCurrentTask() {
+    runner.stopAfterCurrent();
+    setStopAfterRequested(true);
+    setNotice("L'autopilot si fermerà appena il task in corso sarà completato e salvato.");
   }
-  async function sendFeedback() {
-    if (!current) return;
-    // Capture the revision displayed to the author, not an IndexedDB revision
-    // reloaded only after the submit. A stale tab must ask for confirmation.
+  function openIntervention() {
+    setPage("dashboard");
+    window.setTimeout(() => {
+      interventionRef.current?.scrollIntoView({ block: "center" });
+      interventionRef.current?.focus();
+    }, 50);
+  }
+  function prepareActivityRevision(item:Activity) {
+    const rewrite = current && !interventionScopeBlocker(current, "rewrite");
+    setIntervention(rewrite
+      ? `Rivedi quanto prodotto nel task "${item.title}" (fase ${item.phase}): `
+      : `A proposito del task "${item.title}" (fase ${item.phase}): `);
+    setInterventionScope(rewrite ? "rewrite" : "next_step");
+    openIntervention();
+    if(current?.status==="running")setNotice("Intervento preparato: completa il testo, poi usa «Interrompi e registra intervento».");
+    else setNotice("Intervento preparato: completa il testo e scegli come applicarlo. Non ripristina automaticamente un checkpoint storico.");
+  }
+  async function submitIntervention(mode: InterventionSubmitMode) {
+    if (!current || interventionBusy) return;
+    // Capture the revision displayed to the author, not one reloaded after the
+    // click: a stale tab must see the conflict and keep its draft.
     const { id, updatedAt } = current;
+    const instruction = intervention;
+    const scope = interventionScope;
+    setInterventionBusy(true);
     try {
-      await requestRevision(id, intervention, updatedAt);
-      setIntervention(""); setNotice("Istruzione permanente salvata. Riprendi per analizzare l'impatto e riscrivere le scene dipendenti.");
+      let expected = updatedAt;
+      let activityId: string | undefined;
+      let stepLabel: string | undefined;
+      if (mode === "interrupt_and_record") {
+        if (runnerBookId !== id) throw new Error("L'autopilot non è in esecuzione in questa scheda.");
+        activityId = runningActivity?.id;
+        stepLabel = nextStep?.headline;
+        runner.stop();
+        await runPromise.current;
+        // Our own runner just committed the cancelled task and paused the book.
+        const latest = await getBook(id);
+        if (!latest) throw new Error("Libro non trovato.");
+        expected = latest.updatedAt;
+      }
+      const result = await recordAuthorIntervention(id, { instruction, scope, activityId, stepLabel }, expected);
+      setIntervention("");
       await refresh();
+      const message = result.effect === "note" ? "Intervento registrato: verrà usato dal prossimo task di scrittura."
+        : result.effect === "constraint" ? "Intervento registrato come vincolo permanente."
+        : result.effect === "replan" ? "Intervento registrato: alla ripresa verrà rifatto il piano dei capitoli."
+        : "Intervento registrato: alla ripresa l'autopilot analizzerà l'impatto e riscriverà le scene coinvolte.";
+      if (mode === "record_and_continue") {
+        setNotice(message + " Autopilot ripartito.");
+        startRunner(id);
+      } else setNotice(message + (mode === "interrupt_and_record"
+        ? " Il task interrotto sarà ripetuto alla ripresa."
+        : current.status === "idle" && result.effect !== "revision"
+          ? " Premi Autopilot per iniziare." : " Premi Riprendi per continuare."));
     } catch (e) {
-      await refresh(); // Present the new canon/state before the author retries.
-      // Keep the user's draft: the instruction was NOT accepted or persisted.
-      setNotice(e instanceof Error ? e.message : "Feedback non applicabile.");
-    }
+      await refresh(); // Present the current state; the draft stays for a deliberate retry.
+      setNotice(e instanceof Error ? e.message : "Intervento non registrato.");
+    } finally { setInterventionBusy(false); }
   }
   async function approveEditorialScene(sceneId: string) {
     if (!current) return;
@@ -222,6 +323,13 @@ export default function App() {
 
   async function persistSettings(next: AppSettings) {
     await saveSettings(next); setSettings(next); setNotice("Impostazioni salvate in IndexedDB.");
+  }
+  async function toggleTheme() {
+    const theme: AppSettings["theme"] = settingsRef.current.theme === "dark" ? "light" : "dark";
+    setSettings(old => ({ ...old, theme }));
+    // Persist only the theme: unsaved endpoint edits stay drafts until «Salva impostazioni».
+    try { await saveSettings({ ...await loadSettings(), theme }); }
+    catch { setNotice("Impossibile salvare il tema nel browser."); }
   }
   function updateEndpoint(id: string, update: Partial<EndpointProfile>) {
     setSettings(old => ({ ...old, endpoints: old.endpoints.map(e => e.id === id ? { ...e, ...update } : e) }));
@@ -376,19 +484,20 @@ export default function App() {
 
     <nav className="mobile-tabs" aria-label="Navigazione mobile">
       {navigation.map(({id,label,icon:Icon}) => <button key={id} aria-label={label} aria-current={page===id ? "page" : undefined}
-        className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-2 text-[10px] ${page===id ? "text-emerald-500 font-bold" : "muted"}`}
-        onClick={() => setPage(id)}><Icon size={19}/>{label}</button>)}
+        className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-[10px] ${page===id ? "text-emerald-500 font-bold" : "muted"}`}
+        onClick={() => setPage(id)}><Icon size={19}/><span className="block max-w-full truncate">{label}</span></button>)}
     </nav>
 
     <main className="min-w-0 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
+      <header className="mb-5 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold sm:text-2xl">{navigation.find(x => x.id === page)?.label}</h1>
           <p className="muted text-sm">Progetto local-first · GitHub autosync opzionale <span className="sm:hidden">· v{packageInfo.version}</span></p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex size-11 items-center justify-center rounded-lg border border-slate-400 dark:border-slate-700" aria-label="Cambia tema chiaro/scuro"
-            onClick={() => { const next: AppSettings = { ...settings, theme: settings.theme === "dark" ? "light" : "dark" }; void persistSettings(next); }}>
+          <button className="flex size-11 items-center justify-center rounded-lg border border-slate-400 disabled:opacity-50 dark:border-slate-700" aria-label="Cambia tema chiaro/scuro"
+            disabled={!ready}
+            onClick={() => void toggleTheme()}>
             {settings.theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
         </div>
@@ -399,97 +508,100 @@ export default function App() {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="text-sm font-semibold" htmlFor="book-select">Libro attivo</label>
-        <select id="book-select" className="field max-w-xs" value={selectedId} onChange={e => setSelectedId(e.target.value)}>
+        <select id="book-select" className="field max-w-xs" value={selectedId} onChange={e => {
+          creatingNewBook.current = e.target.value === "";
+          setSelectedId(e.target.value);
+        }}>
           <option value="">{books.length ? "+ Nuovo libro" : "Nessun libro"}</option>
           {books.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
         </select>
       </div>
 
-      {current && <div className="panel sticky top-0 z-20 mb-4 flex flex-col gap-3 p-3 shadow-md sm:static sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
+      {current && <div className="panel status-bar z-20 mb-4 flex flex-col gap-3 p-3 shadow-md sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{statusText[current.status]} · {phaseText[current.phase]}</p>
-          <p className="muted truncate text-xs">{latestActivity?.status === "running" ? `Ora: ${latestActivity.title}` : `Prossimo: ${phaseText[current.phase]}`}</p>
-          <p className="muted text-xs">{progress === null ? "Piano non ancora creato" : `${doneScenes}/${allScenes.length} scene canoniche (${progress}%)`}</p>
+          <p className="muted truncate text-xs">{runningActivity ? `Ora: ${runningActivity.title}` : `Prossimo: ${nextStep?.headline ?? phaseText[current.phase]}`}</p>
+          <p className="muted hidden text-xs sm:block">{!progressInfo?.scenes ? "Piano non ancora creato" :
+            `${progressInfo.canonScenes}/${progressInfo.scenes} scene canoniche (${Math.round(progressInfo.canonScenes / progressInfo.scenes * 100)}%) · ${progressInfo.frozenChapters}/${progressInfo.chapters} capitoli congelati`}</p>
         </div>
-        <div className="flex gap-2">
-          {current.status === "running" ? <Button onClick={pause} variant="secondary"><Pause size={17} /> Pausa</Button>
-            : current.status !== "completed" || current.revision ? <Button disabled={(current.editorialReviewSceneIds?.length ?? 0) > 0} onClick={() => void execute()}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
-          <Button variant="outline" onClick={() => setPage("activities")}><ListChecks size={17} /> Log</Button>
-          {(current.editorialReviewSceneIds?.length ?? 0) > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({current.editorialReviewSceneIds?.length})</Button>}
+        <div className="flex flex-wrap gap-2">
+          {current.status === "running" ? runningHere ? <>
+              <Button onClick={pause} variant="secondary"><Pause size={17} /> Pausa</Button>
+              <Button variant="outline" disabled={stopAfterRequested} onClick={stopAfterCurrentTask}
+                title="Lascia completare e salvare il task in corso, poi metti in pausa">
+                <StopCircle size={17}/> {stopAfterRequested ? "Si ferma a fine task" : "Ferma a fine task"}</Button>
+            </> : <span className="muted self-center text-xs">In esecuzione in un'altra scheda</span>
+            : current.status !== "completed" || current.revision ? <Button disabled={pendingFused > 0} onClick={execute}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
+          <Button variant="outline" onClick={openIntervention}><MessageSquareText size={17}/> Intervieni</Button>
+          <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setPage("activities")}><ListChecks size={17} /> Log</Button>
+          {pendingFused > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({pendingFused})</Button>}
         </div>
       </div>}
 
       {page === "dashboard" && <div className="space-y-4">
-        {current&&<AiTaskWorkspace bookId={current.id} activities={activities}
-          live={liveAi} inspectionEnabled={settings.inspectAiRequests===true}
-          onPrepareRevision={prepareActivityRevision} onOpenFull={()=>setPage("activities")} compact/>}
-        <details open={!current || current.status!=="running"} className="min-w-0">
+        {ready && !current && <NewBookPanel onCreate={createProject}/>}
+        {current && <>
+          <AutopilotFocusPanel book={current} activities={activities} live={liveAi}
+            inspectionEnabled={settings.inspectAiRequests===true} runningHere={runningHere}
+            modelWarning={modelWarning} onOpenReader={() => setPage("reader")} onOpenSettings={() => setPage("settings")}/>
+          <AuthorInterventionPanel book={current} draft={intervention} onDraftChange={setIntervention}
+            scope={interventionScope} onScopeChange={setInterventionScope} runningHere={runningHere}
+            busy={interventionBusy} onSubmit={mode => void submitIntervention(mode)} textareaRef={interventionRef}/>
+          <AiTaskWorkspace bookId={current.id} activities={activities}
+            live={liveAi} inspectionEnabled={settings.inspectAiRequests===true}
+            onPrepareRevision={prepareActivityRevision} onOpenFull={()=>setPage("activities")} compact/>
+        </>}
+        {current && <details open={current.status!=="running"} className="min-w-0">
           <summary className="mb-3 cursor-pointer rounded-lg border border-slate-400/40 p-3 text-sm font-semibold">
-            Brief, interventi, redazione e informazioni avanzate del libro
+            Brief, redazione, costi, memoria e sincronizzazione
           </summary>
         <div className="grid min-w-0 gap-4 xl:grid-cols-[1.65fr_1fr]">
         <div className="space-y-4">
-          {!current && <Section title="Nuovo libro" description="Descrivi liberamente il libro: l'AI costruirà il piano e proseguirà scena per scena.">
-            <div className="space-y-4">
-              <Field label="Titolo provvisorio"><input className="field" value={title} onChange={e => setTitle(e.target.value)} /></Field>
-              <Field label="Descrizione iniziale, spunti e vincoli"><textarea className="field min-h-48" rows={8} value={brief} onChange={e => setBrief(e.target.value)} placeholder="Racconta l'ambientazione, i personaggi, le idee, la struttura desiderata, i segreti e tutti i vincoli. Nessun limite artificiale di testo." /></Field>
-              <Field label="Stile"><textarea className="field" rows={2} value={writingStyle} onChange={e => setWritingStyle(e.target.value)} /></Field>
-              <Field label="Audience"><input className="field" value={audience} onChange={e => setAudience(e.target.value)} /></Field>
-              <Button onClick={() => void createProject()}><Plus size={18} /> Crea libro</Button>
-            </div>
-          </Section>}
-          {current && <Section title="Brief e visione del libro">
-            <p className="whitespace-pre-wrap text-sm leading-7">{current.brief}</p>
+          <Section title="Brief e visione del libro">
+            {current.brief ? <p className="whitespace-pre-wrap text-sm leading-7">{current.brief}</p>
+              : <p className="muted text-sm">Nessuna descrizione: l'autopilot sviluppa il libro a partire dal titolo.</p>}
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div><p className="muted text-xs">Stile</p><p className="text-sm">{current.writingStyle}</p></div>
               <div><p className="muted text-xs">Audience</p><p className="text-sm">{current.audience}</p></div>
             </div>
-            {(current.authorConstraints?.length ?? 0) > 0 && <div className="mt-4"><h3 className="font-semibold">Vincoli inderogabili dell'autore</h3>{current.authorConstraints?.map((x,i) => <p className="mt-1 text-sm" key={i}>• {x}</p>)}</div>}
-          </Section>}
-          {current && <Section title="Intervieni sull'autopilot" description="Una correzione diventa un vincolo persistente. L'IA analizzerà l'impatto e riscriverà la parte interessata e le scene successive.">
-            <textarea className="field min-h-28" value={intervention} onChange={e => setIntervention(e.target.value)} placeholder="No, così non va bene: modifica assolutamente..." aria-label="Istruzione di revisione" />
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button disabled={!intervention.trim() || current.status === "running" || !!current.editorialReviewSceneIds?.length} onClick={() => void sendFeedback()}><WandSparkles size={16} /> Richiedi revisione</Button>
-              {current.status === "running" && <span className="muted text-xs">Premi prima Pausa.</span>}
-            </div>
-            {current.revision && <p className="mt-3 text-sm">Revisione in corso: {current.revision.instruction} ({current.revision.cursor}/{current.revision.affectedSceneIds.length})</p>}
-          </Section>}
-          {current?.ideas && <Section title="Idee long / mid / short term"><div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6">{current.ideas}</div></Section>}
-          {current?.previousError && <Section title="Attenzione">
-            <p className="flex items-start gap-2 text-sm text-red-600 dark:text-red-300"><AlertTriangle size={18} className="shrink-0" /> {current.previousError}</p>
-            <p className="muted mt-2 text-xs">Il flusso è fermo. Controlla il registro e la Redazione multi-agente: potrebbero essere necessari interventi, crediti AI o una nuova tornata.</p>
-          </Section>}
+            {current.startMode === "synopsis" && (current.authorChapterSynopses?.length ?? 0) > 0 &&
+              <details className="mt-4 rounded-lg border border-slate-400/40 p-3">
+                <summary className="cursor-pointer text-sm font-semibold">Sinossi vincolante dell'autore ({current.authorChapterSynopses!.length} capitoli)</summary>
+                <ol className="mt-2 list-decimal space-y-2 pl-6 text-sm">
+                  {current.authorChapterSynopses!.map((chapter, index) => <li key={index} className="whitespace-pre-wrap break-words">
+                    {chapter.title && <b>{chapter.title}: </b>}{chapter.synopsis}</li>)}
+                </ol>
+              </details>}
+          </Section>
+          {current.ideas && <Section title="Idee long / mid / short term"><div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6">{current.ideas}</div></Section>}
         </div>
         <div className="space-y-4">
-          <Section title="Gestione ed analisi del libro" description="Controlli editoriali aggiuntivi; la timeline task è sempre visibile più in alto.">
-            <Button variant="outline" onClick={() => setPage("activities")}>Apri registro attività completo</Button>
-          </Section>
-          {current && <EditorialBoardPanel book={current} onRefresh={refresh}/>}
-          {current && <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>}
-          {current && <AiBudgetPanel key={current.id} book={current} settings={settings}
-            activities={activities} onSaveSettings={persistSettings} onRefresh={refresh}/>}
-          <Section title="Memoria narrativa">
+          <EditorialBoardPanel book={current} onRefresh={refresh}/>
+          <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>
+          <AiBudgetPanel key={current.id} book={current} settings={settings}
+            activities={activities} onSaveSettings={persistSettings} onRefresh={refresh}/>
+          <Section title="Memoria narrativa" description="Dettagli completi nella pagina Memoria.">
             <div className="grid grid-cols-2 gap-2 text-sm">
               {[
-                ["Capitoli", current?.chapters.length ?? 0],
-                ["Scene canoniche", doneScenes],
-                ["Personaggi", Object.keys(current?.memory.characters ?? {}).length],
-                ["Luoghi", Object.keys(current?.memory.locations ?? {}).length],
-                ["Fazioni", Object.keys(current?.memory.factions ?? {}).length],
-                ["Oggetti", Object.keys(current?.memory.items ?? {}).length],
-                ["Segreti", Object.keys(current?.memory.secrets ?? {}).length],
-                ["Eventi timeline", current?.memory.timeline.length ?? 0],
+                ["Capitoli", current.chapters.length],
+                ["Scene canoniche", progressInfo?.canonScenes ?? 0],
+                ["Personaggi", Object.keys(current.memory.characters).length],
+                ["Luoghi", Object.keys(current.memory.locations).length],
+                ["Fazioni", Object.keys(current.memory.factions).length],
+                ["Oggetti", Object.keys(current.memory.items).length],
+                ["Segreti", Object.keys(current.memory.secrets).length],
+                ["Eventi timeline", current.memory.timeline.length],
               ].map(([label,value]) => <div key={String(label)} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
                 <div className="muted text-xs">{label}</div><div className="text-xl font-bold">{value}</div>
               </div>)}
             </div>
           </Section>
           <Section title="Sincronizzazione e checkpoint">
-            {current ? <SyncStatusSummary book={current} openArchive={() => setPage("export")}/> : <Empty>Crea un libro per collegare GitHub.</Empty>}
+            <SyncStatusSummary book={current} openArchive={() => setPage("export")}/>
           </Section>
         </div>
         </div>
-        </details>
+        </details>}
       </div>}
 
       {page === "activities" && (current ?
@@ -508,14 +620,18 @@ export default function App() {
           <VoiceReaderPanel book={current} settings={settings} />
           <SemanticSearchPanel book={current} settings={settings} />
         </>}
-        <Section title="Il libro" description="Anteprima della prosa canonizzata. EPUB, DOCX e PDF saranno disponibili nella sezione Export.">
+        <Section title="Il libro" description="Le scene canoniche sono il testo approvato; bozze e scene pianificate sono ancora in lavorazione. Esporta EPUB, DOCX e PDF dall'Archivio.">
         {!current?.chapters.length ? <Empty>Non c'è ancora un piano capitoli. Avvia l'autopilot.</Empty>
           : current.chapters.map(ch => <article key={ch.id} className="mb-8">
-            <h3 className="mb-3 border-b border-slate-300 pb-2 text-xl font-bold dark:border-slate-700">Capitolo {ch.number} — {ch.title}</h3>
+            <h3 className="mb-3 flex flex-wrap items-baseline gap-2 border-b border-slate-300 pb-2 text-xl font-bold dark:border-slate-700">
+              <span>Capitolo {ch.number} — {ch.title}</span>
+              {ch.frozenAt && <span className="rounded-full border border-emerald-600/50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">congelato</span>}
+            </h3>
             <p className="muted mb-4 text-sm">{ch.purpose}</p>
             {ch.scenes.map(s => <section key={s.id} id={`book-scene-${s.id}`} className="mb-6 scroll-mt-24">
-              <h4 className="mb-2 font-semibold">{s.number}. {s.title} <span className="muted text-xs">({s.status})</span></h4>
-              {s.text ? <p className="whitespace-pre-wrap break-words text-[1rem] leading-8">{s.text}</p> : <p className="muted text-sm">Scena non ancora scritta.</p>}
+              <h4 className="mb-2 font-semibold">{s.number}. {s.title} <span className="muted text-xs">({sceneStatusText[s.status]})</span></h4>
+              {s.text ? <p className="whitespace-pre-wrap break-words text-[1rem] leading-8">{s.text}</p>
+                : <p className="muted text-sm">Scena non ancora scritta. Obiettivo: {s.objective}</p>}
               {current.editorialReviewSceneIds?.includes(s.id) && <div className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3">
                 <p className="text-sm">Questa scena fusa richiede la tua rilettura e conferma prima di riprendere l'autopilot.</p>
                 <Button variant="outline" disabled={busy || current.status === "running"}
@@ -591,7 +707,7 @@ export default function App() {
         </Section>
       </div>}
 
-      {page === "settings" && <div className="space-y-4">
+      {ready && page === "settings" && <div className="space-y-4">
         <Section title="Trasparenza e ispezione delle richieste AI" description="Le tracce complete contengono prompt, testi del romanzo e possibili segreti: soltanto con consenso esplicito vengono conservate nel database locale del browser, mai nei ZIP o su GitHub.">
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests===true}
@@ -802,9 +918,9 @@ export default function App() {
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => void saveEndpointSettings()}><CheckCircle2 size={17} /> Salva impostazioni</Button>
         </div>
-        <Section title="Google / Microsoft / GitHub" description="Integrazioni cloud non ancora attive in questa prima implementazione.">
+        <Section title="Google / Microsoft / GitHub" description="Login cloud non ancora attivi in questa versione.">
           <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Nessuna login Google/Microsoft simulata. Il PAT GitHub si configura nella sezione Archivio e resta cifrato nel browser.</p>
-          <p className="muted mt-2 text-sm">La sincronizzazione GitHub manuale è nella sezione Archivio. Lease, autosync e snapshot ZIP remoti sono in programma.</p>
+          <p className="muted mt-2 text-sm">Sincronizzazione GitHub manuale, autosync opzionale e lease del writer sono nella sezione Archivio.</p>
         </Section>
       </div>}
 

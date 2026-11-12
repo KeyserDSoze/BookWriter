@@ -25,6 +25,26 @@ Dopo la configurazione base, puoi selezionare **Protocollo AI: LM Studio nativo*
 
 Riferimenti: [guida catalogo](ai-model-inventory.md), [guida output](ai-output-token-parameter.md), [ADR 0127](../ADR/0127-local-ai-unauthenticated-loopback.md), [issue #146](https://github.com/KeyserDSoze/BookWriter/issues/146).
 
+## Test end-to-end con LM Studio reale (opt-in)
+
+I test Playwright normali usano mock deterministici e non provano il modello reale. In `src/frontend/e2e/live/` ci sono test **live**, attivi solo se imposti le variabili:
+
+| Variabile | Significato |
+| --- | --- |
+| `LMSTUDIO_MODEL` | ID del modello (es. `meta/muse-glimmer`). Senza, il progetto `live-lmstudio` non esiste e CI e run normali restano identici. |
+| `LMSTUDIO_BASE_URL` | Base URL, solo `http://localhost` o `127.0.0.1` (default `http://localhost:1234/v1`). |
+| `LMSTUDIO_TASK_TIMEOUT_MS` | Attesa massima per un task del modello (default 600000). |
+| `LMSTUDIO_REQUIRED=1` | Se LM Studio non è pronto il test fallisce invece di essere saltato. |
+
+Prima di ogni test viene fatta una sonda reale su `GET /models`: server raggiungibile e modello elencato, altrimenti il test è saltato con il motivo. Con CORS attivo in LM Studio:
+
+```powershell
+$env:LMSTUDIO_MODEL="meta/muse-glimmer"; $env:LMSTUDIO_BASE_URL="http://localhost:1235/v1"
+npm run test:e2e:live
+```
+
+I test configurano l'endpoint dall'interfaccia (compreso «Leggi /models»), attivano streaming SSE e ispezione, verificano che il testo arrivi in tempo reale, che «Pausa» non applichi nulla e che un intervento registrato compaia nel prompt realmente inviato. Con le variabili impostate anche `npm run test:e2e` li esegue (solo desktop). L'output di un modello reale non è deterministico: i test non verificano il contenuto narrativo.
+
 ## Versione
 
 La modalità localhost senza API key è inclusa nella **0.11.90**. La raggiungibilità reale del server LM Studio, CORS e i modelli caricati vanno verificati sul PC dell'autore.

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 type Snapshot = {
   id: string; updatedAt: string; status: string; phase: string;
-  constraints: string[]; instruction?: string;
+  constraints: string[]; interventions: string[]; instruction?: string;
 };
 async function snapshot(page: Page): Promise<Snapshot> {
   return page.evaluate(() => new Promise<Snapshot>((resolve, reject) => {
@@ -17,19 +17,21 @@ async function snapshot(page: Page): Promise<Snapshot> {
         const b = books.result[0] as {
           id: string; updatedAt: string; status: string; phase: string;
           authorConstraints: string[]; revision?: { instruction: string };
+          authorInterventions?: Array<{ instruction: string }>;
         };
         db.close();
         if (!b) reject(new Error("Libro test non trovato"));
         else resolve({
           id: b.id, updatedAt: b.updatedAt, status: b.status, phase: b.phase,
           constraints: b.authorConstraints, instruction: b.revision?.instruction,
+          interventions: (b.authorInterventions ?? []).map(x => x.instruction),
         });
       };
     };
   }));
 }
 
-test("due schede: revisione stale rifiutata, lock writer rispettato e draft preservato", async ({ page }) => {
+test("due schede: intervento stale rifiutato, lock writer rispettato e draft preservato", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Libro di revisione concorrente");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" })
@@ -38,8 +40,8 @@ test("due schede: revisione stale rifiutata, lock writer rispettato e draft pres
   await expect(page.getByText(/Libro creato in IndexedDB/)).toBeVisible();
 
   const second = await page.context().newPage();
-  const firstFeedback = page.getByRole("textbox", { name: "Istruzione di revisione" });
-  const otherFeedback = second.getByRole("textbox", { name: "Istruzione di revisione" });
+  const firstFeedback = page.getByRole("textbox", { name: "Il tuo intervento" });
+  const otherFeedback = second.getByRole("textbox", { name: "Il tuo intervento" });
   try {
     await second.goto("/");
     await expect(otherFeedback).toBeVisible();
@@ -48,14 +50,17 @@ test("due schede: revisione stale rifiutata, lock writer rispettato e draft pres
     const secondInstruction = "Fai emergere il mistero dai dialoghi.";
 
     await firstFeedback.fill(firstInstruction);
-    await page.getByRole("button", { name: "Richiedi revisione" }).click();
-    await expect(page.getByText(/Istruzione permanente salvata/)).toBeVisible();
-    await expect.poll(async () => (await snapshot(page)).instruction).toBe(firstInstruction);
+    await page.getByRole("button", { name: "Registra intervento", exact: true }).click();
+    await expect(page.getByText(/Intervento registrato: verrà usato dal prossimo task/)).toBeVisible();
+    await expect.poll(async () => (await snapshot(page)).interventions).toEqual([firstInstruction]);
     const saved = await snapshot(page);
+    expect(saved).toMatchObject({ phase: "brainstorm", status: "idle", constraints: [] });
+    await expect(page.getByRole("region", { name: "Indicazioni in attesa" })).toContainText(firstInstruction);
 
     // Tab two still displays the previous revision and must not clobber it.
     await otherFeedback.fill(secondInstruction);
-    await second.getByRole("button", { name: "Richiedi revisione" }).click();
+    await second.getByRole("radio", { name: /Da ora in poi/ }).check();
+    await second.getByRole("button", { name: "Registra intervento", exact: true }).click();
     await expect(second.getByText(/Il libro è cambiato in un'altra scheda/)).toBeVisible();
     await expect(otherFeedback).toHaveValue(secondInstruction);
     expect(await snapshot(second)).toEqual(saved);
@@ -73,7 +78,7 @@ test("due schede: revisione stale rifiutata, lock writer rispettato e draft pres
     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.revisionLock))
       .toBe("held");
 
-    await second.getByRole("button", { name: "Richiedi revisione" }).click();
+    await second.getByRole("button", { name: "Registra intervento", exact: true }).click();
     await expect(second.getByText(/Un'altra scheda sta scrivendo questo libro/)).toBeVisible();
     await expect(otherFeedback).toHaveValue(secondInstruction);
     expect(await snapshot(second)).toEqual(saved);
@@ -86,14 +91,17 @@ test("due schede: revisione stale rifiutata, lock writer rispettato e draft pres
         lock.name === "bookwriter:writer:" + bookId) ?? false, id)).toBe(false);
 
     // Author explicitly retries against the now-refreshed revision.
-    await second.getByRole("button", { name: "Richiedi revisione" }).click();
-    await expect(second.getByText(/Istruzione permanente salvata/)).toBeVisible();
+    await second.getByRole("button", { name: "Registra intervento", exact: true }).click();
+    await expect(second.getByText(/Intervento registrato come vincolo permanente/)).toBeVisible();
     const final = await snapshot(second);
-    expect(final.constraints).toEqual([firstInstruction, secondInstruction]);
-    expect(final.instruction).toBe(secondInstruction);
-    expect(final.phase).toBe("revision");
-    expect(final.status).toBe("paused");
+    expect(final.constraints).toEqual([secondInstruction]);
+    expect(final.interventions).toEqual([firstInstruction, secondInstruction]);
+    expect(final.instruction).toBeUndefined();
+    expect(final.phase).toBe("brainstorm");
+    expect(final.status).toBe("idle");
     await expect(otherFeedback).toHaveValue("");
+    await second.getByText(/Registro dei tuoi interventi/).click();
+    await expect(second.getByRole("list", { name: "Registro interventi" }).getByRole("listitem")).toHaveCount(2);
   } finally {
     await second.close();
   }

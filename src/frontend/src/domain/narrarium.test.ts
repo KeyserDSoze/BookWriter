@@ -3,6 +3,18 @@ import { newBook } from "./types";
 import { projectBook, slugify } from "./narrarium";
 
 describe("Proiezione deterministica Narrarium", () => {
+  it("rende leggibili la sinossi vincolante e gli interventi dell'autore", () => {
+    const book = newBook("", "Il porto", "Sobrio", "Adulti", { startMode: "synopsis",
+      authorChapterSynopses: [{ title: "L'arrivo", synopsis: "Mara arriva al porto." }, { synopsis: "Il faro." }] });
+    book.authorInterventions = [{ id: "i1", createdAt: "2026-11-12T10:00:00.000Z",
+      instruction: "Più ironia\nnei dialoghi.", scope: "from_now", phase: "prose", stepLabel: "Scrittura della scena 1" }];
+    const files = projectBook(book, []).files;
+    expect(files["story-design.md"]).toContain("1. L'arrivo — Mara arriva al porto.\n2. Il faro.");
+    expect(files["context.md"]).toContain("## Interventi dell'autore");
+    expect(files["context.md"]).toContain("(from_now, durante: Scrittura della scena 1): Più ironia nei dialoghi.");
+    expect(files[".bookwriter/project.json"]).toContain("authorInterventions");
+  });
+
   it("crea gerarchia del libro con metadati per capitoli, scene, segreti e timeline", () => {
     const book = newBook("Un mistero a Roma", "La città nascosta", "Visuale e concreto", "Lettori esigenti");
     book.chapters.push({

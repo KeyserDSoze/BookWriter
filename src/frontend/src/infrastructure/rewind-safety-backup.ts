@@ -30,6 +30,16 @@ function requireMetadata(bookId:string, revision:string, activityId:string): voi
     throw new Error("Seleziona un libro, una revisione e un task validi.");
 }
 
+/** Same data, any key order: the ZIP validator rebuilds objects in schema order,
+ * while stored books keep insertion order (fields added during the run). */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item: unknown) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item as Record<string, unknown>)
+        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0))
+      : item);
+}
+
 /**
  * Snapshot of ONE current book. The read-only transaction is coherent across
  * book, activities and merge drafts; no settings or IndexedDB meta are read.
@@ -98,7 +108,7 @@ export async function prepareBookSafetyBackup(
        (parsed.mergeDrafts??[]).some(d=>d.bookId!==bookId))
       throw new Error("Verifica interna ZIP non riuscita: archivio non esportato.");
     // Check data against what we captured, including the complete manuscript.
-    if(JSON.stringify(parsed.books[0])!==JSON.stringify(book))
+    if(canonicalJson(parsed.books[0])!==canonicalJson(book))
       throw new Error("Il manoscritto nello ZIP differisce dalla revisione acquisita.");
     const current=await getBook(bookId);
     if(!current || current.updatedAt!==expectedRevision ||

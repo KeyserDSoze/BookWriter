@@ -5,7 +5,7 @@ import { newBook, type Activity, type BookProject } from "../domain/types";
 import { getBook, getDb, listBooks, saveActivity, saveBook } from "./db";
 import { importBackup, importBackupAsLocalFork, readBackup } from "./backup";
 import {
-  createLocalForkFromVerifiedSafetyBackup, prepareBookSafetyBackup,
+  canonicalJson, createLocalForkFromVerifiedSafetyBackup, prepareBookSafetyBackup,
   sha256OfZip, verifyDownloadedBookSafetyBackup,
 } from "./rewind-safety-backup";
 
@@ -233,5 +233,28 @@ describe("Copia di sicurezza del solo libro per rewind futuro (#170)",()=>{
     await expect(prepareBookSafetyBackup(running.id,running.updatedAt,task.id))
       .rejects.toThrow(/in esecuzione/);
     expect((await getBook(book.id))?.status).toBe("running");
+  });
+});
+
+describe("Confronto del manoscritto indipendente dall'ordine dei campi",()=>{
+  it("un libro arricchito durante il lavoro supera la verifica round-trip dello ZIP",async()=>{
+    const {book,task}=await fixture();
+    // Fields appended after creation keep insertion order in IndexedDB,
+    // while the ZIP validator rebuilds objects in schema order.
+    book.previousError="Attività interrotta; nessun output canonizzato.";
+    book.ideas="Idee LONG MID SHORT";
+    book.startMode="synopsis";
+    book.authorChapterSynopses=[{synopsis:"Mara arriva al porto."}];
+    book.authorInterventions=[{id:"nota",createdAt:"2026-11-12T12:00:00.000Z",
+      instruction:"Più ironia.",scope:"next_step",phase:"prose",stepLabel:"Scrittura"}];
+    await saveBook(book,false);
+    const saved=(await getBook(book.id))!;
+    const archive=await prepareBookSafetyBackup(saved.id,saved.updatedAt,task.id);
+    expect(archive.bookRevision).toBe(saved.updatedAt);
+  });
+  it("canonicalJson ignora solo l'ordine delle chiavi, non i valori o l'ordine degli array",()=>{
+    expect(canonicalJson({b:1,a:{d:[2,1],c:null}})).toBe(canonicalJson({a:{c:null,d:[2,1]},b:1}));
+    expect(canonicalJson({a:[1,2]})).not.toBe(canonicalJson({a:[2,1]}));
+    expect(canonicalJson({a:"x"})).not.toBe(canonicalJson({a:"y"}));
   });
 });

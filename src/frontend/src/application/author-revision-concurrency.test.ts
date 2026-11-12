@@ -18,6 +18,14 @@ function book() {
   b.authorConstraints.push("Non rivelare il colpevole nel primo capitolo.");
   return b;
 }
+function writtenBook() {
+  const b = book();
+  b.phase = "prose";
+  b.chapters = [{ id: "chapter:001", number: 1, title: "Arrivo", purpose: "Aprire il mistero",
+    scenes: [{ id: "scene:001:001", number: 1, title: "Il porto", objective: "Mara arriva",
+      text: "Mara scende dalla nave.", status: "canon" }] }];
+  return b;
+}
 async function stored(id: string) {
   return (await getBook(id))!;
 }
@@ -33,8 +41,8 @@ beforeEach(async () => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Richiesta revisione dell'autore con Web Lock e CAS IndexedDB", () => {
-  it("salva un solo vincolo normalizzato con la revisione valida, senza inventare canon o attività", async () => {
-    const source = book();
+  it("salva un solo vincolo normalizzato con la revisione valida e la sola voce di registro dell'autore", async () => {
+    const source = writtenBook();
     await saveBook(source, false);
     const stamp = source.updatedAt;
     await requestRevision(source.id, "  Mantieni il dialogo più credibile.  ", stamp);
@@ -46,12 +54,16 @@ describe("Richiesta revisione dell'autore con Web Lock e CAS IndexedDB", () => {
     ]);
     expect(result.revision).toMatchObject({
       instruction: "Mantieni il dialogo più credibile.",
-      beforePhase: "brainstorm", affectedSceneIds: [], cursor: 0,
+      beforePhase: "prose", affectedSceneIds: [], cursor: 0,
     });
     expect(result.status).toBe("paused");
     expect(result.phase).toBe("revision");
     expect(result.brief).toBe(source.brief);
-    expect(await (await getDb()).getAll("activities")).toEqual([]);
+    expect(result.chapters).toEqual(source.chapters);
+    const log = await (await getDb()).getAll("activities") as Array<Record<string, unknown>>;
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({ aiRequested: false, status: "succeeded",
+      output: "Mantieni il dialogo più credibile." });
     expect(await getOutbox(source.id)).toBeUndefined();
     expect(request).toHaveBeenCalledWith(
       "bookwriter:writer:" + source.id, { ifAvailable: true }, expect.any(Function),
@@ -129,7 +141,7 @@ describe("Richiesta revisione dell'autore con Web Lock e CAS IndexedDB", () => {
   });
 
   it("solo una richiesta contemporanea con lo stesso token può vincere", async () => {
-    const source = book();
+    const source = writtenBook();
     await saveBook(source, false);
     // The mock deliberately allows both callbacks: CAS within IndexedDB
     // must still prevent lost writes from a non-cooperating editor.

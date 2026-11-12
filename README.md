@@ -6,6 +6,8 @@
 
 ## Funzionalità disponibili
 
+- **Dashboard orientata al task e interventi registrati (ADR 0146, non ancora release numerata).** La Dashboard mostra le fasi del libro, l'avanzamento e — in italiano semplice — cosa sta scrivendo o verificando l'autopilot, perché e cosa farà dopo. Puoi fermarlo subito o «a fine task» e scrivere un intervento: solo per il prossimo passo, come vincolo permanente o come revisione di quanto già scritto. Ogni intervento resta registrato con data, passo e task interrotto, nel libro e nelle Attività. Un nuovo libro può partire da **un titolo e poche righe** oppure da una **sinossi capitolo per capitolo** vincolante, con pausa facoltativa per approvare il piano. [ADR 0146](ADR/0146-task-first-dashboard-author-interventions.md) · [Guida](docs/autopilot.md).
+
 - **Fork locale supervisionato da ZIP verificato (#171, non ancora release numerata).** Dopo aver generato e verificato il file di sicurezza del **solo libro corrente** (#170), in **Attività → Scheda task** puoi «Prepara fork locale» e poi «Conferma creazione». Il sistema rilegge il file e controlla Web Lock, SHA-256, schema e **CAS nella transazione che crea il libro**; non procede se la revisione originale cambia. Crea un **nuovo libro indipendente** in pausa, con nuovo ID, cronologia importata, remote GitHub disattivato e consensi sensibili revocati, lasciando **intatti** originale e altri libri. La copia è **dello stato corrente, non del task storico**; non è undo/rewind, né sblocca freeze o valida dipendenze narrative. [ADR 0145](ADR/0145-supervised-current-book-fork.md) · [Guida](docs/ai-task-inspection.md).
 
 

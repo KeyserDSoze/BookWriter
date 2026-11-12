@@ -111,14 +111,14 @@ test("mobile/desktop: diff di scena, bozza manuale persistente e approvazione se
   await expect(page.locator("#book-select option")).toHaveCount(4);
   await nav.getByRole("button", { name: "Libro" }).click();
   await expect(page.getByText(/La porta si apre lentamente/)).toBeVisible();
-  await expect(page.getByText("(draft)")).toBeVisible();
+  await expect(page.getByText("(bozza)")).toBeVisible();
   await nav.getByRole("button", { name: "Dashboard" }).click();
   await expect(page.getByRole("button", { name: "Riprendi" })).toBeDisabled();
   await page.getByRole("button", { name: /Rileggi scene/ }).click();
   await expect(page.getByRole("button", { name: "Conferma scena come canonica" })).toBeVisible();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Conferma scena come canonica" }).click();
-  await expect(page.getByText("(canon)")).toBeVisible();
+  await expect(page.getByText("(canonica)")).toBeVisible();
   await nav.getByRole("button", { name: "Dashboard" }).click();
   await expect(page.getByRole("button", { name: "Riprendi" })).toBeEnabled();
   const width = await page.evaluate(() => ({

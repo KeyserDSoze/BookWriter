@@ -144,6 +144,32 @@ export interface RevisionRequest {
   cursor: number;
   impactAnalysis?: string;
 }
+/** How the author started the book: free idea or binding chapter-by-chapter synopsis. */
+export type BookStartMode = "idea" | "synopsis";
+/** One author-written chapter of the starting synopsis (order = chapter number). */
+export interface AuthorChapterSynopsis { title?: string; synopsis: string; }
+/**
+ * next_step: one-shot note for the next authoring task;
+ * from_now: permanent constraint, no rewrite;
+ * rewrite: permanent constraint plus retroactive revision (or a new plan if nothing is written).
+ */
+export type AuthorInterventionScope = "next_step" | "from_now" | "rewrite";
+/** Append-only record of a prompt typed by the author while supervising the autopilot. */
+export interface AuthorIntervention {
+  id: string;
+  createdAt: string;
+  instruction: string;
+  scope: AuthorInterventionScope;
+  phase: Phase;
+  /** Human-readable step that was running or next when the author intervened. */
+  stepLabel: string;
+  /** Task the author interrupted or referenced, when known. */
+  activityId?: string;
+  /** next_step only: set when a successful AI task received the note. */
+  appliedAt?: string;
+  appliedActivityId?: string;
+  appliedStepLabel?: string;
+}
 export interface BookProject {
   id: string;
   title: string;
@@ -189,6 +215,16 @@ export interface BookProject {
   narrativeTransferShareDecisions?: NarrativeTransferShareDecision[];
   /** Private author tracking of checks, never an AI opt-in or repair approval. */
   editorialVerificationChoices?: EditorialVerificationChoice[];
+  /** Legacy books omit it and behave as "idea". */
+  startMode?: BookStartMode;
+  /** synopsis mode: the outline must keep exactly these chapters, in order. */
+  authorChapterSynopses?: AuthorChapterSynopsis[];
+  /** idea mode: optional chapter count requested by the author. */
+  targetChapterCount?: number;
+  /** Stop after the chapter plan so the author can approve or change it. */
+  pauseAfterOutline?: boolean;
+  /** Every author prompt given to the autopilot, never rewritten. */
+  authorInterventions?: AuthorIntervention[];
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
@@ -219,6 +255,10 @@ export interface Activity {
   priceRateSnapshot?: AiPriceRate;
   /** True once a provider request was about to be sent; absent on legacy logs. */
   aiRequested?: boolean;
+  /** This log entry records the author intervention with this ID (no AI call). */
+  interventionId?: string;
+  /** Author next-step notes sent to the provider in this task. */
+  appliedInterventionIds?: string[];
   error?: string;
 }
 export const EMPTY_MEMORY: NarrativeMemory = {
@@ -231,14 +271,32 @@ export const DEFAULT_SETTINGS: AppSettings = {
   taskRoutes: {},
 };
 
-export function newBook(brief: string, title: string, writingStyle: string, audience: string): BookProject {
+export interface NewBookOptions {
+  startMode?: BookStartMode;
+  authorChapterSynopses?: AuthorChapterSynopsis[];
+  targetChapterCount?: number;
+  pauseAfterOutline?: boolean;
+}
+export function newBook(
+  brief: string, title: string, writingStyle: string, audience: string,
+  options: NewBookOptions = {},
+): BookProject {
   const now = new Date().toISOString();
-  return {
+  const book: BookProject = {
     id: crypto.randomUUID(), title: title.trim() || "Nuovo libro", brief,
     writingStyle, audience, authorConstraints: [], createdAt: now, updatedAt: now,
     status: "idle", phase: "brainstorm", audienceReviews: [],
     chapters: [], memory: structuredClone(EMPTY_MEMORY),
   };
+  if (options.startMode === "synopsis" && options.authorChapterSynopses?.length) {
+    book.startMode = "synopsis";
+    book.authorChapterSynopses = structuredClone(options.authorChapterSynopses);
+  } else if (options.startMode === "idea") {
+    book.startMode = "idea";
+    if (options.targetChapterCount) book.targetChapterCount = options.targetChapterCount;
+  }
+  if (options.pauseAfterOutline) book.pauseAfterOutline = true;
+  return book;
 }
 
 export function routeFor(task: TaskKind, settings: AppSettings, book: BookProject): ModelRoute {

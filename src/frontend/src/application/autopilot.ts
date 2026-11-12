@@ -15,6 +15,10 @@ import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
 import { AiBudgetStop, preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
+import { markAuthorNotesApplied, pendingAuthorNotes, taskAcceptsAuthorNotes, withAuthorNotes } from "../domain/author-interventions";
+import { formatAuthorSynopsis } from "../domain/book-start";
+import type { EditorialRound } from "../domain/editorial-board";
+import { recordAuthorIntervention } from "./author-intervention";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -35,6 +39,9 @@ const memorySchema = z.object({
   timeline: z.array(z.string()),
   currentState: z.string(),
 });
+// The editorial board never truncates canon: it refuses oversized memory.
+// Every memory update must therefore keep entries short and merged.
+const MEMORY_COMPACTION_RULE = "Mantieni la memoria COMPATTA: ogni voce di characters/locations/factions/items/secrets al massimo 900 caratteri (stato attuale, non cronaca), unisci i duplicati, timeline con al massimo 60 eventi essenziali (riassumi i più vecchi), currentState al massimo 2500 caratteri.";
 // A non-empty JSON string can still contain only whitespace. Do not let
 // apparent length from spaces/newlines become a frozen, unusable synopsis.
 const meaningfulSummary = (maximum: number) => z.string().max(maximum)
@@ -72,27 +79,95 @@ function parseJson(raw: string): unknown {
   const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
   return JSON.parse(cleaned) as unknown;
 }
-function context(book: BookProject): string {
+function outlineText(book: BookProject): string {
+  return book.chapters.map(ch => `${ch.number}. ${ch.title}: ${ch.purpose}\n${ch.scenes.map(s => `  - ${s.id}: ${s.title}: ${s.objective}`).join("\n")}`).join("\n");
+}
+function recentCanon(book: BookProject): string {
   const previous = book.chapters.flatMap(chapter => chapter.scenes
     .filter(scene => scene.status === "canon")
     .map(scene => ({
       chapter: chapter.title, scene: scene.title,
       summary: scene.summary ?? scene.text.slice(0, 500),
     })));
-  const recent = previous.slice(-12).map(x => `- ${x.chapter} / ${x.scene}: ${x.summary}`).join("\n");
-  const outline = book.chapters.map(ch => `${ch.number}. ${ch.title}: ${ch.purpose}\n${ch.scenes.map(s => `  - ${s.id}: ${s.title}: ${s.objective}`).join("\n")}`).join("\n");
+  return previous.slice(-12).map(x => `- ${x.chapter} / ${x.scene}: ${x.summary}`).join("\n");
+}
+function authorSynopsisBlock(book: BookProject): string {
+  if (book.startMode !== "synopsis" || !book.authorChapterSynopses?.length) return "";
+  return "Sinossi dell'autore capitolo per capitolo (VINCOLANTE: stessi capitoli, stesso ordine, stessi eventi; puoi arricchire, non sostituire):\n" +
+    formatAuthorSynopsis(book.authorChapterSynopses);
+}
+function bookHeader(book: BookProject): string[] {
   return [
-    `Titolo: ${book.title}`, `Brief: ${book.brief}`,
+    `Titolo: ${book.title}`, `Brief: ${book.brief || "(nessuna descrizione: sviluppa il libro a partire dal titolo)"}`,
     `Stile: ${book.writingStyle}`, `Audience: ${book.audience}`,
     `Vincoli inderogabili dell'autore:\n${(book.authorConstraints ?? []).join("\n") || "Nessuno"}`,
+  ];
+}
+/** Ideation and outline need every critique produced before the plan. */
+function context(book: BookProject): string {
+  return [
+    ...bookHeader(book),
+    authorSynopsisBlock(book),
+    book.startMode !== "synopsis" && book.targetChapterCount
+      ? `Numero di capitoli richiesto dall'autore: ${book.targetChapterCount}` : "",
     `Idee:\n${book.ideas ?? "Da generare"}`,
     `Validazione:\n${book.validation ?? "Da svolgere"}`,
     `Review lettori:\n${book.audienceReviews.join("\n")}`,
     `Critica adversarial:\n${book.adversarial ?? "Da svolgere"}`,
-    `Outline:\n${outline}`,
+    `Outline:\n${outlineText(book)}`,
     `Stato narrativo consolidato:\n${JSON.stringify(book.memory)}`,
-    `Ultime scene canoniche:\n${recent}`,
+    `Ultime scene canoniche:\n${recentCanon(book)}`,
+  ].filter(Boolean).join("\n\n");
+}
+/** After the plan exists, the pre-outline critiques are already folded into
+ * it: do not resend them with every scene (cost) — keep the long-term ideas. */
+function writingContext(book: BookProject): string {
+  return [
+    ...bookHeader(book),
+    `Idee a lungo, medio e breve termine:\n${book.ideas ?? "Non disponibili"}`,
+    `Outline:\n${outlineText(book)}`,
+    `Stato narrativo consolidato:\n${JSON.stringify(book.memory)}`,
+    `Ultime scene canoniche:\n${recentCanon(book)}`,
   ].join("\n\n");
+}
+/** Last characters of a scene, starting at a word boundary and never on a lone surrogate. */
+function proseTail(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  let tail = text.slice(-limit);
+  if (/^[\uDC00-\uDFFF]/.test(tail)) tail = tail.slice(1);
+  const space = tail.search(/\s/);
+  return "…" + (space >= 0 && space < 200 ? tail.slice(space + 1) : tail);
+}
+/** Chapter goal, binding author synopsis, exact end of the previous written
+ * scene and the next planned scene: the writer needs them for transitions. */
+function sceneFocus(book: BookProject, sceneId: string): string {
+  const flat = book.chapters.flatMap(chapter => chapter.scenes.map(scene => ({ chapter, scene })));
+  const index = flat.findIndex(entry => entry.scene.id === sceneId);
+  const here = flat[index];
+  if (!here) return "";
+  const lines = [`Capitolo ${here.chapter.number} «${here.chapter.title}»: ${here.chapter.purpose}`];
+  const synopsis = book.startMode === "synopsis"
+    ? book.authorChapterSynopses?.[here.chapter.number - 1] : undefined;
+  if (synopsis) lines.push(`Sinossi dell'autore per questo capitolo (VINCOLANTE): ${synopsis.synopsis}`);
+  for (let i = index - 1; i >= 0; i--) {
+    const previous = flat[i]!;
+    if (!previous.scene.text.trim()) continue;
+    lines.push(`Fine della scena precedente «${previous.scene.title}» (capitolo ${previous.chapter.number}), testo esatto per la continuità:\n${proseTail(previous.scene.text.trim(), 2400)}`);
+    break;
+  }
+  const next = flat[index + 1];
+  if (next) lines.push(`Scena successiva prevista: «${next.scene.title}» — ${next.scene.objective}`);
+  return lines.join("\n\n");
+}
+/** Judged rounds of a discarded active review stay in the chapter history. */
+function archiveJudgedRounds(book: BookProject): void {
+  const cycle = book.editorialCycle;
+  if (!cycle) return;
+  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
+  if (!chapter) return;
+  const judged: EditorialRound[] = [...cycle.priorRounds];
+  if (cycle.judgment) judged.push({ round: cycle.round, reports: cycle.reports, judgment: cycle.judgment });
+  if (judged.length) chapter.editorialRounds = [...(chapter.editorialRounds ?? []), ...judged];
 }
 function allScenes(book: BookProject): Scene[] {
   return book.chapters.flatMap(x => x.scenes);
@@ -107,14 +182,23 @@ function ensureScene(book: BookProject): Scene {
 }
 
 function nextWork(book: BookProject): Work | null {
-  const base = context(book);
+  const planning = ["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase);
+  const base = planning ? context(book) : writingContext(book);
+  const synopses = book.startMode === "synopsis" ? book.authorChapterSynopses ?? [] : [];
+  const synopsisRule = synopses.length
+    ? "\n\nLa sinossi capitolo per capitolo dell'autore è VINCOLANTE: proponi arricchimenti compatibili e segnala problemi, ma non sostituire eventi, ordine o numero dei capitoli decisi dall'autore."
+    : "";
   switch (book.phase) {
     case "brainstorm":
       return {
         phase: "brainstorm", kind: "brainstorm", title: "Brainstorming su tre orizzonti",
-        reason: "Generare alternative e motivazioni prima di fissare la trama.",
+        reason: synopses.length
+          ? "Arricchire la sinossi dell'autore con idee coerenti prima di fissare le scene."
+          : "Generare alternative e motivazioni prima di fissare la trama.",
         nextStep: "Validazione delle idee",
-        prompt: `Genera idee ORIGINALI e longeve per questo libro, divise chiaramente in LONG-TERM (arco totale e rivelazioni), MID-TERM (archi e capitoli), SHORT-TERM (scene e beat). Proponi alternative, conflitti, conseguenze, rischi di cliché, indizi, payoff e criteri di selezione. Non passare ancora alla prosa.\n\n${base}`,
+        prompt: synopses.length
+          ? `L'autore ha già deciso la trama capitolo per capitolo (sinossi vincolante nel contesto). Genera idee ORIGINALI per arricchirla senza cambiarne gli eventi: LONG-TERM (archi, temi, rivelazioni), MID-TERM (sviluppo di ciascun capitolo, sottotrame coerenti) e SHORT-TERM (scene, beat, dialoghi chiave). Proponi indizi, payoff, conflitti interiori e rischi di cliché. Non passare ancora alla prosa.\n\n${base}`
+          : `Genera idee ORIGINALI e longeve per questo libro, divise chiaramente in LONG-TERM (arco totale e rivelazioni), MID-TERM (archi e capitoli), SHORT-TERM (scene e beat). Proponi alternative, conflitti, conseguenze, rischi di cliché, indizi, payoff e criteri di selezione. Se il brief è minimo, costruisci con coraggio premessa, protagonisti e conflitto coerenti con titolo e indicazioni. Non passare ancora alla prosa.\n\n${base}`,
         apply: (b, text) => { b.ideas = text; b.phase = "validate"; },
       };
     case "validate":
@@ -122,7 +206,7 @@ function nextWork(book: BookProject): Work | null {
         phase: "validate", kind: "validate", title: "Validazione delle idee",
         reason: "Scartare incoerenze, banalità e idee che violano il brief.",
         nextStep: "Review di cinque tipologie di lettori",
-        prompt: `Valida criticamente queste idee: tensione, causalità, fattibilità, originalità, coerenza temporale e fedeltà al brief. Non dichiarare verificati fatti esterni senza fonti. Proponi correzioni precise e decisioni per la trama.\n\n${base}`,
+        prompt: `Valida criticamente queste idee: tensione, causalità, fattibilità, originalità, coerenza temporale e fedeltà al brief. Non dichiarare verificati fatti esterni senza fonti. Proponi correzioni precise e decisioni per la trama.${synopsisRule}\n\n${base}`,
         apply: (b, text) => { b.validation = text; b.phase = "audience"; },
       };
     case "audience": {
@@ -132,7 +216,7 @@ function nextWork(book: BookProject): Work | null {
         phase: "audience", kind: "audience", title: `Audience review ${book.audienceReviews.length + 1}/5`,
         reason: `Valutazione indipendente dal punto di vista di: ${persona}.`,
         nextStep: book.audienceReviews.length === 4 ? "Adversarial review" : "Prossima persona del panel",
-        prompt: `Interpreta solo questo profilo: ${persona}. Esamina le idee come un lettore esigente: punti forti, critiche, noia, inconsistenze, curiosità, revisioni necessarie. Sii concreto, non compiacente.\n\n${base}`,
+        prompt: `Interpreta solo questo profilo: ${persona}. Esamina le idee come un lettore esigente: punti forti, critiche, noia, inconsistenze, curiosità, revisioni necessarie. Sii concreto, non compiacente.${synopsisRule}\n\n${base}`,
         apply: (b, text) => {
           b.audienceReviews.push(`[Persona ${b.audienceReviews.length + 1}] ${text}`);
           if (b.audienceReviews.length >= 5) b.phase = "adversarial";
@@ -144,20 +228,28 @@ function nextWork(book: BookProject): Work | null {
         phase: "adversarial", kind: "adversarial", title: "Adversarial review",
         reason: "Mettere sotto pressione trama, misteri, motivazioni e promesse al lettore.",
         nextStep: "Outline capitoli e scene",
-        prompt: `Cerca aggressivamente buchi di trama, colpi di scena prevedibili, deus ex machina, anticipazioni indebite dei segreti, motivazioni piatte, scene senza conflitto. Elenca problemi con gravità e correzioni proposte, considerando il panel di cinque lettori.\n\n${base}`,
+        prompt: `Cerca aggressivamente buchi di trama, colpi di scena prevedibili, deus ex machina, anticipazioni indebite dei segreti, motivazioni piatte, scene senza conflitto. Elenca problemi con gravità e correzioni proposte, considerando il panel di cinque lettori.${synopsisRule}\n\n${base}`,
         apply: (b, text) => { b.adversarial = text; b.phase = "outline"; },
       };
-    case "outline":
+    case "outline": {
+      const chapterRule = synopses.length
+        ? `Il piano DEVE contenere esattamente ${synopses.length} capitoli: uno per ciascun capitolo della sinossi dell'autore, nello stesso ordine. Il purpose di ogni capitolo riassume la sua sinossi; distribuisci TUTTI gli eventi della sinossi nelle scene del capitolo corrispondente, senza spostarli in altri capitoli. `
+        : book.targetChapterCount ? `Il piano DEVE contenere esattamente ${book.targetChapterCount} capitoli. ` : "";
       return {
         phase: "outline", kind: "outline", title: "Piano dei capitoli",
-        reason: "Trasformare la visione in scene scrivibili e verificabili.",
-        nextStep: "Scrittura della prima scena",
-        prompt: `Crea un piano completo e lungimirante del libro. Rispetta istruzioni e capitoli forniti dall'autore. Ogni capitolo include più scene ("paragrafi" Narrarium), con obiettivo narrativo, conflitto, causa ed effetto, indizi distribuiti e payoff successivi. Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"chapters":[{"title":"...","purpose":"...","scenes":[{"title":"...","objective":"..."}]}]}. Niente Markdown o testo extra.\n\n${base}`,
+        reason: synopses.length
+          ? "Trasformare la sinossi dell'autore in scene scrivibili e verificabili."
+          : "Trasformare la visione in scene scrivibili e verificabili.",
+        nextStep: book.pauseAfterOutline ? "Pausa per l'approvazione del piano da parte dell'autore" : "Scrittura della prima scena",
+        prompt: `Crea un piano completo e lungimirante del libro. Rispetta istruzioni e capitoli forniti dall'autore. ${chapterRule}Ogni capitolo include più scene ("paragrafi" Narrarium), con obiettivo narrativo, conflitto, causa ed effetto, indizi distribuiti e payoff successivi. Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"chapters":[{"title":"...","purpose":"...","scenes":[{"title":"...","objective":"..."}]}]}. Niente Markdown o testo extra.\n\n${base}`,
         apply: (b, text) => {
           const parsed = chapterSchema.parse(parseJson(text));
+          const required = b.startMode === "synopsis" ? b.authorChapterSynopses ?? [] : [];
+          if (required.length && parsed.chapters.length !== required.length)
+            throw new Error(`Il piano deve avere esattamente ${required.length} capitoli come la tua sinossi, ma il modello ne ha proposti ${parsed.chapters.length}. Nessun piano applicato: riprendi per ripeterlo, eventualmente con un'indicazione.`);
           b.chapters = parsed.chapters.map((chapter, ci): Chapter => ({
             id: `chapter:${String(ci + 1).padStart(3, "0")}`,
-            number: ci + 1, title: chapter.title, purpose: chapter.purpose,
+            number: ci + 1, title: required[ci]?.title ?? chapter.title, purpose: chapter.purpose,
             scenes: chapter.scenes.map((scene, si): Scene => ({
               id: `scene:${String(ci + 1).padStart(3, "0")}:${String(si + 1).padStart(3, "0")}`,
               number: si + 1, title: scene.title, objective: scene.objective,
@@ -165,8 +257,11 @@ function nextWork(book: BookProject): Work | null {
             })),
           }));
           b.phase = "prose";
+          // The author asked to read and approve the plan before any prose is written.
+          if (b.pauseAfterOutline) b.status = "paused";
         },
       };
+    }
     case "prose": {
       const pending = allScenes(book).find(x => x.status !== "canon");
       if (!pending) return null;
@@ -174,7 +269,7 @@ function nextWork(book: BookProject): Work | null {
         phase: "prose", kind: "prose", title: `Scrittura: ${pending.title}`,
         reason: "Sviluppare una singola scena coerente con i vincoli e il canone.",
         nextStep: "Review di continuità, stile e segreti",
-        prompt: `Scrivi SOLTANTO la scena ${pending.id}: "${pending.title}". Obiettivo: ${pending.objective}. Sviluppa prosa letteraria completa (non scaletta), con causa-effetto, POV coerente, dialoghi e dettagli credibili, senza svelare segreti prima del momento. Ricorda che una scena/paragrafo Narrarium può includere diversi paragrafi tipografici. Evita cliché, riassunti al posto della scena e meta-commenti. Restituisci SOLO il testo della scena.\n\n${base}`,
+        prompt: `Scrivi SOLTANTO la scena ${pending.id}: "${pending.title}". Obiettivo: ${pending.objective}. Sviluppa prosa letteraria completa (non scaletta), con causa-effetto, POV coerente, dialoghi e dettagli credibili, senza svelare segreti prima del momento. Collegati in modo naturale alla fine della scena precedente e prepara la successiva. Ricorda che una scena/paragrafo Narrarium può includere diversi paragrafi tipografici. Evita cliché, riassunti al posto della scena e meta-commenti. Restituisci SOLO il testo della scena.\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, pending.id)}\n\n${base}`,
         apply: (b, text) => {
           const scene = allScenes(b).find(x => x.id === pending.id);
           if (!scene) throw new Error("La scena è stata modificata durante la generazione.");
@@ -188,7 +283,7 @@ function nextWork(book: BookProject): Work | null {
         phase: "review", kind: "continuity", title: `Review: ${scene.title}`,
         reason: "Controllare personaggi, timeline, stile, logica e segreti rispetto ai capitoli precedenti.",
         nextStep: "Consolidamento della memoria narrativa",
-        prompt: `Rivedi e RISCRIVI la scena qui sotto in forma finale. Controlla coerenza con brief, outline, voci dei personaggi, stato, cronologia, oggetti e segreti. Applica show-don't-tell dove serve, evita contraddizioni e rivelazioni premature. Restituisci SOLTANTO il testo corretto.\n\nSCENA:\n${scene.text}\n\nCONTESTO:\n${base}`,
+        prompt: `Rivedi e RISCRIVI la scena qui sotto in forma finale. Controlla coerenza con brief, outline, voci dei personaggi, stato, cronologia, oggetti, segreti e raccordo con la scena precedente. Applica show-don't-tell dove serve, evita contraddizioni e rivelazioni premature. Restituisci SOLTANTO il testo corretto.\n\nSCENA:\n${scene.text}\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, scene.id)}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => { const target = ensureScene(b); target.text = text; target.status = "canon"; target.summary = text.slice(0, 520); b.phase = "consolidate"; },
       };
     }
@@ -198,7 +293,7 @@ function nextWork(book: BookProject): Work | null {
         phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon",
         reason: "Aggiornare personaggi, luoghi, fazioni, oggetti, segreti e timeline dopo la scena.",
         nextStep: "Prossima scena o completamento del libro",
-        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. Restituisci ESCLUSIVAMENTE JSON valido con i campi: {"characters":{"nome":"stato"},"locations":{"nome":"stato"},"factions":{},"items":{},"secrets":{"id":"stato privato e quando rivelare"},"timeline":["evento"],"currentState":"riassunto stato attuale"}.\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
+        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} Restituisci ESCLUSIVAMENTE JSON valido con i campi: {"characters":{"nome":"stato"},"locations":{"nome":"stato"},"factions":{},"items":{},"secrets":{"id":"stato privato e quando rivelare"},"timeline":["evento"],"currentState":"riassunto stato attuale"}.\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => {
           const memory = memorySchema.parse(parseJson(text));
           b.memory = memory as NarrativeMemory; b.currentSceneId = undefined;
@@ -320,6 +415,7 @@ function nextWork(book: BookProject): Work | null {
           prompt: [
             "Aggiorna il canone dopo una correzione editoriale. Mantieni i fatti precedenti ancora veri; non inventare.",
             "Rispondi SOLO JSON valido con campi characters,locations,factions,items,secrets,timeline,currentState.",
+            MEMORY_COMPACTION_RULE,
             "MEMORIA PRECEDENTE: " + checkpoint.memoryJson,
             "SCENA " + segment.sceneId + ", SEGMENTO " + (checkpoint.cursor + 1) +
               "/" + checkpoint.segmentCount + ":\n" + segment.text,
@@ -404,20 +500,22 @@ function nextWork(book: BookProject): Work | null {
     case "revision": {
       const rev = book.revision;
       if (!rev) throw new Error("Revisione senza richiesta dell'autore.");
-      if (!rev.impactAnalysis) {
+      if (rev.impactAnalysis === undefined) {
         return {
           phase: "revision", kind: "revision", title: "Analisi d'impatto della correzione",
           reason: "Individuare le scene da cambiare e i rimandi narrativi da rivalidare.",
           nextStep: "Revisione retroattiva delle scene coinvolte",
-          prompt: `L'autore ha impartito questa istruzione PRIORITARIA: "${rev.instruction}". Identifica gli ID delle scene canoniche coinvolte direttamente o indirettamente, senza inventare ID. Rispondi ESCLUSIVAMENTE JSON {"rationale":"...","affectedSceneIds":["scene:001:001"]}.\n\n${base}`,
+          prompt: `L'autore ha impartito questa istruzione PRIORITARIA: "${rev.instruction}". Identifica gli ID delle scene canoniche coinvolte direttamente o indirettamente, senza inventare ID. Se nessuna scena già scritta va cambiata (l'istruzione riguarda solo il futuro), restituisci un elenco vuoto. Rispondi ESCLUSIVAMENTE JSON {"rationale":"...","affectedSceneIds":["scene:001:001"]}.\n\n${base}`,
           apply: (b, text) => {
             const impact = impactSchema.parse(parseJson(text));
-            const request = b.revision!;
+            const request = b.revision;
+            if (!request || request.id !== rev.id) throw new Error("Revisione cambiata durante l'analisi d'impatto.");
             const canonical = allScenes(b).filter(x => x.status === "canon");
             const requested = new Set(impact.affectedSceneIds);
             const earliest = canonical.findIndex(x => requested.has(x.id));
-            // Rivedere anche le scene successive per non introdurre incoerenze.
-            request.affectedSceneIds = (earliest < 0 ? canonical : canonical.slice(earliest)).map(x => x.id);
+            // Rewrite from the earliest affected scene onward; nothing affected
+            // means the instruction only constrains the future.
+            request.affectedSceneIds = earliest < 0 ? [] : canonical.slice(earliest).map(x => x.id);
             // Reopen every affected chapter and its successors: retroactive edits invalidate prior votes.
             const earliestChapter = b.chapters.find(ch => ch.scenes.some(s =>
               request.affectedSceneIds.includes(s.id)));
@@ -433,22 +531,36 @@ function nextWork(book: BookProject): Work | null {
                   chapter.bookSummaryAtFreeze = undefined;
                 }
               }
+              // An interrupted review may hold judged rounds: keep them as history.
+              archiveJudgedRounds(b);
               b.editorialCycle = undefined;
               b.bookSummary = synopsisBeforeChapter(b.chapters, earliestChapter.number);
             }
-            request.impactAnalysis = impact.rationale;
+            // An empty rationale must not trigger a second (billed) analysis.
+            request.impactAnalysis = impact.rationale.trim() || "Nessuna motivazione fornita dal modello.";
             request.cursor = 0;
           },
         };
       }
       const sceneId = rev.affectedSceneIds[rev.cursor];
       if (!sceneId) {
+        if (!rev.affectedSceneIds.length) return null; // closed locally by the runner, no AI call
+        const rewritten = rev.affectedSceneIds
+          .map(id => allScenes(book).find(scene => scene.id === id))
+          .filter((scene): scene is Scene => !!scene);
+        const last = rewritten.at(-1);
         return {
-          phase: "revision", kind: "revision", title: "Finalizzazione revisione",
-          reason: "Ricollegare il flusso alla scrittura dopo la correzione.",
-          nextStep: "Ripresa autopilot",
-          prompt: `Riassumi brevemente i vincoli da rispettare dopo la modifica: ${rev.instruction}.\n\n${base}`,
-          apply: b => { b.revision = undefined; b.phase = b.chapters.length ? "prose" : rev.beforePhase; b.currentSceneId = undefined; },
+          phase: "revision", kind: "consolidate", title: "Memoria narrativa dopo la revisione",
+          reason: "Allineare personaggi, segreti, oggetti e cronologia alle scene riscritte.",
+          nextStep: "Nuova redazione dei capitoli toccati e ripresa della scrittura",
+          prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} Restituisci ESCLUSIVAMENTE JSON valido con i campi: {"characters":{"nome":"stato"},"locations":{},"factions":{},"items":{},"secrets":{"id":"stato privato e quando rivelare"},"timeline":["evento"],"currentState":"riassunto stato attuale"}.\n\nULTIMA SCENA RISCRITTA:\n${last?.text ?? "Nessuna"}\n\nCONTESTO:\n${base}`,
+          apply: (b, text) => {
+            const memory = memorySchema.parse(parseJson(text)) as NarrativeMemory;
+            const current = b.revision;
+            if (!current || current.id !== rev.id) throw new Error("Revisione cambiata durante l'aggiornamento della memoria.");
+            b.memory = memory;
+            closeRevision(b, current);
+          },
         };
       }
       const scene = allScenes(book).find(x => x.id === sceneId);
@@ -456,8 +568,8 @@ function nextWork(book: BookProject): Work | null {
       return {
         phase: "revision", kind: "revision", title: `Revisione retroattiva: ${scene.title}`,
         reason: `Istruzione dell'autore: ${rev.instruction}`,
-        nextStep: "Scena seguente o ripresa scrittura",
-        prompt: `Riscrivi SOLO la scena ${scene.id} in accordo alla nuova istruzione tassativa dell'autore. Preserva i fatti e le parti buone non coinvolte, ma correggi premesse, legami e rimandi per le conseguenze narrative. Restituisci SOLO prosa pronta per il libro.\n\nISTRUZIONE: ${rev.instruction}\n\nTESTO PRECEDENTE:\n${scene.text}\n\nCONTESTO:\n${base}`,
+        nextStep: "Scena seguente o aggiornamento della memoria",
+        prompt: `Riscrivi SOLO la scena ${scene.id} in accordo alla nuova istruzione tassativa dell'autore. Preserva i fatti e le parti buone non coinvolte, ma correggi premesse, legami e rimandi per le conseguenze narrative. Restituisci SOLO prosa pronta per il libro.\n\nISTRUZIONE: ${rev.instruction}\n\nTESTO PRECEDENTE:\n${scene.text}\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, scene.id)}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => {
           const target = allScenes(b).find(x => x.id === sceneId);
           if (!target || !b.revision) throw new Error("Revisione non più applicabile.");
@@ -469,6 +581,21 @@ function nextWork(book: BookProject): Work | null {
   }
 }
 
+const PLANNING_PHASES: readonly Phase[] = ["brainstorm", "validate", "audience", "adversarial", "outline"];
+/** Leave the revision phase: back to an interrupted review, to writing, or to planning. */
+export function closeRevision(book: BookProject, rev: RevisionRequest): void {
+  book.revision = undefined;
+  book.currentSceneId = undefined;
+  book.phase = book.editorialCycle ? "chapterReview" : book.chapters.length ? "prose" :
+    PLANNING_PHASES.includes(rev.beforePhase) ? rev.beforePhase : "brainstorm";
+}
+/** An analysed revision that touches no written scene needs no further AI call. */
+function revisionClosableLocally(book: BookProject): book is BookProject & { revision: RevisionRequest } {
+  const rev = book.revision;
+  return book.phase === "revision" && !!rev && rev.impactAnalysis !== undefined &&
+    rev.affectedSceneIds.length === 0;
+}
+
 function shortSummary(text: string): string {
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > 340 ? `${clean.slice(0, 337)}…` : clean;
@@ -477,14 +604,20 @@ function shortSummary(text: string): string {
 export class AutopilotRunner {
   private abort?: AbortController;
   private active = false;
+  private stopAfter = false;
 
   get running() { return this.active; }
+  get stopAfterCurrentRequested() { return this.stopAfter; }
 
+  /** Immediate pause: aborts the in-flight request (it may still be billed). */
   stop() { this.abort?.abort(); }
+  /** Graceful pause: let the current task finish and commit, then stop. */
+  stopAfterCurrent() { if (this.active) this.stopAfter = true; }
 
   async run(bookId: string, onUpdate: () => Promise<void>): Promise<void> {
     if (this.active) return;
     this.active = true;
+    this.stopAfter = false;
     const controller = new AbortController();
     this.abort = controller;
     const signal = controller.signal;
@@ -506,6 +639,13 @@ export class AutopilotRunner {
         await guard.assertActive();
         const book = await getBook(bookId);
         if (!book || book.status !== "running") break;
+        if (this.stopAfter) {
+          book.status = "paused";
+          book.previousError = undefined;
+          await saveBook(book, false);
+          await onUpdate();
+          break;
+        }
         // A previously canonical chapter is not final until the independent board freezes it.
         if (book.phase === "prose" && !book.editorialCycle) {
           const ready = [...book.chapters]
@@ -529,6 +669,22 @@ export class AutopilotRunner {
           await onUpdate();
           break;
         }
+        if (revisionClosableLocally(book)) {
+          const expected = book.updatedAt;
+          const instruction = book.revision.instruction;
+          closeRevision(book, book.revision);
+          const now = new Date().toISOString();
+          await saveBookAndActivity(book, {
+            id: crypto.randomUUID(), bookId, runId, phase: "revision",
+            title: "Revisione chiusa senza riscritture",
+            reason: "L'analisi d'impatto non ha individuato scene già scritte da cambiare.",
+            nextStep: "L'istruzione resta un vincolo permanente per i prossimi task.",
+            status: "succeeded", aiRequested: false, createdAt: now, endedAt: now,
+            summary: shortSummary("Nessuna scena riscritta per: " + instruction),
+          }, expected);
+          await onUpdate();
+          continue;
+        }
         const work = nextWork(book);
         if (!work) {
           if (book.phase === "audience" && book.audienceReviews.length >= 5) {
@@ -542,6 +698,9 @@ export class AutopilotRunner {
         const configuredEndpoint=settings.endpoints.find(e=>e.id===assignment.endpointId);
         const requestedEffort=configuredEndpoint
           ? taskReasoningChoice(work.kind,settings,book,configuredEndpoint):undefined;
+        // Author next-step notes go only to tasks that already see the private canon.
+        const notes = taskAcceptsAuthorNotes(work.kind) ? pendingAuthorNotes(book) : [];
+        const userPrompt = withAuthorNotes(work.prompt, notes);
         const started: Activity = {
           id: crypto.randomUUID(), bookId, runId,
           phase: work.phase, title: work.title, reason: work.reason,
@@ -550,6 +709,7 @@ export class AutopilotRunner {
           endpointId: assignment.endpointId, modelId: assignment.modelId,
           aiRequested: false,
           ...(requestedEffort===undefined?{}:{requestedReasoningEffort:requestedEffort}),
+          ...(notes.length ? { appliedInterventionIds: notes.map(note => note.id) } : {}),
         };
         await saveActivity(started);
         await onUpdate();
@@ -557,7 +717,7 @@ export class AutopilotRunner {
           await guard.assertActive(); // Do not charge credits without verified ownership.
           const systemPrompt = work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.";
           const preflight = preflightBookAiBudget(
-            book, settings, await listActivities(bookId), work.kind, systemPrompt, work.prompt, runId,
+            book, settings, await listActivities(bookId), work.kind, systemPrompt, userPrompt, runId,
           );
           await guard.assertActive();
           if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");
@@ -573,7 +733,7 @@ export class AutopilotRunner {
             await saveAiTrace({
               activityId:started.id,bookId,createdAt:started.createdAt,
               endpointId:assignment.endpointId,modelId:assignment.modelId,
-              systemPrompt,userPrompt:work.prompt,truncated:false,
+              systemPrompt,userPrompt,truncated:false,
             });
           }
           started.aiRequested = true;
@@ -588,7 +748,7 @@ export class AutopilotRunner {
           const inspectStream = settings.inspectAiRequests===true ||
             configuredEndpoint?.streamMode==="sse" ||
             configuredEndpoint?.apiProtocol==="lmstudio_native";
-          const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,
+          const result = await callModel(work.kind, systemPrompt, userPrompt, settings, book, signal,
             preflight || inspectStream ? {
               ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
               ...(inspectStream ? {
@@ -616,11 +776,13 @@ export class AutopilotRunner {
           work.apply(latest, result.text);
           started.status = "succeeded"; started.endedAt = new Date().toISOString();
           started.summary = shortSummary(result.text); started.output = result.text;
+          // Atomic with the canon commit below: a failed task leaves notes pending.
+          markAuthorNotesApplied(latest, notes.map(note => note.id), started.id, work.title, started.endedAt);
           if(settings.inspectAiRequests) {
             await saveAiTrace({
               activityId:started.id,bookId,createdAt:started.createdAt,
               endpointId:assignment.endpointId,modelId:assignment.modelId,
-              systemPrompt,userPrompt:work.prompt,response:result.text,
+              systemPrompt,userPrompt,response:result.text,
               reasoning:currentLiveAi()?.activityId===started.id
                 ? currentLiveAi()?.reasoningPreview : undefined,
               truncated:false,
@@ -710,40 +872,11 @@ export class AutopilotRunner {
 }
 
 /**
- * A manual instruction must not overwrite a newer chapter or checkpoint
- * from an AI writer or another tab. Keep the writer Web Lock until the
- * IndexedDB compare-and-swap and any outbox work have finished.
+ * Retroactive author revision, now recorded as an author intervention
+ * (writer Web Lock + CAS + audit entry). Kept for existing callers.
  */
 export async function requestRevision(
   bookId: string, instruction: string, expectedUpdatedAt: string,
 ): Promise<void> {
-  const normalized = instruction.trim();
-  if (!normalized) throw new Error("Scrivi la modifica che desideri.");
-  if (!expectedUpdatedAt) throw new BookRevisionConflict();
-
-  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
-  if (!locks?.request)
-    throw new Error("Web Locks non disponibile: revisione bloccata per evitare scritture concorrenti.");
-  await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {
-    if (!lock) throw new Error("Un'altra scheda sta scrivendo questo libro: attendi prima di richiedere una revisione.");
-    const book = await getBook(bookId);
-    if (!book) throw new Error("Libro non trovato.");
-    if (book.updatedAt !== expectedUpdatedAt) throw new BookRevisionConflict();
-    if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
-    if (book.editorialCycle)
-      throw new Error("La redazione del capitolo è attiva o bloccata. Completa il ciclo o usa la riapertura nel pannello Redazione.");
-    if (book.editorialReviewSceneIds?.length)
-      throw new Error("Conferma le scene fuse nel Lettore prima di richiedere altre revisioni AI.");
-
-    book.authorConstraints = [...(book.authorConstraints ?? []), normalized];
-    const rev: RevisionRequest = {
-      id: crypto.randomUUID(), instruction: normalized, beforePhase: book.phase,
-      affectedSceneIds: [], cursor: 0,
-    };
-    book.revision = rev;
-    book.phase = "revision"; book.status = "paused";
-    // Check the revision again inside the books+outbox transaction: a
-    // non-cooperating writer might have changed IndexedDB since getBook.
-    await saveBook(book, true, expectedUpdatedAt);
-  });
+  await recordAuthorIntervention(bookId, { instruction, scope: "rewrite" }, expectedUpdatedAt);
 }

@@ -8,6 +8,10 @@ import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "./ai";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
 import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
+import { MAX_AUTHOR_INTERVENTIONS, MAX_INTERVENTION_CHARS } from "../domain/author-interventions";
+import {
+  MAX_CHAPTER_SYNOPSIS_CHARS, MAX_CHAPTER_TITLE_CHARS, MAX_SYNOPSIS_CHAPTERS, MAX_TARGET_CHAPTERS,
+} from "../domain/book-start";
 import { MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./ai-header-timeout";
 import {MAX_TRANSFER_SHARE_DECISIONS,type NarrativeTransferShareDecision}
   from "../domain/narrative-transfer-sharing";
@@ -236,14 +240,32 @@ const editorialVerificationChoiceSchema=z.object({
   decidedAt:z.string().datetime(),
 }).strict();
 
+const PHASES = ["brainstorm", "validate", "audience", "adversarial", "outline",
+  "prose", "review", "consolidate", "chapterReview", "revision", "completed"] as const;
+// Author prompts are verbatim history: strict shape, bounded size, no extra keys.
+const authorInterventionSchema = z.object({
+  id: zId, createdAt: z.string().datetime(),
+  instruction: z.string().min(1).max(MAX_INTERVENTION_CHARS),
+  scope: z.enum(["next_step", "from_now", "rewrite"]),
+  phase: z.enum(PHASES),
+  stepLabel: z.string().max(300),
+  activityId: zId.optional(),
+  appliedAt: z.string().datetime().optional(),
+  appliedActivityId: zId.optional(),
+  appliedStepLabel: z.string().max(300).optional(),
+}).strict();
+const authorChapterSynopsisSchema = z.object({
+  title: z.string().min(1).max(MAX_CHAPTER_TITLE_CHARS).optional(),
+  synopsis: z.string().min(1).max(MAX_CHAPTER_SYNOPSIS_CHARS),
+}).strict();
+
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
   writingStyle: z.string(), audience: z.string(),
   authorConstraints: z.array(z.string()).default([]),
   createdAt: z.string(), updatedAt: z.string(),
   status: z.enum(["idle", "running", "paused", "error", "completed"]),
-  phase: z.enum(["brainstorm", "validate", "audience", "adversarial", "outline",
-    "prose", "review", "consolidate", "chapterReview", "revision", "completed"]),
+  phase: z.enum(PHASES),
   previousError: z.string().optional(),
   ideas: z.string().optional(), validation: z.string().optional(),
   audienceReviews: z.array(z.string()),
@@ -258,6 +280,11 @@ const bookSchema = z.object({
   narrativeTransferAssessments: z.array(narrativeTransferAssessmentSchema).max(120).optional(),
   narrativeTransferShareDecisions: z.array(narrativeTransferShareSchema).max(180).optional(),
   editorialVerificationChoices: z.array(editorialVerificationChoiceSchema).max(160).optional(),
+  startMode: z.enum(["idea", "synopsis"]).optional(),
+  authorChapterSynopses: z.array(authorChapterSynopsisSchema).max(MAX_SYNOPSIS_CHAPTERS).optional(),
+  targetChapterCount: z.number().int().min(1).max(MAX_TARGET_CHAPTERS).optional(),
+  pauseAfterOutline: z.boolean().optional(),
+  authorInterventions: z.array(authorInterventionSchema).max(MAX_AUTHOR_INTERVENTIONS).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),
   // Legacy books omit aiBudget. If present, untrusted ZIPs must not supply
@@ -292,6 +319,8 @@ const activitySchema = z.object({
     inputEurPerMillion: z.number().finite().min(0).max(10_000),
     outputEurPerMillion: z.number().finite().min(0).max(10_000),
   }).strict().optional(),
+  interventionId: zId.optional(),
+  appliedInterventionIds: z.array(zId).max(MAX_AUTHOR_INTERVENTIONS).optional(),
 }).passthrough();
 const mergeDraftSchema = z.object({
   id: zId, bookId: zId, chapterId: zId, sceneId: zId,

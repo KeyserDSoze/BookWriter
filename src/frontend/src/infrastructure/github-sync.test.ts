@@ -344,6 +344,39 @@ describe("GitHub sync conservativa", () => {
     expect(fake).toHaveBeenCalled();
   });
 
+  it("dallo snapshot GitHub conserva solo interventi e opzioni di avvio ben formati", async () => {
+    const remoteBook = newBook("Trama remota", "Libro con interventi", "Realista", "Adulti", {
+      startMode: "synopsis",
+      authorChapterSynopses: [{ title: "Arrivo", synopsis: "Mara arriva al porto." }],
+      pauseAfterOutline: true,
+    });
+    const valid = {
+      id: crypto.randomUUID(), createdAt: "2025-01-01T00:00:00.000Z", instruction: "Piu ritmo",
+      scope: "from_now", phase: "prose", stepLabel: "Scrittura",
+    };
+    const source = JSON.stringify({
+      ...remoteBook,
+      targetChapterCount: 999,
+      authorInterventions: [valid, { ...valid, id: 7 }, { ...valid, scope: "sudo" }, "x", null],
+    });
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL): Promise<Response> => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/git/ref/heads/main")) return reply({ object: { sha: BEFORE } });
+      if (path.endsWith("/contents/.bookwriter/project.json"))
+        return reply({ type: "file", encoding: "base64", content: btoa(source) });
+      if (path.endsWith("/contents/.bookwriter/activities.json"))
+        return reply({ type: "file", encoding: "base64", content: btoa("[]") });
+      return reply({ message: "not mocked" }, 500);
+    }));
+    await importGitHubBook({ owner: "test-owner", repository: "book-repo", branch: "main" });
+    const stored = await getBook(remoteBook.id);
+    expect(stored?.authorInterventions).toEqual([valid]);
+    expect(stored?.startMode).toBe("synopsis");
+    expect(stored?.authorChapterSynopses).toEqual([{ title: "Arrivo", synopsis: "Mara arriva al porto." }]);
+    expect(stored?.pauseAfterOutline).toBe(true);
+    expect(stored?.targetChapterCount).toBeUndefined();
+  });
+
 
   it("riconosce un commit remoto già riuscito quando il browser ha perso la risposta", async () => {
     const book = await sampleBook();

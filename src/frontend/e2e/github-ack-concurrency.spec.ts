@@ -187,7 +187,7 @@ test("ACK GitHub non sovrascrive il canon nuovo da seconda tab e conserva la cod
   const second = await page.context().newPage();
   try {
     await second.goto("/");
-    await expect(second.getByRole("textbox", { name: "Istruzione di revisione" })).toBeVisible();
+    await expect(second.getByRole("textbox", { name: "Il tuo intervento" })).toBeVisible();
     await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
     await expect(page.getByText(/HEAD GitHub è diversa dal commit pubblicato/)).toBeVisible();
     const notAcknowledged = await snapshot(page);

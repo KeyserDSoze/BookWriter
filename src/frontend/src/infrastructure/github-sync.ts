@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Activity, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { projectBook } from "../domain/narrarium";
+import { sanitizeAuthorInterventions } from "../domain/author-interventions";
+import { sanitizeBookStart } from "../domain/book-start";
 import { decryptLocal } from "./crypto";
 import { getDb, getBook, listActivities, loadSettings } from "./db";
 import type { ManualPushIntent } from "./manual-push-intent";
@@ -176,8 +178,15 @@ function parseRemoteBook(raw: string): BookProject {
   }).passthrough().safeParse(data);
   if (!parsed.success) throw new Error("Il progetto remoto non segue lo schema BookWriter.");
   const project = parsed.data as unknown as BookProject;
+  // Optional author fields come from an untrusted repository: rebuild them
+  // from well-formed entries only, never pass arbitrary shapes to the UI/prompts.
+  const { startMode: _mode, authorChapterSynopses: _synopses, targetChapterCount: _target,
+    pauseAfterOutline: _pause, authorInterventions: _interventions, ...rest } = project;
+  const interventions = sanitizeAuthorInterventions(project.authorInterventions);
   return {
-    ...project,
+    ...rest,
+    ...sanitizeBookStart(parsed.data as Record<string, unknown>),
+    ...(interventions ? { authorInterventions: interventions } : {}),
     authorConstraints: project.authorConstraints ?? [],
     audienceReviews: project.audienceReviews ?? [],
     status: project.status === "running" ? "paused" : project.status,
