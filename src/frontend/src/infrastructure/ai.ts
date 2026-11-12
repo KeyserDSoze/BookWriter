@@ -1,5 +1,6 @@
 import type { AppSettings, BookProject, TaskKind } from "../domain/types";
 import { routeFor } from "../domain/types";
+import { effectiveReasoningEffort } from "../domain/task-reasoning";
 import { decryptLocal } from "./crypto";
 import { validTokenCount } from "../domain/ai-usage";
 import { assertChatModelCapability } from "../domain/model-capabilities";
@@ -89,7 +90,7 @@ export async function callModel(
   assertChatModelCapability(endpoint, assignment.modelId);
   // Fail closed on malformed local/imported settings before decrypting or POST.
   const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
-  const effort = chatReasoningEffort(endpoint.reasoningEffort);
+  const effort = chatReasoningEffort(effectiveReasoningEffort(kind,settings,book,endpoint));
   const streaming = chatStreamMode(endpoint.streamMode) === "sse";
   if (options?.maxOutputTokens !== undefined &&
       (!Number.isSafeInteger(options.maxOutputTokens) ||

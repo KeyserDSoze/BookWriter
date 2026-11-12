@@ -4,6 +4,9 @@ export const TASK_KINDS = [
   "chapterAudit", "chapterReaders", "chapterJudge", "chapterRepair",
 ] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
+/** "automatic" explicitly omits reasoning_effort even if endpoint has a default. */
+export type TaskReasoning = "automatic" | "low" | "medium" | "high" | "xhigh";
+export type TaskReasoningOverrides = Partial<Record<TaskKind, TaskReasoning>>;
 
 export type RunStatus = "idle" | "running" | "paused" | "error" | "completed";
 export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "outline" | "prose" | "review" | "consolidate" | "chapterReview" | "revision" | "completed";
@@ -41,6 +44,10 @@ export interface EndpointProfile {
   outputTokenParameter?: "max_tokens" | "max_completion_tokens";
   /** Explicit SSE mode for Chat Completions. */
   streamMode?: "off" | "sse";
+  /** SSE body deadline, independent of waiting for HTTP headers. 600–3600 s. */
+  streamTimeoutSeconds?: number;
+  /** Optional local LM Studio native v1 SSE protocol (loopback only). */
+  apiProtocol?: "openai" | "lmstudio_native";
   /** Optional OpenAI-compatible reasoning_effort (provider dependent). */
   reasoningEffort?: "low" | "medium" | "high" | "xhigh";
 }
@@ -78,6 +85,8 @@ export interface AppSettings {
   endpoints: EndpointProfile[];
   defaultRoute: ModelRoute;
   taskRoutes: Partial<Record<TaskKind, ModelRoute>>;
+  /** Task-level effort choices; book overrides take priority, endpoint is fallback. */
+  taskReasoningEfforts?: TaskReasoningOverrides;
   /** Selected defaults for future adapters; Chat continues to use defaultRoute. */
   capabilityRoutes?: Partial<Record<AuxiliaryModelCapability, ModelRoute>>;
   aiPriceRates?: AiPriceRate[];
@@ -184,6 +193,7 @@ export interface BookProject {
   currentSceneId?: string;
   revision?: RevisionRequest;
   modelRoutes?: Partial<Record<TaskKind, ModelRoute>>;
+  taskReasoningEfforts?: TaskReasoningOverrides;
   remote?: GitHubRemote;
 }
 export interface Activity {
@@ -203,6 +213,8 @@ export interface Activity {
   modelId?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Requested value; does not attest that LM Studio honored the parameter. */
+  requestedReasoningEffort?: TaskReasoning;
   /** Author-entered EUR/million quote captured BEFORE the provider attempt. */
   priceRateSnapshot?: AiPriceRate;
   /** True once a provider request was about to be sent; absent on legacy logs. */

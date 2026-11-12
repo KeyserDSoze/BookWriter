@@ -7,6 +7,7 @@ import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "./ai";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
+import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
 import { MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./ai-header-timeout";
 import {MAX_TRANSFER_SHARE_DECISIONS,type NarrativeTransferShareDecision}
   from "../domain/narrative-transfer-sharing";
@@ -276,6 +277,9 @@ const bookSchema = z.object({
     impactAnalysis: z.string().optional(),
   }).passthrough().optional(),
   modelRoutes: z.record(z.string(), routeSchema).optional(),
+  taskReasoningEfforts: z.record(z.string(),z.enum(["automatic","low","medium","high","xhigh"])).superRefine((v,ctx)=>{
+    try{validateTaskReasoningOverrides(v);}catch{ctx.addIssue({code:"custom",message:"Task reasoning non valido"});}
+  }).optional(),
 }).passthrough();
 const activitySchema = z.object({
   id: zId, bookId: zId, runId: z.string(), phase: z.string(), title: z.string(),
@@ -329,6 +333,9 @@ const backupSchema = z.object({
     }, "Autenticazione senza chiave consentita solo su localhost.")).max(30),
     defaultRoute: routeSchema,
     taskRoutes: z.record(z.string(), routeSchema),
+    taskReasoningEfforts: z.record(z.string(),z.enum(["automatic","low","medium","high","xhigh"])).superRefine((v,ctx)=>{
+      try{validateTaskReasoningOverrides(v);}catch{ctx.addIssue({code:"custom",message:"Task reasoning non valido"});}
+    }).optional(),
     capabilityRoutes: z.object({
       tools: routeSchema.optional(),
       embedding: routeSchema.optional(),
@@ -365,6 +372,7 @@ type BackupData = {
       modelCapabilities?: AppSettings["endpoints"][number]["modelCapabilities"] }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
+    taskReasoningEfforts?: AppSettings["taskReasoningEfforts"];
     capabilityRoutes?: AppSettings["capabilityRoutes"];
     aiPriceRates?: AppSettings["aiPriceRates"];
   };
@@ -472,6 +480,7 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
     data.settings = {
       theme: settings.theme, defaultRoute: settings.defaultRoute,
       taskRoutes: settings.taskRoutes,
+      taskReasoningEfforts: settings.taskReasoningEfforts,
       capabilityRoutes: settings.capabilityRoutes,
       aiPriceRates: settings.aiPriceRates,
       endpoints: await Promise.all(settings.endpoints.map(async endpoint => ({
@@ -634,6 +643,7 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     importedSettings = {
       theme: data.settings.theme, defaultRoute: data.settings.defaultRoute,
       taskRoutes: data.settings.taskRoutes as AppSettings["taskRoutes"],
+      taskReasoningEfforts: data.settings.taskReasoningEfforts,
       capabilityRoutes: data.settings.capabilityRoutes,
       aiPriceRates: data.settings.aiPriceRates,
       endpoints: await Promise.all(data.settings.endpoints.map(async endpoint => ({

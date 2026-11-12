@@ -3,6 +3,7 @@ import { chatOutputTokenParameter, endpointAuthMode, normalizeEndpoint } from ".
 import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
 import { chatReasoningEffort, chatStreamMode } from "../infrastructure/ai-stream";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
+import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
 
 export interface EndpointSettingsSnapshot {
   settings: AppSettings;
@@ -47,6 +48,7 @@ export class EndpointSettingsSaveCoordinator {
     try {
       // Validate all declared model tags and defaults before encryption/IndexedDB.
       assertModelCapabilitySettings(snapshot.settings);
+      validateTaskReasoningOverrides(snapshot.settings.taskReasoningEfforts);
       // Validate all endpoint profiles before starting any encryption.
       const verified = snapshot.settings.endpoints.map(profile => {
         const baseUrl = normalizeEndpoint(profile.baseUrl);
