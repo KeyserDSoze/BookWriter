@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #152
+
+- **CI più verificabile e veloce:** Playwright desktop/mobile rimane obbligatorio ma viene eseguito in 4 shard su runner indipendenti. Typecheck/Vitest/smoke/build e EPUBCheck restano gate separati. `fail-fast:false` evita che un fallimento cancelli i risultati degli altri shard; timeout esplicito e artifact diagnostici univoci su errore. Nessuna riduzione di test, nessun bump/npm lockfile modificato. [ADR 0131](../ADR/0131-sharded-mandatory-browser-ci.md).
+
+
 ## Non rilasciato — issue #151
 
 - **Ascolto integrale** delle scene canoniche con Web Speech API, segmentazione di massimo 700 codepoint, confini di frase/parola e conservazione senza perdite. Callback obsolete ignorate dopo stop, cambio scena/voce/libro; controllo blocchi, pausa/ripresa e stop.

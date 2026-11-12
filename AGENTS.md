@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### CI browser sharded obbligatoria — #152 / ADR 0131
+
+- La workflow `.github/workflows/ci.yml` deve restare un gate **obbligatorio**: `frontend` esegue typecheck, Vitest, smoke, build; `epubcheck` valida 4 EPUB reali; `e2e` usa matrice di quattro shard Playwright indipendenti, con **entrambi** i progetti Chromium desktop e mobile in ciascuno shard (aggregati per coprire tutte le spec).
+- Su CI niente skip, `continue-on-error` né `fail-fast: true` per mascherare shard falliti. Ogni runner installa npm ci e Chromium shell, esegue `npm run test:e2e -- --shard=N/4`; timeout 45 minuti per shard e artifact failure con nome univoco. La branch main è attestata solo quando **tutti** i job della stessa HEAD e Pages/cleanup risultano `completed/success`.
+- Il browser mock non certifica provider LM Studio reale. Non modificare lockfile o numero npm manualmente per ottimizzare la CI. [ADR 0131](ADR/0131-sharded-mandatory-browser-ci.md).
+
+
 ### Lettura integrale delle scene canoniche — issue #151 / ADR 0130
 
 - `speechSegments` segmenta `scene.text.trim()` in blocchi fino a 700 codepoint Unicode, preferendo confini frase/parola e preservando esattamente `chunks.join("") === original.trim()`. Oltre 280.000 codepoint rifiutare esplicitamente, mai troncare senza avviso. Solo scene canoniche.

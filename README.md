@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **CI frontend (#152):** Playwright Chromium desktop/mobile viene distribuito in quattro shard obbligatori per ridurre la coda e isolare regressioni, mantenendo typecheck, Vitest, build ed EPUBCheck come gate. [ADR 0131](ADR/0131-sharded-mandatory-browser-ci.md).
+
+
 - **Voce integrale (#151, ancora da rilasciare con versione npm):** la lettura tramite browser raggiunge l'intera scena canonica con sequenza di blocchi, avanzamento, pausa/ripresa/stop, senza più il taglio ai primi 5.000 caratteri. Non è un adapter TTS di LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0130](ADR/0130-browser-speech-complete-scene.md).
 
 
