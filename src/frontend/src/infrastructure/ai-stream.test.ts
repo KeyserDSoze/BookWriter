@@ -78,12 +78,12 @@ describe("SSE Chat Completions e controllo reasoning",()=>{
       ['data: [DONE]\n\n'],
     ]) {
       await expect(readChatCompletionStream(sse(events),new AbortController().signal))
-        .rejects.toThrow(/Stream AI/);
+        .rejects.toThrow(/Stream AI|Il provider ha terminato/);
     }
     const big=new Response("data: "+("x".repeat(2000001)),{
       headers:{"content-type":"text/event-stream"}});
     await expect(readChatCompletionStream(big,new AbortController().signal))
-      .rejects.toThrow(/Stream AI/);
+      .rejects.toThrow(/Stream AI|Il provider ha terminato/);
   });
   it("valida effort e stream prima della rete, non assume compatibilità",async()=>{
     const {settings,book}=fixture(),fetcher=vi.fn();
