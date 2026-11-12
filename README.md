@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Continuità narrativa assistita dagli embedding (#153):** in Libro → Ricerca semantica, dopo indicizzazione puoi confrontare una scena canonica con altre scene collegate attraverso l'indice già in RAM, senza ulteriori chiamate al modello e senza alterare il manoscritto. [Guida](docs/semantic-voice-workspace.md) · [ADR 0132](ADR/0132-semantic-related-scenes.md).
+
+
 - **CI frontend (#152):** Playwright Chromium desktop/mobile viene distribuito in quattro shard obbligatori per ridurre la coda e isolare regressioni, mantenendo typecheck, Vitest, build ed EPUBCheck come gate. [ADR 0131](ADR/0131-sharded-mandatory-browser-ci.md).
 
 

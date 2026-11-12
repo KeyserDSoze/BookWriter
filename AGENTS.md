@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Scene correlate per continuità narrativa — issue #153 / ADR 0132
+
+- Dopo indicizzazione esplicita con `/embeddings`, `SemanticSearchPanel` consente di scegliere una scena canonica di riferimento e mostrare fino a cinque altre scene vicine semanticamente. `relatedSemanticScenes` usa **solo** vettori già presenti in RAM, esclude il riferimento e valida id, lunghezze e dimensioni; **nessun nuovo fetch** per il confronto scena-scena.
+- I risultati non sono giudizi di continuità né attestazioni di contraddizioni: l'autore verifica capitolo, estratto e scena di destinazione. Indice non persistito, obsoleto dopo mutazione libro/endpoint, limitato a scene canoniche, senza bozze/memoria privata, nessun nuovo consenso implicito o accesso ai prompt dei revisori.
+- Copertura Vitest di ranking ed errori, Playwright desktop/mobile mock con contatore POST invariato dopo confronto. [Guida](docs/semantic-voice-workspace.md) · [ADR 0132](ADR/0132-semantic-related-scenes.md). Non sostituisce issue #5 per continuità completa o #148 per indicizzazione estesa.
+
+
 ### Accessibilità router Chat e compatibilità test legacy — #147 (fix E2E)
 
 - Il campo **Modello predefinito** deve restare un `input` con ruolo ARIA **textbox**, utilizzato sia dall'autore per scrivere ID manuali sia da test browser preesistenti. **Non** collegare direttamente `<datalist>` all'input: su Chromium gli cambia il ruolo in `combobox` e gli E2E non trovano più il campo, anche se la build riesce.

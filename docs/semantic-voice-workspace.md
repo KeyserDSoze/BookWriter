@@ -19,6 +19,10 @@ Il pannello usa la **Web Speech API del browser**, non il modello `voice` selezi
 
 L'API usata è `POST http://localhost:1234/v1/embeddings` con il modello scelto; se il server o il modello non lo supporta, si visualizza un errore senza retry automatico. La risposta del provider deve rispettare i vincoli di validazione e di memoria. Per la famiglia `nomic-embed-text` vengono aggiunti i prefissi consigliati `search_document:` per estratti e `search_query:` per query, richiesti da Nomic Embed Text v1.5.
 
+### Continuità narrativa: trova scene collegate
+
+Dopo **Indicizza scene su localhost**, scegli un capitolo e una **Scena di riferimento** in **Continuità narrativa: scene collegate** e premi **Trova scene collegate**. La funzione confronta il vettore della scena con quelli delle altre scene canoniche indicizzate, esclude la scena stessa e mostra fino a cinque correlazioni con estratto, capitolo e comando **Vai alla scena**. **Non invia ulteriori richieste** a LM Studio; riusa i vettori già presenti nella RAM del browser. Non è una verifica automatica delle contraddizioni: una forte similitudine può riflettere ripetizioni, un tema comune o un evento da controllare manualmente. Se la selezione contiene una sola scena non esistono altre scene da proporre; modifica del libro o del modello richiede una nuova indicizzazione.
+
 ### Limiti, privacy e coerenza
 
 - Soltanto hostname letterali **localhost** o **127.0.0.1**; anche con API key non viene inviata prosa a un endpoint remoto da questa funzione. CORS è necessario in LM Studio.

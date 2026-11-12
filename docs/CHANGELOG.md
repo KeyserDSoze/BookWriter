@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## Non rilasciato — issue #153
+
+- **Scene correlate per continuità narrativa:** scegli una scena canonica da un indice embedding locale già costruito e ottieni fino a cinque scene vicine, escludendo l'originale, con punteggio coseno e link alla scena. L'azione confronta soltanto vettori in RAM, quindi non genera altre chiamate al provider. Nessun giudizio automatico di coerenza, nessuna bozza, nuovo prompt, mutazione o sync. [ADR 0132](../ADR/0132-semantic-related-scenes.md) · [guida](semantic-voice-workspace.md).
+
+
 ## Non rilasciato — correzione accessibilità router #147
 
 - Il modello predefinito Chat torna selezionabile tramite una **casella di testo** con ruolo accessibile stabile, affiancata da un menu per scegliere gli ID compatibili trovati nel catalogo. La precedente `datalist` trasformava la casella in una combobox su Chromium, causando regressioni nei test browser esistenti; nessun cambio al defaultRoute, ai dati del libro o alle chiavi API.
