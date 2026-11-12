@@ -6,24 +6,27 @@
 
 ## Funzionalità disponibili
 
+- **Release locale-first 0.11.90 (#145)**: Node 22/npm 10, doppio `npm ci` e 866 Vitest per ciclo. Include gate dossier storico #144, LM Studio no-key #146, ruoli AI #147, embedding locali #148 e scene collegate #153, lettura browser #149/#151 e CI sharded #152. [runner ufficiale npm #43130023179](https://github.com/KeyserDSoze/BookWriter/actions/runs/43130023179). Il frontend è `private:true`: release del sito Pages, **non** pubblicazione al registro npm.
+
+
 - **Continuità narrativa assistita dagli embedding (#153):** in Libro → Ricerca semantica, dopo indicizzazione puoi confrontare una scena canonica con altre scene collegate attraverso l'indice già in RAM, senza ulteriori chiamate al modello e senza alterare il manoscritto. [Guida](docs/semantic-voice-workspace.md) · [ADR 0132](ADR/0132-semantic-related-scenes.md).
 
 
 - **CI frontend (#152):** Playwright Chromium desktop/mobile viene distribuito in quattro shard obbligatori per ridurre la coda e isolare regressioni, mantenendo typecheck, Vitest, build ed EPUBCheck come gate. [ADR 0131](ADR/0131-sharded-mandatory-browser-ci.md).
 
 
-- **Voce integrale (#151, ancora da rilasciare con versione npm):** la lettura tramite browser raggiunge l'intera scena canonica con sequenza di blocchi, avanzamento, pausa/ripresa/stop, senza più il taglio ai primi 5.000 caratteri. Non è un adapter TTS di LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0130](ADR/0130-browser-speech-complete-scene.md).
+- **Voce integrale (#151, incluso in v0.11.90):** la lettura tramite browser raggiunge l'intera scena canonica con sequenza di blocchi, avanzamento, pausa/ripresa/stop, senza più il taglio ai primi 5.000 caratteri. Non è un adapter TTS di LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0130](ADR/0130-browser-speech-complete-scene.md).
 
 
-- **Laboratorio editoriale con voce e ricerca semantica (#148/#149, non ancora in release npm):** nella scheda Libro puoi ascoltare singole scene canoniche con Web Speech API, interrompere/riprendere e regolare la voce; la ricerca semantica indicizza su comando fino a 80 scene canoniche con il modello embedding locale e ordina i risultati per similitudine coseno. I vettori restano in RAM, nessuna richiesta automatica a provider remoti. Il modello TTS configurato **non** viene chiamato finché manca un adapter audio supportato dal server LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0129](ADR/0129-opt-in-editorial-voice-semantic-workspace.md).
+- **Laboratorio editoriale con voce e ricerca semantica (#148/#149, incluso in v0.11.90):** nella scheda Libro puoi ascoltare singole scene canoniche con Web Speech API, interrompere/riprendere e regolare la voce; la ricerca semantica indicizza su comando fino a 80 scene canoniche con il modello embedding locale e ordina i risultati per similitudine coseno. I vettori restano in RAM, nessuna richiesta automatica a provider remoti. Il modello TTS configurato **non** viene chiamato finché manca un adapter audio supportato dal server LM Studio. [Guida](docs/semantic-voice-workspace.md) · [ADR 0129](ADR/0129-opt-in-editorial-voice-semantic-workspace.md).
 
 
-- **Catalogo dei modelli con tag manuali (#147, non ancora in release npm):** dopo `GET /models` puoi contrassegnare i modelli con Chat/scrittura, Tool calling, Embedding o Voce (anche più tag insieme), cercarli e scegliere predefiniti distinti. Solo Chat Completions è già operativa: i tag voce/embedding/tools preparano la configurazione, non attivano i corrispondenti adapter. [Guida](docs/model-capabilities.md) · [ADR 0128](ADR/0128-model-capability-tags.md).
+- **Catalogo dei modelli con tag manuali (#147, incluso in v0.11.90):** dopo `GET /models` puoi contrassegnare i modelli con Chat/scrittura, Tool calling, Embedding o Voce (anche più tag insieme), cercarli e scegliere predefiniti distinti. Solo Chat Completions è già operativa: i tag voce/embedding/tools preparano la configurazione, non attivano i corrispondenti adapter. [Guida](docs/model-capabilities.md) · [ADR 0128](ADR/0128-model-capability-tags.md).
 
 
-- **LM Studio e modelli locali senza API key (#146, non ancora in release npm):** in Impostazioni → Endpoint OpenAI-compatible si può scegliere «Nessuna autenticazione (solo localhost)» e usare `http://localhost:1234/v1`. Le chiamate `/models` e `/chat/completions` omettono Authorization. [Guida](docs/ai-local-endpoints.md) · [ADR 0127](ADR/0127-local-ai-unauthenticated-loopback.md).
+- **LM Studio e modelli locali senza API key (#146, incluso in v0.11.90):** in Impostazioni → Endpoint OpenAI-compatible si può scegliere «Nessuna autenticazione (solo localhost)» e usare `http://localhost:1234/v1`. Le chiamate `/models` e `/chat/completions` omettono Authorization. [Guida](docs/ai-local-endpoints.md) · [ADR 0127](ADR/0127-local-ai-unauthenticated-loopback.md).
 
-- **Fact-check storico resistente a restore concorrenti (#144, non ancora in release npm):** il revisore storico e il giudice possono approvare la propria risposta AI solo se il dossier delle fonti del capitolo è ancora identico a quello letto nel prompt, anche senza variazione del timestamp. [Guida](docs/editorial-historical-source-freshness.md) · [ADR 0126](ADR/0126-historical-dossier-prompt-freshness.md).
+- **Fact-check storico resistente a restore concorrenti (#144, incluso in v0.11.90):** il revisore storico e il giudice possono approvare la propria risposta AI solo se il dossier delle fonti del capitolo è ancora identico a quello letto nel prompt, anche senza variazione del timestamp. [Guida](docs/editorial-historical-source-freshness.md) · [ADR 0126](ADR/0126-historical-dossier-prompt-freshness.md).
 
 - **Release npm v0.11.89 (#143):** consolida il CAS atomico dell'autopilot (#142). File npm generati con [runner #43079099716](https://github.com/KeyserDSoze/BookWriter/actions/runs/43079099716), due `npm ci` e **826 Vitest per ciclo**, typecheck, smoke e build riusciti; lockfile senza aggiornamenti transitivi. CI/Pages/cleanup sulla HEAD finale da verificare.
 

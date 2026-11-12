@@ -21,3 +21,7 @@ BookWriter richiedeva sempre `secret` sia nella POST Chat Completions che in `GE
 ## Prove e limiti
 
 Vitest su header, secret legacy, URL e valori malevoli, salvataggio e ZIP full/content/legacy; Playwright mock per impostazioni, ricarica e una singola chiamata AI desktop/mobile. CI e collegamento effettivo a LM Studio da verificare separatamente. Nessun bump npm manuale, e chiusura issue solo dopo verifica workflow sulla stessa HEAD.
+
+## Stato release
+
+Incluso nella versione **0.11.90** (#145), mantenendo i limiti a hostname loopback letterali e l'autenticazione Bearer legacy. CORS e model inference effettivi su LM Studio sono da verificare sul PC.

@@ -19,3 +19,7 @@ BookWriter è una SPA: parla **direttamente dal browser** con server OpenAI-comp
 - La scoperta `/models` è indicativa; il modello potrebbe richiedere una diversa opzione `max_tokens`/`max_completion_tokens`. I test mock non provano l'inferenza su un server LM Studio reale.
 
 Riferimenti: [guida catalogo](ai-model-inventory.md), [guida output](ai-output-token-parameter.md), [ADR 0127](../ADR/0127-local-ai-unauthenticated-loopback.md), [issue #146](https://github.com/KeyserDSoze/BookWriter/issues/146).
+
+## Versione
+
+La modalità localhost senza API key è inclusa nella **0.11.90**. La raggiungibilità reale del server LM Studio, CORS e i modelli caricati vanno verificati sul PC dell'autore.

@@ -33,3 +33,7 @@ Dopo **Indicizza scene su localhost**, scegli un capitolo e una **Scena di rifer
 - I costi di provider, se il server locale è una proxy che inoltra richieste, non sono automaticamente registrati nel ledger AI. Usare endpoint locali fidati e limitati a loopback.
 
 Fonti: [LM Studio API OpenAI-compatible](https://lmstudio.ai/docs/developer/openai-compat), [Nomic Embed Text v1.5](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5), [Phonon multilingual](https://huggingface.co/gradium/phonon-40m-multilingual), [ADR 0129](../ADR/0129-opt-in-editorial-voice-semantic-workspace.md).
+
+## Versione
+
+La release **0.11.90** include lettura integrale **tramite browser**, retrieval `/embeddings` su localhost e confronto delle scene canoniche già indicizzate. Il modello Voce selezionato non viene ancora chiamato per TTS/STT; provider reale da verificare separatamente.

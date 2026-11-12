@@ -24,3 +24,7 @@ Il confronto CAS sul timestamp (ADR 0125) e la validazione di singole citazioni 
 Vitest: dossier invariato/assente, sostituzione estratto/revisione/attivi/relazioni, fase/stage/round/report count, capitolo e freeze, giudice. Integrazione runner con `updatedAt` invariato modificato durante la chiamata dello storico e del giudice, senza applicazione dei due output stale. Frontend CI, Playwright desktop/mobile, EPUBCheck 5.4.0 sui quattro EPUB, Pages e cleanup devono risultare `completed/success` sulla **medesima HEAD di main** prima della chiusura #144.
 
 Limiti: un backup può comunque essere falsificato *prima* del prompt, e non si dimostra indipendenza, licenza, provenienza o verità storica delle fonti; tali criticità richiedono verifica manuale dell'autore e ulteriori sviluppi della #23.
+
+## Stato release
+
+Incluso nella versione **0.11.90** (#145) dopo chiusura verificata di #144 sulla HEAD `0eb0275a` (Frontend CI #43128627959, Pages #43128627992, cleanup #43128627958 verdi). Verifiche tecniche non equivalgono a validazione storica.

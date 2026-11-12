@@ -1,27 +1,34 @@
 # Changelog — BookWriter
 
-## Non rilasciato — issue #153
+## 0.11.90 — 2026-11-12 (main, issue #145)
+
+**Release riproducibile:** [runner ufficiale npm #43130023179](https://github.com/KeyserDSoze/BookWriter/actions/runs/43130023179) `completed/success`; Node 22/npm 10 su registry ufficiale, `npm version 0.11.90 --no-git-tag-version --ignore-scripts`, `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`, lockfile npm v3 **235 voci**: soltanto la versione root cambia, nessuna differenza in transitive, URL `resolved` o hash `integrity`. Due `npm ci` puliti, ognuno con 866 Vitest, 9 smoke, typecheck e build. Manifest SHA-256 `0e9d9e1891384d0a41d58541f30d75097e16c55a56200acd496e3241b1f27846`, lock SHA-256 `64093bba97d7b0167ac8108c91af0701fe200dc343e78ebe19efc5f1f3798816`.
+
+**Funzionalità incluse:** #144 gate storico, #146 LM Studio localhost senza chiave, #147 catalogo/ruoli modelli, #148 embedding locale e #153 scene correlate, #149/#151 lettura vocale **del browser**, #152 CI E2E sharded. Il pacchetto è privato e viene distribuito via Pages, non pubblicato nel registro npm; non sono stati provati sul PC TTS modello o compatibilità Nomic reale.
+
+
+### Incluso in v0.11.90 — issue #153
 
 - **Scene correlate per continuità narrativa:** scegli una scena canonica da un indice embedding locale già costruito e ottieni fino a cinque scene vicine, escludendo l'originale, con punteggio coseno e link alla scena. L'azione confronta soltanto vettori in RAM, quindi non genera altre chiamate al provider. Nessun giudizio automatico di coerenza, nessuna bozza, nuovo prompt, mutazione o sync. [ADR 0132](../ADR/0132-semantic-related-scenes.md) · [guida](semantic-voice-workspace.md).
 
 
-## Non rilasciato — correzione accessibilità router #147
+### Incluso in v0.11.90 — correzione accessibilità router #147
 
 - Il modello predefinito Chat torna selezionabile tramite una **casella di testo** con ruolo accessibile stabile, affiancata da un menu per scegliere gli ID compatibili trovati nel catalogo. La precedente `datalist` trasformava la casella in una combobox su Chromium, causando regressioni nei test browser esistenti; nessun cambio al defaultRoute, ai dati del libro o alle chiavi API.
 
 
-## Non rilasciato — issue #152
+### Incluso in v0.11.90 — issue #152
 
 - **CI più verificabile e veloce:** Playwright desktop/mobile rimane obbligatorio ma viene eseguito in 4 shard su runner indipendenti. Typecheck/Vitest/smoke/build e EPUBCheck restano gate separati. `fail-fast:false` evita che un fallimento cancelli i risultati degli altri shard; timeout esplicito e artifact diagnostici univoci su errore. Nessuna riduzione di test, nessun bump/npm lockfile modificato. [ADR 0131](../ADR/0131-sharded-mandatory-browser-ci.md).
 
 
-## Non rilasciato — issue #151
+### Incluso in v0.11.90 — issue #151
 
 - **Ascolto integrale** delle scene canoniche con Web Speech API, segmentazione di massimo 700 codepoint, confini di frase/parola e conservazione senza perdite. Callback obsolete ignorate dopo stop, cambio scena/voce/libro; controllo blocchi, pausa/ripresa e stop.
-- Nessun invio a TTS esterni da BookWriter, nessuna modifica al canone, limitazione esplicita per scene oltre 280.000 codepoint. Test unitari/Playwright e [ADR 0130](../ADR/0130-browser-speech-complete-scene.md). Versione npm invariata finché release non certificata.
+- Nessun invio a TTS esterni da BookWriter, nessuna modifica al canone, limitazione esplicita per scene oltre 280.000 codepoint. Test unitari/Playwright e [ADR 0130](../ADR/0130-browser-speech-complete-scene.md). Versione consolidata nella 0.11.90.
 
 
-## Non rilasciato — issue #148 e #149 (epic #6)
+### Incluso in v0.11.90 — issue #148 e #149 (epic #6)
 
 **Prime funzionalità reali per embedding e ascolto della prosa — #148/#149**
 
@@ -30,27 +37,27 @@
 - Test Vitest e Playwright desktop/mobile, documentazione [guida](semantic-voice-workspace.md) · [ADR 0129](../ADR/0129-opt-in-editorial-voice-semantic-workspace.md). Nessuna nuova dipendenza o versione npm anticipata. Il futuro collegamento del vero modello TTS e l'eventuale indicizzazione completa/persistente rimangono lavoro separato.
 
 
-## Non rilasciato — issue #147 (epic #6)
+### Incluso in v0.11.90 — issue #147 (epic #6)
 
 **Modelli configurabili per capacità e default distinti — #147**
 
 - La ricerca `/models` alimenta un catalogo con ricerca/paginazione e checkbox per tag manuali **Chat / scrittura, Tool calling, Embedding, Voce**, anche combinabili. Si può impostare il predefinito Chat già usato dall'autopilot e tenere predefiniti separati per tools, embedding e voce.
-- Il preflight Chat Completions impedisce di inviare prompt a un modello esplicitamente taggato soltanto come voce/embedding. Modelli legacy privi di tag e route per-task rimangono compatibili; le assegnazioni non certificano supporto API, né introducono adapter audio/embedding/tools. ZIP full persiste e valida l'inventario dei tag, backup content/legacy immutati. [ADR 0128](../ADR/0128-model-capability-tags.md) · [guida](model-capabilities.md). **Versione npm 0.11.89 invariata** in attesa di release dedicata.
+- Il preflight Chat Completions impedisce di inviare prompt a un modello esplicitamente taggato soltanto come voce/embedding. Modelli legacy privi di tag e route per-task rimangono compatibili; le assegnazioni non certificano supporto API, né introducono adapter audio/embedding/tools. ZIP full persiste e valida l'inventario dei tag, backup content/legacy immutati. [ADR 0128](../ADR/0128-model-capability-tags.md) · [guida](model-capabilities.md). **Incluso nella versione npm 0.11.90** in attesa di release dedicata.
 
 
-## Non rilasciato — issue #146 (epic #6)
+### Incluso in v0.11.90 — issue #146 (epic #6)
 
 **LM Studio/localhost senza API key — #146**
 
 - Opzione esplicita `authMode: none` per soli hostname letterali `localhost` e `127.0.0.1`, senza Authorization su `GET /models` e `POST /chat/completions`. Profilo legacy `api_key` invariato; host remoti o valori corrotti bloccati prima della rete.
-- Salvataggio IndexedDB senza cifrare la vecchia chiave (rimossa), backup ZIP full preserva la scelta, ZIP content resta senza endpoint; import full rifiuta autenticazione incoerente o remota e accetta legacy. Test Vitest e Playwright mock. [ADR 0127](../ADR/0127-local-ai-unauthenticated-loopback.md) · [guida](ai-local-endpoints.md). **Versione npm 0.11.89 invariata**; CI/prova con LM Studio reale da verificare.
+- Salvataggio IndexedDB senza cifrare la vecchia chiave (rimossa), backup ZIP full preserva la scelta, ZIP content resta senza endpoint; import full rifiuta autenticazione incoerente o remota e accetta legacy. Test Vitest e Playwright mock. [ADR 0127](../ADR/0127-local-ai-unauthenticated-loopback.md) · [guida](ai-local-endpoints.md). **Incluso nella versione npm 0.11.90**; CI/prova con LM Studio reale da verificare.
 
-## Non rilasciato — issue #144 (epic #23/#20)
+### Incluso in v0.11.90 — issue #144 (epic #23/#20)
 
 **Rifiuto di risposte AI basate su dossier storici cambiati — #144**
 
 - Il revisore storico e il giudice legano ogni risposta all'esatto `historicalDossier` del prompt, oltre a capitolo, fase, tornata e prefisso dei report. Un restore concorrente che sostituisce fonti, revisioni, estratti, relazioni, attivi o bibliografia (anche con `updatedAt` invariato) invalida la risposta **prima** di approvare report o verdetto; nessun freeze o canone derivato da fonti stale.
-- Snapshot solo in memoria, nessuna chiamata esterna o dato nuovo persistito, errori italiani generici senza contenuti delle fonti. Test del dominio e integrazione autopilot per revisore e giudice; [ADR 0126](../ADR/0126-historical-dossier-prompt-freshness.md) · [guida](editorial-historical-source-freshness.md). **Versione npm 0.11.89 invariata** fino a release dedicata.
+- Snapshot solo in memoria, nessuna chiamata esterna o dato nuovo persistito, errori italiani generici senza contenuti delle fonti. Test del dominio e integrazione autopilot per revisore e giudice; [ADR 0126](../ADR/0126-historical-dossier-prompt-freshness.md) · [guida](editorial-historical-source-freshness.md). **Incluso nella versione npm 0.11.90** fino a release dedicata.
 
 ## 0.11.89 — 2026-11-11 (main, issue #142, epic #6/#20)
 

@@ -4,6 +4,13 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Release 0.11.90 — #145
+
+- Manifest e lockfile generati da [runner ufficiale npm #43130023179](https://github.com/KeyserDSoze/BookWriter/actions/runs/43130023179) `completed/success`: Node22/npm10, registry ufficiale; solo versione root 0.11.89→0.11.90, **235 voci** npm v3, `resolved`, `integrity` e transitive immutati. SHA-256 manifest `0e9d9e1891384d0a41d58541f30d75097e16c55a56200acd496e3241b1f27846`; lock `64093bba97d7b0167ac8108c91af0701fe200dc343e78ebe19efc5f1f3798816`.
+- **Due `npm ci` puliti**, per ciascuno typecheck, 866 Vitest/144 file, 9 smoke e build, lockfile invariato. File npm originali acquisiti da log indicizzati e artifact, il workflow temporaneo read-only `npm-release-reproduce-145.yml` viene **eliminato nello stesso commit atomico** del bump e della documentazione, senza intervento manuale sul lock.
+- Chiusura #145 solo dopo Frontend CI con **4 shard Playwright desktop/mobile**, EPUBCheck 4 EPUB, Pages e cleanup `completed/success` sulla stessa HEAD definitiva. Prove reali LM Studio, TTS modello, verità storica e fatturazione restano distinte.
+
+
 ### Scene correlate per continuità narrativa — issue #153 / ADR 0132
 
 - Dopo indicizzazione esplicita con `/embeddings`, `SemanticSearchPanel` consente di scegliere una scena canonica di riferimento e mostrare fino a cinque altre scene vicine semanticamente. `relatedSemanticScenes` usa **solo** vettori già presenti in RAM, esclude il riferimento e valida id, lunghezze e dimensioni; **nessun nuovo fetch** per il confronto scena-scena.

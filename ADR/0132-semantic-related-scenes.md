@@ -20,3 +20,7 @@ L'indice delle scene canoniche viene già calcolato in modo esplicito sul server
 ## Non-obiettivi
 
 Non è un giudice di continuità, non cerca automaticamente nella memoria narrativa privata, non completa l'issue epica #5, non modifica la fonte canonica e non aggiunge adapter AI.
+
+## Stato release
+
+Incluso nella versione **0.11.90** (#145): i confronti riusano soltanto l'indice RAM, non certificano coerenza narrativa né avviano richieste AI aggiuntive.

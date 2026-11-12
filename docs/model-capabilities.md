@@ -28,3 +28,7 @@ Le configurazioni e i tag sono persistiti localmente in IndexedDB mediante **Sal
 Il browser continua a richiedere CORS dal server; le API effettivamente disponibili dipendono da provider e modello. Test UI e unitari non certificano automaticamente compatibilità semantica o endpoint audio/vettoriali reali.
 
 Riferimenti: [issue #147](https://github.com/KeyserDSoze/BookWriter/issues/147), [ADR 0128](../ADR/0128-model-capability-tags.md), [endpoint locali](ai-local-endpoints.md) e [catalogo /models](ai-model-inventory.md).
+
+## Versione
+
+Catalogo, tag manuali e predefiniti per ruolo sono inclusi nella release **0.11.90**. I tag non certificano capacità API effettive (TTS, embeddings o tools).

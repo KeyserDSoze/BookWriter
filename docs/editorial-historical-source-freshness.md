@@ -27,3 +27,7 @@ Quando la verifica fallisce, **il giudice e la remediation non vengono chiamati*
 Il controllo è locale-first: non vengono scaricate nuove fonti, inviate chiavi o effettuate nuove chiamate AI per questi gate. Vitest e Playwright desktop/mobile coprono revoche e blocco prima del provider.
 
 [ADR 0101](../ADR/0101-live-historical-sources-at-editorial-gates.md) · [Issue #106](https://github.com/KeyserDSoze/BookWriter/issues/106) · [Epic #20](https://github.com/KeyserDSoze/BookWriter/issues/20) · [Epic #23](https://github.com/KeyserDSoze/BookWriter/issues/23).
+
+## Versione
+
+Il gate storico contro output AI basati su dossier cambiati (#144) è incluso nella versione applicativa **0.11.90**; i test non certificano autenticità o licenze delle fonti.
