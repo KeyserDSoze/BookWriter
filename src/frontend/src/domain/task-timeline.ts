@@ -87,6 +87,6 @@ export function formatTaskDuration(seconds:number):string {
   const hours=Math.floor(seconds/3600);
   const minutes=Math.floor((seconds%3600)/60);
   const remaining=seconds%60;
-  return (hours?hours+" h ":"")+(minutes||hours?minutes+" min ":"")+
-    (remaining?remaining+" s":"").trimEnd();
+  return ((hours?hours+" h ":"")+(minutes||hours?minutes+" min ":"")+
+    (remaining?remaining+" s":"")).trim();
 }

@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Activity } from "../domain/types";
+import {
+  completedTaskDurationSeconds, estimatedTaskCostEur, filterTaskTimeline,
+  formatTaskDuration, summarizeTaskTimeline,
+  type TimelineOrder, type TimelineStatus,
+} from "../domain/task-timeline";
 import {
   loadAiTrace, type AiLocalTrace, type LiveAiTrace,
 } from "../infrastructure/ai-observability";
@@ -11,25 +16,45 @@ interface Props {
   inspectionEnabled: boolean;
   onPrepareRevision: (activity: Activity) => void;
   compact?: boolean;
+  onOpenFull?: () => void;
 }
 
 /** Task-first, read-only inspector. Provisional tokens are NEVER canonical. */
 export function AiTaskWorkspace({
   bookId, activities, live, inspectionEnabled, onPrepareRevision, compact=false,
+  onOpenFull,
 }: Props) {
   const [chosen,setChosen]=useState("");
   const [trace,setTrace]=useState<AiLocalTrace|null>(null);
   const [message,setMessage]=useState("");
   const [clock,setClock]=useState(Date.now());
+  const [search,setSearch]=useState("");
+  const [statusFilter,setStatusFilter]=useState<TimelineStatus>("all");
+  const [phaseFilter,setPhaseFilter]=useState("");
+  const [order,setOrder]=useState<TimelineOrder>("newest");
+  // A request may settle after changing books, hiding inspection or choosing
+  // another task. Never display stale local prompts or responses.
+  const inspectionSequence=useRef(0);
+  const summary=useMemo(()=>summarizeTaskTimeline(activities),[activities]);
+  const phaseOptions=useMemo(()=>[...new Set(activities.map(x=>x.phase))].sort(),[activities]);
+  const filtered=useMemo(()=>compact?[]:filterTaskTimeline(activities,{
+    query:search,status:statusFilter,phase:phaseFilter,order,
+  }),[activities,compact,search,statusFilter,phaseFilter,order]);
   useEffect(()=>{
     const timer=setInterval(()=>setClock(Date.now()),1000);
     return ()=>clearInterval(timer);
   },[]);
-  useEffect(()=>{setChosen("");setTrace(null);setMessage("");},[bookId,inspectionEnabled]);
-  const recent=compact?activities.slice(0,8):activities;
+  useEffect(()=>{
+    inspectionSequence.current++;
+    setChosen("");setTrace(null);setMessage("");
+    setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");
+    return ()=>{inspectionSequence.current++;};
+  },[bookId,inspectionEnabled]);
+  const recent=compact?activities.slice(0,8):filtered;
   const active=live?.bookId===bookId?live:null;
   const elapsed=active?Math.max(0,Math.floor(((active.endedAt??clock)-active.startedAt)/1000)):0;
   const inspect=async(id:string)=>{
+    const ticket=++inspectionSequence.current;
     setChosen(id);setTrace(null);setMessage("");
     if(!inspectionEnabled) {
       setMessage("Attiva l'ispezione locale in Impostazioni per registrare le prossime richieste. Le attività precedenti non contengono il prompt integrale.");
@@ -37,9 +62,13 @@ export function AiTaskWorkspace({
     }
     try{
       const saved=await loadAiTrace(bookId,id);
+      if(ticket!==inspectionSequence.current)return;
       setTrace(saved);
       if(!saved)setMessage("Nessuna richiesta integrale conservata per questo task. L'ispezione non è retroattiva.");
-    }catch{setMessage("Impossibile leggere il tracciato locale da IndexedDB.");}
+    }catch{
+      if(ticket===inspectionSequence.current)
+        setMessage("Impossibile leggere il tracciato locale da IndexedDB.");
+    }
   };
   const status=(s:Activity["status"])=>s==="succeeded"?"Completato":
     s==="running"?"In corso":s==="cancelled"?"Interrotto":"Fallito";
@@ -48,6 +77,29 @@ export function AiTaskWorkspace({
       <h2 className="text-lg font-semibold">Cosa sta facendo adesso · Timeline dei task</h2>
       <span className="muted text-xs">{activities.length} attività registrate</span>
     </div>
+    {!compact&&<div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4" aria-label="Riepilogo dei task">
+      <div className="rounded-lg border border-slate-400/30 p-3">
+        <p className="muted text-xs">Completati</p><b className="tabular-nums">{summary.completed}</b>
+      </div>
+      <div className="rounded-lg border border-slate-400/30 p-3">
+        <p className="muted text-xs">In corso</p><b className="tabular-nums">{summary.running}</b>
+      </div>
+      <div className="rounded-lg border border-slate-400/30 p-3">
+        <p className="muted text-xs">Falliti / interrotti</p><b className="tabular-nums">{summary.failed+summary.cancelled}</b>
+      </div>
+      <div className="rounded-lg border border-slate-400/30 p-3">
+        <p className="muted text-xs">Stima € parziale</p>
+        <b className="tabular-nums">{new Intl.NumberFormat("it-IT",{
+          minimumFractionDigits:4,maximumFractionDigits:6,
+        }).format(summary.knownEstimatedEur)}</b>
+      </div>
+    </div>}
+    {!compact&&<p className="muted mt-2 text-xs">
+      Stima ricavata solo da tariffe storiche inserite dall'autore e conteggi completi del provider:
+      {summary.pricedReports} richieste valorizzate, {summary.uncertainAttempts} tentativi
+      con consumo o tariffa non determinabili. Non è una fattura né un saldo;
+      anche gli errori possono generare addebiti.
+    </p>}
     {active && <div role="region" aria-label="Streaming task corrente"
       className="mt-3 space-y-2 rounded-lg border border-emerald-600/40 p-3">
       <p className="font-semibold">{active.title}</p>
@@ -82,6 +134,46 @@ export function AiTaskWorkspace({
       {!inspectionEnabled && <p className="muted text-xs">Per vedere i token e i prompt completi abilita «Ispezione locale richieste AI» nelle Impostazioni. Contiene dati potenzialmente riservati.</p>}
     </div>}
     <p className="muted mt-3 text-sm">Ogni attività è separata e ispezionabile. Un output in streaming non modifica il libro finché non supera i controlli di validazione e viene confermato come canonico.</p>
+    {!compact&&<div className="mt-4 space-y-2 rounded-lg border border-slate-400/30 p-3" aria-label="Filtri timeline">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-sm">Cerca nei task
+          <input className="field mt-1" type="search" aria-label="Cerca nei task"
+            placeholder="Titolo, fase, modello, run…" value={search} maxLength={160}
+            onChange={e=>setSearch(e.target.value)}/>
+        </label>
+        <label className="text-sm">Stato
+          <select className="field mt-1" aria-label="Filtra stato task" value={statusFilter}
+            onChange={e=>setStatusFilter(e.target.value as TimelineStatus)}>
+            <option value="all">Tutti gli stati</option>
+            <option value="running">In corso</option>
+            <option value="succeeded">Completati</option>
+            <option value="failed">Falliti</option>
+            <option value="cancelled">Interrotti</option>
+          </select>
+        </label>
+        <label className="text-sm">Fase
+          <select className="field mt-1" aria-label="Filtra fase task" value={phaseFilter}
+            onChange={e=>setPhaseFilter(e.target.value)}>
+            <option value="">Tutte le fasi</option>
+            {phaseOptions.map(phase=><option key={phase} value={phase}>{phase}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">Ordine
+          <select className="field mt-1" aria-label="Ordina task" value={order}
+            onChange={e=>setOrder(e.target.value as TimelineOrder)}>
+            <option value="newest">Più recenti</option>
+            <option value="oldest">Più vecchi</option>
+          </select>
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p role="status" className="muted text-xs">{filtered.length} task trovati su {activities.length}</p>
+        <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-xs dark:border-slate-700"
+          onClick={()=>{setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");}}>
+          Azzera filtri
+        </button>
+      </div>
+    </div>}
     {!activities.length ? <p className="muted mt-3 text-sm">Nessun task ancora eseguito per questo libro.</p> :
       <ol className="mt-4 space-y-2" aria-label="Storico task">
         {recent.map((item,index)=><li key={item.id}>
@@ -95,6 +187,15 @@ export function AiTaskWorkspace({
               <p><b>Obiettivo:</b> {item.reason}</p>
               <p><b>Prossimo:</b> {item.nextStep}</p>
               <p><b>Fase:</b> {item.phase} · <b>Esito:</b> {status(item.status)}</p>
+              <p><b>Durata conclusa:</b> {completedTaskDurationSeconds(item)===undefined
+                ?"Non disponibile (attività senza due istanti validi)"
+                :formatTaskDuration(completedTaskDurationSeconds(item)!)}</p>
+              <p className="text-xs"><b>Run:</b> {item.runId} · <b>ID task:</b> {item.id}</p>
+              {item.aiRequested!==false&&<p className="text-xs"><b>Stima costo task:</b> {
+                estimatedTaskCostEur(item)===undefined?"non determinabile (tariffa o usage mancanti)"
+                  :new Intl.NumberFormat("it-IT",{minimumFractionDigits:4,
+                    maximumFractionDigits:6}).format(estimatedTaskCostEur(item)!)+" €"
+              } · Valore indicativo da tariffa storica inserita, non fatturazione effettiva.</p>}
               {item.endpointId&&<p className="muted text-xs">Endpoint: {item.endpointId} · Modello: {item.modelId??"non configurato"} · Richiesta: {item.aiRequested?"tentata":"non inviata"}</p>}
               {item.inputTokens!==undefined&&<p className="text-xs">Token input: {item.inputTokens}, output: {item.outputTokens??"N/D"}</p>}
               {item.requestedReasoningEffort&&<p className="text-xs">Reasoning richiesto: {item.requestedReasoningEffort} (non certifica il valore effettivo usato dal provider)</p>}
@@ -111,7 +212,7 @@ export function AiTaskWorkspace({
               </div>
               {chosen===item.id&&<div className="space-y-2 rounded border border-slate-400/30 p-2">
                 {message&&<p role="status" className="muted text-xs">{message}</p>}
-                {trace&&<div className="space-y-3">
+                {inspectionEnabled&&trace?.bookId===bookId&&trace.activityId===item.id&&<div className="space-y-3">
                   <p className="muted text-xs">Registro privato del browser, non nei backup o su GitHub. {trace.truncated?"Contenuti troncati ai limiti locali.":"Nessun troncamento applicato."}</p>
                   <details><summary className="cursor-pointer font-semibold">Messaggio system inviato</summary>
                     <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs">{trace.systemPrompt}</pre></details>
@@ -128,6 +229,11 @@ export function AiTaskWorkspace({
           </details>
         </li>)}
       </ol>}
+    {!compact&&activities.length>0&&recent.length===0&&<p className="muted mt-3 text-sm">
+      Nessun task corrisponde ai filtri attivi. Modifica i filtri oppure premi «Azzera filtri».
+    </p>}
     {compact&&activities.length>recent.length&&<p className="muted mt-3 text-xs">Mostrati gli ultimi {recent.length} task. Apri Attività per lo storico completo.</p>}
+    {compact&&onOpenFull&&<button type="button" className="mt-3 rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
+      onClick={onOpenFull}>Apri registro completo e filtri</button>}
   </section>;
 }

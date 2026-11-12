@@ -422,7 +422,7 @@ export default function App() {
       {page === "dashboard" && <div className="space-y-4">
         {current&&<AiTaskWorkspace bookId={current.id} activities={activities}
           live={liveAi} inspectionEnabled={settings.inspectAiRequests===true}
-          onPrepareRevision={prepareActivityRevision} compact/>}
+          onPrepareRevision={prepareActivityRevision} onOpenFull={()=>setPage("activities")} compact/>}
         <details open={!current || current.status!=="running"} className="min-w-0">
           <summary className="mb-3 cursor-pointer rounded-lg border border-slate-400/40 p-3 text-sm font-semibold">
             Brief, interventi, redazione e informazioni avanzate del libro
