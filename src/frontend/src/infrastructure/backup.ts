@@ -567,9 +567,22 @@ export async function readBackup(file: File, passphrase?: string): Promise<Backu
   return result.data as unknown as BackupData;
 }
 
-/** Importa come copie distinte: non sovrascrive nessun libro locale. */
-export async function importBackup(data: BackupData, withSettings: boolean): Promise<number> {
+/** Optional fork precondition: source identity + revision must be validated in
+ * the VERY SAME IndexedDB write transaction that inserts all fork records. */
+type ForkSourceGuard = {
+  bookId: string; expectedRevision: string; activityId: string;
+};
+async function importBackupInternal(
+  data: BackupData, withSettings: boolean, forkSource?: ForkSourceGuard,
+): Promise<Map<string,string>> {
   const db = await getDb();
+  if(forkSource && (
+    data.kind!=="content" || data.books.length!==1 ||
+    data.books[0]?.id!==forkSource.bookId ||
+    !data.activities.some(a=>a.id===forkSource.activityId && a.bookId===forkSource.bookId) ||
+    data.activities.some(a=>a.bookId!==forkSource.bookId || a.status==="running") ||
+    (data.mergeDrafts??[]).some(d=>d.bookId!==forkSource.bookId)
+  )) throw new Error("Archivio non idoneo al fork: libro, audit o stato non coerenti.");
   const idMap = new Map<string, string>();
   for (const book of data.books) {
     if (idMap.has(book.id)) throw new Error("ID libro duplicato nell'archivio.");
@@ -625,14 +638,16 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
   const safeBooks: BookProject[] = data.books.map(book => ({
     ...book,
     id: idMap.get(book.id)!,
-    title: book.title + " (importato)",
+    title: book.title + (forkSource?" (fork locale)":" (importato)"),
     authorConstraints: book.authorConstraints ?? [],
     narrativeKnowledgeShareDecisions: importedSharingAudit(book),
     narrativeTransferShareDecisions: importedTransferShareAudit(book),
     editorialVerificationChoices: importedVerificationAudit(book),
     remote: undefined, // Imported copies must not inherit GitHub write permissions/remote SHA.
-    status: book.status === "running" ? "paused" : book.status,
-    previousError: "Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
+    status: forkSource?"paused":book.status==="running"?"paused":book.status,
+    previousError: forkSource
+      ?"Fork locale da ZIP verificato dello stato corrente: revisione editoriale e controllo delle dipendenze necessari prima di riprendere."
+      :"Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
     updatedAt: new Date().toISOString(),
   })) as BookProject[];
   const safeActivities: Activity[] = data.activities
@@ -675,10 +690,52 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
     };
   }
   const tx = db.transaction(["books", "activities", "settings", "mergeDrafts"], "readwrite");
-  for (const book of safeBooks) await tx.objectStore("books").put(book, book.id);
-  for (const activity of safeActivities) await tx.objectStore("activities").put(activity, activity.id);
-  for (const draft of safeDrafts) await tx.objectStore("mergeDrafts").put(draft, draft.id);
+  // Observe tx.done even when an explicit guard rejects before any writes.
+  void tx.done.catch(()=>{});
+  const booksStore=tx.objectStore("books");
+  const activityStore=tx.objectStore("activities");
+  const draftsStore=tx.objectStore("mergeDrafts");
+  if(forkSource) {
+    const original=await booksStore.get(forkSource.bookId) as BookProject|undefined;
+    const focused=await activityStore.get(forkSource.activityId) as Activity|undefined;
+    const allActivities=await activityStore.getAll() as Activity[];
+    if(!original || original.updatedAt!==forkSource.expectedRevision ||
+       original.status==="running" || !focused ||
+       focused.bookId!==forkSource.bookId ||
+       allActivities.some(a=>a.bookId===forkSource.bookId && a.status==="running")){
+      tx.abort();
+      throw new Error("Fork non autorizzato: libro, task, revisione o writer cambiati. Nessuna copia creata.");
+    }
+  }
+  // A UUID collision MUST abort a fork instead of overwriting any existing
+  // book/activity/draft. Existing import behavior is otherwise unchanged.
+  for (const book of safeBooks)
+    if(forkSource) await booksStore.add(book,book.id);
+    else await booksStore.put(book,book.id);
+  for (const activity of safeActivities)
+    if(forkSource) await activityStore.add(activity,activity.id);
+    else await activityStore.put(activity,activity.id);
+  for (const draft of safeDrafts)
+    if(forkSource) await draftsStore.add(draft,draft.id);
+    else await draftsStore.put(draft,draft.id);
   if (importedSettings) await tx.objectStore("settings").put(importedSettings, "global");
   await tx.done;
-  return safeBooks.length;
+  return idMap;
+}
+
+/** Ordinary multi-book import stays as before: consent-sensitive approvals are
+ * revoked and the resulting books never inherit GitHub write permissions. */
+export async function importBackup(data: BackupData, withSettings: boolean): Promise<number> {
+  return (await importBackupInternal(data,withSettings)).size;
+}
+
+/** Single-book supervised local fork from an independently verified ZIP.
+ * The returned ID is the ID actually committed, not inferred from list order. */
+export async function importBackupAsLocalFork(
+  data: BackupData, guard: ForkSourceGuard,
+): Promise<string> {
+  const idMap=await importBackupInternal(data,false,guard);
+  const id=idMap.get(guard.bookId);
+  if(!id)throw new Error("Impossibile identificare il nuovo fork locale.");
+  return id;
 }

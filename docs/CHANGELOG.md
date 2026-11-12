@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #171 (fork locale supervisionato da ZIP sicurezza verificato)
+
+- Nel pannello ZIP #170, **solo dopo aver verificato il file realmente scaricato**, l'autore può preparare e **confermare una seconda volta** un fork locale del **libro attuale**. Nessun fork dopo il solo download, nessuna scelta già approvata per default. Al click definitivo SHA-256/schema e Web Lock sono ricontrollati; libro sorgente, activityId, stato writer e revisione CAS vengono verificati **nella medesima transazione readwrite** che inserisce il fork; `IDB.add` per impedire sovrascritture di ID collisionati.
+- Il nuovo progetto è un libro **separato** con ID nuovo, titolo `(fork locale)`, `status:paused`, senza remote GitHub; canone, memoria, attività e bozze sono copie importate con ID nuovi e revoca delle autorizzazioni sensibili. Nessuna eredità del consenso snapshot testuali dello store `meta`, nessun outbox o POST AI. L'app seleziona solo l'ID restituito dalla transazione e segnala la necessità di revisionare freeze e impatto editoriale prima di riprendere.
+- Fork significa **stato corrente non distruttivo**, non modifica l'originale e **non è ripristino dello stato storico del task, undo o rewind**. Il file ZIP resta non cifrato e va custodito. Vitest/fake-IDB e Playwright desktop/mobile, ADR 0145. Parent #158 aperta. [ADR 0145](../ADR/0145-supervised-current-book-fork.md).
+
 ## Non rilasciato — #170 (ZIP di sicurezza corrente per libro, verificabile prima del rewind)
 
 - Nella **scheda task** il comando «Genera e scarica ZIP di sicurezza del libro corrente» acquisisce una snapshot coerente **solo del libro selezionato** e della relativa cronologia attività/bozze di fusione, con una transazione `books+activities+mergeDrafts` readonly; rifiuta writer lock indisponibile/occupato, autopilot running, task cross-book e revisione stantia. Nessuna modifica al canone.

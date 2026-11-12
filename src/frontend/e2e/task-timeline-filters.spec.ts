@@ -213,17 +213,49 @@ test("copia sicurezza del solo libro: ZIP scaricato e riletto con SHA-256, deskt
   await expect(panel.getByLabel("Stato verifica file scaricato"))
     .toContainText("File scaricato verificato");
   await expect(panel.getByRole("status")).toContainText("SHA-256");
-  await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
-  await expect(panel).toHaveCount(0);
-  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookB);
-  await expect(page.getByText(/File scaricato verificato/)).toHaveCount(0);
+  const fork=panel.getByRole("region",{name:"Fork locale supervisionato"});
+  const prepare=fork.getByRole("button",{name:"Prepara fork locale da ZIP verificato"});
+  await expect(prepare).toBeVisible();
+  // No implicit fork: downloading and verifying do not create another book.
+  const beforeFork=await page.evaluate(async()=>{
+    const {listBooks}=await import("/src/infrastructure/db.ts");
+    return (await listBooks()).length;
+  });
+  expect(beforeFork).toBe(2);
+  await prepare.click();
+  await expect(fork).toContainText("non la destinazione temporale");
+  await fork.getByRole("button",{name:"Annulla fork locale"}).click();
+  await expect(fork.getByRole("button",{name:"Conferma creazione fork locale separato"}))
+    .toHaveCount(0);
+  expect(await page.evaluate(async()=>{
+    const {listBooks}=await import("/src/infrastructure/db.ts");
+    return (await listBooks()).length;
+  })).toBe(2);
+  await prepare.click();
+  await fork.getByRole("button",{name:"Conferma creazione fork locale separato"}).click();
+  await expect(page.getByRole("status")
+    .filter({hasText:"Fork locale separato creato"})).toBeVisible();
+  const selectedForkId=await page.getByRole("combobox",{name:"Libro attivo"})
+    .inputValue();
+  expect(selectedForkId).not.toBe(bookA);
+  expect(selectedForkId).not.toBe(bookB);
   const books=await page.evaluate(async()=>{
     const {listBooks}=await import("/src/infrastructure/db.ts");
     return listBooks();
   });
+  expect(books).toHaveLength(3);
+  const newFork=books.find(x=>x.id===selectedForkId);
+  expect(newFork?.title).toContain("(fork locale)");
+  expect(newFork?.status).toBe("paused");
+  expect(newFork?.remote).toBeUndefined();
+  expect(newFork?.chapters[0]?.scenes[0]?.text)
+    .toBe("MANOSCRITTO_PRIVATO_COPIA_DI_SICUREZZA");
   expect(books.find(x=>x.id===bookA)?.chapters[0]?.scenes[0]?.text)
     .toBe("MANOSCRITTO_PRIVATO_COPIA_DI_SICUREZZA");
   expect(books.find(x=>x.id===bookB)?.chapters).toHaveLength(0);
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookB);
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByText(/File scaricato verificato/)).toHaveCount(0);
 });
 
 test("checkpoint strutturale salvato insieme al task: confronto locale e nessun replay, desktop/mobile",async({page})=>{

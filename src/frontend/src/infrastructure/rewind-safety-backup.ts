@@ -2,7 +2,7 @@ import { strToU8, zipSync } from "fflate";
 import type { Activity, BookProject } from "../domain/types";
 import type { SceneMergeDraft } from "../domain/scene-merge";
 import { getBook, getDb } from "./db";
-import { readBackup } from "./backup";
+import { importBackupAsLocalFork, readBackup } from "./backup";
 
 const MAX_ZIP_BYTES = 40 * 1024 * 1024;
 const MAX_UNPACKED_BYTES = 80 * 1024 * 1024;
@@ -148,4 +148,33 @@ export function downloadBookSafetyBackup(blob:Blob,bookId:string):void {
   anchor.click();
   anchor.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60_000);
+}
+
+/** The author explicitly confirmed a SECOND action after verifying the file.
+ * Re-validate the exact downloaded bytes while holding the original writer's
+ * Web Lock. importBackupAsLocalFork performs another CAS in its write tx.
+ * Never restores a task's historical BookProject or overwrites the original. */
+export async function createLocalForkFromVerifiedSafetyBackup(
+  file: File, evidence: BookSafetyEvidence,
+): Promise<string> {
+  if(!evidence.bookId || !evidence.activityId || !evidence.bookRevision)
+    throw new Error("Origine del fork non valida.");
+  const locks=typeof navigator==="undefined"?undefined:navigator.locks;
+  if(!locks?.request)throw new Error(
+    "Web Locks non disponibili: impossibile creare un fork sicuro.",
+  );
+  return locks.request("bookwriter:writer:"+evidence.bookId,
+    {ifAvailable:true},async lock=>{
+      if(!lock)throw new Error(
+        "Il libro è in uso da un'altra scheda: fork non creato.",
+      );
+      await verifyDownloadedBookSafetyBackup(file,evidence);
+      const data=await readBackup(file);
+      const id=await importBackupAsLocalFork(data,{
+        bookId:evidence.bookId,
+        expectedRevision:evidence.bookRevision,
+        activityId:evidence.activityId,
+      });
+      return id;
+    });
 }

@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Fork locale supervisionato da ZIP verificato (#171, non ancora release numerata).** Dopo aver generato e verificato il file di sicurezza del **solo libro corrente** (#170), in **Attività → Scheda task** puoi «Prepara fork locale» e poi «Conferma creazione». Il sistema rilegge il file e controlla Web Lock, SHA-256, schema e **CAS nella transazione che crea il libro**; non procede se la revisione originale cambia. Crea un **nuovo libro indipendente** in pausa, con nuovo ID, cronologia importata, remote GitHub disattivato e consensi sensibili revocati, lasciando **intatti** originale e altri libri. La copia è **dello stato corrente, non del task storico**; non è undo/rewind, né sblocca freeze o valida dipendenze narrative. [ADR 0145](ADR/0145-supervised-current-book-fork.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Copia di sicurezza prima di un futuro rewind (#170, non ancora release numerata):** in **Attività → scheda task**, scarica su richiesta un **ZIP content-only del solo libro corrente** con manoscritto, memoria narrativa e audit; senza altri libri, credenziali, impostazioni AI o copie cronologiche locali opt-in. Acquisizione coerente sotto Web Lock, controllo revisione, rilettura e verifica interna del formato, SHA-256. Per confermare il **file effettivamente scaricato**, va riselezionato nella pagina con «Verifica ZIP scaricato»: verifica hash, schema e identità/revisione. Lo ZIP **non è cifrato** e include contenuti privati: custodiscilo al sicuro. **Non** ripristina automaticamente nulla né rappresenta il libro com'era al momento del task. [ADR 0144](ADR/0144-rewind-safety-book-archive.md) · [Guida](docs/ai-task-inspection.md).
 
 

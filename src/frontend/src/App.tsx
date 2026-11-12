@@ -495,7 +495,12 @@ export default function App() {
       {page === "activities" && (current ?
         <AiTaskWorkspace book={current} bookId={current.id} activities={activities} live={liveAi}
           inspectionEnabled={settings.inspectAiRequests===true}
-          onPrepareRevision={prepareActivityRevision}/>
+          onPrepareRevision={prepareActivityRevision}
+          onForkCreated={async(forkBookId)=>{
+            await refresh();
+            setSelectedId(forkBookId);
+            setNotice("Fork locale separato creato dallo ZIP verificato: selezionato il nuovo libro in pausa. L'originale è invariato; controlla capitoli, freeze, dipendenze e modelli prima di riprendere.");
+          }}/>
         : <Section title="Registro delle attività"><Empty>Seleziona un libro per ispezionare le attività.</Empty></Section>)}
 
       {page === "reader" && <div className="space-y-4">

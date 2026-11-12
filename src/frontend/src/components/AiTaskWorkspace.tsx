@@ -36,6 +36,7 @@ interface Props {
   live: LiveAiTrace | null;
   inspectionEnabled: boolean;
   onPrepareRevision: (activity: Activity) => void;
+  onForkCreated?: (forkBookId: string) => Promise<void> | void;
   compact?: boolean;
   onOpenFull?: () => void;
 }
@@ -43,7 +44,7 @@ interface Props {
 /** Task-first, read-only inspector. Provisional tokens are NEVER canonical. */
 export function AiTaskWorkspace({
   book, bookId, activities, live, inspectionEnabled, onPrepareRevision, compact=false,
-  onOpenFull,
+  onOpenFull, onForkCreated,
 }: Props) {
   const [chosen,setChosen]=useState("");
   const [trace,setTrace]=useState<AiLocalTrace|null>(null);
@@ -502,9 +503,10 @@ export function AiTaskWorkspace({
           vero rewind, undo, approvazioni e controllo a valle restano #158.</p>
       </section>}
       {book?.id===bookId&&<RewindSafetyBackupPanel
-        key={bookId+":"+focused.id}
+        key={bookId+":"+focused.id+":"+book.updatedAt}
         bookId={bookId} activityId={focused.id}
-        bookRevision={book.updatedAt} bookStatus={book.status}/>}
+        bookRevision={book.updatedAt} bookStatus={book.status}
+        onForkCreated={onForkCreated}/>}
       <section aria-label="Confronto strutturale salvato"
         className="space-y-2 rounded-lg border border-slate-400/40 p-3 text-sm">
         <h4 className="font-semibold">Checkpoint strutturale prima/dopo (sola lettura)</h4>

@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
 import { newBook, type Activity, type BookProject } from "../domain/types";
 import { getBook, getDb, listBooks, saveActivity, saveBook } from "./db";
-import { importBackup, readBackup } from "./backup";
+import { importBackup, importBackupAsLocalFork, readBackup } from "./backup";
 import {
-  prepareBookSafetyBackup, sha256OfZip, verifyDownloadedBookSafetyBackup,
+  createLocalForkFromVerifiedSafetyBackup, prepareBookSafetyBackup,
+  sha256OfZip, verifyDownloadedBookSafetyBackup,
 } from "./rewind-safety-backup";
 
 beforeEach(()=>{
@@ -17,7 +18,10 @@ beforeEach(()=>{
     },
   }});
 });
-afterEach(()=>vi.unstubAllGlobals());
+afterEach(()=>{
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 async function fixture(){
   const book=newBook("STORIA_PRIVATA","Libro di test","Narrativo","Adulti");
@@ -77,6 +81,106 @@ describe("Copia di sicurezza del solo libro per rewind futuro (#170)",()=>{
     expect(imported).toBe(1);
     expect(await listBooks()).toHaveLength(before.length+1);
     expect((await getBook(a.book.id))?.updatedAt).toBe(a.book.updatedAt);
+  });
+
+  it("fork locale separato dal file verificato: originale immutato, remote e consenso non ereditati",async()=>{
+    const {book,task}=await fixture();
+    const db=await getDb();
+    const original=structuredClone((await getBook(book.id))!);
+    original.remote={
+      owner:"utente",repository:"romanzo",branch:"main",
+      lastSyncedCommit:"a".repeat(40),autoSync:true,
+    };
+    await saveBook(original,false,book.updatedAt);
+    const current=(await getBook(book.id))!;
+    await db.put("meta",true,"task-prose-consent:v1:"+book.id);
+    await db.put("meta",{private:"DATI_PRIVATI_FORK_META"},"trace:"+book.id);
+    const archive=await prepareBookSafetyBackup(book.id,current.updatedAt,task.id);
+    const before=new Set((await listBooks()).map(b=>b.id));
+    const id=await createLocalForkFromVerifiedSafetyBackup(archive.blob as File,archive);
+    expect(id).toBeTruthy();
+    expect(id).not.toBe(book.id);
+    const fork=(await getBook(id))!;
+    expect(fork).toMatchObject({
+      id,title:current.title+" (fork locale)",status:"paused",
+    });
+    expect(fork.previousError).toContain("Fork locale da ZIP verificato");
+    expect(fork.remote).toBeUndefined();
+    expect(fork.chapters).toEqual(current.chapters);
+    expect(fork.memory).toEqual(current.memory);
+    expect(fork.phase).toBe(current.phase);
+    const copiedActivities=(await db.getAll("activities") as Activity[])
+      .filter(a=>a.bookId===id);
+    expect(copiedActivities).toHaveLength(1);
+    expect(copiedActivities[0]?.id).not.toBe(task.id);
+    expect(copiedActivities[0]?.output).toBe(task.output);
+    expect(await db.get("meta","task-prose-consent:v1:"+id)).toBeUndefined();
+    expect(await db.get("meta","trace:"+id)).toBeUndefined();
+    expect(await db.get("meta","task-prose-consent:v1:"+book.id)).toBe(true);
+    expect(await getBook(book.id)).toEqual(current);
+    expect(await listBooks()).toHaveLength(before.size+1);
+  });
+
+  it("fork rifiutato dopo modifica sorgente: CAS nella stessa transazione, nessuna copia",async()=>{
+    const {book,task}=await fixture();
+    const archive=await prepareBookSafetyBackup(book.id,book.updatedAt,task.id);
+    const parsed=await readBackup(archive.blob as File);
+    const changed=structuredClone((await getBook(book.id))!);
+    changed.brief="Nuovo brief non presente nello ZIP";
+    await saveBook(changed,false,book.updatedAt);
+    const before=(await listBooks()).length;
+    await expect(createLocalForkFromVerifiedSafetyBackup(archive.blob as File,archive))
+      .rejects.toThrow(/revisione o writer cambiati/);
+    await expect(importBackupAsLocalFork(parsed,{
+      bookId:book.id,expectedRevision:book.updatedAt,activityId:task.id,
+    })).rejects.toThrow(/revisione o writer cambiati/);
+    expect(await listBooks()).toHaveLength(before);
+    expect((await getBook(book.id))!.brief).toBe(changed.brief);
+  });
+
+  it("fork non procede con file alterato, writer occupato o Web Locks mancanti",async()=>{
+    const {book,task}=await fixture();
+    const archive=await prepareBookSafetyBackup(book.id,book.updatedAt,task.id);
+    const bytes=new Uint8Array(await archive.blob.arrayBuffer());
+    const mutated=bytes.slice();
+    const i=Math.floor(mutated.length/2);
+    mutated[i]=mutated[i]!^1;
+    const file=new Blob([mutated],{type:"application/zip"}) as File;
+    await expect(createLocalForkFromVerifiedSafetyBackup(file,archive))
+      .rejects.toThrow(/SHA-256/);
+    vi.stubGlobal("navigator",{});
+    await expect(createLocalForkFromVerifiedSafetyBackup(archive.blob as File,archive))
+      .rejects.toThrow(/Web Locks non disponibili/);
+    vi.stubGlobal("navigator",{locks:{
+      request:async(_name:string,_options:unknown,fn:(lock:null)=>Promise<unknown>)=>fn(null),
+    }});
+    await expect(createLocalForkFromVerifiedSafetyBackup(archive.blob as File,archive))
+      .rejects.toThrow(/in uso da un'altra scheda/);
+    expect(await listBooks()).toHaveLength(1);
+  });
+
+  it("ID nuovo collisionato fa fallire tutta la transazione senza sovrascrivere l'originale",async()=>{
+    const {book,task}=await fixture();
+    const archive=await prepareBookSafetyBackup(book.id,book.updatedAt,task.id);
+    const before=structuredClone((await getBook(book.id))!);
+    const log=structuredClone(await (await getDb()).get("activities",task.id));
+    vi.spyOn(globalThis.crypto,"randomUUID").mockReturnValue(book.id as `${string}-${string}-${string}-${string}-${string}`);
+    await expect(createLocalForkFromVerifiedSafetyBackup(archive.blob as File,archive))
+      .rejects.toThrow();
+    expect(await getBook(book.id)).toEqual(before);
+    expect(await (await getDb()).get("activities",task.id)).toEqual(log);
+    expect(await listBooks()).toHaveLength(1);
+  });
+
+  it("un task sorgente in esecuzione impedisce ogni fork anche con libro paused",async()=>{
+    const {book,task}=await fixture();
+    const archive=await prepareBookSafetyBackup(book.id,book.updatedAt,task.id);
+    const live:Activity={...task,id:crypto.randomUUID(),status:"running"};
+    await saveActivity(live);
+    const count=(await listBooks()).length;
+    await expect(createLocalForkFromVerifiedSafetyBackup(archive.blob as File,archive))
+      .rejects.toThrow(/revisione o writer cambiati/);
+    expect(await listBooks()).toHaveLength(count);
   });
 
   it("non mostra verde dopo un file diverso, modificato o corrotto",async()=>{

@@ -15,6 +15,10 @@ Il backup standard `createBackup("content")` esporta l'intera libreria, con lett
 3. Solo il pulsante «Genera e scarica ZIP di sicurezza del libro corrente» avvia il download. La UI mostra hash, bookId, revisione e conteggi verificati in memoria, **non** dichiara ancora verificato il file fisico. La selezione successiva «Verifica ZIP scaricato» rilegge bytes da un `File` scelto dall'autore, ricontrolla size/digest/schema/bookId/revisione/activityId/conteggi e quindi segnala **File scaricato verificato**. Il file è custodito dall'utente, non viene caricato, e lo stato volatile viene azzerato su cambio task/libro. Non salvare automaticamente impronte o file in IDB per evitare duplicazioni.
 4. Un backup corrente non ricostruisce capitoli al momento di un task storico; import manuale segue le protezioni precedenti di `importBackup`, creando una **copia nuova** con autorizzazioni AI sensibili revocate, mai sovrascrivendo il canone. La verifica di un file non è consenso al rewind e non concede patch/undo/fork, non certifica dependences, freeze o lease multi-dispositivo. Parent #158 rimane aperta.
 
+## Evoluzione successiva — ADR 0145 / #171
+
+La generazione/validazione ZIP #170 **da sola** non crea fork, autorizzazioni o restore. [ADR 0145](0145-supervised-current-book-fork.md) introduce **solo dopo** rilettura del file e due gesti espliciti la possibilità di creare una **copia locale non distruttiva dello stato corrente**, con CAS atomico nel write transaction e protezioni import esistenti; non recupera il passato.
+
 ## Limiti e verifiche
 
 - Un'altra scheda può mutare dati non rispettando le Web Locks: le revisioni vengono controllate prima e dopo la preparazione, ma senza una transazione di scrittura o lock distribuito non si certificano salvataggi remoti dopo la verifica. Se un file viene cancellato o modificato dopo la verifica, il badge precedente non è una garanzia. Non promettere copertura delle snapshot `meta`.
