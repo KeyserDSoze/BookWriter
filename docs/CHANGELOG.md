@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #156 / #157 (task AI osservabili)
+
+- **Trasparenza dell'autopilot:** via Chat Completions SSE per endpoint esplicitamente compatibili, anteprima in diretta dei delta e del reasoning che il provider realmente espone, timer e status; nessun output provvisorio promosso automaticamente nel canone. Modalità JSON legacy preservata, nessun retry automatico.
+- **Reasoning configurabile:** Impostazioni → Endpoint → Reasoning effort AI (Automatico/Low/Medium/High/Extra high). Il campo `reasoning_effort` è opzionale, il provider può rifiutarlo. `stream:true` con `stream_options.include_usage:true` solo quando selezionato dall'autore. SSE con deadline e limiti anti-risposta ostile.
+- **Tracce sensibili opt-in:** in Impostazioni consenso esplicito a conservare localmente system/user e risposte per task (limiti dichiarati), fuori da Activity, ZIP e outbox; cancellazione in un clic. Dashboard presenta cronologia task e priorità a stato corrente, dettagli libro collassati durante l'esecuzione; scheda Attività permette l'ispezione.
+- **Interventi contestuali:** si prepara una revisione collegata al task scelto ma **non** si ripristina automaticamente una snapshot storica. Rewind e strumenti editoriali con approvazione sono issue #158/#150. [ADR 0134](../ADR/0134-task-observability-streaming.md) · [guida](ai-task-inspection.md).
+
+
 ## Non rilasciato — issue #154
 
 - **Embedding: inizio, centro e finale delle scene lunghe.** Il limite precedente di 1.400 caratteri iniziali diventa una selezione di max tre passaggi non duplicati per scena canonica; fino a 80 scene e max **240** embedding per indicizzazione esplicita su localhost. Il testo non coperto è dichiarato. Le scene brevi vengono indicizzate integralmente.

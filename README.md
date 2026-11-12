@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Task AI osservabili (#156/#157, ancora non inclusi nella release npm numerata):** Dashboard con timeline per task, streaming Chat Completions SSE facoltativo (LM Studio), scelta di reasoning effort per endpoint, visualizzazione dei delta e del reasoning **solo se il provider lo invia**, ispezione consentita di input/output in IndexedDB locale senza sync/backup e azione di preparazione revisione supervisionata. Non è ancora un vero rewind a snapshot passato (#158). [Guida pratica](docs/ai-task-inspection.md) · [ADR 0134](ADR/0134-task-observability-streaming.md).
+
+
 - **Indicizzazione semantica di scene lunghe (#154, non ancora in release numerata):** da Libro → Ricerca semantica, scene canoniche lunghe vengono campionate in **inizio, centro e finale**, fino a tre estratti per scena e massimo 240 vettori per libro. I risultati mostrano il passaggio corrispondente; la continuità riusa l'indice senza nuove chiamate, avvertendo delle parti non coperte. [Guida](docs/semantic-voice-workspace.md) · [ADR 0133](ADR/0133-long-scene-semantic-passage-sampling.md).
 
 

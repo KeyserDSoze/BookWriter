@@ -4,6 +4,14 @@ Queste regole valgono per **tutta** la repository. Leggi README, documentazione,
 
 ## Obiettivo
 
+### Streaming, reasoning e tracciabilità task — #156/#157 / ADR 0134
+
+- La chiamata legacy `POST /v1/chat/completions` resta JSON per impostazione predefinita; ogni endpoint può optare per `streamMode:sse` (OpenAI-compatible `stream:true`, `stream_options.include_usage:true`) e per `reasoningEffort` opzionale `low/medium/high/xhigh`. Valori non dichiarati non si inviano. **Nessun retry automatico** se un provider rifiuta parametri/stream o dopo un possibile addebito; validare prima di decrittare e chiamare la rete. SSE richiede `[DONE]`, limiti di 2 MB e deadline di dieci minuti, abort e corpo completo prima del commit canonico, con HTTP 2xx e verifica envelope/usage finale. Solo il **reasoning emesso realmente dal provider** è visualizzato: non ricostruire o inventare catene di pensiero del modello.
+- `AiTaskWorkspace` presenta output **provvisori**, status, tempi e delta per task. I dati in streaming non vanno mai nel canone finché non sono applicati tramite `saveBookAndActivity` con lease/CAS/fencing. `AiLocalTrace` viene scritto **solo con consenso esplicito** `settings.inspectAiRequests===true` nella store IndexedDB `meta` con prefisso `ai-trace:`, limitato 120k caratteri per system/user/risposta e 20k reasoning. Non deve finire in `Activity`, ZIP full/content, GitHub outbox o sync; dati sensibili, cancellazione locale manuale.
+- Vista Dashboard task-first: barra task e timeline, dettagli avanzati collassati mentre l'autopilot è in esecuzione; scheda Attività contiene ispezione di prompt/risposte. L'azione «Prepara revisione da questo task» **non** è rollback: precompila una correzione supervisionata dell'attuale libro e richiede pausa e validazione del canone. Il vero checkpoint/replay con tool diff/merge è separato in #158/#150 e non deve essere simulato.
+- Diagnostica LM Studio: CORS, hostname `localhost` del browser, richieste effettive in DevTools Network **senza filtri attivi** sulla stessa scheda e con Preserve log; la vista di LM Studio e il Network di altri tab non sono una prova affidabile di mancata POST. Test Vitest SSE malformed/abort, no-key, reasoning e privacy; Playwright desktop/mobile mock. [ADR 0134](ADR/0134-task-observability-streaming.md) · [Guida](docs/ai-task-inspection.md). Versione npm invariata finché non eseguita release ufficiale.
+
+
 ### Embedding per scene lunghe: tre passaggi campionati — #154 / ADR 0133
 
 - `sampleSemanticPassages` prepara solo prosa **canonica**, max 80 scene, max **3 passaggi da 1.400 code unit UTF-16** per scena (inizio/centro/fine se supera la copertura integrale): quindi max **240 vettori** su `POST /embeddings`, lotti seriali da 8 su loopback. Non spezzare coppie surrogate; le zone non indicizzate vanno **dichiarate**, non trattate come prova d'assenza. Nessun testo di bozze, memoria, audit o segreti viene usato.
