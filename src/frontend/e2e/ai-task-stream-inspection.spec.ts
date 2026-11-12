@@ -79,7 +79,7 @@ test("SSE locale, reasoning opzionale, timeline per task e richieste solo con co
   await brainstorm.getByRole("button",{name:"Ispeziona richiesta e risposta"}).click();
   await expect(brainstorm.getByText("Messaggio user inviato")).toBeVisible();
   await brainstorm.getByText("Messaggio user inviato").click();
-  await expect(brainstorm).toContainText("due scimmie");
+  await expect(brainstorm).toContainText("Due scimmie");
   await brainstorm.getByRole("button",{name:"Prepara revisione da questo task"}).click();
   await expect(page.getByRole("textbox",{name:"Istruzione di revisione"}))
     .toHaveValue(/Brainstorming/);
