@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Checkpoint strutturali pre/post per task riusciti (#166, non ancora nella release numerata):** ogni nuovo task che applica un risultato con `saveBookAndActivity` salva localmente e nella stessa transazione una coppia di snapshot **solo strutturali** (ID capitoli/scene, stati e freeze, revisioni). In **Attività → scheda task**, «Carica confronto strutturale» presenta differenze aggregate senza leggere la prosa o copiare prompt/segreti. Task legacy non ricostruiti; nessun rollback, undo o confronto testuale possibile da questi dati. [ADR 0140](ADR/0140-atomic-task-structural-checkpoints.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Preflight rewind non distruttivo (#165, sviluppo successivo a 0.11.91):** nella scheda di un task storico in Attività, una valutazione esplicita delle attività con timestamp successivo, di date uguali/non verificabili e dei capitoli **attualmente** congelati, scene canoniche e revisioni pendenti. Non è un confronto storico, una dipendenza narrativa provata né un comando di ripristino: il vero rewind con checkpoint/diff/undo rimane #158. [ADR 0139](ADR/0139-rewind-readonly-impact-preflight.md) · [Guida](docs/ai-task-inspection.md).
 
 

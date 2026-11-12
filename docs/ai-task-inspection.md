@@ -1,5 +1,13 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## Confrontare la struttura prima e dopo un task — #166
+
+Per i nuovi task completati e applicati, BookWriter conserva **localmente** un checkpoint **strutturale** versione 1 dentro la stessa transazione IndexedDB che salva il libro, il risultato della attività e l'eventuale outbox. Questo evita di raccontare come «storico» una foto ottenuta dopo una modifica concorrente: il controllo CAS blocca una revisione stantia e i duplicati non possono sovrascrivere il checkpoint del task. Per i task falliti/interrotti e quelli precedenti a questa funzione non viene creata retroattivamente alcuna prova.
+
+In **Attività → Apri scheda task → Carica confronto strutturale** puoi consultare le revisioni prima/dopo, il numero di capitoli prima/dopo, aggiunte/rimozioni, modifiche al freeze, scene aggiunte/rimosse e cambi di status. Il caricamento è manuale, isolato per libro/task e invalida le letture obsolete quando cambi scheda o libro.
+
+**Limite essenziale:** il checkpoint contiene solo ID capitoli/scene, indicatori di congelamento e stati, fase e revisione. **Non** contiene testo, titoli, prosa, memoria privata, prompt, reasoning o output AI. Anche con **0 differenze strutturali**, il testo potrebbe essere cambiato radicalmente. Non è un backup, una snapshot recuperabile della prosa, un diff testuale o un pulsante di rewind. Non è incluso in ZIP o GitHub e può andare perso svuotando IndexedDB; la #158 resta aperta per snapshot canoniche complete con backup, diff, ramo/undo e consenso esplicito. [ADR 0140](../ADR/0140-atomic-task-structural-checkpoints.md).
+
 ## Valutazione preliminare prima di un rewind — #165
 
 In **Attività → Apri scheda task** compare **Prima di ripartire: impatto potenziale (non un rewind)**. Il pannello mostra il numero dei task con orario di creazione sicuramente successivo al task selezionato, fino a cinque esempi cronologici, e segnala separatamente le attività con timestamp **identico** o **non verificabile**. Nessun filtro della vista o raggruppamento nasconde le altre attività del libro nel conteggio; vengono ignorati i task di altri libri. Se data/identità del task non è affidabile, la valutazione fallisce in modo esplicito. Anche quando non risultano successori, **non** significa che non esistano conseguenze narrative.

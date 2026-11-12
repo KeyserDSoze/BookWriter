@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import { DEFAULT_SETTINGS } from "../domain/types";
 import { enqueueCheckpoint } from "./outbox";
+import { createTaskStructuralCheckpoint } from "../domain/task-structural-checkpoint";
 
 const DB_NAME = "bookwriter";
 const DB_VERSION = 2;
@@ -92,7 +93,7 @@ export async function saveBookAndActivity(
   // An editorial approval must not commit a stale canon AND a false audit.
   // Check the optional precondition in the SAME readwrite transaction that
   // writes the book, its activity, and potentially a sync checkpoint.
-  const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
+  const tx = db.transaction(["books", "activities", "outbox", "meta"], "readwrite");
   const books = tx.objectStore("books");
   const stored = await books.get(book.id) as BookProject | undefined;
   if (expectedUpdatedAt !== undefined && stored?.updatedAt !== expectedUpdatedAt) {
@@ -102,6 +103,17 @@ export async function saveBookAndActivity(
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   await tx.objectStore("activities").put(activity, activity.id);
+  // A structural witness is committed atomically with the canon+activity.
+  // Only a new successful task with an existing book qualifies. The IDB
+  // "add" rejects duplicate task IDs, preventing silent history rewrites.
+  // No prose, memory, prompts, reasoning or secrets are copied.
+  if (activity.status === "succeeded" && stored &&
+      activity.bookId === book.id) {
+    await tx.objectStore("meta").add(
+      createTaskStructuralCheckpoint(stored, book, activity),
+      "task-structure:v1:" + activity.id,
+    );
+  }
   // Keep a durable sync request in the same transaction as the narrative result.
   // Do not create a GitHub commit for every intermediate AI planning operation.
   if (activity.status === "succeeded" &&

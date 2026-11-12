@@ -130,6 +130,8 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
   await list.first().getByRole("button",{name:"Apri scheda task"}).click();
   const focus=timeline.getByRole("region",{name:"Scheda task dedicata"});
   const impact=focus.getByRole("region",{name:"Valutazione preliminare di ripartenza"});
+  await focus.getByRole("button",{name:"Carica confronto strutturale"}).click();
+  await expect(focus.getByText(/Nessun checkpoint strutturale valido/)).toBeVisible();
   await expect(focus).toContainText("1 di 3");
   await expect(impact).toContainText("Attività registrate con orario successivo: 0");
   await expect(impact).toContainText("1 capitoli congelati");
@@ -153,6 +155,64 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
   await expect(focus).toHaveCount(0);
   await expect(impact).toHaveCount(0);
   await expect(list).toHaveCount(3);
+});
+
+test("checkpoint strutturale salvato insieme al task: confronto locale e nessun replay, desktop/mobile",async({page})=>{
+  await page.goto("/");
+  const bookId=await createBook(page,"Libro con checkpoint strutturale");
+  await page.evaluate(async(id)=>{
+    const {getBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
+    const original=await getBook(id);
+    if(!original)throw Error("Libro non trovato");
+    const updated=structuredClone(original);
+    updated.status="paused";updated.phase="prose";
+    updated.chapters=[{id:"chapter-struct",number:1,title:"Capitolo sintetico",
+      purpose:"Mostrare il test",frozenAt:"2026-11-12T11:00:00.000Z",
+      scenes:[{id:"scene-struct",number:1,title:"Scena sintetica",
+        objective:"Controllare",text:"PROSA_CANONICA_NON_DA_ESPORRE_NEL_CHECKPOINT",
+        status:"canon"}]}];
+    await saveBookAndActivity(updated,{
+      id:"completed-struct-"+id,bookId:id,runId:"session-test",
+      phase:"prose",title:"Scrittura con checkpoint",reason:"Completamento task",
+      nextStep:"Revisione",status:"succeeded",
+      createdAt:"2026-11-12T10:00:00.000Z",endedAt:"2026-11-12T10:00:05.000Z",
+      output:"OUTPUT_PRIVATO_NON_IN_CHECKPOINT",
+    },original.updatedAt);
+  },bookId);
+  await page.reload();
+  const nav=page.getByRole("navigation",{
+    name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
+  });
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const timeline=page.getByRole("region",{name:"Timeline task AI"});
+  await timeline.getByRole("button",{name:"Apri scheda task"}).click();
+  const panel=timeline.getByRole("region",{name:"Scheda task dedicata"});
+  const section=panel.getByRole("region",{name:"Confronto strutturale salvato"});
+  await section.getByRole("button",{name:"Carica confronto strutturale"}).click();
+  await expect(section.getByLabel("Differenze strutturali registrate"))
+    .toContainText("Capitoli: 0 prima, 1 dopo");
+  await expect(section.getByLabel("Differenze strutturali registrate"))
+    .toContainText("1 aggiunte");
+  await expect(section.getByLabel("Differenze strutturali registrate"))
+    .toContainText("Anche con zero differenze strutturali");
+  await expect(section).not.toContainText("PROSA_CANONICA_NON_DA_ESPORRE");
+  await expect(section).not.toContainText("OUTPUT_PRIVATO_NON_IN_CHECKPOINT");
+  await panel.getByRole("button",{name:"Torna al registro dei task"}).click();
+  await expect(section).toHaveCount(0);
+  const saved=await page.evaluate(async(id)=>{
+    const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+      const req=indexedDB.open("bookwriter");
+      req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+    });
+    const book=await new Promise<{phase:string}>((resolve,reject)=>{
+      const tx=db.transaction("books","readonly");
+      const req=tx.objectStore("books").get(id);
+      req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+    });
+    db.close();
+    return book.phase;
+  },bookId);
+  expect(saved).toBe("prose");
 });
 
 test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{

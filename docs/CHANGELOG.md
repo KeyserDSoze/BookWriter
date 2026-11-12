@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #166 (checkpoint strutturali atomici per task)
+
+- Ogni nuovo task **riuscito** salvato con `saveBookAndActivity` può produrre una coppia **pre/post** in IndexedDB locale `meta`, schema v1, scritta nella stessa transazione CAS del libro, attività e outbox. Un ID di task duplicato non sovrascrive la storia; rollback atomico in caso di errore.
+- Copia soltanto revisioni, fase/stato, ID capitoli/scene, freeze e stati delle scene; **mai** prosa, output AI, prompt, reasoning, titoli o segreti. Non finisce negli ZIP (nemmeno full), su GitHub o nell'outbox.
+- Nella scheda Attività «Carica confronto strutturale» mostra aggiunte/rimozioni di capitoli/scene, cambiamenti di freeze e status, con lettura esplicita e isolamento cross-book. Nessun dato inventato per task legacy, nessun ripristino del romanzo: il vero rewind #158 resta separato. Test Vitest, IndexedDB e Playwright desktop/mobile. [ADR 0140](../ADR/0140-atomic-task-structural-checkpoints.md).
+
 ## Non rilasciato — #165 (preflight non distruttivo per il rewind)
 
 - Nella scheda task dedicata, pannello **Prima di ripartire** con numero di attività temporalmente successive e anteprima dei primi cinque task, conteggio delle attività con data identica o non valida, stato attuale di freeze/canone/revisioni e avviso se l'autopilot è in corso.

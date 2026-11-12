@@ -1,5 +1,12 @@
 # BookWriter — istruzioni per agenti e sviluppatori
 
+## Checkpoint atomici **solo strutturali** pre/post task — #166 / ADR 0140
+
+- `saveBookAndActivity` registra per nuovi task `succeeded` una coppia versionata `TaskStructuralCheckpoint` v1 nello store IndexedDB `meta` **nella stessa transazione** di libro, attività e outbox, **dopo** CAS sul libro. `meta.add` non può sovrascrivere un checkpoint precedente con lo stesso ID; un errore deve abortire tutte le scritture. Task legacy/falliti/interrotti, libri assenti o bookId non corrispondenti non ottengono snapshot.
+- `captureBookStructure` copia solo revision, phase, run status, ID capitoli/scene, freeze booleano e status delle scene. **Mai** duplicare `Scene.text`, titoli, purpose, `Activity.output`, prompt/reasoning, memoria privata, segreti, credenziali o fatturazione. Il dato è locale, non in ZIP, sincronizzazione GitHub, outbox o export. Non modificare schema backup per introdurlo senza decisione separata.
+- Caricare i checkpoint **solo su clic esplicito** della scheda task e validare versione, libro/attività, limiti di forma. Fencing asincrono dedicato su cambio focus/libro/consenso/unmount; mostrare solo delta strutturali aggregati. **Zero differenze non implica testo invariato.** Questi checkpoint non possono ricostruire la prosa né consentono rewind, undo o sblocco freeze: parent #158 resta aperta per snapshot contenuto, diff, backup e approvazioni.
+- Test unitari pure/comparazione e fake-indexeddb per commit CAS/duplicati/fallimenti, E2E desktop/mobile su checkpoint reale e task legacy, CI Frontend/4 shard/EPUBCheck/Pages/cleanup su una sola SHA. [ADR 0140](ADR/0140-atomic-task-structural-checkpoints.md) · [Guida](docs/ai-task-inspection.md).
+
 ## Preflight rewind storico a sola lettura — #165 / ADR 0139
 
 - La valutazione preliminare dei task storici usa **solo metadati** `Activity.id/bookId/title/phase/status/createdAt` e conteggi del **canone attuale** (`chapters`, `frozenAt`, stato `canon`, `editorialReviewSceneIds`). Mai leggere o trasmettere `Activity.output`, `Scene.text`, prompt, reasoning, memoria privata, tracce, chiavi. Mai alterare il libro, inviare POST AI, generare un falso checkpoint o asserire un rewind effettivo.

@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Activity } from "../domain/types";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import {
+  compareBookStructure, type TaskStructuralCheckpoint,
+} from "../domain/task-structural-checkpoint";
+import { loadTaskStructuralCheckpoint } from "../infrastructure/task-structural-checkpoint";
+import {
   analyzeRewindPreflight, type RewindPreflightBook,
 } from "../domain/rewind-preflight";
 import {
@@ -32,6 +36,8 @@ export function AiTaskWorkspace({
 }: Props) {
   const [chosen,setChosen]=useState("");
   const [trace,setTrace]=useState<AiLocalTrace|null>(null);
+  const [structural,setStructural]=useState<TaskStructuralCheckpoint|null>(null);
+  const [structuralMessage,setStructuralMessage]=useState("");
   const [message,setMessage]=useState("");
   const [clock,setClock]=useState(Date.now());
   const [search,setSearch]=useState("");
@@ -44,6 +50,7 @@ export function AiTaskWorkspace({
   // A request may settle after changing books, hiding inspection or choosing
   // another task. Never display stale local prompts or responses.
   const inspectionSequence=useRef(new AiTraceReadFence());
+  const checkpointSequence=useRef(new AiTraceReadFence());
   const summary=useMemo(()=>summarizeTaskTimeline(activities),[activities]);
   const phaseOptions=useMemo(()=>[...new Set(activities.map(x=>x.phase))].sort(),[activities]);
   const filtered=useMemo(()=>compact?[]:filterTaskTimeline(activities,{
@@ -57,6 +64,8 @@ export function AiTaskWorkspace({
   [activities,compact,groupByRun,runGroups,filtered]);
   const focused=compact?undefined:resolveTaskFocus(ordered,focusedTaskId);
   const recent=focused?[ordered[focused.index]!]:ordered;
+  const structuralChanges=structural&&focused&&structural.bookId===bookId&&
+    structural.activityId===focused.id?compareBookStructure(structural):null;
   const preflight=useMemo(()=>
     !compact&&focused&&book&&book.id===bookId
       ?analyzeRewindPreflight(book,activities,focused.id):null,
@@ -70,17 +79,37 @@ export function AiTaskWorkspace({
   },[]);
   useEffect(()=>{
     inspectionSequence.current.invalidate();
+    checkpointSequence.current.invalidate();
     setChosen("");setTrace(null);setMessage("");
+    setStructural(null);setStructuralMessage("");
     setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");
     setGroupByRun(false);setFocusedTaskId("");
-    return ()=>{inspectionSequence.current.invalidate();};
+    return ()=>{
+      inspectionSequence.current.invalidate();
+      checkpointSequence.current.invalidate();
+    };
   },[bookId,inspectionEnabled]);
   const active=live?.bookId===bookId?live:null;
   const elapsed=active?Math.max(0,Math.floor(((active.endedAt??clock)-active.startedAt)/1000)):0;
   // Switching a focused task always revokes any in-flight IndexedDB inspection.
   const focusTask=(id:string)=>{
     inspectionSequence.current.invalidate();
-    setChosen("");setTrace(null);setMessage("");setFocusedTaskId(id);
+    checkpointSequence.current.invalidate();
+    setChosen("");setTrace(null);setMessage("");
+    setStructural(null);setStructuralMessage("");setFocusedTaskId(id);
+  };
+  const inspectStructure=async(id:string)=>{
+    const ticket=checkpointSequence.current.begin();
+    setStructural(null);setStructuralMessage("");
+    try{
+      const stored=await loadTaskStructuralCheckpoint(bookId,id);
+      if(!checkpointSequence.current.isCurrent(ticket))return;
+      if(stored)setStructural(stored);
+      else setStructuralMessage("Nessun checkpoint strutturale valido per questo task. Le attività storiche precedenti alla funzione non sono ricostruibili retroattivamente.");
+    }catch{
+      if(checkpointSequence.current.isCurrent(ticket))
+        setStructuralMessage("Impossibile leggere il checkpoint strutturale locale da IndexedDB.");
+    }
   };
   const inspect=async(id:string)=>{
     const ticket=inspectionSequence.current.begin();
@@ -211,6 +240,35 @@ export function AiTaskWorkspace({
           solo come istruzione per il libro corrente; vero rewind, backup,
           approvazioni e controllo delle conseguenze restano nella issue #158.</p>
       </section>}
+      <section aria-label="Confronto strutturale salvato"
+        className="space-y-2 rounded-lg border border-slate-400/40 p-3 text-sm">
+        <h4 className="font-semibold">Checkpoint strutturale prima/dopo (sola lettura)</h4>
+        <p className="muted text-xs">Solo per nuovi task completati: archivio locale
+          versionato nella stessa transazione del canone e dell'audit.
+          Non contiene il testo del romanzo, né prompt, segreti o reasoning.
+          Non è un backup né permette di ripristinare lo stato precedente.</p>
+        <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
+          onClick={()=>{if(focused)void inspectStructure(focused.id);}}>
+          Carica confronto strutturale</button>
+        {structuralMessage&&<p role="status" className="muted text-xs">{structuralMessage}</p>}
+        {structuralChanges&&structural&&<div className="space-y-1 text-xs"
+          aria-label="Differenze strutturali registrate">
+          <p>Revisione prima: {structural.before.revision} · dopo: {structural.after.revision}.</p>
+          <p>Capitoli: {structuralChanges.chaptersBefore} prima,
+            {" "}{structuralChanges.chaptersAfter} dopo;
+            {" "}{structuralChanges.chaptersAdded} aggiunti,
+            {" "}{structuralChanges.chaptersRemoved} rimossi.</p>
+          <p>Freeze capitoli: {structuralChanges.chaptersFrozen} aggiunti,
+            {" "}{structuralChanges.chaptersUnfrozen} tolti.</p>
+          <p>Scene: {structuralChanges.scenesAdded} aggiunte,
+            {" "}{structuralChanges.scenesRemoved} rimosse,
+            {" "}{structuralChanges.sceneStatusesChanged} stati modificati.
+            Fase modificata: {structuralChanges.phaseChanged?"sì":"no"}.</p>
+          <p className="muted">Anche con zero differenze strutturali, il testo
+            potrebbe essere cambiato: questa vista non confronta la prosa,
+            le istruzioni o le dipendenze narrative.</p>
+        </div>}
+      </section>
       <div className="flex flex-wrap gap-2" aria-label="Navigazione task">
         <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
           onClick={()=>focusTask("")}>Torna al registro dei task</button>
