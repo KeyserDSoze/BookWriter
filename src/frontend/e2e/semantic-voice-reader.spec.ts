@@ -119,6 +119,13 @@ test("lettura ad alta voce e ricerca semantica canonical-only con LM Studio mock
   expect(encoded?.[0]?.input[0]).toContain("search_document:");
   expect(encoded?.[1]?.input[0]).toContain("search_query:");
   expect(JSON.stringify(encoded)).not.toContain("Non inviare il testo");
+  const continuity=search.getByRole("group",{name:"Confronto scene per continuità narrativa"});
+  await continuity.getByRole("combobox",{name:"Scena di riferimento"}).selectOption("scene-forest");
+  await continuity.getByRole("button",{name:"Trova scene collegate"}).click();
+  const related=search.getByRole("list",{name:"Scene collegate"}).getByRole("listitem");
+  await expect(related).toHaveCount(1);
+  await expect(related.first()).toContainText("Il ponte");
+  expect((await page.evaluate(()=>(window as LocalWindow).embedRequests))?.length).toBe(2);
   const layout=await page.evaluate(()=>({
     scroll:document.documentElement.scrollWidth,viewport:window.innerWidth,
   }));

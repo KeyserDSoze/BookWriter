@@ -43,6 +43,27 @@ export function semanticEmbeddingInput(text: string, modelId: string, query: boo
     : text;
 }
 
+/** Reuse vectors already approved for local indexing: no new requests or
+ * model-generated statements. The reference scene must not recommend itself. */
+export function relatedSemanticScenes(
+  scenes: SemanticScene[], vectors: number[][], referenceId: string, limit = 5,
+): SemanticMatch[] {
+  if (scenes.length !== vectors.length)
+    throw new Error("Indice semantico incoerente: reindicizza il libro.");
+  const referenceIndex = scenes.findIndex(scene => scene.id === referenceId);
+  if (referenceIndex < 0)
+    throw new Error("Scena di riferimento non presente nell'indice: reindicizza il libro.");
+  const others: SemanticScene[] = [];
+  const otherVectors: number[][] = [];
+  for (let i = 0; i < scenes.length; i++) {
+    if (i !== referenceIndex) {
+      others.push(scenes[i]!);
+      otherVectors.push(vectors[i]!);
+    }
+  }
+  return rankSemanticScenes(others, otherVectors, vectors[referenceIndex]!, limit);
+}
+
 /** Cosine similarity is a ranking signal, not proof of semantic truth. */
 export function rankSemanticScenes(
   scenes: SemanticScene[], vectors: number[][], query: number[], limit = 5,

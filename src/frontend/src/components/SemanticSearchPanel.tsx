@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppSettings, BookProject } from "../domain/types";
 import {
-  MAX_SEMANTIC_SCENES, rankSemanticScenes, semanticEmbeddingInput, semanticScenes,
+  MAX_SEMANTIC_SCENES, rankSemanticScenes, relatedSemanticScenes, semanticEmbeddingInput, semanticScenes,
   type SemanticMatch, type SemanticScene,
 } from "../application/semantic-search";
 import { embedTextBatch, localEmbeddingSelection, MAX_EMBED_BATCH } from "../infrastructure/embeddings";
@@ -22,6 +22,8 @@ export function SemanticSearchPanel({ book, settings }: Props) {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState<SearchIndex | null>(null);
   const [matches, setMatches] = useState<SemanticMatch[]>([]);
+  const [referenceId, setReferenceId] = useState("");
+  const [resultKind, setResultKind] = useState<"query" | "related" | null>(null);
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState<"index" | "search" | null>(null);
@@ -40,7 +42,8 @@ export function SemanticSearchPanel({ book, settings }: Props) {
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setIndex(null);setMatches([]);setStatus("");setProgress(0);setBusy(null);
+    setIndex(null);setMatches([]);setReferenceId("");setResultKind(null);
+    setStatus("");setProgress(0);setBusy(null);
     return () => { abortRef.current?.abort(); };
   }, [book.id, book.updatedAt, modelKey]);
 
@@ -57,7 +60,7 @@ export function SemanticSearchPanel({ book, settings }: Props) {
     if (!scenes.length) {setStatus("Nessuna scena canonica con testo da indicizzare.");return;}
     const controller = new AbortController();
     abortRef.current = controller;
-    setIndex(null);setMatches([]);setBusy("index");setProgress(0);
+    setIndex(null);setMatches([]);setResultKind(null);setBusy("index");setProgress(0);
     setStatus("Indicizzazione richiesta dall'autore: soltanto testo di scene canoniche al server localhost.");
     try {
       const vectors: number[][] = [];
@@ -95,13 +98,27 @@ export function SemanticSearchPanel({ book, settings }: Props) {
       const [vector] = await embedTextBatch(settings,[input],controller.signal);
       if (controller.signal.aborted || !vector) return;
       const results=rankSemanticScenes(currentIndex.scenes,currentIndex.vectors,vector);
-      setMatches(results);
+      setMatches(results);setResultKind("query");
       setStatus(`Trovati ${results.length} passaggi ordinati per vicinanza semantica (non è un giudizio di verità).`);
     } catch(e) {
       if (!controller.signal.aborted) setStatus(e instanceof Error ? e.message : "Ricerca non riuscita.");
     } finally {
       if (abortRef.current === controller) abortRef.current=null;
       setBusy(null);
+    }
+  };
+
+  const related = () => {
+    if (busy || !currentIndex || currentIndex.scenes.length < 2) return;
+    try {
+      const chosenId = currentIndex.scenes.some(scene => scene.id === referenceId)
+        ? referenceId : currentIndex.scenes[0]!.id;
+      const results = relatedSemanticScenes(currentIndex.scenes,currentIndex.vectors,chosenId);
+      setMatches(results);setResultKind("related");
+      setStatus(`Trovate ${results.length} altre scene semanticamente vicine. Controlla personalmente la continuità: la similarità non indica contraddizioni.`);
+    } catch (e) {
+      setMatches([]);setResultKind(null);
+      setStatus(e instanceof Error ? e.message : "Confronto scene non riuscito.");
     }
   };
 
@@ -136,8 +153,29 @@ export function SemanticSearchPanel({ book, settings }: Props) {
       <button type="submit" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
         disabled={busy!==null || !currentIndex || query.trim().length < 3}>Cerca scene simili</button>
     </form>
+    <div role="group" aria-label="Confronto scene per continuità narrativa"
+      className="mt-4 space-y-2 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
+      <h3 className="font-semibold">Continuità narrativa: scene collegate</h3>
+      <p className="muted text-xs">
+        Usa i vettori già calcolati per trovare altre scene collegate alla scena di riferimento.
+        Nessuna nuova chiamata AI. I risultati sono indizi da verificare, non segnalazioni automatiche di errori.
+      </p>
+      <label htmlFor="semantic-related-reference" className="block text-sm font-semibold">Scena di riferimento</label>
+      <select id="semantic-related-reference" className="field" disabled={busy!==null || !currentIndex || currentIndex.scenes.length<2}
+        value={currentIndex?.scenes.some(scene => scene.id === referenceId) ? referenceId : currentIndex?.scenes[0]?.id ?? ""}
+        onChange={e => setReferenceId(e.target.value)}>
+        {!currentIndex && <option value="">Indicizza il libro per scegliere una scena</option>}
+        {currentIndex?.scenes.map(scene => <option key={scene.id} value={scene.id}>
+          Capitolo {scene.chapter}, scena {scene.number}: {scene.title}
+        </option>)}
+      </select>
+      <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
+        onClick={related} disabled={busy!==null || !currentIndex || currentIndex.scenes.length<2}>
+        Trova scene collegate
+      </button>
+    </div>
     <p role="status" aria-live="polite" className="muted mt-3 text-sm">{status}</p>
-    {matches.length>0 && <ol aria-label="Risultati semantici" className="mt-3 space-y-3">
+    {matches.length>0 && resultKind && <ol aria-label={resultKind==="related"?"Scene collegate":"Risultati semantici"} className="mt-3 space-y-3">
       {matches.map(({scene,similarity})=>
         <li key={scene.id} className="min-w-0 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
           <p className="font-semibold">Capitolo {scene.chapter} — {scene.chapterTitle}, scena {scene.number}: {scene.title}</p>
