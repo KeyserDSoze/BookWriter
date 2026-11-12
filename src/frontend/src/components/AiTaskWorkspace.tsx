@@ -45,7 +45,7 @@ export function AiTaskWorkspace({
   }),[activities,compact,search,statusFilter,phaseFilter,order]);
   const runGroups=useMemo(()=>!compact&&groupByRun
     ?groupTaskTimelineByRun(filtered):[],[compact,groupByRun,filtered]);
-  const runHeaders=new Map(runGroups.map(group=>[group.activities[0].id,group]));
+  const runHeaders=new Map(runGroups.map(group=>[group.activities[0]!.id,group]));
   useEffect(()=>{
     const timer=setInterval(()=>setClock(Date.now()),1000);
     return ()=>clearInterval(timer);

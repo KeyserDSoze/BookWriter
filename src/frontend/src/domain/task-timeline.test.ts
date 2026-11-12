@@ -51,17 +51,17 @@ describe("Timeline task: filtri, durata e stime verificabili",()=>{
     expect(groups.map(group=>group.activities.map(a=>a.id)))
       .toEqual([["e"],["d"],["c","a"],["b"]]);
     expect(groups.map(group=>group.runId)).toEqual([null,null,"run-1","run-2"]);
-    expect(groups[2].summary).toMatchObject({
+    expect(groups[2]!.summary).toMatchObject({
       total:2,pricedReports:2,uncertainAttempts:0,
     });
-    expect(groups[2].summary.knownEstimatedEur).toBeCloseTo(0.0008);
-    expect(groups[3].summary).toMatchObject({
+    expect(groups[2]!.summary.knownEstimatedEur).toBeCloseTo(0.0008);
+    expect(groups[3]!.summary).toMatchObject({
       total:1,pricedReports:0,uncertainAttempts:1,
     });
     expect(entries.map(a=>a.id)).toEqual(["a","b","c","d","e"]);
     expect(groupTaskTimelineByRun(filterTaskTimeline(entries,{
       query:"",status:"failed",phase:"",order:"oldest",
-    })).map(group=>group.activities[0].id)).toEqual(["b"]);
+    })).map(group=>group.activities[0]!.id)).toEqual(["b"]);
   });
   it("distingue durata reale e tempi mancanti o corrotti",()=>{
     expect(completedTaskDurationSeconds(t("a"))).toBe(61);
