@@ -41,6 +41,47 @@ export function parseLmStudioReasoningCatalog(payload: unknown): Record<string, 
 export async function fetchLmStudioReasoningCatalog(
   endpointUrl: string, signal?: AbortSignal,
 ): Promise<Record<string, ModelReasoningInfo | null> | undefined> {
+  const payload = await fetchLmStudioModelsPayload(endpointUrl, signal);
+  return payload === undefined ? undefined : parseLmStudioReasoningCatalog(payload);
+}
+
+export interface LmStudioContextInfo { loaded?: number; max?: number }
+const isTokens = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 256 && value <= 10_000_000;
+
+/** Context length LM Studio actually loaded for a model (untrusted data; undefined = unknown). */
+export function parseLmStudioContext(payload: unknown, modelId: string): LmStudioContextInfo | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const models = (payload as { models?: unknown }).models;
+  if (!Array.isArray(models)) return undefined;
+  for (const item of models.slice(0, MAX_MODELS)) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const model = item as { type?: unknown; key?: unknown; loaded_instances?: unknown; max_context_length?: unknown };
+    if (model.type !== "llm" || typeof model.key !== "string") continue;
+    const instances = Array.isArray(model.loaded_instances) ? model.loaded_instances : [];
+    const instance = instances.find(entry => entry && typeof entry === "object" &&
+      (entry as { id?: unknown }).id === modelId);
+    if (model.key !== modelId && !instance) continue;
+    const config = (instance ?? instances[0]) as { config?: { context_length?: unknown } } | undefined;
+    const loaded = config?.config?.context_length;
+    return {
+      ...(isTokens(loaded) ? { loaded } : {}),
+      ...(isTokens(model.max_context_length) ? { max: model.max_context_length } : {}),
+    };
+  }
+  return undefined;
+}
+
+export async function fetchLmStudioContext(
+  endpointUrl: string, modelId: string, signal?: AbortSignal,
+): Promise<LmStudioContextInfo | undefined> {
+  const payload = await fetchLmStudioModelsPayload(endpointUrl, signal);
+  return payload === undefined ? undefined : parseLmStudioContext(payload, modelId);
+}
+
+async function fetchLmStudioModelsPayload(
+  endpointUrl: string, signal?: AbortSignal,
+): Promise<unknown | undefined> {
   let target: string;
   try {
     const url = new URL(normalizeEndpoint(endpointUrl));
@@ -71,7 +112,7 @@ export async function fetchLmStudioReasoningCatalog(
     const bytes = new Uint8Array(size);
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    return parseLmStudioReasoningCatalog(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
   } catch { return undefined; }
   finally {
     clearTimeout(timer);

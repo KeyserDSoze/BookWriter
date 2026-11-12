@@ -1,5 +1,5 @@
 import type { BookProject, Chapter, Scene } from "./types";
-import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, chapterSegments } from "./editorial-board";
+import { ROLE_LABELS, acceptedRepairs, chapterSegments, cycleRoles } from "./editorial-board";
 
 export type PipelineStage = "ideation" | "planning" | "writing" | "editing" | "done";
 export const PIPELINE_STAGES: ReadonlyArray<{ id: PipelineStage; label: string; description: string }> = [
@@ -153,8 +153,9 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
           try {
             const segments = chapterSegments(chapter).length;
             const done = cycle.reports.length;
-            const role = EDITORIAL_ROLES[Math.floor(done / segments)];
-            if (role) return view(`Redazione del ${where}: revisore ${done + 1} di ${segments * EDITORIAL_ROLES.length} — ${ROLE_LABELS[role]}.`, {
+            const roles = cycleRoles(book, cycle);
+            const role = roles[Math.floor(done / segments)];
+            if (role) return view(`Redazione del ${where}: revisore ${done + 1} di ${segments * roles.length} — ${ROLE_LABELS[role]}.`, {
               chapterNumber: chapter.number, detail: `Tornata ${cycle.round}/3. Ogni revisore è una chiamata AI indipendente che non vede gli altri pareri.` });
           } catch { /* the board panel explains invalid checkpoints */ }
           return view(`Redazione del ${where}.`, { chapterNumber: chapter.number });

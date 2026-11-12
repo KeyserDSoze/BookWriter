@@ -118,6 +118,9 @@ const archivedCycleSchema = z.object({
   reports: z.array(archivedReportSchema).max(480),
   judgment: archivedJudgmentSchema.optional(),
   priorRounds: z.array(archivedRoundSchema).max(3),
+  roles: z.array(z.enum(["continuity", "secrets", "timeline", "historical", "characterVoice", "style", "narrative",
+    "readerGenre", "readerCasual", "readerSkeptic", "readerCharacters", "readerMystery"]))
+    .min(1).max(12).refine(list => new Set(list).size === list.length).optional(),
 }).passthrough();
 const editorialRecoveryArchiveSchema = z.object({
   chapterId: zId,
@@ -130,6 +133,7 @@ const chapterSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
   purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
   continuityRecheck: continuityRecheckSchema.optional(),
+  editorialMode: z.literal("light").optional(),
   editorialRounds: z.array(archivedRoundSchema).max(3).optional(),
   lastContinuityReview: continuityAuditSchema.optional(),
 }).passthrough();
@@ -284,6 +288,7 @@ const bookSchema = z.object({
   authorChapterSynopses: z.array(authorChapterSynopsisSchema).max(MAX_SYNOPSIS_CHAPTERS).optional(),
   targetChapterCount: z.number().int().min(1).max(MAX_TARGET_CHAPTERS).optional(),
   pauseAfterOutline: z.boolean().optional(),
+  editorialMode: z.enum(["full", "light"]).optional(),
   authorInterventions: z.array(authorInterventionSchema).max(MAX_AUTHOR_INTERVENTIONS).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),

@@ -5,6 +5,7 @@ import {
   RefreshCw, Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
+import { applyFastCheckRoutes, clearFastCheckRoutes } from "./domain/model-routing-preset";
 import { usePwaInstall } from "./application/pwa";
 import { AutopilotRunner } from "./application/autopilot";
 import { recordAuthorIntervention } from "./application/author-intervention";
@@ -38,7 +39,7 @@ import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
 import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
-import { updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
+import { updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
@@ -121,6 +122,7 @@ export default function App() {
   // Force only the affected uncontrolled model input to remount and display
   // the actually persisted value, never a draft that was refused by the lock.
   const [bookModelResets, setBookModelResets] = useState<Partial<Record<TaskKind, number>>>({});
+  const [fastCheckModel, setFastCheckModel] = useState("");
   const [ready, setReady] = useState(false);
   const [backupMode, setBackupMode] = useState<BackupMode>("content");
   const [backupPassword, setBackupPassword] = useState("");
@@ -449,6 +451,21 @@ export default function App() {
     }catch(error){
       await refresh();
       setNotice(error instanceof Error?error.message:"Reasoning del task non salvato.");
+    }
+  }
+
+  async function updateBookEditorial(mode: "full" | "light") {
+    if (!current) return;
+    const { id, updatedAt } = current;
+    try {
+      await updateBookEditorialMode(id, updatedAt, mode);
+      await refresh();
+      setNotice(mode === "light"
+        ? "Redazione leggera attiva: i NUOVI cicli usano 5 revisori (6 con fonti storiche) e il direttore. I capitoli congelati così sono marcati."
+        : "Redazione completa ripristinata: i NUOVI cicli usano 12 revisori.");
+    } catch (error) {
+      await refresh();
+      setNotice(error instanceof Error ? error.message : "Modalità di redazione non salvata.");
     }
   }
 
@@ -888,6 +905,28 @@ export default function App() {
             <Button variant="outline" onClick={applyRecommendedThinking}>Applica thinking consigliato</Button>
             <p className="muted text-xs">Low per scrittura, consolidamento e riassunti; Medium per piano, validazione e analisi d'impatto; High per il direttore editoriale. Usa solo i livelli che ogni modello dichiara.</p>
           </div>
+          <div className="mb-4 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
+            <p className="mb-2 text-sm font-semibold">Modello veloce per i controlli</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-0">
+                <label className="mb-1 block text-xs font-semibold" htmlFor="fast-check-model">Modello per revisori, lettori, riassunti e memoria</label>
+                <select id="fast-check-model" className="field" value={fastCheckModel} onChange={e => setFastCheckModel(e.target.value)}>
+                  <option value="">Scegli dal catalogo</option>
+                  {settings.endpoints.find(e => e.id === settings.defaultRoute.endpointId)?.models.map(modelId =>
+                    <option key={modelId} value={modelId}>{modelId}</option>)}
+                </select>
+              </div>
+              <Button variant="outline" disabled={!fastCheckModel} onClick={() => {
+                setSettings(s => ({ ...s, ...applyFastCheckRoutes(s, fastCheckModel) }));
+                setNotice("Modello veloce assegnato a revisori, lettori, riassunti e memoria. Premi Salva impostazioni per conservarlo.");
+              }}>Assegna ai task di controllo</Button>
+              <Button variant="outline" onClick={() => {
+                setSettings(s => ({ ...s, ...clearFastCheckRoutes(s) }));
+                setNotice("Assegnazione dei task di controllo rimossa: tornano al modello predefinito. Premi Salva impostazioni per conservarlo.");
+              }}>Torna al predefinito</Button>
+            </div>
+            <p className="muted mt-2 text-xs">Un capitolo richiede oltre dieci chiamate di controllo per ogni parte di testo: su una macchina lenta un modello piccolo qui fa risparmiare ore. Scrittura, piano e direttore editoriale restano sul modello predefinito.</p>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Endpoint predefinito"><select className="field" value={settings.defaultRoute.endpointId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,endpointId:e.target.value}}))}>
               {settings.endpoints.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
@@ -940,6 +979,14 @@ export default function App() {
           </div>
         </Section>
         {current && <Section title={`Override del libro: ${current.title}`} description="Il modello scelto qui sostituisce quello globale soltanto per il libro attivo.">
+          <label className="mb-3 block text-sm font-semibold">Redazione dei capitoli
+            <select className="field mt-1" aria-label="Modalità di redazione" disabled={current.status === "running"}
+              value={current.editorialMode ?? "full"} onChange={e => void updateBookEditorial(e.target.value as "full" | "light")}>
+              <option value="full">Completa: 12 revisori indipendenti (consigliata con modelli veloci)</option>
+              <option value="light">Leggera: 5 revisori (6 con fonti storiche), molto più veloce su modelli locali</option>
+            </select>
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Vale per i nuovi cicli di revisione; non riduce il direttore critico né i controlli di prova letterale.</span>
+          </label>
           <div className="grid gap-3 md:grid-cols-2">
             {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge","chapterAudit","chapterReaders","chapterJudge","chapterRepair"] as TaskKind[]).map(kind => {
               const configured = current.modelRoutes?.[kind];

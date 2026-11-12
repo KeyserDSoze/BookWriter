@@ -56,3 +56,20 @@ export async function updateBookTaskReasoning(
     await saveBook(next,true,expectedUpdatedAt);
   });
 }
+
+/** Editorial board for NEW review cycles (a cycle already started keeps its reviewers). Same fencing as the model routes. */
+export async function updateBookEditorialMode(
+  bookId: string, expectedUpdatedAt: string, mode: "full" | "light",
+): Promise<void> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks?.request) throw new Error("Web Locks non disponibile: modifica della redazione bloccata.");
+  await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {
+    if (!lock) throw new Error("Un'altra scheda sta scrivendo questo libro: riprova quando l'autopilot è fermo.");
+    const stored = await getBook(bookId);
+    if (!stored || stored.updatedAt !== expectedUpdatedAt) throw new BookRevisionConflict();
+    if (stored.status === "running") throw new Error("Metti prima in pausa l'autopilot e ricarica il libro.");
+    const next = structuredClone(stored);
+    if (mode === "light") next.editorialMode = "light"; else delete next.editorialMode;
+    await saveBook(next, true, expectedUpdatedAt);
+  });
+}

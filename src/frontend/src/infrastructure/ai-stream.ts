@@ -4,7 +4,7 @@ import { MAX_CHAT_COMPLETION_BYTES, ProviderResponseReadError } from "./ai-compl
  * All deltas are provisional, not canonical book text. */
 export type AiStreamDelta = { kind: "text" | "reasoning"; text: string };
 export interface StreamCompletion {
-  choices: Array<{ message: { content: string } }>;
+  choices: Array<{ message: { content: string }; finish_reason?: string }>;
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
 }
 
@@ -64,6 +64,7 @@ export async function readChatCompletionStream(
   let text = "";
   let reasoning = "";
   let usage:StreamCompletion["usage"];
+  let finishReason:string|undefined;
   let pending = "";
   let bytes = 0;
   let events=0;
@@ -108,8 +109,9 @@ export async function readChatCompletionStream(
       if(!Array.isArray(envelope.choices))throw invalid();
       for (const choice of envelope.choices) {
         if (!choice || typeof choice !== "object" || Array.isArray(choice))throw invalid();
-        const c=choice as { index?:unknown; delta?:unknown };
+        const c=choice as { index?:unknown; delta?:unknown; finish_reason?:unknown };
         if(c.index!==undefined && c.index!==0) continue;
+        if(typeof c.finish_reason=="string") finishReason=c.finish_reason;
         if(c.delta===null||c.delta===undefined) continue;
         if(typeof c.delta!=="object"||Array.isArray(c.delta))throw invalid();
         const d=c.delta as {content?:unknown;reasoning_content?:unknown;reasoning?:unknown};
@@ -158,11 +160,13 @@ export async function readChatCompletionStream(
       // A terminated connection without [DONE] is not an accepted result.
       if(!done)throw invalid();
     }
-    if(!text.trim())throw new ProviderResponseReadError(reasoning
+    if(!text.trim())throw new ProviderResponseReadError(finishReason==="length"
+      ? "Il modello ha esaurito il limite di lunghezza o di contesto prima di scrivere la risposta (di solito per il reasoning). Nessun output applicato: aumenta il contesto in LM Studio o abbassa il thinking."
+      : reasoning
       ? "Il provider ha terminato dopo il reasoning ma senza testo finale: nessun output applicato."
       : "Il provider ha terminato senza generare una risposta testuale: nessun output applicato.");
     completed=true;
-    return {choices:[{message:{content:text}}],usage};
+    return {choices:[{message:{content:text},...(finishReason===undefined?{}:{finish_reason:finishReason})}],usage};
   } catch(e){
     if(signal.aborted)throw new DOMException("Generazione interrotta.", "AbortError");
     if(expired)throw timeout();

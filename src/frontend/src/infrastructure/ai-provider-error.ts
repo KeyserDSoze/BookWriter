@@ -41,6 +41,17 @@ export class MalformedProviderContentError extends ProviderContentError {
     this.name = "MalformedProviderContentError";
   }
 }
+/** The model stopped on its length/context limit: the text is cut mid-way and must never become canon. */
+export class TruncatedProviderContentError extends ProviderContentError {
+  constructor(
+    endpointId: string, modelId: string,
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown },
+  ) {
+    super("Risposta troncata: il modello si è fermato per limite di lunghezza o di contesto. Nessun testo applicato. Aumenta la lunghezza del contesto del modello (LM Studio), abbassa il thinking o riduci il capitolo.",
+      endpointId, modelId, usage);
+    this.name = "TruncatedProviderContentError";
+  }
+}
 
 /** Call only on a persisted provider attempt's failure path. An unusable
  * completion never creates a successful editorial report or scene draft. */

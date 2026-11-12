@@ -1,5 +1,14 @@
 # Changelog — BookWriter
 
+## 0.12.0 — 2026-11-12 (main) — Orchestrazione per modelli locali lenti (ADR 0151)
+
+- **Memoria a delta:** le attività di scrittura restituiscono solo le modifiche alla memoria, validate e applicate dal codice.
+- **Guardia di contesto:** prima della POST si confronta il prompt con il contesto caricato in LM Studio; se non ci sta, l'autopilot si ferma con un messaggio chiaro invece di far troncare il prompt.
+- **Risposte troncate rifiutate** (`finish_reason: length`), con usage conservato.
+- **Piano a tappe** con ripresa, **controllo strutturale della prosa**, **compattazione della memoria**, **tempo residuo stimato** nella Dashboard e preset opzionale di un modello veloce per i controlli.
+- **Redazione leggera (opt-in per libro, Impostazioni):** 5 revisori (6 con fonti storiche) più il direttore critico; i capitoli congelati così sono marcati. Default invariato: 12 revisori.
+- **Non incluso:** revisori in parallelo (richiede ridisegnare checkpoint e gate di copertura).
+
 ## 0.11.95 — 2026-11-12 (main) — App installabile (PWA) e guscio offline (ADR 0150)
 
 - **Installabile** su PC e smartphone: manifest standalone, icona con il fantasmino (anche come favicon) e pulsante «Installa app» (dove il browser lo consente). Richiesta di storage persistente quando installata.

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { AlertTriangle, BookOpen, CheckCircle2, Circle, CircleDot, Loader2, PauseCircle, Settings2 } from "lucide-react";
 import type { Activity, BookProject } from "../domain/types";
 import { PIPELINE_STAGES, bookProgress, describeNextAutopilotStep } from "../domain/autopilot-step";
+import { describeEta, estimateBookEta } from "../domain/book-eta";
 import type { LiveAiTrace } from "../infrastructure/ai-observability";
 import { LiveTaskStream, formatElapsed, useElapsedSeconds } from "./LiveTaskStream";
 import { Button } from "./ui/button";
@@ -42,6 +43,7 @@ export function AutopilotFocusPanel({
 }: Props) {
   const step = useMemo(() => describeNextAutopilotStep(book), [book]);
   const progress = useMemo(() => bookProgress(book), [book]);
+  const etaLine = useMemo(() => describeEta(estimateBookEta(book, activities)), [book, activities]);
   const running = book.status === "running";
   const runningActivity = running ? activities.find(a => a.status === "running") : undefined;
   const active = live?.bookId === book.id ? live : null;
@@ -88,6 +90,7 @@ export function AutopilotFocusPanel({
         <p className="text-lg font-bold tabular-nums">{progress.words.toLocaleString("it-IT")}</p>
       </div>
     </div>
+    {etaLine && <p className="muted mt-2 text-xs" aria-label="Stima dei tempi">{etaLine}</p>}
 
     <div className={`mt-4 rounded-xl border p-4 ${running ? "border-emerald-500/60" : step.blocked || book.status === "error"
       ? "border-amber-500/60" : "border-slate-400/50"}`}>

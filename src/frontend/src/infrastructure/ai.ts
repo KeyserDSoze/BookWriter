@@ -4,7 +4,7 @@ import { effectiveReasoningEffort } from "../domain/task-reasoning";
 import { decryptLocal } from "./crypto";
 import { validTokenCount } from "../domain/ai-usage";
 import { assertChatModelCapability } from "../domain/model-capabilities";
-import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
+import { EmptyProviderContentError, MalformedProviderContentError, TruncatedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
 import { chatReasoningEffort, endpointStreamMode, chatStreamTimeoutSeconds, readChatCompletionStream,
   type AiStreamDelta } from "./ai-stream";
@@ -192,6 +192,9 @@ export async function callModel(
   if (!Array.isArray(data.choices) || !data.choices.length) throw invalid();
   const first: unknown = data.choices[0];
   if (!first || typeof first !== "object" || Array.isArray(first)) throw invalid();
+  // A reply cut by the length/context limit looks like valid prose: never accept it.
+  if ((first as { finish_reason?: unknown }).finish_reason === "length")
+    throw new TruncatedProviderContentError(endpoint.id, assignment.modelId, data.usage);
   const message: unknown = (first as {message?: unknown}).message;
   if (!message || typeof message !== "object" || Array.isArray(message)) throw invalid();
   const content: unknown = (message as {content?: unknown}).content;

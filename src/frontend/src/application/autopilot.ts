@@ -6,11 +6,15 @@ import { addAiDelta, currentLiveAi, finishLiveAi, markAiHeader, markAiTransport,
   saveAiTrace, startLiveAi } from "../infrastructure/ai-observability";
 import { taskReasoningChoice } from "../domain/task-reasoning";
 import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
-import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
+import { keepObservedUsageOnRejectedReply, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
+import { assertScenePlausible } from "../domain/prose-sanity";
+import { applyMemoryResponse, assertCompactionShrinks, DELTA_REPLY_RULE, DELTA_REPLY_RULE_NO_SUMMARY,
+  memoryNeedsCompaction, memorySchema } from "../domain/memory-delta";
+import { assertPromptFitsLoadedContext, PromptExceedsContextError } from "./context-guard";
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
@@ -30,15 +34,6 @@ const chapterSchema = z.object({
       objective: z.string().min(8),
     })).min(1).max(50),
   })).min(1).max(80),
-});
-const memorySchema = z.object({
-  characters: z.record(z.string(), z.string()),
-  locations: z.record(z.string(), z.string()),
-  factions: z.record(z.string(), z.string()),
-  items: z.record(z.string(), z.string()),
-  secrets: z.record(z.string(), z.string()),
-  timeline: z.array(z.string()),
-  currentState: z.string(),
 });
 // The editorial board never truncates canon: it refuses oversized memory.
 // Every memory update must therefore keep entries short and merged.
@@ -67,6 +62,8 @@ const PERSONAS = [
 
 type Work = {
   system?: string;
+  /** Task-internal housekeeping: pending author notes must stay pending. */
+  noAuthorNotes?: boolean;
   phase: Phase;
   kind: TaskKind;
   title: string;
@@ -182,6 +179,109 @@ function ensureScene(book: BookProject): Scene {
   return scene;
 }
 
+/** Books with more chapters than this are planned chapter by chapter. */
+const STAGED_OUTLINE_FROM = 6;
+const chapterListSchema = z.object({
+  chapters: z.array(z.object({
+    title: z.string().min(2), purpose: z.string().min(8),
+    scenes: z.array(z.object({ title: z.string().min(2), objective: z.string().min(8) })).max(50).optional(),
+  })).min(1).max(80),
+});
+const chapterScenesSchema = z.object({
+  scenes: z.array(z.object({ title: z.string().min(2), objective: z.string().min(8) })).min(1).max(50),
+});
+const chapterIdFor = (index: number) => `chapter:${String(index + 1).padStart(3, "0")}`;
+const scenesFor = (chapterIndex: number, scenes: Array<{ title: string; objective: string }>): Scene[] =>
+  scenes.map((scene, si): Scene => ({
+    id: `scene:${String(chapterIndex + 1).padStart(3, "0")}:${String(si + 1).padStart(3, "0")}`,
+    number: si + 1, title: scene.title, objective: scene.objective, text: "", status: "planned",
+  }));
+function finishOutline(b: BookProject): void {
+  b.phase = "prose";
+  // The author asked to read and approve the plan before any prose is written.
+  if (b.pauseAfterOutline) b.status = "paused";
+}
+/** A complete plan in one reply (the original format, and the way small books are planned). */
+function applyFullPlan(b: BookProject, parsed: z.infer<typeof chapterSchema>): void {
+  const required = b.startMode === "synopsis" ? b.authorChapterSynopses ?? [] : [];
+  if (required.length && parsed.chapters.length !== required.length)
+    throw new Error(`Il piano deve avere esattamente ${required.length} capitoli come la tua sinossi, ma il modello ne ha proposti ${parsed.chapters.length}. Nessun piano applicato: riprendi per ripeterlo, eventualmente con un'indicazione.`);
+  b.chapters = parsed.chapters.map((chapter, ci): Chapter => ({
+    id: chapterIdFor(ci), number: ci + 1, title: required[ci]?.title ?? chapter.title, purpose: chapter.purpose,
+    scenes: scenesFor(ci, chapter.scenes),
+  }));
+  finishOutline(b);
+}
+function outlineChapterListWork(book: BookProject, base: string, chapterRule: string,
+  synopses: readonly unknown[]): Work {
+  return {
+    phase: "outline", kind: "outline", title: "Elenco dei capitoli",
+    reason: "Prima l'elenco dei capitoli, poi le scene di ciascuno: una risposta piccola per volta, più facile da ripetere se va storta.",
+    nextStep: "Scene del primo capitolo",
+    prompt: `Elenca SOLO i capitoli del libro, con titolo e scopo narrativo di ciascuno (senza scene). Rispetta istruzioni e capitoli forniti dall'autore. ${chapterRule}${synopses.length ? "" : "Distribuisci archi, rivelazioni e payoff lungo tutto il libro. "}Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"chapters":[{"title":"...","purpose":"..."}]}. Niente Markdown o testo extra.\n\n${base}`,
+    apply: (b, text) => {
+      const parsed = chapterListSchema.parse(parseJson(text));
+      // A reply that already contains every chapter's scenes is a complete plan.
+      if (parsed.chapters.every(ch => ch.scenes?.length))
+        return applyFullPlan(b, chapterSchema.parse(parseJson(text)));
+      const required = b.startMode === "synopsis" ? b.authorChapterSynopses ?? [] : [];
+      const expected = required.length || b.targetChapterCount || 0;
+      if (expected && parsed.chapters.length !== expected)
+        throw new Error(`L'elenco deve avere esattamente ${expected} capitoli, ma il modello ne ha proposti ${parsed.chapters.length}. Nessun piano applicato: riprendi per ripeterlo.`);
+      b.chapters = parsed.chapters.map((chapter, ci): Chapter => ({
+        id: chapterIdFor(ci), number: ci + 1, title: required[ci]?.title ?? chapter.title,
+        purpose: chapter.purpose, scenes: [],
+      }));
+    },
+  };
+}
+function outlineChapterWork(book: BookProject, chapter: Chapter, base: string,
+  synopses: ReadonlyArray<{ synopsis: string }>): Work {
+  const synopsis = synopses[chapter.number - 1]?.synopsis;
+  const total = book.chapters.length;
+  return {
+    phase: "outline", kind: "outline", title: `Scene del capitolo ${chapter.number}/${total}: ${chapter.title}`,
+    reason: "Pianificare le scene di un solo capitolo, coerenti con l'elenco dei capitoli e con quelli già pianificati.",
+    nextStep: chapter.number === total
+      ? (book.pauseAfterOutline ? "Pausa per l'approvazione del piano da parte dell'autore" : "Scrittura della prima scena")
+      : `Scene del capitolo ${chapter.number + 1}`,
+    prompt: `Pianifica le scene SOLO del capitolo ${chapter.number} «${chapter.title}» (scopo: ${chapter.purpose}). ${synopsis ? `La sinossi dell'autore per questo capitolo è VINCOLANTE: distribuisci TUTTI i suoi eventi nelle scene, senza spostarli in altri capitoli: ${synopsis}. ` : ""}Più scene ("paragrafi" Narrarium), con obiettivo narrativo, conflitto, causa ed effetto, indizi distribuiti e payoff successivi, coerenti con gli altri capitoli del piano. Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"scenes":[{"title":"...","objective":"..."}]}. Niente Markdown o testo extra.\n\n${base}`,
+    apply: (b, text) => {
+      const raw = parseJson(text) as { chapters?: unknown } | null;
+      // A model that answers with the whole plan anyway is accepted as before.
+      if (raw && typeof raw === "object" && Array.isArray(raw.chapters))
+        return applyFullPlan(b, chapterSchema.parse(raw));
+      const parsed = chapterScenesSchema.parse(raw);
+      const index = b.chapters.findIndex(ch => ch.id === chapter.id);
+      const target = b.chapters[index];
+      if (!target || target.scenes.length) throw new Error("Il capitolo è cambiato durante la pianificazione.");
+      target.scenes = scenesFor(index, parsed.scenes);
+      if (b.chapters.every(ch => ch.scenes.length)) finishOutline(b);
+    },
+  };
+}
+
+/** Shrinks canon memory so later prompts (and the model's context) can carry it. The reply must
+ * be the complete memory and must be clearly smaller, otherwise the task fails instead of looping. */
+function memoryCompactionWork(book: BookProject): Work {
+  return {
+    phase: book.phase, kind: "consolidate", noAuthorNotes: true,
+    title: "Compattazione della memoria narrativa",
+    reason: "La memoria del libro è troppo grande per i prompt e per il contesto del modello: va riassunta senza perdere i fatti ancora utili.",
+    nextStep: "Riprende il lavoro dal punto in cui si era fermato",
+    prompt: "Compatta la memoria narrativa. Mantieni TUTTI i fatti e i segreti ancora rilevanti, unisci i duplicati, elimina i dettagli esauriti e i personaggi o luoghi secondari non più utili. " +
+      "Al massimo 14 voci per categoria (characters/locations/factions/items/secrets), ognuna di al massimo 600 caratteri; timeline con al massimo 40 eventi essenziali (riassumi i più vecchi); currentState al massimo 2000 caratteri. Non inventare nulla. " +
+      'Restituisci ESCLUSIVAMENTE JSON valido con la memoria COMPLETA: {"characters":{},"locations":{},"factions":{},"items":{},"secrets":{},"timeline":[],"currentState":""}.\n\nMEMORIA ATTUALE:\n' +
+      JSON.stringify(book.memory),
+    apply: (b, text) => {
+      const update = applyMemoryResponse(b.memory, parseJson(text));
+      if (update.mode !== "full") throw new Error("La compattazione deve restituire la memoria completa, non un delta.");
+      assertCompactionShrinks(b.memory, update.memory);
+      b.memory = update.memory;
+    },
+  };
+}
+
 function nextWork(book: BookProject): Work | null {
   const planning = ["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase);
   const base = planning ? context(book) : writingContext(book);
@@ -236,6 +336,11 @@ function nextWork(book: BookProject): Work | null {
       const chapterRule = synopses.length
         ? `Il piano DEVE contenere esattamente ${synopses.length} capitoli: uno per ciascun capitolo della sinossi dell'autore, nello stesso ordine. Il purpose di ogni capitolo riassume la sua sinossi; distribuisci TUTTI gli eventi della sinossi nelle scene del capitolo corrispondente, senza spostarli in altri capitoli. `
         : book.targetChapterCount ? `Il piano DEVE contenere esattamente ${book.targetChapterCount} capitoli. ` : "";
+      // Long books are planned in small pieces: a failed or slow reply costs one chapter, not the whole plan.
+      const toPlan = book.chapters.find(ch => ch.scenes.length === 0);
+      if (toPlan) return outlineChapterWork(book, toPlan, base, synopses);
+      if (!book.chapters.length && (synopses.length || book.targetChapterCount || 0) > STAGED_OUTLINE_FROM)
+        return outlineChapterListWork(book, base, chapterRule, synopses);
       return {
         phase: "outline", kind: "outline", title: "Piano dei capitoli",
         reason: synopses.length
@@ -243,24 +348,7 @@ function nextWork(book: BookProject): Work | null {
           : "Trasformare la visione in scene scrivibili e verificabili.",
         nextStep: book.pauseAfterOutline ? "Pausa per l'approvazione del piano da parte dell'autore" : "Scrittura della prima scena",
         prompt: `Crea un piano completo e lungimirante del libro. Rispetta istruzioni e capitoli forniti dall'autore. ${chapterRule}Ogni capitolo include più scene ("paragrafi" Narrarium), con obiettivo narrativo, conflitto, causa ed effetto, indizi distribuiti e payoff successivi. Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"chapters":[{"title":"...","purpose":"...","scenes":[{"title":"...","objective":"..."}]}]}. Niente Markdown o testo extra.\n\n${base}`,
-        apply: (b, text) => {
-          const parsed = chapterSchema.parse(parseJson(text));
-          const required = b.startMode === "synopsis" ? b.authorChapterSynopses ?? [] : [];
-          if (required.length && parsed.chapters.length !== required.length)
-            throw new Error(`Il piano deve avere esattamente ${required.length} capitoli come la tua sinossi, ma il modello ne ha proposti ${parsed.chapters.length}. Nessun piano applicato: riprendi per ripeterlo, eventualmente con un'indicazione.`);
-          b.chapters = parsed.chapters.map((chapter, ci): Chapter => ({
-            id: `chapter:${String(ci + 1).padStart(3, "0")}`,
-            number: ci + 1, title: required[ci]?.title ?? chapter.title, purpose: chapter.purpose,
-            scenes: chapter.scenes.map((scene, si): Scene => ({
-              id: `scene:${String(ci + 1).padStart(3, "0")}:${String(si + 1).padStart(3, "0")}`,
-              number: si + 1, title: scene.title, objective: scene.objective,
-              text: "", status: "planned",
-            })),
-          }));
-          b.phase = "prose";
-          // The author asked to read and approve the plan before any prose is written.
-          if (b.pauseAfterOutline) b.status = "paused";
-        },
+        apply: (b, text) => applyFullPlan(b, chapterSchema.parse(parseJson(text))),
       };
     }
     case "prose": {
@@ -274,6 +362,7 @@ function nextWork(book: BookProject): Work | null {
         apply: (b, text) => {
           const scene = allScenes(b).find(x => x.id === pending.id);
           if (!scene) throw new Error("La scena è stata modificata durante la generazione.");
+          assertScenePlausible(text);
           scene.text = text; scene.status = "draft"; b.currentSceneId = scene.id; b.phase = "review";
         },
       };
@@ -285,7 +374,7 @@ function nextWork(book: BookProject): Work | null {
         reason: "Controllare personaggi, timeline, stile, logica e segreti rispetto ai capitoli precedenti.",
         nextStep: "Consolidamento della memoria narrativa",
         prompt: `Rivedi e RISCRIVI la scena qui sotto in forma finale. Controlla coerenza con brief, outline, voci dei personaggi, stato, cronologia, oggetti, segreti e raccordo con la scena precedente. Applica show-don't-tell dove serve, evita contraddizioni e rivelazioni premature. Restituisci SOLTANTO il testo corretto.\n\nSCENA:\n${scene.text}\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, scene.id)}\n\nCONTESTO:\n${base}`,
-        apply: (b, text) => { const target = ensureScene(b); target.text = text; target.status = "canon"; target.summary = text.slice(0, 520); b.phase = "consolidate"; },
+        apply: (b, text) => { const target = ensureScene(b); assertScenePlausible(text, target.text); target.text = text; target.status = "canon"; target.summary = text.slice(0, 520); b.phase = "consolidate"; },
       };
     }
     case "consolidate": {
@@ -294,10 +383,15 @@ function nextWork(book: BookProject): Work | null {
         phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon",
         reason: "Aggiornare personaggi, luoghi, fazioni, oggetti, segreti e timeline dopo la scena.",
         nextStep: "Prossima scena o completamento del libro",
-        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} Restituisci ESCLUSIVAMENTE JSON valido con i campi: {"characters":{"nome":"stato"},"locations":{"nome":"stato"},"factions":{},"items":{},"secrets":{"id":"stato privato e quando rivelare"},"timeline":["evento"],"currentState":"riassunto stato attuale"}.\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
+        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE}\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => {
-          const memory = memorySchema.parse(parseJson(text));
-          b.memory = memory as NarrativeMemory; b.currentSceneId = undefined;
+          const update = applyMemoryResponse(b.memory, parseJson(text));
+          b.memory = update.memory; b.currentSceneId = undefined;
+          // A real summary of the scene (events and ending) replaces the opening-text fallback.
+          if (update.sceneSummary) {
+            const done = allScenes(b).find(s => s.id === scene?.id);
+            if (done) done.summary = update.sceneSummary;
+          }
           const chapter = b.chapters.find(ch => ch.scenes.some(s => s.id === scene?.id));
           if (chapter && !chapter.frozenAt && chapter.scenes.every(s => s.status === "canon")) {
             b.editorialCycle = createEditorialCycle(chapter.id);
@@ -320,7 +414,7 @@ function nextWork(book: BookProject): Work | null {
           ? captureHistoricalPromptDossier(book, cycle.chapterId, "review") : undefined;
         const prompt = reviewerPrompt(book, cycle, next.role, next.segment, next.segmentCount);
         const title = "Redazione: " + next.role + " " + (cycle.reports.length + 1) + "/" +
-          (next.segmentCount * 12);
+          (next.segmentCount * cycleRoles(book, cycle).length);
         return {
           phase: "chapterReview", kind: reviewerTask(next.role), title,
           system: prompt.system,
@@ -335,6 +429,9 @@ function nextWork(book: BookProject): Work | null {
             // the book timestamp. Never approve a report based on old sources.
             if (historicalSnapshot) assertCurrentHistoricalPromptDossier(b, historicalSnapshot);
             const report = validateReport(current, next.role, next.segment, next.segmentCount, text, ch, b);
+            // The reviewers of a cycle are fixed by its first report.
+            if (!current.reports.length && !current.roles && b.editorialMode === "light")
+              current.roles = [...cycleRoles(b, current)];
             current.reports.push(report);
             if (!nextReviewSlot(b, current)) current.stage = "adjudicate";
           },
@@ -391,6 +488,7 @@ function nextWork(book: BookProject): Work | null {
             // request was in flight. Re-run the provenance gate against the
             // very same book revision being written, not the planning snapshot.
             repairPrompt(b,b.editorialCycle,sceneId);
+            assertScenePlausible(text, scene.text);
             scene.text = text.trim();
             scene.status = "draft";
             scene.summary = undefined;
@@ -415,7 +513,8 @@ function nextWork(book: BookProject): Work | null {
           nextStep: "Prossimo segmento di memoria oppure nuova votazione della redazione",
           prompt: [
             "Aggiorna il canone dopo una correzione editoriale. Mantieni i fatti precedenti ancora veri; non inventare.",
-            "Rispondi SOLO JSON valido con campi characters,locations,factions,items,secrets,timeline,currentState.",
+            "Rispondi SOLO con le modifiche alla memoria in JSON valido.",
+            DELTA_REPLY_RULE_NO_SUMMARY,
             MEMORY_COMPACTION_RULE,
             "MEMORIA PRECEDENTE: " + checkpoint.memoryJson,
             "SCENA " + segment.sceneId + ", SEGMENTO " + (checkpoint.cursor + 1) +
@@ -425,7 +524,7 @@ function nextWork(book: BookProject): Work | null {
             // The preflight/IndexedDB revision gate is not a substitute for
             // validating the exact checkpoint used by this editorial agent.
             const current = assertCurrentEditorialReconcileStep(b, checkpoint);
-            const memory = memorySchema.parse(parseJson(text)) as NarrativeMemory;
+            const memory = applyMemoryResponse(b.memory, parseJson(text)).memory;
             b.memory = memory;
             current.cycle.reconcileCursor = checkpoint.cursor + 1;
             if (current.cycle.reconcileCursor >= checkpoint.segmentCount) {
@@ -486,6 +585,7 @@ function nextWork(book: BookProject): Work | null {
               ch.bookSummaryAtFreeze = data.bookSummary;
               b.bookSummary = data.bookSummary;
               ch.frozenAt = freezeTime;
+              if (current.roles) ch.editorialMode = "light"; else delete ch.editorialMode;
               ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, {
                 round: current.round, reports: current.reports, judgment: current.judgment!,
               }];
@@ -554,9 +654,9 @@ function nextWork(book: BookProject): Work | null {
           phase: "revision", kind: "consolidate", title: "Memoria narrativa dopo la revisione",
           reason: "Allineare personaggi, segreti, oggetti e cronologia alle scene riscritte.",
           nextStep: "Nuova redazione dei capitoli toccati e ripresa della scrittura",
-          prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} Restituisci ESCLUSIVAMENTE JSON valido con i campi: {"characters":{"nome":"stato"},"locations":{},"factions":{},"items":{},"secrets":{"id":"stato privato e quando rivelare"},"timeline":["evento"],"currentState":"riassunto stato attuale"}.\n\nULTIMA SCENA RISCRITTA:\n${last?.text ?? "Nessuna"}\n\nCONTESTO:\n${base}`,
+          prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}\n\nULTIMA SCENA RISCRITTA:\n${last?.text ?? "Nessuna"}\n\nCONTESTO:\n${base}`,
           apply: (b, text) => {
-            const memory = memorySchema.parse(parseJson(text)) as NarrativeMemory;
+            const memory = applyMemoryResponse(b.memory, parseJson(text)).memory;
             const current = b.revision;
             if (!current || current.id !== rev.id) throw new Error("Revisione cambiata durante l'aggiornamento della memoria.");
             b.memory = memory;
@@ -693,7 +793,17 @@ export class AutopilotRunner {
           await onUpdate();
           continue;
         }
-        const work = nextWork(book);
+        let work: Work | null;
+        try {
+          work = book.phase === "prose" && !book.editorialCycle && !book.revision &&
+            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book);
+        } catch (error) {
+          // The editorial board refuses oversized canon memory; compact it instead of stopping.
+          if (error instanceof Error && !book.revision &&
+              /compattare la memoria|Memoria pertinente troppo ampia/.test(error.message))
+            work = memoryCompactionWork(book);
+          else throw error;
+        }
         if (!work) {
           if (book.phase === "audience" && book.audienceReviews.length >= 5) {
             book.phase = "adversarial"; await saveBook(book, false); continue;
@@ -707,7 +817,7 @@ export class AutopilotRunner {
         const requestedEffort=configuredEndpoint
           ? taskReasoningChoice(work.kind,settings,book,configuredEndpoint,assignment.modelId):undefined;
         // Author next-step notes go only to tasks that already see the private canon.
-        const notes = taskAcceptsAuthorNotes(work.kind) ? pendingAuthorNotes(book) : [];
+        const notes = !work.noAuthorNotes && taskAcceptsAuthorNotes(work.kind) ? pendingAuthorNotes(book) : [];
         const userPrompt = withAuthorNotes(work.prompt, notes);
         const started: Activity = {
           id: crypto.randomUUID(), bookId, runId,
@@ -729,6 +839,9 @@ export class AutopilotRunner {
           );
           await guard.assertActive();
           if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");
+          if (configuredEndpoint)
+            await assertPromptFitsLoadedContext(configuredEndpoint, assignment.modelId, work.title,
+              systemPrompt, userPrompt, preflight?.reservedOutputTokens, signal);
           // Store the author's validated price BEFORE the provider call.
           // The quote belongs to this attempt even if its output is rejected.
           const quote = snapshotPriceRate(settings, assignment.endpointId, assignment.modelId);
@@ -806,7 +919,8 @@ export class AutopilotRunner {
           retries = 0;
           await onUpdate();
         } catch (error) {
-          const message=error instanceof ProviderResponseReadError?error.message:
+          const message=error instanceof ProviderResponseReadError || error instanceof TruncatedProviderContentError ||
+            error instanceof PromptExceedsContextError?error.message:
             error instanceof Error && error.name==="ProviderHeaderTimeoutError"?error.message:
             "La richiesta non ha prodotto un risultato applicabile. Apri il task per vedere l'errore.";
           finishLiveAi(started.id,signal.aborted?"interrotta":"rifiutata",message);

@@ -29,6 +29,41 @@ const events=[
   'data: [DONE]\n\n',
 ];
 describe("SSE Chat Completions e controllo reasoning",()=>{
+  it("rifiuta una risposta troncata dal limite di lunghezza (stream e JSON) conservando l'usage",async()=>{
+    const {settings,book}=fixture();
+    const cut=[
+      'data: {"choices":[{"index":0,"delta":{"content":"La scena si interrompe a me"}}]}\n\n',
+      'data: {"choices":[{"index":0,"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":30,"completion_tokens":99}}\n\n',
+      'data: [DONE]\n\n',
+    ];
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(sse(cut)));
+    const error=await callModel("prose","S","P",settings,book,new AbortController().signal)
+      .catch((e:unknown)=>e) as {name:string;message:string;inputTokens?:number;outputTokens?:number};
+    expect(error.name).toBe("TruncatedProviderContentError");
+    expect(error.message).toMatch(/troncata/);
+    expect([error.inputTokens,error.outputTokens]).toEqual([30,99]);
+    settings.endpoints[0]!.streamMode="off";
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices:[{message:{content:"Testo a metà"},finish_reason:"length"}],
+      usage:{prompt_tokens:5,completion_tokens:7},
+    }),{status:200,headers:{"content-type":"application/json"}})));
+    await expect(callModel("prose","S","P",settings,book,new AbortController().signal))
+      .rejects.toMatchObject({name:"TruncatedProviderContentError"});
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices:[{message:{content:"Testo completo"},finish_reason:"stop"}],
+    }),{status:200,headers:{"content-type":"application/json"}})));
+    await expect(callModel("prose","S","P",settings,book,new AbortController().signal))
+      .resolves.toMatchObject({text:"Testo completo"});
+  });
+  it("spiega il caso reasoning senza testo finale per esaurimento del contesto",async()=>{
+    const onlyReasoning=[
+      'data: {"choices":[{"index":0,"delta":{"reasoning_content":"penso..."}}]}\n\n',
+      'data: {"choices":[{"index":0,"delta":{},"finish_reason":"length"}]}\n\n',
+      'data: [DONE]\n\n',
+    ];
+    await expect(readChatCompletionStream(sse(onlyReasoning),new AbortController().signal))
+      .rejects.toThrow(/esaurito il limite di lunghezza o di contesto/);
+  });
   it("assembla eventi suddivisi su chunk e espone deltas provider soltanto se presenti",async()=>{
     const deltas:Array<{kind:string;text:string}>=[];
     const r=await readChatCompletionStream(sse(events.flatMap(e=>[

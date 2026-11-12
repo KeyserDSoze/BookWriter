@@ -128,6 +128,8 @@ export interface Chapter {
   /** Rolling, public book synopsis at this chapter freeze: supports safe rewind. */
   bookSummaryAtFreeze?: string;
   frozenAt?: string;
+  /** Frozen by the reduced ("light") editorial board. Absent = full twelve-role board. */
+  editorialMode?: "light";
   editorialRounds?: EditorialRound[];
   historicalDossier?: ChapterHistoricalDossier;
   /** A change upstream requires this chapter's twelve reviewers to run again. */
@@ -231,6 +233,8 @@ export interface BookProject {
   targetChapterCount?: number;
   /** Stop after the chapter plan so the author can approve or change it. */
   pauseAfterOutline?: boolean;
+  /** "light" = reduced editorial board for new review cycles (opt-in, ADR 0151). Absent = full board. */
+  editorialMode?: "full" | "light";
   /** Every author prompt given to the autopilot, never rewritten. */
   authorInterventions?: AuthorIntervention[];
   memory: NarrativeMemory;
