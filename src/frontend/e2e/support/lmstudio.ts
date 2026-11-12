@@ -76,7 +76,7 @@ export async function configureLmStudio(page: Page, lm: LmStudioTarget, projectN
   await page.getByRole("textbox", { name: "Modello predefinito" }).fill(lm.model);
   await page.getByRole("combobox", { name: "Streaming Chat Completions" }).selectOption("sse");
   if (options.streamTimeoutSeconds)
-    await page.getByRole("spinbutton", { name: "Tempo massimo lettura streaming (secondi)" }).fill(String(options.streamTimeoutSeconds));
+    await page.getByRole("spinbutton", { name: "Tempo massimo senza dati dallo streaming (secondi)" }).fill(String(options.streamTimeoutSeconds));
   await page.getByRole("checkbox", { name: /Ispezione locale richieste AI/ }).check();
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();

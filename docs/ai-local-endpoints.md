@@ -25,6 +25,12 @@ Dopo la configurazione base, puoi selezionare **Protocollo AI: LM Studio nativo*
 
 Riferimenti: [guida catalogo](ai-model-inventory.md), [guida output](ai-output-token-parameter.md), [ADR 0127](../ADR/0127-local-ai-unauthenticated-loopback.md), [issue #146](https://github.com/KeyserDSoze/BookWriter/issues/146).
 
+## Thinking: da dove arrivano i livelli e come impostarli
+
+LM Studio dichiara per ogni modello i livelli di reasoning ammessi e quello predefinito (`GET /api/v1/models` → `capabilities.reasoning`). BookWriter li legge **solo** quando premi «Leggi /models» su un endpoint localhost senza chiave e li conserva con le impostazioni; per gli altri provider restano «non verificati».
+
+Dove si imposta (vince il più specifico): override del **libro** → **attività** (Router dei modelli) → **endpoint**. «Automatico» non invia il parametro e il modello usa il proprio predefinito (per Muse Glimmer: High). Un livello che il modello non dichiara non viene inviato. «Applica thinking consigliato» imposta tutte le attività in un colpo, usando solo i livelli dichiarati.
+
 ## Test end-to-end con LM Studio reale (opt-in)
 
 I test Playwright normali usano mock deterministici e non provano il modello reale. In `src/frontend/e2e/live/` ci sono test **live**, attivi solo se imposti le variabili:

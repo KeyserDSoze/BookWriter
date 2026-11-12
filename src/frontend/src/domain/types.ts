@@ -7,6 +7,10 @@ export type TaskKind = (typeof TASK_KINDS)[number];
 /** "automatic" explicitly omits reasoning_effort even if endpoint has a default. */
 export type TaskReasoning = "automatic" | "low" | "medium" | "high" | "xhigh";
 export type TaskReasoningOverrides = Partial<Record<TaskKind, TaskReasoning>>;
+/** Levels a provider can accept as reasoning effort. */
+export type ReasoningLevel = Exclude<TaskReasoning, "automatic">;
+/** Reported by the provider (LM Studio /api/v1/models), never author-declared. */
+export interface ModelReasoningInfo { options: ReasoningLevel[]; default?: ReasoningLevel }
 
 export type RunStatus = "idle" | "running" | "paused" | "error" | "completed";
 export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "outline" | "prose" | "review" | "consolidate" | "chapterReview" | "revision" | "completed";
@@ -50,6 +54,10 @@ export interface EndpointProfile {
   apiProtocol?: "openai" | "lmstudio_native";
   /** Optional OpenAI-compatible reasoning_effort (provider dependent). */
   reasoningEffort?: "low" | "medium" | "high" | "xhigh";
+  /** Free local endpoints only (authMode none): retry a failed task up to 2 times by itself. */
+  localAutoRetry?: boolean;
+  /** Read from the provider on an explicit «Leggi /models». null = model reports no reasoning control; missing = not checked. Not exported in backups. */
+  modelReasoning?: Record<string, ModelReasoningInfo | null>;
 }
 export interface ModelRoute { endpointId: string; modelId: string; }
 /** User-entered tariff (not verified against provider invoices). */

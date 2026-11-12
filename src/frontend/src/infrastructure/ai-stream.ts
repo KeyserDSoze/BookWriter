@@ -23,8 +23,10 @@ const invalid = () => new ProviderResponseReadError(
   "Stream AI non valido o incompleto: nessun testo applicato. Verifica il supporto SSE del provider."
 );
 const timeout = () => new ProviderResponseReadError(
-  "Tempo scaduto durante lo streaming AI. Nessun testo applicato: il provider potrebbe avere consumato token."
+  "Il provider non ha inviato dati per troppo tempo durante lo streaming AI. Nessun testo applicato: il provider potrebbe avere consumato token. Aumenta l'attesa nelle Impostazioni o abbassa il thinking."
 );
+/** Hard ceiling even if the provider keeps trickling bytes (e.g. an endless loop). */
+export const CHAT_STREAM_TOTAL_CAP_MS = 4 * 60 * 60 * 1000;
 
 export function chatReasoningEffort(value: unknown): "low" | "medium" | "high" | "xhigh" | undefined {
   if (value === undefined) return undefined;
@@ -63,12 +65,22 @@ export async function readChatCompletionStream(
   let completed = false;
   let abortHandler: (() => void) | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let totalTimer: ReturnType<typeof setTimeout> | undefined;
   let expired = false;
+  let rejectExpired: (reason: unknown) => void = () => {};
   const cancelled = new Promise<never>((_,reject)=>{
     abortHandler = ()=>reject(new DOMException("Generazione interrotta.", "AbortError"));
     signal.addEventListener("abort",abortHandler,{once:true});
-    timer=setTimeout(()=>{expired=true;reject(timeout());},readTimeoutMs);
+    rejectExpired = reject;
   });
+  // Inactivity deadline: re-armed after every received chunk, so a slow but
+  // steady local model is not cut off mid-answer.
+  const armIdleTimer = () => {
+    if(timer!==undefined)clearTimeout(timer);
+    timer=setTimeout(()=>{expired=true;rejectExpired(timeout());},readTimeoutMs);
+  };
+  armIdleTimer();
+  totalTimer=setTimeout(()=>{expired=true;rejectExpired(timeout());},CHAT_STREAM_TOTAL_CAP_MS);
   const acceptEvent = (data:string) => {
     const value=data.trim();
     events++;
@@ -129,6 +141,7 @@ export async function readChatCompletionStream(
       const chunk=await Promise.race([reader.read(),cancelled]);
       if(signal.aborted)throw new DOMException("Generazione interrotta.", "AbortError");
       if(chunk.done)break;
+      armIdleTimer();
       bytes+=chunk.value.byteLength;
       if(bytes>MAX_CHAT_COMPLETION_BYTES)throw invalid();
       try{onTransport?.({bytes,events});}catch{/* observer only */}
@@ -151,6 +164,7 @@ export async function readChatCompletionStream(
     throw invalid();
   } finally {
     if(timer!==undefined)clearTimeout(timer);
+    if(totalTimer!==undefined)clearTimeout(totalTimer);
     if(abortHandler)signal.removeEventListener("abort",abortHandler);
     if(!completed){
       try{void reader.cancel().catch(()=>{});}catch{/* ignore */ }

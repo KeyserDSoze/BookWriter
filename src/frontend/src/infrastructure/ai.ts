@@ -95,7 +95,7 @@ export async function callModel(
   assertChatModelCapability(endpoint, assignment.modelId);
   // Fail closed on malformed local/imported settings before decrypting or POST.
   const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
-  const effort = chatReasoningEffort(effectiveReasoningEffort(kind,settings,book,endpoint));
+  const effort = chatReasoningEffort(effectiveReasoningEffort(kind,settings,book,endpoint,assignment.modelId));
   const protocol=lmStudioNativeProtocol(endpoint.apiProtocol);
   const streaming = chatStreamMode(endpoint.streamMode) === "sse";
   const streamTimeoutMs=chatStreamTimeoutSeconds(endpoint.streamTimeoutSeconds)*1000;

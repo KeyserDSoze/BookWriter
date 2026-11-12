@@ -601,6 +601,9 @@ function shortSummary(text: string): string {
   return clean.length > 340 ? `${clean.slice(0, 337)}…` : clean;
 }
 
+/** Automatic retries per task on a free local endpoint (opt-in per endpoint). */
+export const MAX_LOCAL_AUTO_RETRIES = 2;
+
 export class AutopilotRunner {
   private abort?: AbortController;
   private active = false;
@@ -634,6 +637,10 @@ export class AutopilotRunner {
       await saveBook(initial, false); // A run start is not a narrative checkpoint.
       sessionStarted = true;
       await onUpdate();
+      // Local, unauthenticated endpoints cost nothing per call: a failed task may
+      // be retried a bounded number of times so an unattended run can continue.
+      let retries = 0;
+      let retryScope = "";
 
       while (!signal.aborted) {
         await guard.assertActive();
@@ -697,7 +704,7 @@ export class AutopilotRunner {
         const assignment = routeFor(work.kind, settings, book);
         const configuredEndpoint=settings.endpoints.find(e=>e.id===assignment.endpointId);
         const requestedEffort=configuredEndpoint
-          ? taskReasoningChoice(work.kind,settings,book,configuredEndpoint):undefined;
+          ? taskReasoningChoice(work.kind,settings,book,configuredEndpoint,assignment.modelId):undefined;
         // Author next-step notes go only to tasks that already see the private canon.
         const notes = taskAcceptsAuthorNotes(work.kind) ? pendingAuthorNotes(book) : [];
         const userPrompt = withAuthorNotes(work.prompt, notes);
@@ -795,6 +802,7 @@ export class AutopilotRunner {
           // A non-cooperating writer can update after getBook above.
           await saveBookAndActivity(latest, started, book.updatedAt);
           finishLiveAi(started.id,"completata");
+          retries = 0;
           await onUpdate();
         } catch (error) {
           const message=error instanceof ProviderResponseReadError?error.message:
@@ -828,13 +836,22 @@ export class AutopilotRunner {
             ? "Attività interrotta; nessun output canonizzato."
             : error instanceof Error ? error.message : "Errore sconosciuto.");
           started.endedAt = new Date().toISOString();
+          const retryKey = work.phase + ":" + work.title;
+          if (retryScope !== retryKey) { retryScope = retryKey; retries = 0; }
+          const willRetry = !aborted && !leaseFailure && !budgetStop && started.aiRequested === true &&
+            configuredEndpoint?.authMode === "none" && configuredEndpoint.localAutoRetry === true &&
+            retries < MAX_LOCAL_AUTO_RETRIES && !this.stopAfter && !signal.aborted;
+          if (willRetry) retries++;
           const latest = await getBook(bookId);
           if (latest) {
-            latest.status = aborted || budgetStop ? "paused" : "error";
-            latest.previousError = started.error;
+            latest.status = willRetry ? "running" : aborted || budgetStop ? "paused" : "error";
+            latest.previousError = willRetry
+              ? `Tentativo ${retries}/${MAX_LOCAL_AUTO_RETRIES} fallito su «${work.title}»: ${started.error} Riprovo automaticamente.`
+              : started.error;
             await saveBookAndActivity(latest, started);
           } else await saveActivity(started);
           await onUpdate();
+          if (willRetry && latest) continue;
           break;
         }
       }

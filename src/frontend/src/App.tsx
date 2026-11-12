@@ -13,8 +13,12 @@ import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSub
 import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
 import { clearAiTraces, currentLiveAi, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
 import { confirmEditorialScene } from "./application/editorial-review";
-import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
+import { DEFAULT_SETTINGS, TASK_KINDS, newBook, routeFor, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
 import { declaredModelCapabilities } from "./domain/model-capabilities";
+import { reasoningSupport } from "./domain/model-reasoning";
+import { recommendedReasoningPreset } from "./domain/reasoning-presets";
+import { fetchLmStudioReasoningCatalog } from "./infrastructure/lmstudio-models";
+import { ReasoningHint, ReasoningSelect } from "./components/ReasoningSelect";
 import { bookProgress, describeNextAutopilotStep } from "./domain/autopilot-step";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
@@ -37,6 +41,7 @@ import { updateBookModelRoute, updateBookTaskReasoning } from "./application/boo
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
+import { useWakeLock } from "./application/use-wake-lock";
 
 type Page = "dashboard" | "activities" | "costs" | "reader" | "atlas" | "settings" | "export";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
@@ -184,6 +189,7 @@ export default function App() {
   const current = useMemo(() => books.find(x => x.id === selectedId), [books, selectedId]);
   const runningActivity = current?.status === "running" ? activities.find(x => x.status === "running") : undefined;
   const runningHere = !!current && runnerBookId === current.id;
+  useWakeLock(runningHere && current?.status === "running");
   const nextStep = useMemo(() => current ? describeNextAutopilotStep(current) : undefined, [current]);
   const progressInfo = useMemo(() => current ? bookProgress(current) : undefined, [current]);
   const pendingFused = current?.editorialReviewSceneIds?.length ?? 0;
@@ -377,12 +383,16 @@ export default function App() {
       if (authMode === "api_key" && !secret) throw new Error("Inserisci prima la chiave API.");
       const models = await fetchModels(endpoint.baseUrl, secret);
       if (!current()) { discardStale(); return; }
+      // Optional, loopback-only: which thinking levels each LM Studio model declares.
+      const reasoning = authMode === "none" ? await fetchLmStudioReasoningCatalog(endpoint.baseUrl) : undefined;
+      if (!current()) { discardStale(); return; }
       // Synchronous ref-based commit: there is no async gap after the guard
       // and no side effect inside a React state updater.
       const latest = settingsRef.current;
       setSettings({ ...latest, endpoints: latest.endpoints.map(profile =>
-        profile === endpoint ? { ...profile, models } : profile) });
-      setNotice(`Trovati ${models.length} modelli. Premi Salva impostazioni per conservarli.`);
+        profile === endpoint ? { ...profile, models,
+          ...(reasoning ? { modelReasoning: reasoning } : {}) } : profile) });
+      setNotice(`Trovati ${models.length} modelli${reasoning ? " e i livelli di thinking che dichiarano" : ""}. Premi Salva impostazioni per conservarli.`);
     } catch (error) {
       if (!newest()) return;
       if (!current()) { discardStale(); return; }
@@ -408,6 +418,24 @@ export default function App() {
     }
   }
 
+
+  /** Thinking levels the provider declared for the model routed to this task. */
+  function taskSupport(kind: TaskKind) {
+    const route = settings.taskRoutes[kind];
+    const endpointId = route?.endpointId || settings.defaultRoute.endpointId;
+    return reasoningSupport(settings.endpoints.find(e => e.id === endpointId),
+      route?.modelId || settings.defaultRoute.modelId);
+  }
+  function applyRecommendedThinking() {
+    const result = recommendedReasoningPreset(settingsRef.current);
+    setSettings(s => ({ ...s, taskReasoningEfforts: result.efforts }));
+    setNotice(result.applied === 0 && result.withoutReasoning === 0
+      ? "Nessun livello applicato: leggi prima i modelli con «Leggi /models» (solo LM Studio dichiara i livelli di thinking)."
+      : `Thinking consigliato applicato a ${result.applied} attività` +
+        (result.withoutReasoning ? `; ${result.withoutReasoning} usano modelli senza thinking` : "") +
+        (result.unverified ? `; ${result.unverified} lasciate invariate (modello non verificato)` : "") +
+        ". Premi Salva impostazioni per conservarlo.");
+  }
 
   async function updateBookReasoning(kind:TaskKind,value:TaskReasoning|undefined){
     if(!current)return;
@@ -793,25 +821,32 @@ export default function App() {
                     <option value="sse">Streaming SSE (provider compatibile)</option>
                   </select>
                 </Field>
-                <Field label="Tempo massimo lettura streaming (secondi)">
+                <Field label="Tempo massimo senza dati dallo streaming (secondi)">
                   <input className="field" type="number" min={600} max={3600} step={300}
                     value={endpoint.streamTimeoutSeconds??600}
                     onChange={e=>updateEndpoint(endpoint.id,{
                       streamTimeoutSeconds:Number(e.target.value)})}/>
+                  <p className="muted mt-1 text-xs">Si azzera a ogni dato ricevuto: un modello lento ma costante non viene interrotto.</p>
                 </Field>
-                <Field label="Reasoning effort AI">
-                  <select className="field" value={endpoint.reasoningEffort??""}
-                    onChange={e=>updateEndpoint(endpoint.id,{
-                      reasoningEffort:e.target.value===""?undefined:
-                        e.target.value as "low"|"medium"|"high"|"xhigh",
-                    })}>
-                    <option value="">Automatico (non inviare parametro)</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="xhigh">Extra high (xhigh)</option>
-                  </select>
-                </Field>
+                {endpoint.authMode==="none" && <label className="flex min-w-0 items-start gap-2 text-sm sm:col-span-2">
+                  <input type="checkbox" className="mt-1" checked={endpoint.localAutoRetry===true}
+                    onChange={e=>updateEndpoint(endpoint.id,{localAutoRetry:e.target.checked})}/>
+                  <span>Ritenta da solo i task falliti (massimo 2 volte per task). Solo per questo endpoint locale senza chiave,
+                    dove ogni chiamata non ha costo: permette all'autopilot di proseguire senza supervisione.
+                    Ogni tentativo resta registrato nelle Attività.</span>
+                </label>}
+                <div className="min-w-0">
+                  <label className="mb-1 block text-sm font-semibold" htmlFor={`endpoint-reasoning-${endpoint.id}`}>Reasoning effort AI</label>
+                  <ReasoningSelect id={`endpoint-reasoning-${endpoint.id}`} hideAutomatic
+                    value={endpoint.reasoningEffort} inheritLabel="Automatico (non inviare parametro)"
+                    support={reasoningSupport(endpoint, settings.defaultRoute.endpointId===endpoint.id ? settings.defaultRoute.modelId : "")}
+                    onChange={value=>updateEndpoint(endpoint.id,{
+                      reasoningEffort:value as "low"|"medium"|"high"|"xhigh"|undefined,
+                    })}/>
+                  <ReasoningHint value={endpoint.reasoningEffort}
+                    support={reasoningSupport(endpoint, settings.defaultRoute.endpointId===endpoint.id ? settings.defaultRoute.modelId : "")}
+                    modelId={settings.defaultRoute.endpointId===endpoint.id ? settings.defaultRoute.modelId : ""}/>
+                </div>
                 {endpoint.apiProtocol==="lmstudio_native" && <p className="muted text-xs sm:col-span-2">
                   Modalità nativa: BookWriter usa un'unica richiesta SSE a /api/v1/chat con store:false
                   e mostra caricamento modello, avanzamento prompt e reasoning solo quando trasmessi da LM Studio.
@@ -845,6 +880,10 @@ export default function App() {
         </Section>
         <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
         <Section title="Router dei modelli" description="Predefinito Chat e modello per ogni attività. Per ogni task puoi scegliere il reasoning: eredita dall'endpoint, Automatico (non invia il parametro), Low, Medium, High o Extra high. Il libro può avere override propri in pausa. LM Studio può ignorare la richiesta OpenAI-compatible.">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={applyRecommendedThinking}>Applica thinking consigliato</Button>
+            <p className="muted text-xs">Low per scrittura, consolidamento e riassunti; Medium per piano, validazione e analisi d'impatto; High per il direttore editoriale. Usa solo i livelli che ogni modello dichiara.</p>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Endpoint predefinito"><select className="field" value={settings.defaultRoute.endpointId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,endpointId:e.target.value}}))}>
               {settings.endpoints.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
@@ -880,20 +919,17 @@ export default function App() {
                 </div>
                 <div className="mt-2">
                   <label className="mb-1 block text-xs font-semibold" htmlFor={`task-reasoning-${kind}`}>Reasoning di {LABELS[kind]}</label>
-                  <select id={`task-reasoning-${kind}`} className="field" value={settings.taskReasoningEfforts?.[kind]??""}
-                    onChange={e=>setSettings(s=>{
+                  <ReasoningSelect id={`task-reasoning-${kind}`} emphasizeLevels
+                    value={settings.taskReasoningEfforts?.[kind]} inheritLabel="Eredita dall'endpoint"
+                    support={taskSupport(kind)}
+                    onChange={value=>setSettings(s=>{
                       const next={...s.taskReasoningEfforts};
-                      if(!e.target.value)delete next[kind];
-                      else next[kind]=e.target.value as TaskReasoning;
+                      if(value===undefined)delete next[kind];
+                      else next[kind]=value;
                       return {...s,taskReasoningEfforts:next};
-                    })}>
-                    <option value="">Eredita dall'endpoint</option>
-                    <option value="automatic">Automatico: ometti il parametro</option>
-                    <option value="low">Low — rapido</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="xhigh">Extra high (xhigh) — molto lento</option>
-                  </select>
+                    })}/>
+                  <ReasoningHint value={settings.taskReasoningEfforts?.[kind]} support={taskSupport(kind)}
+                    modelId={route?.modelId||settings.defaultRoute.modelId}/>
                 </div>
               </div>;
             })}
@@ -919,19 +955,17 @@ export default function App() {
                   placeholder="Modello per questo libro"
                 />
                 <label className="block text-xs font-semibold">Reasoning di {LABELS[kind]} nel libro
-                  <select className="field mt-1" aria-label={`Reasoning libro per ${LABELS[kind]}`}
+                  <ReasoningSelect ariaLabel={`Reasoning libro per ${LABELS[kind]}`}
                     disabled={current.status==="running"}
-                    value={current.taskReasoningEfforts?.[kind]??""}
-                    onChange={e=>void updateBookReasoning(kind,
-                      e.target.value?e.target.value as TaskReasoning:undefined)}>
-                    <option value="">Eredita dal task globale/endpoint</option>
-                    <option value="automatic">Automatico: non inviare effort</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="xhigh">Extra high (xhigh)</option>
-                  </select>
+                    value={current.taskReasoningEfforts?.[kind]} inheritLabel="Eredita dal task globale/endpoint"
+                    support={reasoningSupport(settings.endpoints.find(e=>e.id===routeFor(kind,settings,current).endpointId),
+                      routeFor(kind,settings,current).modelId)}
+                    onChange={value=>void updateBookReasoning(kind,value)}/>
                 </label>
+                <ReasoningHint value={current.taskReasoningEfforts?.[kind]}
+                  support={reasoningSupport(settings.endpoints.find(e=>e.id===routeFor(kind,settings,current).endpointId),
+                    routeFor(kind,settings,current).modelId)}
+                  modelId={routeFor(kind,settings,current).modelId}/>
               </div>;
             })}
           </div>

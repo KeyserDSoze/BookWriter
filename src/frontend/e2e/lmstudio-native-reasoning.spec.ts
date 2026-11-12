@@ -58,7 +58,7 @@ test("LM Studio nativo: progresso vero del prompt, reasoning per task e nessun t
   await page.getByRole("combobox",{name:"Protocollo AI per le richieste Chat"}).selectOption("lmstudio_native");
   await page.getByRole("combobox",{name:"Reasoning effort AI"}).selectOption("high");
   await page.getByRole("combobox",{name:"Reasoning di Brainstorming"}).selectOption("low");
-  await page.getByRole("spinbutton",{name:"Tempo massimo lettura streaming (secondi)"}).fill("1800");
+  await page.getByRole("spinbutton",{name:"Tempo massimo senza dati dallo streaming (secondi)"}).fill("1800");
   await page.getByRole("checkbox",{name:/Ispezione locale richieste AI/}).check();
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();

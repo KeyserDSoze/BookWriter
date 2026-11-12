@@ -52,18 +52,25 @@ export async function readLmStudioNativeStream(
   let generatedReasoning=false;
   let final:StreamCompletion|undefined;
   let timer:ReturnType<typeof setTimeout>|undefined;
+  let totalTimer:ReturnType<typeof setTimeout>|undefined;
   let onAbort:(()=>void)|undefined;
   let expired=false;
+  let rejectExpired:(reason:unknown)=>void=()=>{};
+  const expiry=()=>new ProviderResponseReadError(
+    "LM Studio nativo non ha inviato dati per troppo tempo: nessun testo applicato. Prova Reasoning Low o aumenta l'attesa."
+  );
   const interrupt=new Promise<never>((_,reject)=>{
     onAbort=()=>reject(abortError());
     signal.addEventListener("abort",onAbort,{once:true});
-    timer=setTimeout(()=>{
-      expired=true;
-      reject(new ProviderResponseReadError(
-        "Timeout dello streaming LM Studio nativo: nessun testo applicato. Prova Reasoning Low o aumenta l'attesa."
-      ));
-    },timeoutMs);
+    rejectExpired=reject;
   });
+  // Inactivity deadline re-armed on every packet; a hard ceiling stops endless trickles.
+  const armIdleTimer=()=>{
+    if(timer!==undefined)clearTimeout(timer);
+    timer=setTimeout(()=>{expired=true;rejectExpired(expiry());},timeoutMs);
+  };
+  armIdleTimer();
+  totalTimer=setTimeout(()=>{expired=true;rejectExpired(expiry());},4*60*60*1000);
   const emit=(callback:()=>void)=>{try{callback();}catch{/* UI observer only */}};
   const progress=(phase:LmStudioPhase["phase"],value:unknown)=>{
     if(value!==undefined &&
@@ -147,6 +154,7 @@ export async function readLmStudioNativeStream(
       const packet=await Promise.race([reader.read(),interrupt]);
       if(signal.aborted)throw abortError();
       if(packet.done)break;
+      armIdleTimer();
       bytes+=packet.value.byteLength;
       if(bytes>MAX_CHAT_COMPLETION_BYTES)fail();
       emit(()=>onTransport?.({bytes,events}));
@@ -157,13 +165,12 @@ export async function readLmStudioNativeStream(
     return final;
   }catch(error){
     if(signal.aborted)throw abortError();
-    if(expired)throw new ProviderResponseReadError(
-      "Timeout dello streaming LM Studio nativo: nessun testo applicato. Prova Reasoning Low o aumenta l'attesa."
-    );
+    if(expired)throw expiry();
     if(error instanceof ProviderResponseReadError)throw error;
     throw new ProviderResponseReadError("Risposta LM Studio nativa incompleta: nessun testo applicato.");
   }finally{
     if(timer!==undefined)clearTimeout(timer);
+    if(totalTimer!==undefined)clearTimeout(totalTimer);
     if(onAbort)signal.removeEventListener("abort",onAbort);
     // A complete chat.end is an application-level terminator; close locally
     // without waiting for extra network frames.

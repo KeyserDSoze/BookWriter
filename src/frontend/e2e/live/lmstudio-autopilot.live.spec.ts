@@ -1,4 +1,4 @@
-import { captureChatRequests, configureLmStudio, expect, liveTest as test, readStored } from "../support/lmstudio";
+import { captureChatRequests, configureLmStudio, expect, liveTest as test, navigation, readStored } from "../support/lmstudio";
 
 async function startIdeaBook(page: import("@playwright/test").Page) {
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Le scimmie e il leone");
@@ -10,6 +10,26 @@ async function startIdeaBook(page: import("@playwright/test").Page) {
 }
 
 const SHOWING = /Risposta in streaming|Reasoning trasmesso/;
+
+test("LM Studio reale: i livelli di thinking dichiarati dal modello compaiono nei menu", async ({ page, lm }, info) => {
+  test.setTimeout(60_000);
+  const native = await (await fetch(lm.baseUrl.replace(/\/v1$/, "/api/v1/models"))).json() as {
+    models: Array<{ key: string; capabilities?: { reasoning?: { allowed_options: string[]; default?: string } } }> };
+  const declared = native.models.find(model => model.key === lm.model)?.capabilities?.reasoning;
+  await page.goto("/");
+  await configureLmStudio(page, lm, info.project.name);
+  await navigation(page, info.project.name).getByRole("button", { name: "Impostazioni" }).click();
+  await page.getByRole("button", { name: "Leggi /models" }).click();
+  await expect(page.getByText(/Trovati \d+ modelli/)).toBeVisible({ timeout: 15_000 });
+  const select = page.getByRole("combobox", { name: "Reasoning di Brainstorming" });
+  if (declared) {
+    await expect(page.getByText(/livelli di thinking che dichiarano/)).toBeVisible();
+    // inherit + automatic + one entry per declared level
+    await expect(select.locator("option")).toHaveCount(2 + declared.allowed_options.length);
+  } else {
+    await expect(page.getByText(/non dichiara un controllo del thinking/).first()).toBeVisible();
+  }
+});
 
 test("LM Studio reale: il testo arriva in streaming e «Pausa» non applica nulla", async ({ page, lm }, info) => {
   test.setTimeout(lm.taskTimeoutMs);
