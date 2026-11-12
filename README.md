@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Copia di sicurezza prima di un futuro rewind (#170, non ancora release numerata):** in **Attività → scheda task**, scarica su richiesta un **ZIP content-only del solo libro corrente** con manoscritto, memoria narrativa e audit; senza altri libri, credenziali, impostazioni AI o copie cronologiche locali opt-in. Acquisizione coerente sotto Web Lock, controllo revisione, rilettura e verifica interna del formato, SHA-256. Per confermare il **file effettivamente scaricato**, va riselezionato nella pagina con «Verifica ZIP scaricato»: verifica hash, schema e identità/revisione. Lo ZIP **non è cifrato** e include contenuti privati: custodiscilo al sicuro. **Non** ripristina automaticamente nulla né rappresenta il libro com'era al momento del task. [ADR 0144](ADR/0144-rewind-safety-book-archive.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Confronto editoriale a paragrafi per task (#169, non ancora release numerata):** in Attività, dopo aver caricato un checkpoint di prosa **opt-in**, puoi scegliere una scena canonica modificata, aggiunta o rimossa e poi rivelare deliberatamente un'anteprima privata dei paragrafi **prima/dopo**. Il diff è locale, allineato per paragrafi, esplicitamente limitato per testi molto lunghi e può essere nascosto subito. La prosa non compare prima di un secondo clic e viene rimossa dalla vista a cambio scena, task, libro o revoca. **Non** applica patch o restore; l'undo/fork con backup resta nella #158. [ADR 0143](ADR/0143-opt-in-paragraph-editorial-diff.md) · [Guida](docs/ai-task-inspection.md).
 
 

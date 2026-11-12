@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Activity } from "../domain/types";
+import type { Activity, BookProject } from "../domain/types";
+import { RewindSafetyBackupPanel } from "./RewindSafetyBackupPanel";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import {
   compareBookStructure, type TaskStructuralCheckpoint,
@@ -29,7 +30,7 @@ import {
 } from "../infrastructure/ai-observability";
 
 interface Props {
-  book?: RewindPreflightBook;
+  book?: RewindPreflightBook & Pick<BookProject, "updatedAt">;
   bookId: string;
   activities: Activity[];
   live: LiveAiTrace | null;
@@ -500,6 +501,10 @@ export function AiTaskWorkspace({
           richieste AI. «Prepara revisione» riguarda il libro corrente;
           vero rewind, undo, approvazioni e controllo a valle restano #158.</p>
       </section>}
+      {book?.id===bookId&&<RewindSafetyBackupPanel
+        key={bookId+":"+focused.id}
+        bookId={bookId} activityId={focused.id}
+        bookRevision={book.updatedAt} bookStatus={book.status}/>}
       <section aria-label="Confronto strutturale salvato"
         className="space-y-2 rounded-lg border border-slate-400/40 p-3 text-sm">
         <h4 className="font-semibold">Checkpoint strutturale prima/dopo (sola lettura)</h4>

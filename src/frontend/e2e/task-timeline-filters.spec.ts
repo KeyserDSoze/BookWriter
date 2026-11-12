@@ -157,6 +157,68 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
   await expect(list).toHaveCount(3);
 });
 
+test("copia sicurezza del solo libro: ZIP scaricato e riletto con SHA-256, desktop/mobile",async({page})=>{
+  await page.goto("/");
+  const bookA=await createBook(page,"Libro A sicurezza prima rewind");
+  const bookB=await createBook(page,"Libro B non esportare");
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookA);
+  await page.evaluate(async(id)=>{
+    const {getBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
+    const old=await getBook(id);
+    if(!old)throw Error("Libro selezionato non trovato");
+    const now=structuredClone(old);
+    now.chapters=[{id:"safe-ch",number:1,title:"Titolo privato",purpose:"Narrativa",
+      scenes:[{id:"safe-sc",number:1,title:"Scena",objective:"Continuare",
+        text:"MANOSCRITTO_PRIVATO_COPIA_DI_SICUREZZA",status:"canon"}]}];
+    await saveBookAndActivity(now,{
+      id:"safe-task-"+id,bookId:id,runId:"safety-session",
+      phase:"prose",title:"Task di riferimento sicurezza",
+      reason:"Ripartenza futura",nextStep:"Valuta",
+      status:"succeeded",createdAt:"2026-11-12T10:00:00Z",
+      output:"OUTPUT_PRIVATO_ARCHIVIO",
+    },old.updatedAt);
+  },bookA);
+  await page.reload();
+  const nav=page.getByRole("navigation",{
+    name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
+  });
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const timeline=page.getByRole("region",{name:"Timeline task AI"});
+  await timeline.getByRole("button",{name:"Apri scheda task"}).click();
+  const focus=timeline.getByRole("region",{name:"Scheda task dedicata"});
+  const panel=focus.getByRole("region",{name:"Copia di sicurezza prima del rewind"});
+  await expect(panel).toContainText("solo libro selezionato nello stato attuale");
+  await expect(panel).toContainText("non contiene password, API key");
+  const trigger=panel.getByRole("button",{
+    name:"Genera e scarica ZIP di sicurezza del libro corrente",
+  });
+  const [download]=await Promise.all([page.waitForEvent("download"),trigger.click()]);
+  expect(download.suggestedFilename()).toMatch(/^bookwriter-sicurezza-.*\.zip$/);
+  const evidence=panel.getByLabel("Dati della copia di sicurezza");
+  await expect(evidence).toContainText("Attività: 1");
+  await expect(evidence).toContainText("bozze di fusione: 0");
+  await expect(evidence.getByText(/^[a-f0-9]{64}$/)).toBeVisible();
+  await expect(panel.getByLabel("Stato verifica file scaricato"))
+    .toContainText("non ancora verificato");
+  const savedPath=await download.path();
+  expect(savedPath).not.toBeNull();
+  await panel.getByLabel("Verifica ZIP scaricato").setInputFiles(savedPath!);
+  await expect(panel.getByLabel("Stato verifica file scaricato"))
+    .toContainText("File scaricato verificato");
+  await expect(panel.getByRole("status")).toContainText("SHA-256");
+  await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookB);
+  await expect(page.getByText(/File scaricato verificato/)).toHaveCount(0);
+  const books=await page.evaluate(async()=>{
+    const {listBooks}=await import("/src/infrastructure/db.ts");
+    return listBooks();
+  });
+  expect(books.find(x=>x.id===bookA)?.chapters[0]?.scenes[0]?.text)
+    .toBe("MANOSCRITTO_PRIVATO_COPIA_DI_SICUREZZA");
+  expect(books.find(x=>x.id===bookB)?.chapters).toHaveLength(0);
+});
+
 test("checkpoint strutturale salvato insieme al task: confronto locale e nessun replay, desktop/mobile",async({page})=>{
   await page.goto("/");
   const bookId=await createBook(page,"Libro con checkpoint strutturale");

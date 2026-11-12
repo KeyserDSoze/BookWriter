@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #170 (ZIP di sicurezza corrente per libro, verificabile prima del rewind)
+
+- Nella **scheda task** il comando «Genera e scarica ZIP di sicurezza del libro corrente» acquisisce una snapshot coerente **solo del libro selezionato** e della relativa cronologia attività/bozze di fusione, con una transazione `books+activities+mergeDrafts` readonly; rifiuta writer lock indisponibile/occupato, autopilot running, task cross-book e revisione stantia. Nessuna modifica al canone.
+- ZIP `content` compatibile con `readBackup` (validazione round-trip su schema reale, limite dimensioni e integrità), SHA-256 del file prodotto. Lo stato «File scaricato verificato» richiede un **secondo input file** del vero ZIP dal disco, con digest, lunghezza, libro/revisione, task e conteggi verificati nuovamente. Download riuscito da solo non è una attestazione del file conservato.
+- Zero altri libri, impostazioni provider/credenziali, snapshot opt-in/trace store `meta`, outbox o sincronizzazione GitHub. Il file include **testo, memoria privata e audit**, non è cifrato; chi lo scarica deve custodirlo. Non è uno snapshot storico selezionato, fork, undo, rewind né un ripristino automatico. Vitest/fake IDB e Playwright desktop/mobile, ADR 0144. [ADR 0144](../ADR/0144-rewind-safety-book-archive.md).
+
 ## Non rilasciato — #169 (diff editoriale di paragrafi a rivelazione privata)
 
 - In **Attività → scheda task**, dopo il caricamento volontario della snapshot canonica opt-in #167, elenco paginato delle sole scene **aggiunte, rimosse o con prosa modificata**, identificate da coppia capitolo/scena. La scelta di scena non espone testo; il pulsante **Mostra anteprima privata dei paragrafi** richiede un secondo gesto e ricontrolla la disponibilità/consenso locale prima della rivelazione. **Nascondi**, cambio scena/task/libro, revoca e cancellazione azzerano la prosa visibile.
