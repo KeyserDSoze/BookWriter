@@ -1,7 +1,8 @@
 import type { AppSettings, EncryptedSecret } from "../domain/types";
 import { chatOutputTokenParameter, endpointAuthMode, normalizeEndpoint } from "../infrastructure/ai";
 import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
-import { chatReasoningEffort, chatStreamMode } from "../infrastructure/ai-stream";
+import { chatReasoningEffort, chatStreamMode, chatStreamTimeoutSeconds } from "../infrastructure/ai-stream";
+import { lmStudioNativeProtocol,lmStudioNativeEndpoint } from "../infrastructure/lmstudio-native";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
 import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
 
@@ -56,6 +57,9 @@ export class EndpointSettingsSaveCoordinator {
         chatOutputTokenParameter(profile.outputTokenParameter);
         chatReasoningEffort(profile.reasoningEffort);
         chatStreamMode(profile.streamMode);
+        chatStreamTimeoutSeconds(profile.streamTimeoutSeconds);
+        if(lmStudioNativeProtocol(profile.apiProtocol)==="lmstudio_native")
+          lmStudioNativeEndpoint(baseUrl);
         const authMode = endpointAuthMode(profile.authMode, baseUrl);
         return { profile, baseUrl, authMode };
       });

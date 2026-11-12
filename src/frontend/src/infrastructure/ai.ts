@@ -6,7 +6,10 @@ import { validTokenCount } from "../domain/ai-usage";
 import { assertChatModelCapability } from "../domain/model-capabilities";
 import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
-import { chatReasoningEffort, chatStreamMode, readChatCompletionStream, type AiStreamDelta } from "./ai-stream";
+import { chatReasoningEffort, chatStreamMode, chatStreamTimeoutSeconds, readChatCompletionStream,
+  type AiStreamDelta } from "./ai-stream";
+import { lmStudioNativeProtocol, lmStudioNativeEndpoint, lmStudioNativeReasoning,
+  readLmStudioNativeStream, type LmStudioPhase, type AiTransportStats } from "./lmstudio-native";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
 
 export type ModelAnswer = {
@@ -81,7 +84,9 @@ export async function callModel(
   settings: AppSettings,
   book: BookProject,
   signal: AbortSignal,
-  options?: { maxOutputTokens?: number; onProgress?: (delta: AiStreamDelta) => void; onHeaders?: () => void },
+  options?: { maxOutputTokens?: number; onProgress?: (delta: AiStreamDelta) => void;
+    onHeaders?: () => void; onPhase?: (phase:LmStudioPhase)=>void;
+    onTransport?: (stats:AiTransportStats)=>void },
 ): Promise<ModelAnswer> {
   const assignment = routeFor(kind, settings, book);
   const endpoint = settings.endpoints.find(p => p.id === assignment.endpointId);
@@ -91,13 +96,17 @@ export async function callModel(
   // Fail closed on malformed local/imported settings before decrypting or POST.
   const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
   const effort = chatReasoningEffort(effectiveReasoningEffort(kind,settings,book,endpoint));
+  const protocol=lmStudioNativeProtocol(endpoint.apiProtocol);
   const streaming = chatStreamMode(endpoint.streamMode) === "sse";
+  const streamTimeoutMs=chatStreamTimeoutSeconds(endpoint.streamTimeoutSeconds)*1000;
   if (options?.maxOutputTokens !== undefined &&
       (!Number.isSafeInteger(options.maxOutputTokens) ||
         options.maxOutputTokens < 1 || options.maxOutputTokens > 32_768)) {
     throw new Error("Limite output AI non valido: usa un intero tra 1 e 32768 token.");
   }
   const base = normalizeEndpoint(endpoint.baseUrl);
+  const nativeUrl=protocol==="lmstudio_native"?lmStudioNativeEndpoint(base):undefined;
+  const nativeReasoning=protocol==="lmstudio_native"?lmStudioNativeReasoning(effort):undefined;
   const authMode = endpointAuthMode(endpoint.authMode, base);
   if (authMode === "api_key" && !endpoint.secret)
     throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
@@ -108,7 +117,7 @@ export async function callModel(
 
   let response: Response;
   try {
-    response = await fetchChatCompletionHeaders(`${base}/chat/completions`, {
+    response = await fetchChatCompletionHeaders(nativeUrl??`${base}/chat/completions`, {
       method: "POST",
       mode: "cors",
       redirect: "error",
@@ -116,7 +125,12 @@ export async function callModel(
         "Content-Type": "application/json",
         ...(apiKey === null ? {} : { Authorization: `Bearer ${apiKey}` }),
       },
-      body: JSON.stringify({
+      body: JSON.stringify(nativeUrl?{
+        model:assignment.modelId, system_prompt:system,input:prompt,
+        stream:true,store:false,
+        ...(options?.maxOutputTokens===undefined?{}:{max_output_tokens:options.maxOutputTokens}),
+        ...(nativeReasoning===undefined?{}:{reasoning:nativeReasoning}),
+      }:{
         model: assignment.modelId,
         messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
         ...(options?.maxOutputTokens !== undefined ? { [outputField]: options.maxOutputTokens } : {}),
@@ -150,8 +164,11 @@ export async function callModel(
   }
 
   try{options?.onHeaders?.();}catch{/* observers are optional */}
-  const payload = streaming && /^text\/event-stream\b/i.test(response.headers.get("content-type")??"")
-    ? await readChatCompletionStream(response, signal, options?.onProgress)
+  const payload = nativeUrl
+    ? await readLmStudioNativeStream(response,signal,options?.onProgress,
+        options?.onPhase,options?.onTransport,streamTimeoutMs)
+    : streaming && /^text\/event-stream\b/i.test(response.headers.get("content-type")??"")
+    ? await readChatCompletionStream(response, signal, options?.onProgress,streamTimeoutMs,options?.onTransport)
     : await readChatCompletionJson(response, signal);
   if (!payload || typeof payload !== "object") throw new Error("Risposta AI non valida.");
   const data = payload as {

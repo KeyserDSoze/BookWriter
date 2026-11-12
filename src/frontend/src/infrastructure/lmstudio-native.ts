@@ -48,7 +48,7 @@ export async function readLmStudioNativeStream(
   const reader=response.body?.getReader();
   if(!reader)fail();
   const decoder=new TextDecoder("utf-8",{fatal:true});
-  let pending="",bytes=0,events=0,started=false,completed=false,ended=false;
+  let pending="",bytes=0,events=0,started=false,ended=false;
   let generatedReasoning=false;
   let final:StreamCompletion|undefined;
   let timer:ReturnType<typeof setTimeout>|undefined;
@@ -154,7 +154,6 @@ export async function readLmStudioNativeStream(
     }
     if(!ended)consume(decoder.decode());
     if(!started || !ended || !final)fail();
-    completed=true;
     return final;
   }catch(error){
     if(signal.aborted)throw abortError();

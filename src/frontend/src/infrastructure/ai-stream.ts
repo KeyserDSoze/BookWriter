@@ -9,6 +9,16 @@ export interface StreamCompletion {
 }
 
 export const CHAT_STREAM_TIMEOUT_MS = 600_000;
+export const MIN_CHAT_STREAM_TIMEOUT_SECONDS=600;
+export const MAX_CHAT_STREAM_TIMEOUT_SECONDS=3600;
+export function chatStreamTimeoutSeconds(value:unknown):number{
+  if(value===undefined)return 600;
+  if(typeof value!=="number" || !Number.isSafeInteger(value) ||
+    value<MIN_CHAT_STREAM_TIMEOUT_SECONDS || value>MAX_CHAT_STREAM_TIMEOUT_SECONDS)
+    throw new Error("Attesa streaming AI non valida: scegli 600–3600 secondi.");
+  return value;
+}
+export interface AiTransportStats {bytes:number;events:number}
 const invalid = () => new ProviderResponseReadError(
   "Stream AI non valido o incompleto: nessun testo applicato. Verifica il supporto SSE del provider."
 );
@@ -32,6 +42,7 @@ export async function readChatCompletionStream(
   signal: AbortSignal,
   onDelta?: (delta: AiStreamDelta) => void,
   readTimeoutMs = CHAT_STREAM_TIMEOUT_MS,
+  onTransport?: (stats:AiTransportStats)=>void,
 ): Promise<StreamCompletion> {
   if (signal.aborted) throw new DOMException("Generazione interrotta.", "AbortError");
   const type = response.headers.get("content-type") ?? "";
@@ -47,6 +58,7 @@ export async function readChatCompletionStream(
   let usage:StreamCompletion["usage"];
   let pending = "";
   let bytes = 0;
+  let events=0;
   let done = false;
   let completed = false;
   let abortHandler: (() => void) | undefined;
@@ -59,6 +71,8 @@ export async function readChatCompletionStream(
   });
   const acceptEvent = (data:string) => {
     const value=data.trim();
+    events++;
+    try{onTransport?.({bytes,events});}catch{/* observer only */}
     if (value === "[DONE]") { done = true; return; }
     if (!value) return;
     let parsed:unknown;
@@ -117,6 +131,7 @@ export async function readChatCompletionStream(
       if(chunk.done)break;
       bytes+=chunk.value.byteLength;
       if(bytes>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+      try{onTransport?.({bytes,events});}catch{/* observer only */}
       consume(decoder.decode(chunk.value,{stream:true}));
     }
     if(!done) {
@@ -124,7 +139,9 @@ export async function readChatCompletionStream(
       // A terminated connection without [DONE] is not an accepted result.
       if(!done)throw invalid();
     }
-    if(!text.trim())throw invalid();
+    if(!text.trim())throw new ProviderResponseReadError(reasoning
+      ? "Il provider ha terminato dopo il reasoning ma senza testo finale: nessun output applicato."
+      : "Il provider ha terminato senza generare una risposta testuale: nessun output applicato.");
     completed=true;
     return {choices:[{message:{content:text}}],usage};
   } catch(e){

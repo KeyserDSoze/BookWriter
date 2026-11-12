@@ -320,6 +320,8 @@ const backupSchema = z.object({
         .max(MAX_CHAT_HEADER_TIMEOUT_SECONDS).optional(),
       outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
       streamMode: z.enum(["off","sse"]).optional(),
+      streamTimeoutSeconds: z.number().int().min(600).max(3600).optional(),
+      apiProtocol: z.enum(["openai","lmstudio_native"]).optional(),
       reasoningEffort: z.enum(["low","medium","high","xhigh"]).optional(),
       authMode: z.enum(["api_key", "none"]).optional(),
       modelCapabilities: z.record(z.string(), z.array(
@@ -328,6 +330,12 @@ const backupSchema = z.object({
     }).refine(profile => {
       try {
         endpointAuthMode(profile.authMode, profile.baseUrl);
+        if(profile.apiProtocol==="lmstudio_native"){
+          const base=new URL(profile.baseUrl);
+          if(!["localhost","127.0.0.1"].includes(base.hostname) ||
+            base.pathname.replace(/\/$/,"")!=="/v1")return false;
+          if(profile.reasoningEffort==="xhigh")return false;
+        }
         return profile.authMode !== "none" || profile.apiKey === null;
       } catch { return false; }
     }, "Autenticazione senza chiave consentita solo su localhost.")).max(30),
@@ -369,6 +377,7 @@ type BackupData = {
     endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number;
       outputTokenParameter?: "max_tokens" | "max_completion_tokens"; authMode?: "api_key" | "none";
       streamMode?: "off" | "sse"; reasoningEffort?: "low" | "medium" | "high" | "xhigh";
+      streamTimeoutSeconds?: number; apiProtocol?: "openai" | "lmstudio_native";
       modelCapabilities?: AppSettings["endpoints"][number]["modelCapabilities"] }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
@@ -490,6 +499,8 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
         streamMode: endpoint.streamMode,
+        streamTimeoutSeconds: endpoint.streamTimeoutSeconds,
+        apiProtocol: endpoint.apiProtocol,
         reasoningEffort: endpoint.reasoningEffort,
 
         authMode: endpoint.authMode,
@@ -653,6 +664,8 @@ export async function importBackup(data: BackupData, withSettings: boolean): Pro
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
         streamMode: endpoint.streamMode,
+        streamTimeoutSeconds: endpoint.streamTimeoutSeconds,
+        apiProtocol: endpoint.apiProtocol,
         reasoningEffort: endpoint.reasoningEffort,
 
         authMode: endpoint.authMode,
