@@ -1,75 +1,77 @@
 # Changelog — BookWriter
 
-## Non rilasciato — Dashboard orientata al task, interventi registrati dell'autore e avvio da sinossi (ADR 0149)
+## 0.11.92 — 2026-11-12 (main) — Dashboard orientata al task, interventi registrati dell'autore e avvio da sinossi (ADR 0149)
 
 - **Dashboard «Lavoro dell'autopilot»:** fasi del libro, avanzamento (scene canoniche, capitoli congelati, parole), cosa sta facendo in italiano semplice (capitolo, scena, obiettivo, perché, poi) e prossimo passo quando è fermo; streaming con diagnostica tecnica richiudibile; avviso se manca un modello. Se il libro gira in un'altra scheda viene detto esplicitamente.
 - **Fermarsi e intervenire:** «Pausa» immediata o «Ferma a fine task»; pannello «Intervieni sull'autopilot» sempre visibile con tre modalità (solo prossimo passo, da ora in poi, rivedi anche il già scritto), «Interrompi e registra intervento», «Registra e continua». Ogni intervento è registrato nel libro e nelle Attività con data, passo e task interrotto; le note puntuali raggiungono solo i task di scrittura e risultano «applicate» nel commit del task che le ha usate.
 - **Nuovo libro da idea o da sinossi capitolo per capitolo**, con anteprima dei capitoli rilevati, numero di capitoli facoltativo e pausa per approvare il piano. Il piano deve rispettare numero, ordine e titoli della sinossi; ogni scena riceve la sinossi del suo capitolo.
+- **Pagina «Costi»:** budget AI, tariffe, ledger CSV, storico per task e consumi registrati escono dalla Dashboard e vivono in una vista dedicata. In Dashboard resta una sintesi («Costi AI in sintesi»: token noti, spesa stimata e barra del budget se attivo, avviso se i dati sono parziali) con il pulsante «Apri costi e budget». La Dashboard su schermi larghi è a due colonne (lavoro dell'autopilot e ultimi task a sinistra, intervento e costi a destra); su mobile l'ordine è lavoro, intervento, costi, task. Scegliere «+ Nuovo libro» riporta alla Dashboard.
+- **Test con LM Studio reale (opt-in):** `npm run test:e2e:live` con `LMSTUDIO_MODEL`/`LMSTUDIO_BASE_URL`; sonda su `/models`, salto o fallimento (`LMSTUDIO_REQUIRED=1`) se il server non è pronto, nessun effetto su CI e run normali. [Guida](ai-local-endpoints.md).
 - **Correzioni del flusso:** una revisione senza scene coinvolte non riscrive più l'intero libro; due revisioni consecutive non bloccano più il libro; niente ciclo di analisi con motivazione vuota; la chiamata AI di «finalizzazione» scartata è sostituita da un vero aggiornamento della memoria; lo scrittore riceve la fine della scena precedente; meno contesto ridondante nei prompt di scrittura; memorie compatte.
 - **Bug corretti:** «+ Nuovo libro» veniva annullato dal refresh periodico; il caricamento iniziale poteva sovrascrivere impostazioni appena digitate; il cambio tema salvava modifiche non confermate degli endpoint; lo ZIP di sicurezza falliva per libri con campi aggiunti durante il lavoro; pulsanti outline illeggibili al passaggio del mouse nel tema chiaro; etichette mobili tagliate a metà; stati delle scene in inglese nel Lettore.
 - Backup ZIP e proiezione GitHub includono sinossi e interventi; l'import da GitHub conserva solo interventi e opzioni di avvio ben formati; archivi legacy compatibili. Test Vitest e Playwright desktop/mobile. [ADR 0149](../ADR/0149-task-first-dashboard-author-interventions.md).
 
-## Non rilasciato — #174 (bozza piano storico read-only, SHA-256 e prerequisiti non soddisfatti)
+## 0.11.92 — #174 (bozza piano storico read-only, SHA-256 e prerequisiti non soddisfatti)
 
 - In **Attività → scheda task**, dopo l'analisi differenze narrative #173, un controllo separato permette di selezionare il checkpoint integrale #172 **prima** oppure **dopo** il task e generare **solo su richiesta** una bozza di piano storico. Una transazione readonly `books+activities+meta` legge consenso, task `succeeded`, snapshot e libro corrente; segnala task in esecuzione, remote GitHub configurato e revisione attuale distinta. Digest SHA-256 dei due contenuti narrativi (remote escluso), revisioni, conteggi di scene/freeze e candidati a rilettura, senza esporre testi, segreti o titoli.
 - I **blocchi per un vero rewind** restano sempre visibili: file di backup esterno non attestato, fork storico non implementato, autorizzazioni editoriali e recheck downstream mancanti, eventuale writer running e remote lease non verificato. Nessuna valutazione `readyToRestore`, nessuna modifica canon, undo, fork, POST AI o upload. L'autore può scrivere una bozza di istruzione correttiva **effimera** (max 2.000 caratteri), non persistita/loggata.
 - **Riconvalida impronte e revisione** rilegge l'origine e scarta piano/bozza quando hash, revisioni, task running o blocker cambiano; reset anche su target, libro, task, consenso revocato e unmount. Test unitari/fake-IDB e browser desktop/mobile, ADR 0148. #158 aperta: la prova SHA non equivale a backup, lock distribuito o permesso di recovery. [ADR 0148](../ADR/0148-historical-rewind-review-plan.md).
 
-## Non rilasciato — #173 (preflight narrativo storico e candidati downstream)
+## 0.11.92 — #173 (preflight narrativo storico e candidati downstream)
 
 - In **Attività**, nuova analisi **manuale, metadata-only** dei checkpoint narrativi integrali #172: confronta prima/dopo di un singolo task e mostra conteggi capitoli e scene (incluse bozze) aggiunti/rimossi/modificati, freeze, memoria, campi narrativi globali e riordini, senza mostrare titoli/prosa/segreti o contenuti delle richieste AI.
 - Lista **prudenziale** dei capitoli **attuali** da rivalutare: cambi narrativi globali → tutti; altrimenti dal primo capitolo modificato/riordinato in poi, incluso il primo. Massimo 20 numeri renderizzati e contatore dei restanti; la lista **non dimostra legami causali** e non invalida automaticamente nulla. Se ci sono numeri/ID ambigui o copie non disponibili il confronto fallisce chiuso. Segnalata la revisione attuale rispetto alla post-task registrata, senza confonderle.
 - Accesso consenso+snapshot+libro corrente in **un'unica transazione readonly**, letture con fencing su cambio task/libro/revoca e vista cancellata immediatamente; nessun restore, fork storico, editor di merge, nuovo prompt o POST AI. Vitest/fake IDB, Playwright desktop/mobile, ADR 0147. Parent #158 ancora aperta. [ADR 0147](../ADR/0147-historical-narrative-diff-preflight.md).
 
-## Non rilasciato — #172 (checkpoint integrali narrativi opt-in per futuri task)
+## 0.11.92 — #172 (checkpoint integrali narrativi opt-in per futuri task)
 
 - Nuovo consenso **per libro, separato** dalle copie di sola prosa #167 e disattivato per default: ogni nuovo `saveBookAndActivity` riuscito registra **prima/dopo** la totalità del contenuto narrativo BookProject, incluse bozze, testo canonico, brief, memoria, segreti narrativi, freeze e decisioni autoriali, ma **non** i permessi `remote` GitHub o l'output dei task. Lettura consenso e `meta.add` sono dentro il transaction CAS di book/activity/outbox; duplicati e errori falliscono senza commit parziali.
 - **Cap hard obbligatorio**, senza retention automatica né troncamenti: 32 MiB per coppia, 128 MiB cumulativi per libro calcolati con JSON UTF-8 stimato e ledger locale atomico; il browser può esaurire quota fisica anche sotto cap. Revoca esplicita **a due decisioni** elimina flag/coppie/contatore solo per quel libro, non scene, attività, checkpoint strutturali o opt-in prosa distinto.
 - In Attività inventario locale e ispezione del task mostrano **solo metadati, revisioni e conteggi** senza esporre la prosa privata. Copie integrali mai in ZIP, sync GitHub o richieste AI. Per task legacy senza consenso nessuna ricostruzione fittizia. Non sono un rewind/undo/restore: parent #158 resta aperta per scelta dello stato, approvazione, backup storico e controllo downstream. [ADR 0146](../ADR/0146-opt-in-whole-book-task-checkpoints.md).
 
-## Non rilasciato — #171 (fork locale supervisionato da ZIP sicurezza verificato)
+## 0.11.92 — #171 (fork locale supervisionato da ZIP sicurezza verificato)
 
 - Nel pannello ZIP #170, **solo dopo aver verificato il file realmente scaricato**, l'autore può preparare e **confermare una seconda volta** un fork locale del **libro attuale**. Nessun fork dopo il solo download, nessuna scelta già approvata per default. Al click definitivo SHA-256/schema e Web Lock sono ricontrollati; libro sorgente, activityId, stato writer e revisione CAS vengono verificati **nella medesima transazione readwrite** che inserisce il fork; `IDB.add` per impedire sovrascritture di ID collisionati.
 - Il nuovo progetto è un libro **separato** con ID nuovo, titolo `(fork locale)`, `status:paused`, senza remote GitHub; canone, memoria, attività e bozze sono copie importate con ID nuovi e revoca delle autorizzazioni sensibili. Nessuna eredità del consenso snapshot testuali dello store `meta`, nessun outbox o POST AI. L'app seleziona solo l'ID restituito dalla transazione e segnala la necessità di revisionare freeze e impatto editoriale prima di riprendere.
 - Fork significa **stato corrente non distruttivo**, non modifica l'originale e **non è ripristino dello stato storico del task, undo o rewind**. Il file ZIP resta non cifrato e va custodito. Vitest/fake-IDB e Playwright desktop/mobile, ADR 0145. Parent #158 aperta. [ADR 0145](../ADR/0145-supervised-current-book-fork.md).
 
-## Non rilasciato — #170 (ZIP di sicurezza corrente per libro, verificabile prima del rewind)
+## 0.11.92 — #170 (ZIP di sicurezza corrente per libro, verificabile prima del rewind)
 
 - Nella **scheda task** il comando «Genera e scarica ZIP di sicurezza del libro corrente» acquisisce una snapshot coerente **solo del libro selezionato** e della relativa cronologia attività/bozze di fusione, con una transazione `books+activities+mergeDrafts` readonly; rifiuta writer lock indisponibile/occupato, autopilot running, task cross-book e revisione stantia. Nessuna modifica al canone.
 - ZIP `content` compatibile con `readBackup` (validazione round-trip su schema reale, limite dimensioni e integrità), SHA-256 del file prodotto. Lo stato «File scaricato verificato» richiede un **secondo input file** del vero ZIP dal disco, con digest, lunghezza, libro/revisione, task e conteggi verificati nuovamente. Download riuscito da solo non è una attestazione del file conservato.
 - Zero altri libri, impostazioni provider/credenziali, snapshot opt-in/trace store `meta`, outbox o sincronizzazione GitHub. Il file include **testo, memoria privata e audit**, non è cifrato; chi lo scarica deve custodirlo. Non è uno snapshot storico selezionato, fork, undo, rewind né un ripristino automatico. Vitest/fake IDB e Playwright desktop/mobile, ADR 0144. [ADR 0144](../ADR/0144-rewind-safety-book-archive.md).
 
-## Non rilasciato — #169 (diff editoriale di paragrafi a rivelazione privata)
+## 0.11.92 — #169 (diff editoriale di paragrafi a rivelazione privata)
 
 - In **Attività → scheda task**, dopo il caricamento volontario della snapshot canonica opt-in #167, elenco paginato delle sole scene **aggiunte, rimosse o con prosa modificata**, identificate da coppia capitolo/scena. La scelta di scena non espone testo; il pulsante **Mostra anteprima privata dei paragrafi** richiede un secondo gesto e ricontrolla la disponibilità/consenso locale prima della rivelazione. **Nascondi**, cambio scena/task/libro, revoca e cancellazione azzerano la prosa visibile.
 - LCS esatto su paragrafi preservando spazi/separatori: blocchi prima/dopo, posizioni e conteggio delle differenze. Lavoro limitato a 160 paragrafi per lato e 300.000 caratteri per lato; altrimenti nessuna falsa comparazione. Fino a 32 blocchi renderizzati con anteprime individuali abbreviate e **conteggi espliciti** di quelli omessi. Tutto locale, senza nuova richiesta AI o manipolazione del manoscritto.
 - Test Vitest, Playwright desktop/mobile, ADR 0143 e documenti. Questo confronto **non** è word-diff, backup, merge, undo, fork o rewind autorizzato; #158 rimane aperta. [ADR 0143](../ADR/0143-opt-in-paragraph-editorial-diff.md).
 
-## Non rilasciato — #168 (quota e retention snapshot locali)
+## 0.11.92 — #168 (quota e retention snapshot locali)
 
 - In **Attività → Copie locali della prosa canonica**, riepilogo manuale per libro di copie e dimensione **stimata** dei payload JSON UTF-8, più preventivo di una coppia prima/dopo **a prosa invariata**; non sono misure fisiche di IndexedDB, né previsioni garantite dei testi futuri.
 - **Soglia facoltativa 1–1024 MiB per libro**, assente per impostazione predefinita: nessun pruning automatico. Alla prima configurazione viene indicizzato anche lo storico #167; i commit successivi aggiornano un ledger locale atomico in O(1) rispetto al numero delle copie. Con limite superato un task riuscito è rifiutato **prima del commit**, senza troncamenti e senza libro/attività/checkpoint parziali.
 - **Eliminazione selettiva** di 1–20 snapshot testuali per volta, soltanto con selezione e seconda conferma: cancella il testo locale, registra marcatori senza prosa, aggiorna il ledger e lascia invariati canone, audit, checkpoint strutturali e copie degli altri libri. La revoca totale #167 azzera l'indice. Nessun dato in ZIP, sync GitHub o provider. Test unitari, IndexedDB e browser desktop/mobile. [ADR 0142](../ADR/0142-task-prose-storage-retention.md).
 
-## Non rilasciato — #167 (copie della prosa canonica opt-in)
+## 0.11.92 — #167 (copie della prosa canonica opt-in)
 
 - **Attività → Copie locali della prosa canonica:** consenso disattivato per default, attivazione esplicita per libro con avviso su privacy e spazio. Solo i **task riusciti dopo l'attivazione** registrano una coppia di copie integrali, non troncate, delle scene `canon` prima/dopo, nella stessa transazione IndexedDB CAS di canone/attività/outbox/checkpoint strutturale. `meta.add` protegge dalle collisioni.
 - **Attività → scheda task → Carica confronto della prosa canonica:** conteggi scene pre/post e scene aggiunte/rimosse/con testo diverso; lettura manuale, senza esposizione automatica della prosa e senza ripristino. Revoca per libro cancella **atomically** copie solo del libro, senza toccare il canone o i checkpoint strutturali.
 - Mai in ZIP full/content, sync GitHub, outbox, backup o provider AI; esclusi draft/planned, titoli, memory, segreti, output e reasoning. Test domain, fake-indexeddb, Playwright desktop/mobile. **Non** include diff testuale granulare, undo/fork, restore, backup/retention: #158 resta aperta. [ADR 0141](../ADR/0141-opt-in-canonical-prose-snapshots.md).
 
-## Non rilasciato — #166 (checkpoint strutturali atomici per task)
+## 0.11.92 — #166 (checkpoint strutturali atomici per task)
 
 - Ogni nuovo task **riuscito** salvato con `saveBookAndActivity` può produrre una coppia **pre/post** in IndexedDB locale `meta`, schema v1, scritta nella stessa transazione CAS del libro, attività e outbox. Un ID di task duplicato non sovrascrive la storia; rollback atomico in caso di errore.
 - Copia soltanto revisioni, fase/stato, ID capitoli/scene, freeze e stati delle scene; **mai** prosa, output AI, prompt, reasoning, titoli o segreti. Non finisce negli ZIP (nemmeno full), su GitHub o nell'outbox.
 - Nella scheda Attività «Carica confronto strutturale» mostra aggiunte/rimozioni di capitoli/scene, cambiamenti di freeze e status, con lettura esplicita e isolamento cross-book. Nessun dato inventato per task legacy, nessun ripristino del romanzo: il vero rewind #158 resta separato. Test Vitest, IndexedDB e Playwright desktop/mobile. [ADR 0140](../ADR/0140-atomic-task-structural-checkpoints.md).
 
-## Non rilasciato — #165 (preflight non distruttivo per il rewind)
+## 0.11.92 — #165 (preflight non distruttivo per il rewind)
 
 - Nella scheda task dedicata, pannello **Prima di ripartire** con numero di attività temporalmente successive e anteprima dei primi cinque task, conteggio delle attività con data identica o non valida, stato attuale di freeze/canone/revisioni e avviso se l'autopilot è in corso.
 - Isolamento per libro e rigetto di identità/data del task non affidabili; niente testi di scene, `Activity.output`, prompt, reasoning, trascrizioni private, copie o invii al provider. L'ordine dei timestamp **non** dimostra dipendenze narrative e il canone attuale **non** è una snapshot del passato.
 - Funzione pura/test Vitest e Playwright desktop/mobile con dati sintetici. Non esegue replay, backup o ripristini: vero rewind #158 ancora aperto. [ADR 0139](../ADR/0139-rewind-readonly-impact-preflight.md) · [Guida](ai-task-inspection.md).
 
-## Non rilasciato — #164 (scheda task dedicata)
+## 0.11.92 — #164 (scheda task dedicata)
 
 - In **Attività**, apertura di una singola scheda task con navigazione precedente/successivo dentro la vista filtrata, anche con raggruppamenti per run. Ritorno al registro senza perdere filtri; Dashboard compatta invariata.
 - Isolamento delle trascrizioni private: cambiare scheda o tornare alla lista invalida letture IndexedDB pendenti e svuota il contenuto già ispezionato. Nessuna nuova lettura senza clic/consenso, nuova POST AI, ripristino checkpoint o modifica del canone.
