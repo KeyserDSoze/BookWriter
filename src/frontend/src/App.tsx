@@ -641,16 +641,23 @@ export default function App() {
             <Field label="Endpoint predefinito"><select className="field" value={settings.defaultRoute.endpointId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,endpointId:e.target.value}}))}>
               {settings.endpoints.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
             </select></Field>
-            <Field label="Modello predefinito"><input className="field" list="chat-default-model-list" value={settings.defaultRoute.modelId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,modelId:e.target.value}}))} placeholder="Seleziona o digita un ID modello Chat" />
-              <datalist id="chat-default-model-list">
+            <Field label="Modello predefinito"><input className="field" value={settings.defaultRoute.modelId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,modelId:e.target.value}}))} placeholder="Digita un ID modello Chat" /></Field>
+            <div className="min-w-0">
+              <label className="mb-1 block text-sm font-semibold" htmlFor="chat-model-catalog-select">Seleziona modello Chat dal catalogo</label>
+              <select id="chat-model-catalog-select" className="field"
+                value={settings.endpoints.find(e => e.id === settings.defaultRoute.endpointId)?.models.includes(settings.defaultRoute.modelId) ? settings.defaultRoute.modelId : ""}
+                onChange={e => {
+                  if (e.target.value) setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,modelId:e.target.value}}));
+                }}>
+                <option value="">Scelta manuale / nessun modello catalogato</option>
                 {settings.endpoints.find(endpoint => endpoint.id === settings.defaultRoute.endpointId)?.models
                   .filter(modelId => {
                     const endpoint = settings.endpoints.find(e => e.id === settings.defaultRoute.endpointId)!;
                     const roles = declaredModelCapabilities(endpoint, modelId);
                     return roles.length === 0 || roles.includes("chat");
-                  }).map(modelId => <option key={modelId} value={modelId} />)}
-              </datalist>
-            </Field>
+                  }).map(modelId => <option key={modelId} value={modelId}>{modelId}</option>)}
+              </select>
+            </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {TASK_KINDS.map(kind => {

@@ -36,6 +36,12 @@ test("catalogo LM Studio: assegna chat/tools, voce e embedding con predefiniti p
   await voice.getByRole("checkbox",{name:"Voce"}).check();
   await embedding.getByRole("checkbox",{name:"Embedding"}).check();
   await chat.getByRole("button",{name:"Usa come predefinito Chat"}).click();
+  // The searchable catalog remains separate from the editable textbox used
+  // by legacy flows; a datalist would change its ARIA role into combobox.
+  await expect(page.getByRole("combobox",{name:"Seleziona modello Chat dal catalogo"}))
+    .toHaveValue("meta/muse-glimmer");
+  await expect(page.getByRole("textbox",{name:"Modello predefinito"}))
+    .toHaveValue("meta/muse-glimmer");
   await catalog.getByRole("combobox",{name:"Predefinito Tool calling"})
     .selectOption({label:"OpenAI: meta/muse-glimmer"});
   await catalog.getByRole("combobox",{name:"Predefinito Voce"})
