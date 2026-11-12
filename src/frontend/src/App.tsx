@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { AutopilotRunner, requestRevision } from "./application/autopilot";
+import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
+import { clearAiTraces, currentLiveAi, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
 import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, TASK_KINDS, newBook, type Activity, type AppSettings, type BookProject, type EndpointProfile, type TaskKind } from "./domain/types";
 import { declaredModelCapabilities } from "./domain/model-capabilities";
@@ -74,6 +76,8 @@ export default function App() {
   const [books, setBooks] = useState<BookProject[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [liveAi,setLiveAi]=useState<LiveAiTrace|null>(()=>currentLiveAi());
+  useEffect(()=>subscribeLiveAi(()=>setLiveAi(currentLiveAi())),[]);
   // The inventory fetch may finish between user events and React's batched render.
   // Keep the last synchronous update available to async completion checks.
   const [settings, renderSettings] = useState<AppSettings>(structuredClone(DEFAULT_SETTINGS));
@@ -177,6 +181,12 @@ export default function App() {
       .catch(e => setNotice(e instanceof Error ? e.message : "Errore di esecuzione."));
   }
   function pause() { runner.stop(); setNotice("Pausa richiesta: arresto della chiamata in corso e salvataggio del checkpoint."); }
+  function prepareActivityRevision(item:Activity) {
+    setIntervention(`Rivedi l'attività "${item.title}" (fase ${item.phase}, ID ${item.id}). Modifica questa scelta e analizza l'impatto sulle scene e sui capitoli dipendenti: `);
+    setPage("dashboard");
+    if(current?.status==="running")setNotice("Intervento preparato. Premi prima Pausa e verifica lo stato, poi richiedi la revisione.");
+    else setNotice("Istruzione preparata. Modifica il testo prima di richiedere la revisione. Non ripristina automaticamente un checkpoint storico.");
+  }
   async function sendFeedback() {
     if (!current) return;
     // Capture the revision displayed to the author, not an IndexedDB revision
@@ -396,7 +406,15 @@ export default function App() {
         </div>
       </div>}
 
-      {page === "dashboard" && <div className="grid min-w-0 gap-4 xl:grid-cols-[1.65fr_1fr]">
+      {page === "dashboard" && <div className="space-y-4">
+        {current&&<AiTaskWorkspace bookId={current.id} activities={activities}
+          live={liveAi} inspectionEnabled={settings.inspectAiRequests===true}
+          onPrepareRevision={prepareActivityRevision} compact/>}
+        <details open={!current || current.status!=="running"} className="min-w-0">
+          <summary className="mb-3 cursor-pointer rounded-lg border border-slate-400/40 p-3 text-sm font-semibold">
+            Brief, interventi, redazione e informazioni avanzate del libro
+          </summary>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[1.65fr_1fr]">
         <div className="space-y-4">
           {!current && <Section title="Nuovo libro" description="Descrivi liberamente il libro: l'AI costruirà il piano e proseguirà scena per scena.">
             <div className="space-y-4">
@@ -430,16 +448,8 @@ export default function App() {
           </Section>}
         </div>
         <div className="space-y-4">
-          <Section title="Cosa sta facendo adesso" description="Ogni attività espone obiettivo, risultato e prossima azione.">
-            {latestActivity ? <div className="space-y-3 text-sm">
-              <p className="font-semibold">{latestActivity.title}</p>
-              <p><b>Perché:</b> {latestActivity.reason}</p>
-              <p><b>Stato:</b> {latestActivity.status}</p>
-              <p><b>Risultato:</b> {latestActivity.summary || "Attività ancora in corso."}</p>
-              <p><b>Prossimo:</b> {latestActivity.nextStep}</p>
-              {latestActivity.modelId && <p className="muted text-xs">Modello: {latestActivity.modelId} · Endpoint: {latestActivity.endpointId}</p>}
-              <Button variant="outline" onClick={() => setPage("activities")}>Apri registro attività</Button>
-            </div> : <Empty>Nessuna operazione registrata.</Empty>}
+          <Section title="Gestione ed analisi del libro" description="Controlli editoriali aggiuntivi; la timeline task è sempre visibile più in alto.">
+            <Button variant="outline" onClick={() => setPage("activities")}>Apri registro attività completo</Button>
           </Section>
           {current && <EditorialBoardPanel book={current} onRefresh={refresh}/>}
           {current && <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>}
@@ -465,33 +475,14 @@ export default function App() {
             {current ? <SyncStatusSummary book={current} openArchive={() => setPage("export")}/> : <Empty>Crea un libro per collegare GitHub.</Empty>}
           </Section>
         </div>
+        </details>
       </div>}
 
-      {page === "activities" && <Section title="Registro delle attività" description="Log persistito in IndexedDB. Tocca un'attività per leggere output, modello e motivazione.">
-        {!activities.length ? <Empty>Nessun log registrato per questo libro.</Empty>
-          : <div className="space-y-2">{activities.map(item => <details key={item.id} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700" open={item.status === "running"}>
-            <summary className="cursor-pointer list-none">
-              <div className="flex flex-wrap justify-between gap-2">
-                <span className="flex items-center gap-2 text-sm font-semibold">
-                  {item.status === "succeeded" ? <CheckCircle2 size={16} className="text-emerald-500" /> : item.status === "failed" ? <AlertTriangle size={16} className="text-red-500" /> : <RefreshCw size={16} />}
-                  {item.title}
-                </span>
-                <span className="muted text-xs">{new Date(item.createdAt).toLocaleString("it-IT")}</span>
-              </div>
-              <p className="muted mt-1 text-xs">{item.summary ?? item.reason}</p>
-            </summary>
-            <div className="mt-3 space-y-2 border-t border-slate-300 pt-3 text-sm dark:border-slate-700">
-              <p><b>Obiettivo:</b> {item.reason}</p>
-              <p><b>Prossimo passo:</b> {item.nextStep}</p>
-              <p><b>Stato:</b> {item.status}</p>
-              {item.modelId && <p>Endpoint: {item.endpointId} · Modello: {item.modelId}</p>}
-              {(item.inputTokens !== undefined || item.outputTokens !== undefined) && <p>Token: input {item.inputTokens ?? "N/D"}, output {item.outputTokens ?? "N/D"}</p>}
-              {item.error && <p className="text-red-600 dark:text-red-300">{item.error}</p>}
-              {item.output && <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-100 p-3 text-xs dark:bg-slate-900">{item.output}</pre>}
-              <Button variant="outline" onClick={() => { setIntervention(`Correggi il lavoro "${item.title}" (${item.phase}): `); setPage("dashboard"); }}><WandSparkles size={16} /> Intervieni su questa attività</Button>
-            </div>
-          </details>)}</div>}
-      </Section>}
+      {page === "activities" && (current ?
+        <AiTaskWorkspace bookId={current.id} activities={activities} live={liveAi}
+          inspectionEnabled={settings.inspectAiRequests===true}
+          onPrepareRevision={prepareActivityRevision}/>
+        : <Section title="Registro delle attività"><Empty>Seleziona un libro per ispezionare le attività.</Empty></Section>)}
 
       {page === "reader" && <div className="space-y-4">
         {current && <>
@@ -582,6 +573,21 @@ export default function App() {
       </div>}
 
       {page === "settings" && <div className="space-y-4">
+        <Section title="Trasparenza e ispezione delle richieste AI" description="Le tracce complete contengono prompt, testi del romanzo e possibili segreti: soltanto con consenso esplicito vengono conservate nel database locale del browser, mai nei ZIP o su GitHub.">
+          <label className="flex items-start gap-3 text-sm">
+            <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests===true}
+              onChange={e=>void persistSettings({...settings,inspectAiRequests:e.target.checked})}/>
+            <span>Ispezione locale richieste AI: mostra e conserva i messaggi system/user e le risposte dei prossimi task. Disattivata per impostazione predefinita, non retroattiva.</span>
+          </label>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="outline" onClick={()=>void (async()=>{
+              if(!window.confirm("Eliminare definitivamente tutte le richieste e risposte AI conservate localmente in questo browser?"))return;
+              try{const count=await clearAiTraces();setNotice(`Eliminate ${count} tracce AI locali.`);}
+              catch{setNotice("Impossibile eliminare le tracce AI locali.");}
+            })()}>Cancella tutte le tracce AI locali</Button>
+          </div>
+          <p className="muted mt-2 text-xs">Il registro attività salva già gli output delle attività confermate. Lo streaming è un'anteprima non approvata e l'eventuale reasoning è mostrato soltanto se il modello lo trasmette.</p>
+        </Section>
         <Section title="Endpoint OpenAI-compatible" description="Configura servizi con chiavi cifrate in IndexedDB, oppure senza autenticazione per localhost. Il browser parla direttamente con l'endpoint, senza backend proxy.">
           <div className="space-y-4">
             {settings.endpoints.map(endpoint => <div key={endpoint.id} className="space-y-3 rounded-lg border border-slate-300 p-4 dark:border-slate-700">
@@ -610,6 +616,26 @@ export default function App() {
                 <Field label="Modelli rilevati / manuali">
                   <input className="field" value={endpoint.models.join(", ")} onChange={e => updateEndpoint(endpoint.id, { models: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })} placeholder="es. model-a, model-b" />
                 </Field>
+                <Field label="Streaming Chat Completions">
+                  <select className="field" value={endpoint.streamMode??"off"}
+                    onChange={e=>updateEndpoint(endpoint.id,{streamMode:e.target.value as "off"|"sse"})}>
+                    <option value="off">Compatibilità JSON (nessuno streaming)</option>
+                    <option value="sse">Streaming SSE (provider compatibile)</option>
+                  </select>
+                </Field>
+                <Field label="Reasoning effort AI">
+                  <select className="field" value={endpoint.reasoningEffort??""}
+                    onChange={e=>updateEndpoint(endpoint.id,{
+                      reasoningEffort:e.target.value===""?undefined:
+                        e.target.value as "low"|"medium"|"high"|"xhigh",
+                    })}>
+                    <option value="">Automatico (non inviare parametro)</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="xhigh">Extra high (xhigh)</option>
+                  </select>
+                </Field>
                 <Field label="Parametro limite output API">
                   <select className="field" value={endpoint.outputTokenParameter ?? "max_tokens"}
                     onChange={e => updateEndpoint(endpoint.id, {
@@ -626,7 +652,7 @@ export default function App() {
                     onChange={e => updateEndpoint(endpoint.id, { headerTimeoutSeconds: Number(e.target.value) })} />
                 </Field>
               </div>
-              <p className="muted text-xs">Per LM Studio imposta http://localhost:1234/v1 e «Nessuna autenticazione» (solo localhost/127.0.0.1). Questa modalità elimina la chiave precedente al salvataggio e omette Authorization. Abilita CORS nel server locale per il browser; non esporre un server senza autenticazione in rete. Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s; un timeout non esclude addebiti.</p>
+              <p className="muted text-xs">Per LM Studio imposta http://localhost:1234/v1 e «Nessuna autenticazione» (solo localhost/127.0.0.1). Questa modalità elimina la chiave precedente al salvataggio e omette Authorization. Abilita CORS nel server locale per il browser; non esporre un server senza autenticazione in rete. Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s e lo stream SSE un limite di dieci minuti; un timeout non esclude addebiti. Attiva SSE solo se supportato dall'endpoint: non eseguiamo retry automatici dopo un errore. Il campo reasoning_effort è facoltativo e può essere rifiutato da modelli non compatibili. Il browser comunica direttamente con localhost; verifica il Network della scheda che ospita BookWriter, non quello di altre applicazioni.</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => void discoverModels(endpoint.id)}><RefreshCw size={16} /> Leggi /models</Button>
                 {settings.endpoints.length > 1 && <Button variant="destructive" onClick={() => setSettings(s => ({...s, endpoints:s.endpoints.filter(x => x.id !== endpoint.id)}))}>Rimuovi</Button>}
