@@ -7,6 +7,9 @@ export function taskProseConsentKey(bookId: string): string {
 export function taskProseKey(bookId: string, activityId: string): string {
   return "task-prose:v1:" + bookId + ":" + activityId;
 }
+export function taskProseUsageKey(bookId: string): string {
+  return "task-prose-usage:v1:" + bookId;
+}
 export async function loadTaskProseConsent(bookId: string): Promise<boolean> {
   if (!bookId) return false;
   const db = await getDb();
@@ -37,6 +40,12 @@ export async function setTaskProseConsent(bookId: string, enabled: boolean): Pro
         await cursor.delete();
       cursor = await cursor.continue();
     }
+    // Keep an existing quota ledger consistent with the now-empty archive.
+    // Do not clear the author's optional limit when revoking consent.
+    const usage=await meta.get(taskProseUsageKey(bookId));
+    if(usage!==undefined)await meta.put({
+      schemaVersion:1,bookId,estimatedBytes:0,records:0,
+    },taskProseUsageKey(bookId));
   }
   await tx.done;
 }

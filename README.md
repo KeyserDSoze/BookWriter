@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Archivio locale prosa: spazio e retention supervisionati (#168, non ancora release numerata).** In **Attività**, per i libri che hanno attivato le copie canoniche #167, puoi vedere la **stima** dei byte JSON UTF-8, impostare un limite facoltativo di 1–1024 MiB, oppure lasciarlo assente conservando tutta la cronologia. Il limite è verificato atomicamente al commit: se la nuova snapshot integrale lo supera, il task non viene applicato; non ci sono troncamenti o cancellazioni automatiche. Puoi selezionare fino a 20 copie alla volta e confermare esplicitamente la loro eliminazione, con marcatore locale di cancellazione senza testo; manoscritto e checkpoint strutturali rimangono intatti. Le stime **non** rappresentano l'occupazione fisica IndexedDB. [ADR 0142](ADR/0142-task-prose-storage-retention.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Copie pre/post del testo canonico su consenso esplicito (#167, non ancora release numerata):** in **Attività** puoi attivare per singolo libro un archivio **locale opt-in** delle versioni integrali del testo delle sole scene canoniche prima/dopo i **futuri task riusciti**, insieme al commit atomico del libro. La scheda task consente un confronto **di conteggi** delle scene con prosa diversa, senza mostrare automaticamente il testo. La revoca cancella tutte le copie testuali locali di quel libro (non il manoscritto); niente ZIP, outbox o GitHub. **Non è ancora il rewind**, che richiede backup/undo/approvazioni. [ADR 0141](ADR/0141-opt-in-canonical-prose-snapshots.md) · [Guida](docs/ai-task-inspection.md).
 
 

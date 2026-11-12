@@ -6,6 +6,11 @@ import {
 } from "../domain/task-structural-checkpoint";
 import { loadTaskStructuralCheckpoint } from "../infrastructure/task-structural-checkpoint";
 import { compareCanonProse, type TaskProseCheckpoint } from "../domain/task-prose-checkpoint";
+import { validProseLimitMiB, PROSE_MIB } from "../domain/task-prose-storage";
+import {
+  deleteSelectedTaskProse, loadTaskProseInventory, setTaskProseLimit,
+  wasTaskProseManuallyRemoved, type TaskProseStorageInventory,
+} from "../infrastructure/task-prose-storage";
 import {
   loadTaskProseCheckpoint, loadTaskProseConsent, setTaskProseConsent,
 } from "../infrastructure/task-prose-checkpoint";
@@ -47,6 +52,12 @@ export function AiTaskWorkspace({
   const [consentMessage,setConsentMessage]=useState("");
   const [proseCheckpoint,setProseCheckpoint]=useState<TaskProseCheckpoint|null>(null);
   const [proseMessage,setProseMessage]=useState("");
+  const [storageInventory,setStorageInventory]=useState<TaskProseStorageInventory|null>(null);
+  const [storageMessage,setStorageMessage]=useState("");
+  const [storageBusy,setStorageBusy]=useState(false);
+  const [limitDraft,setLimitDraft]=useState("64");
+  const [selectedCopyIds,setSelectedCopyIds]=useState<string[]>([]);
+  const [pendingDeleteIds,setPendingDeleteIds]=useState<string[]>([]);
   const [message,setMessage]=useState("");
   const [clock,setClock]=useState(Date.now());
   const [search,setSearch]=useState("");
@@ -62,6 +73,7 @@ export function AiTaskWorkspace({
   const checkpointSequence=useRef(new AiTraceReadFence());
   const proseSequence=useRef(new AiTraceReadFence());
   const consentSequence=useRef(new AiTraceReadFence());
+  const storageSequence=useRef(new AiTraceReadFence());
   const summary=useMemo(()=>summarizeTaskTimeline(activities),[activities]);
   const phaseOptions=useMemo(()=>[...new Set(activities.map(x=>x.phase))].sort(),[activities]);
   const filtered=useMemo(()=>compact?[]:filterTaskTimeline(activities,{
@@ -93,6 +105,13 @@ export function AiTaskWorkspace({
     const timer=setInterval(()=>setClock(Date.now()),1000);
     return ()=>clearInterval(timer);
   },[]);
+  useEffect(()=>{
+    storageSequence.current.invalidate();
+    setStorageInventory(null);setStorageMessage("");
+    setStorageBusy(false);setSelectedCopyIds([]);setPendingDeleteIds([]);
+    setLimitDraft("64");
+    return ()=>{storageSequence.current.invalidate();};
+  },[bookId,compact]);
   useEffect(()=>{
     if(compact)return;
     const ticket=consentSequence.current.begin();
@@ -138,7 +157,10 @@ export function AiTaskWorkspace({
     setConsentBusy(true);setConsentMessage("");
     // Revocation must hide any previously loaded comparison immediately.
     proseSequence.current.invalidate();
+    storageSequence.current.invalidate();
     setProseCheckpoint(null);setProseMessage("");
+    setStorageInventory(null);setStorageMessage("");
+    setSelectedCopyIds([]);setPendingDeleteIds([]);
     try{
       await setTaskProseConsent(bookId,enabled);
       if(!consentSequence.current.isCurrent(ticket))return;
@@ -163,10 +185,74 @@ export function AiTaskWorkspace({
       const stored=await loadTaskProseCheckpoint(bookId,id);
       if(!proseSequence.current.isCurrent(ticket))return;
       if(stored)setProseCheckpoint(stored);
-      else setProseMessage("Nessuna copia testuale locale disponibile per questo task: il consenso non era attivo al commit, il task è legacy o le copie sono state eliminate.");
+      else {
+        const deleted=await wasTaskProseManuallyRemoved(bookId,id);
+        if(!proseSequence.current.isCurrent(ticket))return;
+        setProseMessage(deleted
+          ?"Copia testuale cancellata manualmente dall’autore: il confronto non è più disponibile per questo task."
+          :"Nessuna copia testuale locale disponibile per questo task: il consenso non era attivo al commit, il task è legacy o le copie sono state eliminate.");
+      }
     }catch{
       if(proseSequence.current.isCurrent(ticket))
         setProseMessage("Impossibile leggere la copia locale della prosa.");
+    }
+  };
+  const refreshStorage=async()=>{
+    const ticket=storageSequence.current.begin();
+    setStorageInventory(null);setStorageMessage("");
+    try{
+      const inventory=await loadTaskProseInventory(bookId);
+      if(!storageSequence.current.isCurrent(ticket))return;
+      if(inventory){
+        setStorageInventory(inventory);
+        setLimitDraft(String(inventory.limitMiB??64));
+      }else setStorageMessage("Libro non trovato: impossibile misurare l'archivio.");
+    }catch{
+      if(storageSequence.current.isCurrent(ticket))
+        setStorageMessage("Impossibile stimare lo spazio dell'archivio locale.");
+    }
+  };
+  const changeStorageLimit=async(limitMiB:number|null)=>{
+    if(limitMiB!==null&&!validProseLimitMiB(limitMiB)){
+      setStorageMessage("Limite non valido: usa un intero da 1 a 1024 MiB.");
+      return;
+    }
+    const ticket=storageSequence.current.begin();
+    setStorageBusy(true);setStorageMessage("");
+    try{
+      await setTaskProseLimit(bookId,limitMiB);
+      if(!storageSequence.current.isCurrent(ticket))return;
+      setStorageMessage(limitMiB===null
+        ?"Limite applicativo rimosso. Il browser applica ancora la propria quota."
+        :`Limite applicativo impostato a ${limitMiB} MiB; nessuna copia eliminata.`);
+      const next=await loadTaskProseInventory(bookId);
+      if(storageSequence.current.isCurrent(ticket))setStorageInventory(next);
+    }catch{
+      if(storageSequence.current.isCurrent(ticket))
+        setStorageMessage("Impossibile salvare il limite: nessuna copia è stata cancellata.");
+    }finally{
+      if(storageSequence.current.isCurrent(ticket))setStorageBusy(false);
+    }
+  };
+  const deleteSelectedCopies=async()=>{
+    if(!pendingDeleteIds.length)return;
+    const ticket=storageSequence.current.begin();
+    setStorageBusy(true);setStorageMessage("");
+    proseSequence.current.invalidate();
+    setProseCheckpoint(null);setProseMessage("");
+    try{
+      const removed=await deleteSelectedTaskProse(bookId,pendingDeleteIds);
+      if(!storageSequence.current.isCurrent(ticket))return;
+      setPendingDeleteIds([]);setSelectedCopyIds([]);
+      const inventory=await loadTaskProseInventory(bookId);
+      if(!storageSequence.current.isCurrent(ticket))return;
+      setStorageInventory(inventory);
+      setStorageMessage(`Eliminate ${removed} copie testuali selezionate del libro corrente; manoscritto e checkpoint strutturali intatti.`);
+    }catch{
+      if(storageSequence.current.isCurrent(ticket))
+        setStorageMessage("Eliminazione non riuscita: ricontrolla la selezione e riprova.");
+    }finally{
+      if(storageSequence.current.isCurrent(ticket))setStorageBusy(false);
     }
   };
   const inspectStructure=async(id:string)=>{
@@ -273,12 +359,94 @@ export function AiTaskWorkspace({
       <p className="text-xs">Stato per questo libro: {proseReady
         ?proseEnabled?"attivo":"disattivato"
         :"in caricamento o non verificabile"}.</p>
-      <button type="button" disabled={!proseReady||consentBusy}
+      <button type="button" disabled={!proseReady||consentBusy||storageBusy}
         className="rounded-lg border border-amber-600 px-3 py-2 text-sm disabled:opacity-40"
         onClick={()=>void changeProseConsent(!proseEnabled)}>
         {proseEnabled?"Revoca consenso ed elimina tutte le copie testuali del libro"
           :"Attiva copie testuali locali per questo libro"}</button>
       {consentMessage&&<p role="status" className="muted text-xs">{consentMessage}</p>}
+      {proseEnabled&&<div className="space-y-2 border-t border-amber-500/30 pt-3"
+        aria-label="Gestione spazio snapshot testuali">
+        <p className="font-semibold">Spazio e conservazione delle copie testuali</p>
+        <p className="muted text-xs">Per default tutte le copie restano conservate finché
+          non scegli di eliminarle. Nessuna cancellazione automatica.
+          Le dimensioni mostrate sono stime dei payload JSON UTF-8,
+          <b> non lo spazio effettivo IndexedDB</b> né la quota fisica del browser.
+          Un nuovo task può produrre più testo di quello attuale.</p>
+        <button type="button" disabled={storageBusy}
+          className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
+          onClick={()=>void refreshStorage()}>Aggiorna stima spazio locale</button>
+        {storageInventory?.bookId===bookId&&<>
+          <p className="text-xs" aria-label="Riepilogo archivio locale">
+            Copie conservate: {storageInventory.records};
+            stima payload: {(storageInventory.estimatedBytes/PROSE_MIB).toFixed(2)} MiB
+            ({storageInventory.estimatedBytes} byte).
+            Prossima coppia, <b>ipotizzando la prosa attuale invariata</b>:
+            {" "}{(storageInventory.nextPairEstimateBytes/PROSE_MIB).toFixed(2)} MiB.
+            {storageInventory.limitMiB===null
+              ?" Nessun limite applicativo impostato (resta la quota del browser)."
+              :` Limite applicativo: ${storageInventory.limitMiB} MiB.`}
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs">Limite archivio (MiB, 1–1024)
+              <input className="field mt-1 w-32" type="number" min="1" max="1024"
+                step="1" value={limitDraft}
+                onChange={e=>setLimitDraft(e.target.value)}
+                aria-label="Limite copie testuali MiB"/>
+            </label>
+            <button type="button" disabled={storageBusy}
+              className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
+              onClick={()=>void changeStorageLimit(Number(limitDraft))}>
+              Applica limite copie testuali</button>
+            <button type="button" disabled={storageBusy||storageInventory.limitMiB===null}
+              className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
+              onClick={()=>void changeStorageLimit(null)}>
+              Rimuovi limite copie testuali</button>
+          </div>
+          <p className="muted text-xs">Se la prossima coppia completa supera il limite
+            (considerando le copie già presenti), il commit del task viene
+            rifiutato: niente troncamenti, rollback parziali o cancellazioni automatiche.</p>
+          {storageInventory.entries.length>0&&<div className="space-y-2">
+            <p className="font-medium text-xs">Seleziona da 1 a 20 copie da cancellare
+              manualmente; vengono mostrati al massimo i primi 20 ID.
+              La selezione non modifica il libro.</p>
+            <div className="max-h-44 space-y-1 overflow-auto"
+              aria-label="Copie testuali disponibili">
+              {storageInventory.entries.slice(0,20).map(entry=><label key={entry.activityId}
+                className="flex items-center gap-2 text-xs">
+                <input type="checkbox"
+                  aria-label={`Seleziona copia task ${entry.activityId}`}
+                  checked={selectedCopyIds.includes(entry.activityId)}
+                  onChange={e=>{
+                    setPendingDeleteIds([]);
+                    setSelectedCopyIds(ids=>e.target.checked
+                      ?[...ids,entry.activityId]:ids.filter(id=>id!==entry.activityId));
+                  }}/>
+                <span>{activities.find(x=>x.id===entry.activityId)?.title??"Task non presente nel registro"}
+                  {" · "}{entry.activityId.slice(0,8)}…
+                  {" · "}{(entry.estimatedBytes/1024).toFixed(1)} KiB stimati</span>
+              </label>)}
+            </div>
+            <button type="button" disabled={storageBusy||selectedCopyIds.length===0}
+              className="rounded-lg border border-amber-600 px-3 py-2 text-xs disabled:opacity-40"
+              onClick={()=>setPendingDeleteIds([...selectedCopyIds])}>
+              Richiedi cancellazione copie selezionate ({selectedCopyIds.length})</button>
+            {pendingDeleteIds.length>0&&<div className="space-y-2 rounded-lg border border-red-600/40 p-2">
+              <p className="text-xs">Confermi la cancellazione irreversibile di
+                {" "}{pendingDeleteIds.length} copie testuali di questo libro?
+                Manoscritto, audit e checkpoint strutturali rimangono invariati;
+                il futuro confronto di quei task non sarà più disponibile.</p>
+              <button type="button" disabled={storageBusy}
+                className="rounded-lg border border-red-600 px-3 py-2 text-xs"
+                onClick={()=>void deleteSelectedCopies()}>
+                Conferma cancellazione copie selezionate</button>
+              <button type="button" className="ml-2 rounded-lg border border-slate-400 px-3 py-2 text-xs"
+                onClick={()=>setPendingDeleteIds([])}>Annulla cancellazione copie</button>
+            </div>}
+          </div>}
+        </>}
+        {storageMessage&&<p role="status" className="muted text-xs">{storageMessage}</p>}
+      </div>}
     </section>}
     <p className="muted mt-3 text-sm">Ogni attività è separata e ispezionabile. Un output in streaming non modifica il libro finché non supera i controlli di validazione e viene confermato come canonico.</p>
     {!compact&&focused&&<div role="region" aria-label="Scheda task dedicata"

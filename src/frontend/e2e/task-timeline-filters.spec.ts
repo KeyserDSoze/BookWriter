@@ -263,6 +263,29 @@ test("copie canoniche opt-in: confronto esatto e revoca locale, desktop/mobile",
   await expect(prose).not.toContainText("PROSA_ANTE_OPERAZIONE_PRIVATA");
   await expect(prose).not.toContainText("PROSA_DOPO_OPERAZIONE_PRIVATA");
   await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
+  const storage=consent.getByLabel("Gestione spazio snapshot testuali");
+  await storage.getByRole("button",{name:"Aggiorna stima spazio locale"}).click();
+  await expect(storage.getByLabel("Riepilogo archivio locale"))
+    .toContainText("Copie conservate: 1");
+  await expect(storage).toContainText("non lo spazio effettivo IndexedDB");
+  await storage.getByRole("spinbutton",{name:"Limite copie testuali MiB"}).fill("1");
+  await storage.getByRole("button",{name:"Applica limite copie testuali"}).click();
+  await expect(storage.getByLabel("Riepilogo archivio locale")).toContainText(
+    "Limite applicativo: 1 MiB",
+  );
+  const selected=storage.getByRole("checkbox",{name:/Seleziona copia task/});
+  await selected.check();
+  await storage.getByRole("button",{
+    name:"Richiedi cancellazione copie selezionate (1)",
+  }).click();
+  await expect(storage).toContainText("cancellazione irreversibile di 1 copie");
+  await storage.getByRole("button",{name:"Conferma cancellazione copie selezionate"}).click();
+  await expect(storage.getByLabel("Riepilogo archivio locale"))
+    .toContainText("Copie conservate: 0");
+  await timeline.getByRole("button",{name:"Apri scheda task"}).click();
+  await prose.getByRole("button",{name:"Carica confronto della prosa canonica"}).click();
+  await expect(prose).toContainText("Copia testuale cancellata manualmente");
+  await focus.getByRole("button",{name:"Torna al registro dei task"}).click();
   await consent.getByRole("button",{
     name:"Revoca consenso ed elimina tutte le copie testuali del libro",
   }).click();
@@ -283,6 +306,61 @@ test("copie canoniche opt-in: confronto esatto e revoca locale, desktop/mobile",
   expect(local.prose).toBeUndefined();
   expect(local.structural).toBeDefined();
   expect(local.book.chapters[0].scenes[0].text).toBe("PROSA_DOPO_OPERAZIONE_PRIVATA");
+});
+
+test("limite copie testuali: il task oltre quota non canonizza nulla, desktop/mobile",async({page})=>{
+  await page.goto("/");
+  const bookId=await createBook(page,"Libro prova soglia locale");
+  const nav=page.getByRole("navigation",{
+    name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
+  });
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const consent=page.getByRole("region",{name:"Consenso copie testuali per il rewind"});
+  await consent.getByRole("button",{name:"Attiva copie testuali locali per questo libro"}).click();
+  const storage=consent.getByLabel("Gestione spazio snapshot testuali");
+  await storage.getByRole("button",{name:"Aggiorna stima spazio locale"}).click();
+  await storage.getByRole("spinbutton",{name:"Limite copie testuali MiB"}).fill("1");
+  await storage.getByRole("button",{name:"Applica limite copie testuali"}).click();
+  const outcome=await page.evaluate(async(id)=>{
+    const {getDb,getBook,saveBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
+    const original=await getBook(id);
+    if(!original)throw Error("Libro mancante");
+    const canon=structuredClone(original);
+    canon.chapters=[{id:"large-ch",number:1,title:"Sintetico",purpose:"Prova",
+      scenes:[{id:"large-sc",number:1,title:"Scena",objective:"Quota",
+        status:"canon",text:"Q".repeat(600_000)}]}];
+    await saveBook(canon,false,original.updatedAt);
+    const before=await getBook(id);
+    if(!before)throw Error("Book absent");
+    const proposed=structuredClone(before);
+    proposed.chapters[0].scenes[0].text="R".repeat(600_000);
+    const taskId="blocked-quota-"+id;
+    let errorName="";
+    try{
+      await saveBookAndActivity(proposed,{
+        id:taskId,bookId:id,runId:"run",phase:"prose",title:"Tentativo oltre quota",
+        reason:"Test",nextStep:"Interrompere",status:"succeeded",
+        createdAt:"2026-11-12T10:00:00.000Z",
+      },before.updatedAt);
+    }catch(error){errorName=error instanceof Error?error.name:"unknown";}
+    const db=await getDb();
+    const after=await getBook(id);
+    return {
+      errorName,
+      sameRevision:after?.updatedAt===before.updatedAt,
+      sameText:after?.chapters[0]?.scenes[0]?.text===before.chapters[0].scenes[0].text,
+      activityAbsent:(await db.get("activities",taskId))===undefined,
+      structureAbsent:(await db.get("meta","task-structure:v1:"+taskId))===undefined,
+      proseAbsent:(await db.get("meta","task-prose:v1:"+id+":"+taskId))===undefined,
+    };
+  },bookId);
+  expect(outcome).toEqual({
+    errorName:"TaskProseQuotaExceeded",sameRevision:true,sameText:true,
+    activityAbsent:true,structureAbsent:true,proseAbsent:true,
+  });
+  await storage.getByRole("button",{name:"Aggiorna stima spazio locale"}).click();
+  await expect(storage.getByLabel("Riepilogo archivio locale"))
+    .toContainText("Copie conservate: 0");
 });
 
 test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{

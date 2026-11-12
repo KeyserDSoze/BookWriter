@@ -4,7 +4,13 @@ import { DEFAULT_SETTINGS } from "../domain/types";
 import { enqueueCheckpoint } from "./outbox";
 import { createTaskStructuralCheckpoint } from "../domain/task-structural-checkpoint";
 import { createTaskProseCheckpoint } from "../domain/task-prose-checkpoint";
-import { taskProseConsentKey, taskProseKey } from "./task-prose-checkpoint";
+import { taskProseConsentKey, taskProseKey, taskProseUsageKey } from "./task-prose-checkpoint";
+import { taskProseLimitKey } from "./task-prose-storage";
+import {
+  estimateProsePayloadBytes, TaskProseQuotaExceeded, PROSE_MIB,
+  validProseLimitMiB, validTaskProseUsageLedger,
+  type TaskProseUsageLedger,
+} from "../domain/task-prose-storage";
 
 const DB_NAME = "bookwriter";
 const DB_VERSION = 2;
@@ -120,9 +126,45 @@ export async function saveBookAndActivity(
       "task-structure:v1:" + activity.id);
     // Explicit consent is read inside the very same transaction as the
     // structural witness, book, audit and outbox. An opt-out serializes here.
-    if ((await meta.get(taskProseConsentKey(book.id))) === true)
-      await meta.add(createTaskProseCheckpoint(stored, book, activity),
-        taskProseKey(book.id, activity.id));
+    if ((await meta.get(taskProseConsentKey(book.id))) === true) {
+      try {
+        const prose = createTaskProseCheckpoint(stored, book, activity);
+        const rawLimit = await meta.get(taskProseLimitKey(book.id)) as unknown;
+        const rawLedger = await meta.get(taskProseUsageKey(book.id)) as unknown;
+        if (rawLimit !== undefined && !validProseLimitMiB(rawLimit))
+          throw new Error("Limite delle copie locali non valido: nessun risultato applicato.");
+        if (rawLedger !== undefined && !validTaskProseUsageLedger(rawLedger,book.id))
+          throw new Error("Indice dello spazio locale non verificabile: nessun risultato applicato.");
+        const incoming = estimateProsePayloadBytes(prose);
+        let ledger: TaskProseUsageLedger | null =
+          rawLedger === undefined ? null : rawLedger as TaskProseUsageLedger;
+        // A configured cap initializes its exact payload ledger once (legacy
+        // copies included). Subsequent task commits update it in O(1).
+        // The read and the write remain in the same IDB transaction as canon.
+        if (rawLimit !== undefined && ledger === null) {
+          const prefix = taskProseKey(book.id,"");
+          let cursor = await meta.openCursor(IDBKeyRange.bound(prefix,prefix+"\uffff"));
+          let estimatedBytes = 0, records = 0;
+          while(cursor){
+            estimatedBytes += estimateProsePayloadBytes(cursor.value);
+            records++;
+            cursor = await cursor.continue();
+          }
+          ledger={schemaVersion:1,bookId:book.id,estimatedBytes,records};
+        }
+        const total = (ledger?.estimatedBytes??0)+incoming;
+        if (rawLimit !== undefined && total > rawLimit * PROSE_MIB)
+          throw new TaskProseQuotaExceeded(total,rawLimit);
+        await meta.add(prose,taskProseKey(book.id,activity.id));
+        if (ledger) await meta.put({...ledger,estimatedBytes:total,
+          records:ledger.records+1},taskProseUsageKey(book.id));
+      } catch (error) {
+        // An app-level quota error is not an IndexedDB request failure:
+        // explicitly abort so earlier book/audit/structure puts cannot commit.
+        try { tx.abort(); } catch { /* an IDB request may already have aborted */ }
+        throw error;
+      }
+    }
   }
   // Keep a durable sync request in the same transaction as the narrative result.
   // Do not create a GitHub commit for every intermediate AI planning operation.

@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #168 (quota e retention snapshot locali)
+
+- In **Attività → Copie locali della prosa canonica**, riepilogo manuale per libro di copie e dimensione **stimata** dei payload JSON UTF-8, più preventivo di una coppia prima/dopo **a prosa invariata**; non sono misure fisiche di IndexedDB, né previsioni garantite dei testi futuri.
+- **Soglia facoltativa 1–1024 MiB per libro**, assente per impostazione predefinita: nessun pruning automatico. Alla prima configurazione viene indicizzato anche lo storico #167; i commit successivi aggiornano un ledger locale atomico in O(1) rispetto al numero delle copie. Con limite superato un task riuscito è rifiutato **prima del commit**, senza troncamenti e senza libro/attività/checkpoint parziali.
+- **Eliminazione selettiva** di 1–20 snapshot testuali per volta, soltanto con selezione e seconda conferma: cancella il testo locale, registra marcatori senza prosa, aggiorna il ledger e lascia invariati canone, audit, checkpoint strutturali e copie degli altri libri. La revoca totale #167 azzera l'indice. Nessun dato in ZIP, sync GitHub o provider. Test unitari, IndexedDB e browser desktop/mobile. [ADR 0142](../ADR/0142-task-prose-storage-retention.md).
+
 ## Non rilasciato — #167 (copie della prosa canonica opt-in)
 
 - **Attività → Copie locali della prosa canonica:** consenso disattivato per default, attivazione esplicita per libro con avviso su privacy e spazio. Solo i **task riusciti dopo l'attivazione** registrano una coppia di copie integrali, non troncate, delle scene `canon` prima/dopo, nella stessa transazione IndexedDB CAS di canone/attività/outbox/checkpoint strutturale. `meta.add` protegge dalle collisioni.
