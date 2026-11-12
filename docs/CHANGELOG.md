@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.11.93 — 2026-11-12 (main) — Thinking dichiarato dal modello, streaming a inattività e esecuzione senza supervisione
+
+- **Thinking letto dal modello (LM Studio):** «Leggi /models» legge anche `GET /api/v1/models` (solo loopback, senza credenziali) e conserva per ogni modello i livelli di reasoning che dichiara e il suo livello predefinito. I menu «Reasoning» (endpoint, attività e override del libro) mostrano solo quei livelli, indicano cosa supporta il modello («Con Automatico usa il suo predefinito: High») e avvisano se un valore salvato non è supportato. Un livello non supportato **non viene inviato** (si omette il parametro) e l'attività registra la richiesta reale. Per endpoint diversi da LM Studio i livelli restano «non verificati» e tutti disponibili. I livelli letti non finiscono nei backup ZIP.
+- **«Applica thinking consigliato»:** imposta per attività Low (scrittura, consolidamento, riassunti, lettori), Medium (brainstorming, validazione, piano, analisi d'impatto) e High (direttore editoriale), scegliendo il livello più vicino tra quelli dichiarati; non tocca i modelli non verificati e toglie il parametro ai modelli senza thinking.
+- **Streaming con scadenza per inattività:** il limite (600–3600 s) conta il silenzio del provider e si azzera a ogni dato ricevuto; un modello lento ma costante non viene più interrotto a metà risposta. Tetto assoluto di 4 ore contro flussi infiniti.
+- **Ritentativi automatici opt-in sugli endpoint locali senza chiave:** massimo 2 per task, solo dopo una richiesta realmente inviata, mai con chiave API (possibile addebito); ogni tentativo resta nelle Attività e il libro non passa in errore finché restano tentativi.
+- **Schermo sveglio** (Wake Lock del browser) mentre l'autopilot gira in questa scheda, ripreso quando la scheda torna visibile.
+- Test Vitest e Playwright desktop/mobile; test live opt-in sui livelli dichiarati dal LM Studio reale.
+
+
 ## 0.11.92 — 2026-11-12 (main) — Dashboard orientata al task, interventi registrati dell'autore e avvio da sinossi (ADR 0149)
 
 - **Dashboard «Lavoro dell'autopilot»:** fasi del libro, avanzamento (scene canoniche, capitoli congelati, parole), cosa sta facendo in italiano semplice (capitolo, scena, obiettivo, perché, poi) e prossimo passo quando è fermo; streaming con diagnostica tecnica richiudibile; avviso se manca un modello. Se il libro gira in un'altra scheda viene detto esplicitamente.
