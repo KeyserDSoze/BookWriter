@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Activity } from "../domain/types";
+import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import {
   completedTaskDurationSeconds, estimatedTaskCostEur, filterTaskTimeline,
   formatTaskDuration, summarizeTaskTimeline,
@@ -34,7 +35,7 @@ export function AiTaskWorkspace({
   const [order,setOrder]=useState<TimelineOrder>("newest");
   // A request may settle after changing books, hiding inspection or choosing
   // another task. Never display stale local prompts or responses.
-  const inspectionSequence=useRef(0);
+  const inspectionSequence=useRef(new AiTraceReadFence());
   const summary=useMemo(()=>summarizeTaskTimeline(activities),[activities]);
   const phaseOptions=useMemo(()=>[...new Set(activities.map(x=>x.phase))].sort(),[activities]);
   const filtered=useMemo(()=>compact?[]:filterTaskTimeline(activities,{
@@ -45,16 +46,16 @@ export function AiTaskWorkspace({
     return ()=>clearInterval(timer);
   },[]);
   useEffect(()=>{
-    inspectionSequence.current++;
+    inspectionSequence.current.invalidate();
     setChosen("");setTrace(null);setMessage("");
     setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");
-    return ()=>{inspectionSequence.current++;};
+    return ()=>{inspectionSequence.current.invalidate();};
   },[bookId,inspectionEnabled]);
   const recent=compact?activities.slice(0,8):filtered;
   const active=live?.bookId===bookId?live:null;
   const elapsed=active?Math.max(0,Math.floor(((active.endedAt??clock)-active.startedAt)/1000)):0;
   const inspect=async(id:string)=>{
-    const ticket=++inspectionSequence.current;
+    const ticket=inspectionSequence.current.begin();
     setChosen(id);setTrace(null);setMessage("");
     if(!inspectionEnabled) {
       setMessage("Attiva l'ispezione locale in Impostazioni per registrare le prossime richieste. Le attività precedenti non contengono il prompt integrale.");
@@ -62,11 +63,11 @@ export function AiTaskWorkspace({
     }
     try{
       const saved=await loadAiTrace(bookId,id);
-      if(ticket!==inspectionSequence.current)return;
+      if(!inspectionSequence.current.isCurrent(ticket))return;
       setTrace(saved);
       if(!saved)setMessage("Nessuna richiesta integrale conservata per questo task. L'ispezione non è retroattiva.");
     }catch{
-      if(ticket===inspectionSequence.current)
+      if(inspectionSequence.current.isCurrent(ticket))
         setMessage("Impossibile leggere il tracciato locale da IndexedDB.");
     }
   };
