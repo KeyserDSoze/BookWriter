@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import { callModel } from "../infrastructure/ai";
+import { endpointStreamMode } from "../infrastructure/ai-stream";
 import { addAiDelta, currentLiveAi, finishLiveAi, markAiHeader, markAiTransport, markNativePhase,
   saveAiTrace, startLiveAi } from "../infrastructure/ai-observability";
 import { taskReasoningChoice } from "../domain/task-reasoning";
@@ -753,7 +754,7 @@ export class AutopilotRunner {
             streamDeadlineSeconds:configuredEndpoint?.streamTimeoutSeconds??600,
           });
           const inspectStream = settings.inspectAiRequests===true ||
-            configuredEndpoint?.streamMode==="sse" ||
+            (configuredEndpoint!==undefined && endpointStreamMode(configuredEndpoint)==="sse") ||
             configuredEndpoint?.apiProtocol==="lmstudio_native";
           const result = await callModel(work.kind, systemPrompt, userPrompt, settings, book, signal,
             preflight || inspectStream ? {

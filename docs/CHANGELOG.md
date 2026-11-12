@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## 0.11.94 — 2026-11-12 (main) — Streaming predefinito sugli endpoint locali e diagnosi dei timeout
+
+- **Causa dei timeout «sempre» su LM Studio:** senza streaming (modalità JSON) il server invia gli header solo a risposta completa; con un modello lento (~2 tok/s) e reasoning alto la risposta superava i 300 s e la richiesta veniva interrotta con 0 byte ricevuti. Verificato nei log di LM Studio (richiesta senza `stream:true` chiusa dal client dopo 5 min esatti).
+- **Streaming SSE predefinito** per gli endpoint locali senza chiave quando la scelta non è esplicita; «Compatibilità JSON» resta selezionabile e prevale.
+- **Messaggio di timeout con la causa:** su endpoint locali l'app indica se lo streaming è spento e prova `GET /models` per distinguere server occupato da server irraggiungibile dal browser (server spento, CORS, permesso «Rete locale»).
+- Test Vitest e Playwright desktop/mobile.
+
+
 ## 0.11.93 — 2026-11-12 (main) — Thinking dichiarato dal modello, streaming a inattività e esecuzione senza supervisione
 
 - **Thinking letto dal modello (LM Studio):** «Leggi /models» legge anche `GET /api/v1/models` (solo loopback, senza credenziali) e conserva per ogni modello i livelli di reasoning che dichiara e il suo livello predefinito. I menu «Reasoning» (endpoint, attività e override del libro) mostrano solo quei livelli, indicano cosa supporta il modello («Con Automatico usa il suo predefinito: High») e avvisano se un valore salvato non è supportato. Un livello non supportato **non viene inviato** (si omette il parametro) e l'attività registra la richiesta reale. Per endpoint diversi da LM Studio i livelli restano «non verificati» e tutti disponibili. I livelli letti non finiscono nei backup ZIP.

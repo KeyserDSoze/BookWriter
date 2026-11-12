@@ -6,11 +6,12 @@ import { validTokenCount } from "../domain/ai-usage";
 import { assertChatModelCapability } from "../domain/model-capabilities";
 import { EmptyProviderContentError, MalformedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
-import { chatReasoningEffort, chatStreamMode, chatStreamTimeoutSeconds, readChatCompletionStream,
+import { chatReasoningEffort, endpointStreamMode, chatStreamTimeoutSeconds, readChatCompletionStream,
   type AiStreamDelta } from "./ai-stream";
 import { lmStudioNativeProtocol, lmStudioNativeEndpoint, lmStudioNativeReasoning,
   readLmStudioNativeStream, type LmStudioPhase, type AiTransportStats } from "./lmstudio-native";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
+import { localEndpointTimeoutHint } from "./local-endpoint-probe";
 
 export type ModelAnswer = {
   text: string;
@@ -97,7 +98,7 @@ export async function callModel(
   const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
   const effort = chatReasoningEffort(effectiveReasoningEffort(kind,settings,book,endpoint,assignment.modelId));
   const protocol=lmStudioNativeProtocol(endpoint.apiProtocol);
-  const streaming = chatStreamMode(endpoint.streamMode) === "sse";
+  const streaming = endpointStreamMode(endpoint) === "sse";
   const streamTimeoutMs=chatStreamTimeoutSeconds(endpoint.streamTimeoutSeconds)*1000;
   if (options?.maxOutputTokens !== undefined &&
       (!Number.isSafeInteger(options.maxOutputTokens) ||
@@ -142,7 +143,15 @@ export async function callModel(
     }, signal, endpoint.headerTimeoutSeconds);
   } catch (e) {
     if (signal.aborted) throw new DOMException("Interrotto", "AbortError");
-    if (e instanceof ProviderHeaderTimeoutError) throw e;
+    if (e instanceof ProviderHeaderTimeoutError) {
+      // Free local endpoints only: a quick probe turns a bare timeout into a cause.
+      if (authMode === "none") {
+        const jsonMode = !streaming && protocol !== "lmstudio_native"
+          ? " Lo streaming è disattivato: in modalità JSON il server invia gli header solo a risposta completa, quindi un modello lento supera l'attesa. Attiva «Streaming SSE» nelle Impostazioni." : "";
+        throw new ProviderHeaderTimeoutError(jsonMode + await localEndpointTimeoutHint(base));
+      }
+      throw e;
+    }
     throw new Error("Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.");
   }
   if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");

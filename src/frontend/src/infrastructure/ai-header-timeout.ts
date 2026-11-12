@@ -7,8 +7,8 @@ export const MIN_CHAT_HEADER_TIMEOUT_SECONDS = 60;
 export const MAX_CHAT_HEADER_TIMEOUT_SECONDS = 1800;
 
 export class ProviderHeaderTimeoutError extends Error {
-  constructor() {
-    super("Tempo scaduto in attesa degli header del provider AI. Nessun testo è stato applicato; il consumo potrebbe essere sconosciuto.");
+  constructor(hint = "") {
+    super("Tempo scaduto in attesa degli header del provider AI. Nessun testo è stato applicato; il consumo potrebbe essere sconosciuto." + hint);
     this.name = "ProviderHeaderTimeoutError";
   }
 }

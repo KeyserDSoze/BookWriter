@@ -38,6 +38,12 @@ export function chatStreamMode(value: unknown): "off" | "sse" {
   if (value === "sse") return "sse";
   throw new Error("Modalità streaming AI non valida.");
 }
+/** Free local endpoints stream by default: in JSON mode the server sends headers only after the
+ * whole answer, so a slow local model would hit the header timeout. An explicit choice always wins. */
+export function endpointStreamMode(endpoint: { streamMode?: unknown; authMode?: unknown }): "off" | "sse" {
+  if (endpoint.streamMode === undefined && endpoint.authMode === "none") return "sse";
+  return chatStreamMode(endpoint.streamMode);
+}
 
 export async function readChatCompletionStream(
   response: Response,

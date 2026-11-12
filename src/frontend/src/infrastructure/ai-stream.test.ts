@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
 import { callModel } from "./ai";
-import { chatReasoningEffort, chatStreamMode, readChatCompletionStream } from "./ai-stream";
+import { chatReasoningEffort, chatStreamMode, endpointStreamMode, readChatCompletionStream } from "./ai-stream";
 
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
 
@@ -90,6 +90,10 @@ describe("SSE Chat Completions e controllo reasoning",()=>{
     vi.stubGlobal("fetch",fetcher);
     expect(chatReasoningEffort(undefined)).toBeUndefined();
     expect(chatStreamMode(undefined)).toBe("off");
+    expect(endpointStreamMode({authMode:"none"})).toBe("sse");
+    expect(endpointStreamMode({authMode:"none",streamMode:"off"})).toBe("off");
+    expect(endpointStreamMode({authMode:"api_key"})).toBe("off");
+    expect(endpointStreamMode({})).toBe("off");
     for(const wrong of [null,"extra-high","none",0,{}]){
       expect(()=>chatReasoningEffort(wrong)).toThrow(/Reasoning effort/);
       settings.endpoints[0]!.reasoningEffort=wrong as "low";

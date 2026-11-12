@@ -815,7 +815,7 @@ export default function App() {
                   </select>
                 </Field>
                 <Field label="Streaming Chat Completions">
-                  <select className="field" value={endpoint.streamMode??"off"}
+                  <select className="field" value={endpoint.streamMode??(endpoint.authMode==="none"?"sse":"off")}
                     onChange={e=>updateEndpoint(endpoint.id,{streamMode:e.target.value as "off"|"sse"})}>
                     <option value="off">Compatibilità JSON (nessuno streaming)</option>
                     <option value="sse">Streaming SSE (provider compatibile)</option>

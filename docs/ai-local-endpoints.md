@@ -55,3 +55,9 @@ I test configurano l'endpoint dall'interfaccia (compreso «Leggi /models»), att
 ## Versione
 
 La modalità localhost senza API key è inclusa nella **0.11.90**. La raggiungibilità reale del server LM Studio, CORS e i modelli caricati vanno verificati sul PC dell'autore.
+
+## Streaming predefinito e diagnosi dei timeout locali
+
+- Per gli endpoint locali senza chiave (`authMode:none`) lo streaming SSE è il default quando la scelta non è esplicita; «Compatibilità JSON» resta selezionabile. In modalità JSON il server invia gli header solo a risposta completa: un modello lento (es. ~2 tok/s con reasoning `xhigh`) supera l'attesa header e la richiesta viene interrotta.
+- Allo scadere dell'attesa header su un endpoint locale l'app prova `GET /models` e indica se il server è occupato oppure irraggiungibile dal browser (server spento, CORS, permesso «Rete locale» del browser per il sito pubblico).
+
