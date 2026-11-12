@@ -136,7 +136,7 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
   await expect(impact).toContainText("Attività registrate con orario successivo: 0");
   await expect(impact).toContainText("1 capitoli congelati");
   await expect(impact).toContainText("1 scene canoniche");
-  await expect(impact).toContainText("Non esistono snapshot storiche");
+  await expect(impact).toContainText("le versioni testuali canoniche esistono solo con opt-in locale");
   await expect(list).toHaveCount(1);
   await expect(list.first()).toContainText("Revisione conclusiva");
   await expect(focus.getByRole("button",{name:"Task precedente"})).toBeDisabled();
