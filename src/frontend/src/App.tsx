@@ -5,6 +5,7 @@ import {
   RefreshCw, Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
+import { usePwaInstall } from "./application/pwa";
 import { AutopilotRunner } from "./application/autopilot";
 import { recordAuthorIntervention } from "./application/author-intervention";
 import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
@@ -190,6 +191,7 @@ export default function App() {
   const runningActivity = current?.status === "running" ? activities.find(x => x.status === "running") : undefined;
   const runningHere = !!current && runnerBookId === current.id;
   useWakeLock(runningHere && current?.status === "running");
+  const pwa = usePwaInstall();
   const nextStep = useMemo(() => current ? describeNextAutopilotStep(current) : undefined, [current]);
   const progressInfo = useMemo(() => current ? bookProgress(current) : undefined, [current]);
   const pendingFused = current?.editorialReviewSceneIds?.length ?? 0;
@@ -525,6 +527,8 @@ export default function App() {
           <p className="muted text-sm">Progetto local-first · GitHub autosync opzionale <span className="sm:hidden">· v{packageInfo.version}</span></p>
         </div>
         <div className="flex items-center gap-2">
+          {pwa.canInstall && <button className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-600/60 px-3 text-sm font-semibold text-emerald-500"
+            onClick={() => void pwa.install()}><Download size={18}/> Installa app</button>}
           <button className="flex size-11 items-center justify-center rounded-lg border border-slate-400 disabled:opacity-50 dark:border-slate-700" aria-label="Cambia tema chiaro/scuro"
             disabled={!ready}
             onClick={() => void toggleTheme()}>

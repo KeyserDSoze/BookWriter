@@ -33,6 +33,13 @@ Se la revisione cambia, il risultato AI viene **scartato**. Lo stato, le scene e
 
 Questo controllo protegge la concorrenza **locale**; non sostituisce il writer lease GitHub, non certifica un import malformato con timestamp riciclato né garantisce la correttezza narrativa. [ADR 0125](../ADR/0125-autopilot-ai-commit-cas.md) · [issue #142](https://github.com/KeyserDSoze/BookWriter/issues/142).
 
+## App installabile e lavoro in background (ADR 0150)
+
+- Puoi installare BookWriter come app (pulsante «Installa app» nell'intestazione, oppure il menu del browser; su iPhone «Aggiungi a Home»). Si apre in una finestra propria e l'app si riapre anche offline.
+- **Non è un lavoro in background.** L'autopilot lavora finché la pagina o l'app resta aperta; mentre lavora tiene lo schermo acceso se l'app è in primo piano.
+- Sul PC puoi usare altre finestre: la risposta del modello continua ad arrivare. Evita sospensione del PC e il risparmio memoria del browser per questa scheda. Se la scheda viene chiusa o scartata, il libro risulta in pausa e riprende dal checkpoint.
+- Su smartphone, con app in secondo piano o schermo spento, il sistema sospende la pagina: tieni l'app aperta in primo piano. Un modello su localhost (LM Studio) non è raggiungibile dal telefono.
+
 ## State machine
 
 `idle -> planning -> running -> pause-requested -> paused -> running`

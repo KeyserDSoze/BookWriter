@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## 0.11.95 — 2026-11-12 (main) — App installabile (PWA) e guscio offline (ADR 0150)
+
+- **Installabile** su PC e smartphone: manifest standalone, icona con il fantasmino (anche come favicon) e pulsante «Installa app» (dove il browser lo consente). Richiesta di storage persistente quando installata.
+- **Guscio offline:** un service worker minimo serve da cache solo file statici same-origin; POST e chiamate a provider AI/GitHub/cloud non passano dal worker. Attivo solo in produzione.
+- **Limite dichiarato:** non è un lavoro in background. L'autopilot gira finché la pagina è aperta (Wake Lock a schermo acceso); su smartphone in secondo piano il sistema sospende la pagina. Un vero lavoro continuo richiederebbe un runner server (ADR separato).
+- Smoke test su manifest/icone/worker.
+
+
 ## 0.11.94 — 2026-11-12 (main) — Streaming predefinito sugli endpoint locali e diagnosi dei timeout
 
 - **Causa dei timeout «sempre» su LM Studio:** senza streaming (modalità JSON) il server invia gli header solo a risposta completa; con un modello lento (~2 tok/s) e reasoning alto la risposta superava i 300 s e la richiesta veniva interrotta con 0 byte ricevuti. Verificato nei log di LM Studio (richiesta senza `stream:true` chiusa dal client dopo 5 min esatti).
