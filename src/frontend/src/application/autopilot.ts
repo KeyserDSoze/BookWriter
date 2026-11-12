@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import { callModel } from "../infrastructure/ai";
+import { addAiDelta, currentLiveAi, finishLiveAi, markAiHeader, saveAiTrace, startLiveAi } from "../infrastructure/ai-observability";
 import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
 import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
@@ -559,10 +560,27 @@ export class AutopilotRunner {
           if (quote) started.priceRateSnapshot = quote;
           // Persist the request attempt BEFORE network fetch: an interrupted browser
           // must not misrepresent a possibly billed call as a free operation.
+          if(settings.inspectAiRequests) {
+            // Explicitly local, sensitive opt-in. Never stored in Activity
+            // or exported to ZIP, GitHub or sync.
+            await saveAiTrace({
+              activityId:started.id,bookId,createdAt:started.createdAt,
+              endpointId:assignment.endpointId,modelId:assignment.modelId,
+              systemPrompt,userPrompt:work.prompt,truncated:false,
+            });
+          }
           started.aiRequested = true;
           await saveActivity(started);
-          const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,
-            preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : undefined);
+          startLiveAi({
+            activityId:started.id,bookId,title:work.title,
+            endpointId:assignment.endpointId,modelId:assignment.modelId,
+            inspect:settings.inspectAiRequests === true,
+          });
+          const result = await callModel(work.kind, systemPrompt, work.prompt, settings, book, signal,{
+            ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
+            onHeaders:()=>markAiHeader(started.id),
+            onProgress:delta=>addAiDelta(started.id,delta),
+          });
           // A provider reply may carry usage even when the editorial schema,
           // freshness gate or writer lease rejects its text. Capture the
           // observed counts before validation so the failed/cancelled Activity
@@ -579,14 +597,26 @@ export class AutopilotRunner {
           work.apply(latest, result.text);
           started.status = "succeeded"; started.endedAt = new Date().toISOString();
           started.summary = shortSummary(result.text); started.output = result.text;
+          if(settings.inspectAiRequests) {
+            await saveAiTrace({
+              activityId:started.id,bookId,createdAt:started.createdAt,
+              endpointId:assignment.endpointId,modelId:assignment.modelId,
+              systemPrompt,userPrompt:work.prompt,response:result.text,
+              reasoning:currentLiveAi()?.activityId===started.id
+                ? currentLiveAi()?.reasoningPreview : undefined,
+              truncated:false,
+            });
+          }
           // One more fencing check before canonizing output in IndexedDB.
           await guard.assertActive();
           // The revision checked after the provider call must still be
           // current inside the SAME IndexedDB transaction as canon + audit.
           // A non-cooperating writer can update after getBook above.
           await saveBookAndActivity(latest, started, book.updatedAt);
+          finishLiveAi(started.id,"completata");
           await onUpdate();
         } catch (error) {
+          finishLiveAi(started.id,signal.aborted?"interrotta":"rifiutata");
           // HTTP 200 + valid JSON can report usage with empty or malformed
           // content. Keep the observed counters on failure, without approving
           // a report, chapter or remediation.
