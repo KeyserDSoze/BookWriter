@@ -1,5 +1,12 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## Raggruppare task della stessa sessione — #163
+
+In **Attività**, oltre ai filtri, puoi scegliere **Raggruppa per sessione (run)**. I task con lo stesso `runId` appaiono vicini, preservando internamente l'ordine cronologico scelto; le sessioni sono ordinate dalla prima attività visibile. Vecchie attività senza `runId` rimangono separate. Il raggruppamento avviene **dopo** i filtri, senza modificare il libro né inviare richieste AI; viene disattivato con **Azzera filtri** o cambiando libro.
+
+Ogni intestazione mostra quanti task appartengono alla sessione, una **stima € parziale** solo con tariffa storica valida e contatori token completi, più il numero di tentativi incerti. Senza report utilizzabili appare «non determinabile», mai un falso zero. Anche errori e interruzioni possono avere costi; non è una fattura né un totale. Si consultano solo metadati e non prompt, output, reasoning o tracce IndexedDB; per ispezionare le richieste integrali rimane necessario il consenso locale. La Dashboard mantiene gli ultimi otto task. [ADR 0137](../ADR/0137-task-run-grouping.md).
+
+
 ## 0. LM Studio e modelli lenti: perché 0 caratteri non significa fermo
 
 Muse Glimmer può produrre molti token di reasoning prima di una risposta leggibile. In questo periodo il browser può mostrare 0 caratteri; allo scadere del vecchio timeout SSE di dieci minuti LM Studio può scrivere “Client disconnected”, senza che il modello fosse davvero inattivo.

@@ -3,6 +3,7 @@ import type { Activity } from "../domain/types";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import {
   completedTaskDurationSeconds, estimatedTaskCostEur, filterTaskTimeline,
+  groupTaskTimelineByRun,
   formatTaskDuration, summarizeTaskTimeline,
   type TimelineOrder, type TimelineStatus,
 } from "../domain/task-timeline";
@@ -33,6 +34,7 @@ export function AiTaskWorkspace({
   const [statusFilter,setStatusFilter]=useState<TimelineStatus>("all");
   const [phaseFilter,setPhaseFilter]=useState("");
   const [order,setOrder]=useState<TimelineOrder>("newest");
+  const [groupByRun,setGroupByRun]=useState(false);
   // A request may settle after changing books, hiding inspection or choosing
   // another task. Never display stale local prompts or responses.
   const inspectionSequence=useRef(new AiTraceReadFence());
@@ -41,6 +43,9 @@ export function AiTaskWorkspace({
   const filtered=useMemo(()=>compact?[]:filterTaskTimeline(activities,{
     query:search,status:statusFilter,phase:phaseFilter,order,
   }),[activities,compact,search,statusFilter,phaseFilter,order]);
+  const runGroups=useMemo(()=>!compact&&groupByRun
+    ?groupTaskTimelineByRun(filtered):[],[compact,groupByRun,filtered]);
+  const runHeaders=new Map(runGroups.map(group=>[group.activities[0].id,group]));
   useEffect(()=>{
     const timer=setInterval(()=>setClock(Date.now()),1000);
     return ()=>clearInterval(timer);
@@ -49,9 +54,11 @@ export function AiTaskWorkspace({
     inspectionSequence.current.invalidate();
     setChosen("");setTrace(null);setMessage("");
     setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");
+    setGroupByRun(false);
     return ()=>{inspectionSequence.current.invalidate();};
   },[bookId,inspectionEnabled]);
-  const recent=compact?activities.slice(0,8):filtered;
+  const recent=compact?activities.slice(0,8):
+    groupByRun?runGroups.flatMap(group=>group.activities):filtered;
   const active=live?.bookId===bookId?live:null;
   const elapsed=active?Math.max(0,Math.floor(((active.endedAt??clock)-active.startedAt)/1000)):0;
   const inspect=async(id:string)=>{
@@ -167,17 +174,42 @@ export function AiTaskWorkspace({
           </select>
         </label>
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" aria-label="Raggruppa task per sessione"
+          checked={groupByRun} onChange={e=>setGroupByRun(e.target.checked)}/>
+        Raggruppa per sessione (run)
+      </label>
+      {groupByRun&&<p className="muted text-xs">
+        Sessioni ordinate dal primo task visibile; ordine scelto conservato all'interno
+        di ciascuna sessione. Task senza ID sessione separati.
+      </p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p role="status" className="muted text-xs">{filtered.length} task trovati su {activities.length}</p>
         <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-xs dark:border-slate-700"
-          onClick={()=>{setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");}}>
+          onClick={()=>{setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");setGroupByRun(false);}}>
           Azzera filtri
         </button>
       </div>
     </div>}
     {!activities.length ? <p className="muted mt-3 text-sm">Nessun task ancora eseguito per questo libro.</p> :
       <ol className="mt-4 space-y-2" aria-label="Storico task">
-        {recent.map((item,index)=><li key={item.id}>
+        {recent.map((item,index)=>{
+          const group=runHeaders.get(item.id);
+          return <li key={item.id}>
+          {group&&<div role="group" aria-label={`Sessione ${group.runId??"senza identificativo"}`}
+            className="mb-2 rounded-lg border border-slate-400/50 p-3 text-sm">
+            <p className="font-semibold">Sessione: <span className="break-all">
+              {group.runId??"senza ID (task isolato)"}</span> · {group.summary.total} task</p>
+            <p className="muted text-xs">
+              Stima € parziale: {group.summary.pricedReports>0
+                ?new Intl.NumberFormat("it-IT",{
+                  minimumFractionDigits:4,maximumFractionDigits:6,
+                }).format(group.summary.knownEstimatedEur)
+                :"non determinabile"} · {group.summary.pricedReports} richieste valorizzate,
+              {" "}{group.summary.uncertainAttempts} tentativi incerti.
+              Non è una fattura né una stima del totale reale.
+            </p>
+          </div>}
           <details className="rounded-lg border border-slate-300 p-3 dark:border-slate-700" open={item.status==="running"}>
             <summary className="cursor-pointer text-sm">
               <span className="font-semibold">{index+1}. {item.title}</span>
@@ -228,7 +260,7 @@ export function AiTaskWorkspace({
               <p className="muted text-xs">La revisione usa il sistema di correzioni supervisionate del libro attuale: non ripristina automaticamente il checkpoint storico. Il vero rewind controllato è tracciato nella issue #158.</p>
             </div>
           </details>
-        </li>)}
+        </li>;})}
       </ol>}
     {!compact&&activities.length>0&&recent.length===0&&<p className="muted mt-3 text-sm">
       Nessun task corrisponde ai filtri attivi. Modifica i filtri oppure premi «Azzera filtri».

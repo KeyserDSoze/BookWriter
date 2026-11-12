@@ -2,6 +2,12 @@
 
 Queste regole valgono per **tutta** la repository. Leggi README, documentazione, ADR e feature prima di modificare codice. Interfaccia, documentazione, ADR e messaggi destinati all'autore sono in **italiano**; identificatori del codice in inglese.
 
+## Raggruppamento sessioni task — #163 / ADR 0137
+
+- Nel registro Attività completo, il raggruppamento facoltativo per `runId` segue i filtri e l'ordine correnti, senza modificare gli oggetti `Activity`. Gruppi ordinati dalla prima occorrenza, ordine interno preservato; task legacy senza run non aggregati.
+- Solo metadati: mai cercare o leggere `Activity.output`, prompt, reasoning o `AiLocalTrace`. Costi per sessione **parziali** solo con snapshot tariffario e usage completo, tentativi incerti distinti e nessuna fattura totale inventata. Reset a cambio libro/consenso e con «Azzera filtri». Dashboard sempre massimo otto task.
+- Nessuna chiamata AI, mutazione canone, rewind o sync. Test Vitest e Playwright desktop/mobile, CI/Pages/cleanup sulla medesima HEAD. [ADR 0137](ADR/0137-task-run-grouping.md) · [Guida](docs/ai-task-inspection.md).
+
 ## Obiettivo
 
 ### Timeline interrogabile, metriche verificabili e isolamento locale — #162 / ADR 0136

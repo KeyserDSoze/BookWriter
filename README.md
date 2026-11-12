@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Sessioni task raggruppabili (#163, prima della release numerata):** in Attività si possono raggruppare su richiesta i task per sessione `runId`, mantenendo filtri, stime *parziali* e tentativi incerti; attività prive di ID restano separate. Nessuna richiesta aggiuntiva al provider e nessuna modifica del canone. [ADR 0137](ADR/0137-task-run-grouping.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Registro task avanzato (#162):** in Attività cerca per titolo, fase, motivo, endpoint/modello e run; filtra per stato/fase, ordina cronologicamente e consulta durate registrate, stime indicative solo con tariffa storica e usage completo, con conteggio dei tentativi incerti. Il caricamento asincrono di prompt e risposte locali è isolato tra libri. [Guida](docs/ai-task-inspection.md) · [ADR 0136](ADR/0136-task-timeline-filters-accounting.md).
 
 

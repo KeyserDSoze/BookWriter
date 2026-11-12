@@ -81,6 +81,31 @@ export function summarizeTaskTimeline(activities:readonly Activity[]):TaskTimeli
   return summary;
 }
 
+/** Display-only grouping: no prompts, output or local traces. */
+export interface TaskRunGroup {
+  key:string;
+  runId:string|null;
+  activities:Activity[];
+  summary:TaskTimelineSummary;
+}
+
+/** Preserves filtered order, isolating legacy activities without run IDs. */
+export function groupTaskTimelineByRun(rows:readonly Activity[]):TaskRunGroup[]{
+  const groups=new Map<string,{runId:string|null;activities:Activity[]}>();
+  rows.forEach((activity,index)=>{
+    const runId=typeof activity.runId==="string"&&activity.runId.trim()
+      ?activity.runId:null;
+    const key=runId===null?`unassigned:${index}`:`run:${runId}`;
+    const previous=groups.get(key);
+    if(previous)previous.activities.push(activity);
+    else groups.set(key,{runId,activities:[activity]});
+  });
+  return [...groups.entries()].map(([key,group])=>({
+    key,runId:group.runId,activities:group.activities,
+    summary:summarizeTaskTimeline(group.activities),
+  }));
+}
+
 export function formatTaskDuration(seconds:number):string {
   if(!Number.isSafeInteger(seconds)||seconds<0)throw new Error("Durata task non valida.");
   if(seconds<60)return seconds+" s";

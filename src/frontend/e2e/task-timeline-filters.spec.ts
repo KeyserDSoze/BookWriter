@@ -24,7 +24,7 @@ async function openStore(page:Page,bookId:string){
         priceRateSnapshot:{endpointId:"local",modelId:"meta/muse-glimmer",
           inputEurPerMillion:2,outputEurPerMillion:4},
         output:"SEGRETO-DA-NON-USARE-NELLA-RICERCA"},
-      {id:"task-middle",bookId:id,runId:"run-two",phase:"prose",title:"Scrittura scena",
+      {id:"task-middle",bookId:id,runId:"run-one",phase:"prose",title:"Scrittura scena",
         reason:"Scrivere una scena",nextStep:"Controllo",status:"failed",
         createdAt:"2026-11-12T08:00:00.000Z",endedAt:"2026-11-12T08:00:50.000Z",
         endpointId:"local",modelId:"meta/muse-glimmer",aiRequested:true},
@@ -101,6 +101,17 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
   await expect(list.first()).toContainText("Brainstorming iniziale");
   await timeline.getByRole("searchbox",{name:"Cerca nei task"}).fill("meta/muse-glimmer");
   await expect(list).toHaveCount(3);
+  await timeline.getByRole("checkbox",{name:"Raggruppa task per sessione"}).check();
+  const one=timeline.getByRole("group",{name:"Sessione run-one"});
+  const three=timeline.getByRole("group",{name:"Sessione run-three"});
+  await expect(one).toContainText("2 task");
+  await expect(one).toContainText("tentativi incerti");
+  await expect(one).toContainText("0,0004");
+  await expect(three).toContainText("1 task");
+  await expect(list).toHaveCount(3);
+  await expect(list.nth(1)).toContainText("Scrittura scena");
+  await timeline.getByRole("button",{name:"Azzera filtri"}).click();
+  await expect(timeline.getByRole("group",{name:"Sessione run-one"})).toHaveCount(0);
 });
 
 test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{

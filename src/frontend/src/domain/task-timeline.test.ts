@@ -2,7 +2,7 @@ import { describe,expect,it } from "vitest";
 import { type Activity } from "./types";
 import {
   completedTaskDurationSeconds,estimatedTaskCostEur,filterTaskTimeline,
-  formatTaskDuration,summarizeTaskTimeline,
+  formatTaskDuration,groupTaskTimelineByRun,summarizeTaskTimeline,
 } from "./task-timeline";
 const t=(id:string,override:Partial<Activity>={}):Activity=>({
   id,bookId:"book",runId:"run-1",phase:"brainstorm",title:"Brainstorming "+id,
@@ -34,6 +34,34 @@ describe("Timeline task: filtri, durata e stime verificabili",()=>{
       .toEqual([]);
     expect(filterTaskTimeline(entries,{...filters,query:"run-1"})).toHaveLength(3);
     expect(entries.map(x=>x.id)).toEqual(["a","b","c"]); // sort never mutates source
+  });
+  it("raggruppa run non contigui e isola task senza sessione",()=>{
+    const entries=[
+      t("a",{runId:"run-1",createdAt:"2026-11-12T07:00:00Z"}),
+      t("b",{runId:"run-2",createdAt:"2026-11-12T08:00:00Z",
+        status:"failed",outputTokens:undefined}),
+      t("c",{runId:"run-1",createdAt:"2026-11-12T09:00:00Z"}),
+      t("d",{runId:"",createdAt:"2026-11-12T10:00:00Z"}),
+      t("e",{runId:"",createdAt:"2026-11-12T11:00:00Z"}),
+    ];
+    const sorted=filterTaskTimeline(entries,{
+      query:"",status:"all",phase:"",order:"newest",
+    });
+    const groups=groupTaskTimelineByRun(sorted);
+    expect(groups.map(group=>group.activities.map(a=>a.id)))
+      .toEqual([["e"],["d"],["c","a"],["b"]]);
+    expect(groups.map(group=>group.runId)).toEqual([null,null,"run-1","run-2"]);
+    expect(groups[2].summary).toMatchObject({
+      total:2,pricedReports:2,uncertainAttempts:0,
+    });
+    expect(groups[2].summary.knownEstimatedEur).toBeCloseTo(0.0008);
+    expect(groups[3].summary).toMatchObject({
+      total:1,pricedReports:0,uncertainAttempts:1,
+    });
+    expect(entries.map(a=>a.id)).toEqual(["a","b","c","d","e"]);
+    expect(groupTaskTimelineByRun(filterTaskTimeline(entries,{
+      query:"",status:"failed",phase:"",order:"oldest",
+    })).map(group=>group.activities[0].id)).toEqual(["b"]);
   });
   it("distingue durata reale e tempi mancanti o corrotti",()=>{
     expect(completedTaskDurationSeconds(t("a"))).toBe(61);
