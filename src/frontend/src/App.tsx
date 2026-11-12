@@ -577,7 +577,13 @@ export default function App() {
         <Section title="Trasparenza e ispezione delle richieste AI" description="Le tracce complete contengono prompt, testi del romanzo e possibili segreti: soltanto con consenso esplicito vengono conservate nel database locale del browser, mai nei ZIP o su GitHub.">
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests===true}
-              onChange={e=>void persistSettings({...settings,inspectAiRequests:e.target.checked})}/>
+              onChange={e=>{
+                const next={...settingsRef.current,inspectAiRequests:e.target.checked};
+                // Controlled checkbox must update synchronously; IndexedDB write is async.
+                setSettings(next);
+                void saveSettings(next).then(()=>setNotice("Preferenza d'ispezione salvata localmente."))
+                  .catch(()=>setNotice("Impossibile salvare la preferenza d'ispezione."));
+              }}/>
             <span>Ispezione locale richieste AI: mostra e conserva i messaggi system/user e le risposte dei prossimi task. Disattivata per impostazione predefinita, non retroattiva.</span>
           </label>
           <div className="mt-3 flex flex-wrap gap-2">

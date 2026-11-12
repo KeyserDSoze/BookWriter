@@ -82,7 +82,7 @@ export function AiTaskWorkspace({
               <p><b>Fase:</b> {item.phase} · <b>Esito:</b> {status(item.status)}</p>
               {item.endpointId&&<p className="muted text-xs">Endpoint: {item.endpointId} · Modello: {item.modelId??"non configurato"} · Richiesta: {item.aiRequested?"tentata":"non inviata"}</p>}
               {item.inputTokens!==undefined&&<p className="text-xs">Token input: {item.inputTokens}, output: {item.outputTokens??"N/D"}</p>}
-              {item.error&&<p className="text-sm text-red-600 dark:text-red-300">{item.error}</p>}
+              {item.error&&!compact&&<p className="text-sm text-red-600 dark:text-red-300">{item.error}</p>}
               {item.output&&<details className="rounded border border-slate-400/30 p-2">
                 <summary className="cursor-pointer text-sm font-semibold">Risposta AI confermata</summary>
                 <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{item.output}</pre>
