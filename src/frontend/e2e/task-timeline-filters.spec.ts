@@ -48,7 +48,7 @@ async function createBook(page:Page,title:string){
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Un libro per bambini con tre capitoli e due scimmie.");
   await page.getByRole("button",{name:"Crea libro"}).click();
-  return page.evaluate(async()=>{
+  return page.evaluate(async(title)=>{
     const db=await new Promise<IDBDatabase>((resolve,reject)=>{
       const req=indexedDB.open("bookwriter");
       req.onsuccess=()=>resolve(req.result);
@@ -62,7 +62,7 @@ async function createBook(page:Page,title:string){
     });
     db.close();
     return records.find(x=>x.title===title)!.id;
-  });
+  },title);
 }
 test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({page})=>{
   await page.goto("/");
