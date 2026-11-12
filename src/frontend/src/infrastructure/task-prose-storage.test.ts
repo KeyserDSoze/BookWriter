@@ -140,6 +140,11 @@ describe("Storage locale opt-in e retention selettiva #168",()=>{
     await expect(setTaskProseLimit(book.id,1.5)).rejects.toThrow(/Limite/);
     await setTaskProseLimit(book.id,null);
     expect((await loadTaskProseInventory(book.id))!.limitMiB).toBeNull();
+    // Ledger does not exist until a limit is configured. Initializing it
+    // from legacy opt-in copies gives revocation a concrete index to reset.
+    await setTaskProseLimit(book.id,1);
+    expect(await (await getDb()).get("meta",taskProseUsageKey(book.id)))
+      .toMatchObject({records:1});
     await setTaskProseConsent(book.id,false);
     await expect((await getDb()).get("meta",taskProseUsageKey(book.id)))
       .resolves.toMatchObject({records:0,estimatedBytes:0});
