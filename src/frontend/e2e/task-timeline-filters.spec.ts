@@ -316,6 +316,102 @@ test("checkpoint strutturale salvato insieme al task: confronto locale e nessun 
   expect(saved).toBe("prose");
 });
 
+test("checkpoint narrativo integrale opt-in: capture locale, metadati e revoca, desktop/mobile",async({page})=>{
+  await page.goto("/");
+  const bookId=await createBook(page,"Libro checkpoint narrativo privato");
+  const nav=page.getByRole("navigation",{
+    name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
+  });
+  await nav.getByRole("button",{name:"Attività"}).click();
+  const panel=page.getByRole("region",{name:"Checkpoint narrativi integrali per rewind"});
+  await expect(panel).toContainText("Stato consenso integrale: disattivato");
+  await expect(panel).toContainText("32.00 MiB");
+  await expect(panel).toContainText("128.00 MiB");
+  await panel.getByRole("button",{
+    name:"Attiva checkpoint narrativi integrali per questo libro",
+  }).click();
+  await expect(panel).toContainText("Stato consenso integrale: attivo");
+  await page.evaluate(async id=>{
+    const {getBook,saveBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
+    const current=await getBook(id);
+    if(!current)throw Error("Libro mancante");
+    const prepared=structuredClone(current);
+    prepared.memory.secrets["rivelazione"]="SEGRETO_INTEGRALE_MEMORIA_PRIVATA";
+    prepared.chapters=[{id:"chapter-full",number:1,title:"Capitolo",
+      purpose:"Trama",frozenAt:"2026-11-12T10:00:00.000Z",
+      scenes:[{id:"canon-full",number:1,title:"Scena",
+        objective:"Continuità",text:"TESTO_PRIVATO_CANON_PRE",status:"canon"},
+      {id:"draft-full",number:2,title:"Bozza",objective:"Alternativa",
+        text:"TESTO_PRIVATO_DRAFT_PRE",status:"draft"}]}];
+    await saveBook(prepared,false,current.updatedAt);
+    const before=await getBook(id);
+    if(!before)throw Error("Nessuna revisione");
+    const after=structuredClone(before);
+    after.chapters[0].scenes[0].text="TESTO_PRIVATO_CANON_POST";
+    after.chapters[0].scenes[1].text="TESTO_PRIVATO_DRAFT_POST";
+    after.chapters[0].frozenAt=undefined;
+    after.memory.secrets["rivelazione"]="SEGRETO_INTEGRALE_POST";
+    await saveBookAndActivity(after,{
+      id:"task-book-snap-"+id,bookId:id,runId:"run",
+      phase:"prose",status:"succeeded",title:"Scrittura snapshot completa",
+      reason:"Test",nextStep:"Rilettura",createdAt:"2026-11-12T11:00:00.000Z",
+      output:"OUTPUT_AI_PRIVATO_NO_SNAPSHOT",
+    },before.updatedAt);
+  },bookId);
+  await page.reload();
+  await nav.getByRole("button",{name:"Attività"}).click();
+  await expect(panel).toContainText("Stato consenso integrale: attivo");
+  await panel.getByRole("button",{name:"Aggiorna spazio checkpoint narrativi"}).click();
+  await expect(panel.getByLabel("Inventario checkpoint narrativi"))
+    .toContainText("Coppie conservate: 1");
+  const timeline=page.getByRole("region",{name:"Timeline task AI"});
+  await timeline.getByRole("button",{name:"Apri scheda task"}).click();
+  await panel.getByRole("button",{
+    name:"Verifica checkpoint narrativo integrale del task",
+  }).click();
+  const summary=panel.getByRole("region",{
+    name:"Metadati checkpoint narrativo integrale",
+  });
+  await expect(summary).toContainText("Checkpoint integrale locale presente");
+  await expect(summary).toContainText("Scene (incluse bozze): 2 prima, 2 dopo");
+  await expect(summary).toContainText("Capitoli congelati: 1 prima, 0 dopo");
+  for(const secret of ["SEGRETO_INTEGRALE","TESTO_PRIVATO",
+    "OUTPUT_AI_PRIVATO_NO_SNAPSHOT"])
+    await expect(panel).not.toContainText(secret);
+  await panel.getByRole("button",{
+    name:"Richiedi revoca checkpoint narrativi integrali",
+  }).click();
+  await expect(panel.getByLabel("Conferma revoca checkpoint narrativi"))
+    .toContainText("Confermi?");
+  await panel.getByRole("button",{
+    name:"Annulla revoca integrale",
+  }).click();
+  await expect(summary).toBeVisible();
+  await panel.getByRole("button",{
+    name:"Richiedi revoca checkpoint narrativi integrali",
+  }).click();
+  await panel.getByRole("button",{
+    name:"Conferma revoca ed elimina checkpoint integrali",
+  }).click();
+  await expect(panel).toContainText("Stato consenso integrale: disattivato");
+  await expect(summary).toHaveCount(0);
+  const persisted=await page.evaluate(async(id)=>{
+    const {getDb,getBook}=await import("/src/infrastructure/db.ts");
+    const db=await getDb();
+    const taskId="task-book-snap-"+id;
+    return {
+      snapshot:await db.get("meta","task-book:v1:"+id+":"+taskId),
+      structural:await db.get("meta","task-structure:v1:"+taskId),
+      activity:await db.get("activities",taskId),
+      text:(await getBook(id))?.chapters[0]?.scenes[0]?.text,
+    };
+  },bookId);
+  expect(persisted.snapshot).toBeUndefined();
+  expect(persisted.structural).toBeDefined();
+  expect(persisted.activity).toBeDefined();
+  expect(persisted.text).toBe("TESTO_PRIVATO_CANON_POST");
+});
+
 test("copie canoniche opt-in: confronto esatto e revoca locale, desktop/mobile",async({page})=>{
   await page.goto("/");
   const bookId=await createBook(page,"Libro con copie canoniche consensuali");

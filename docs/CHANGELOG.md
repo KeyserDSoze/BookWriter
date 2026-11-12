@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## Non rilasciato — #172 (checkpoint integrali narrativi opt-in per futuri task)
+
+- Nuovo consenso **per libro, separato** dalle copie di sola prosa #167 e disattivato per default: ogni nuovo `saveBookAndActivity` riuscito registra **prima/dopo** la totalità del contenuto narrativo BookProject, incluse bozze, testo canonico, brief, memoria, segreti narrativi, freeze e decisioni autoriali, ma **non** i permessi `remote` GitHub o l'output dei task. Lettura consenso e `meta.add` sono dentro il transaction CAS di book/activity/outbox; duplicati e errori falliscono senza commit parziali.
+- **Cap hard obbligatorio**, senza retention automatica né troncamenti: 32 MiB per coppia, 128 MiB cumulativi per libro calcolati con JSON UTF-8 stimato e ledger locale atomico; il browser può esaurire quota fisica anche sotto cap. Revoca esplicita **a due decisioni** elimina flag/coppie/contatore solo per quel libro, non scene, attività, checkpoint strutturali o opt-in prosa distinto.
+- In Attività inventario locale e ispezione del task mostrano **solo metadati, revisioni e conteggi** senza esporre la prosa privata. Copie integrali mai in ZIP, sync GitHub o richieste AI. Per task legacy senza consenso nessuna ricostruzione fittizia. Non sono un rewind/undo/restore: parent #158 resta aperta per scelta dello stato, approvazione, backup storico e controllo downstream. [ADR 0146](../ADR/0146-opt-in-whole-book-task-checkpoints.md).
+
 ## Non rilasciato — #171 (fork locale supervisionato da ZIP sicurezza verificato)
 
 - Nel pannello ZIP #170, **solo dopo aver verificato il file realmente scaricato**, l'autore può preparare e **confermare una seconda volta** un fork locale del **libro attuale**. Nessun fork dopo il solo download, nessuna scelta già approvata per default. Al click definitivo SHA-256/schema e Web Lock sono ricontrollati; libro sorgente, activityId, stato writer e revisione CAS vengono verificati **nella medesima transazione readwrite** che inserisce il fork; `IDB.add` per impedire sovrascritture di ID collisionati.

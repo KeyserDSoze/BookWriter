@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Activity, BookProject } from "../domain/types";
 import { RewindSafetyBackupPanel } from "./RewindSafetyBackupPanel";
+import { TaskBookHistoryPanel } from "./TaskBookHistoryPanel";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import {
   compareBookStructure, type TaskStructuralCheckpoint,
@@ -451,6 +452,8 @@ export function AiTaskWorkspace({
         {storageMessage&&<p role="status" className="muted text-xs">{storageMessage}</p>}
       </div>}
     </section>}
+    {!compact&&<TaskBookHistoryPanel key={bookId} bookId={bookId}
+      focusedTaskId={focused?.id??null}/>}
     <p className="muted mt-3 text-sm">Ogni attività è separata e ispezionabile. Un output in streaming non modifica il libro finché non supera i controlli di validazione e viene confermato come canonico.</p>
     {!compact&&focused&&<div role="region" aria-label="Scheda task dedicata"
       className="mt-4 space-y-3 rounded-xl border border-slate-400/50 p-4">

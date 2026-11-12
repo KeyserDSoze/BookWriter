@@ -6,6 +6,9 @@
 
 ## Funzionalità disponibili
 
+- **Checkpoint storici narrativi integrali per task (#172, non ancora release numerata):** consenso **separato e disattivato di default**, attivabile in Attività per il solo libro scelto. I successivi task riusciti conservano in IndexedDB una coppia **pre/post** dell'intero contenuto narrativo del libro (canon, bozze, brief, memoria, decisioni e freeze), **senza remote GitHub, credenziali, settings o output Activity**. Un limite obbligatorio di **32 MiB per coppia e 128 MiB per libro**, calcolato su stima JSON UTF-8, blocca atomically il commit se superato: nessun testo troncato e nessuna cancellazione automatica. Inventario e controllo task espongono **solo conteggi e revisioni**; la revoca richiede due clic ed elimina tutte le copie integrali del libro, senza toccare manoscritto o audit. Non sono in ZIP/cloud, **non** sono copie retroattive, e **non** consentono ancora undo/rewind. [ADR 0146](ADR/0146-opt-in-whole-book-task-checkpoints.md) · [Guida](docs/ai-task-inspection.md).
+
+
 - **Fork locale supervisionato da ZIP verificato (#171, non ancora release numerata).** Dopo aver generato e verificato il file di sicurezza del **solo libro corrente** (#170), in **Attività → Scheda task** puoi «Prepara fork locale» e poi «Conferma creazione». Il sistema rilegge il file e controlla Web Lock, SHA-256, schema e **CAS nella transazione che crea il libro**; non procede se la revisione originale cambia. Crea un **nuovo libro indipendente** in pausa, con nuovo ID, cronologia importata, remote GitHub disattivato e consensi sensibili revocati, lasciando **intatti** originale e altri libri. La copia è **dello stato corrente, non del task storico**; non è undo/rewind, né sblocca freeze o valida dipendenze narrative. [ADR 0145](ADR/0145-supervised-current-book-fork.md) · [Guida](docs/ai-task-inspection.md).
 
 
