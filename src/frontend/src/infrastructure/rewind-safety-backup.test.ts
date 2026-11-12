@@ -84,7 +84,8 @@ describe("Copia di sicurezza del solo libro per rewind futuro (#170)",()=>{
     const archive=await prepareBookSafetyBackup(book.id,book.updatedAt,task.id);
     const bytes=new Uint8Array(await archive.blob.arrayBuffer());
     const changed=bytes.slice();
-    changed[Math.floor(changed.length/2)]^=1;
+    const midpoint=Math.floor(changed.length/2);
+    changed[midpoint]=changed[midpoint]!^1;
     const fake=new Blob([changed],{type:"application/zip"}) as File;
     await expect(verifyDownloadedBookSafetyBackup(fake,archive))
       .rejects.toThrow(/SHA-256 non corrispondente/);
