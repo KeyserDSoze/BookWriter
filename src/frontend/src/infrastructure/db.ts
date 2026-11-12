@@ -94,6 +94,10 @@ export async function saveBookAndActivity(
   // Check the optional precondition in the SAME readwrite transaction that
   // writes the book, its activity, and potentially a sync checkpoint.
   const tx = db.transaction(["books", "activities", "outbox", "meta"], "readwrite");
+  // A duplicate checkpoint ID rejects both the add request and tx.done.
+  // Observe the transaction abort immediately, while propagating the request
+  // error and ensuring no partial canon/audit/outbox commit becomes visible.
+  void tx.done.catch(() => {});
   const books = tx.objectStore("books");
   const stored = await books.get(book.id) as BookProject | undefined;
   if (expectedUpdatedAt !== undefined && stored?.updatedAt !== expectedUpdatedAt) {
