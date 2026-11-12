@@ -160,7 +160,14 @@ test("timeline filtrabile e stime parziali verificate, desktop/mobile",async({pa
 test("copia sicurezza del solo libro: ZIP scaricato e riletto con SHA-256, desktop/mobile",async({page})=>{
   await page.goto("/");
   const bookA=await createBook(page,"Libro A sicurezza prima rewind");
-  const bookB=await createBook(page,"Libro B non esportare");
+  const bookB=await page.evaluate(async()=>{
+    const {newBook}=await import("/src/domain/types.ts");
+    const {saveBook}=await import("/src/infrastructure/db.ts");
+    const other=newBook("Brief secondo libro","Libro B non esportare","Narrativo","Adulti");
+    await saveBook(other,false);
+    return other.id;
+  });
+  await page.reload();
   await page.getByRole("combobox",{name:"Libro attivo"}).selectOption(bookA);
   await page.evaluate(async(id)=>{
     const {getBook,saveBookAndActivity}=await import("/src/infrastructure/db.ts");
