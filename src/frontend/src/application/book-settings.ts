@@ -73,3 +73,21 @@ export async function updateBookEditorialMode(
     await saveBook(next, true, expectedUpdatedAt);
   });
 }
+
+/** Opt-in parallel reviewers (1-4). Same fencing as the other per-book settings. */
+export async function updateBookEditorialConcurrency(
+  bookId: string, expectedUpdatedAt: string, value: number,
+): Promise<void> {
+  if (!Number.isSafeInteger(value) || value < 1 || value > 4) throw new Error("Il parallelismo deve essere tra 1 e 4.");
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks?.request) throw new Error("Web Locks non disponibile: modifica del parallelismo bloccata.");
+  await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {
+    if (!lock) throw new Error("Un'altra scheda sta scrivendo questo libro: riprova quando l'autopilot è fermo.");
+    const stored = await getBook(bookId);
+    if (!stored || stored.updatedAt !== expectedUpdatedAt) throw new BookRevisionConflict();
+    if (stored.status === "running") throw new Error("Metti prima in pausa l'autopilot e ricarica il libro.");
+    const next = structuredClone(stored);
+    if (value > 1) next.editorialConcurrency = value; else delete next.editorialConcurrency;
+    await saveBook(next, true, expectedUpdatedAt);
+  });
+}

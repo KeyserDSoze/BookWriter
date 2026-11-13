@@ -39,7 +39,8 @@ import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
 import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
-import { updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
+import { updateBookEditorialConcurrency, updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
+import { endpointAutoRetry } from "./application/auto-retry";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
@@ -469,6 +470,21 @@ export default function App() {
     }
   }
 
+  async function updateBookConcurrency(value: number) {
+    if (!current) return;
+    const { id, updatedAt } = current;
+    try {
+      await updateBookEditorialConcurrency(id, updatedAt, value);
+      await refresh();
+      setNotice(value > 1
+        ? `Revisori in parallelo: fino a ${value} richieste insieme nei NUOVI passi di revisione. Ogni revisore non ricorda più le proprie note dei segmenti precedenti.`
+        : "Revisori in sequenza (predefinito).");
+    } catch (error) {
+      await refresh();
+      setNotice(error instanceof Error ? error.message : "Parallelismo non salvato.");
+    }
+  }
+
   async function makeBackup() {
     if (busy) return;
     setBusy(true); setNotice("");
@@ -849,13 +865,26 @@ export default function App() {
                       streamTimeoutSeconds:Number(e.target.value)})}/>
                   <p className="muted mt-1 text-xs">Si azzera a ogni dato ricevuto: un modello lento ma costante non viene interrotto.</p>
                 </Field>
-                {endpoint.authMode==="none" && <label className="flex min-w-0 items-start gap-2 text-sm sm:col-span-2">
-                  <input type="checkbox" className="mt-1" checked={endpoint.localAutoRetry===true}
-                    onChange={e=>updateEndpoint(endpoint.id,{localAutoRetry:e.target.checked})}/>
-                  <span>Ritenta da solo i task falliti (massimo 2 volte per task). Solo per questo endpoint locale senza chiave,
-                    dove ogni chiamata non ha costo: permette all'autopilot di proseguire senza supervisione.
-                    Ogni tentativo resta registrato nelle Attività.</span>
-                </label>}
+                {(() => {
+                  const retry=endpointAutoRetry(endpoint);
+                  return <div className="min-w-0 space-y-2 sm:col-span-2">
+                    <label className="flex min-w-0 items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-1" checked={retry.enabled}
+                        onChange={e=>updateEndpoint(endpoint.id,{autoRetry:e.target.checked})}/>
+                      <span>Ritenta da solo i task falliti, così l'autopilot può proseguire senza supervisione.
+                        {endpoint.authMode==="none"
+                          ? " Endpoint locale senza chiave: i tentativi non hanno costo."
+                          : " Attenzione: su un provider con chiave ogni tentativo può essere fatturato, anche se fallisce. Tra un tentativo e l'altro c'è una pausa crescente."}
+                        {" "}Non ritenta errori di credenziali o configurazione, né oltre il budget AI. Ogni tentativo resta registrato nelle Attività.</span>
+                    </label>
+                    {retry.enabled && <label className="flex items-center gap-2 text-sm">Tentativi massimi per task
+                      <select className="field w-24" aria-label={`Tentativi massimi per ${endpoint.name}`} value={retry.max}
+                        onChange={e=>updateEndpoint(endpoint.id,{autoRetryMax:Number(e.target.value)})}>
+                        {[1,2,3,4,5].map(n=><option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>}
+                  </div>;
+                })()}
                 <div className="min-w-0">
                   <label className="mb-1 block text-sm font-semibold" htmlFor={`endpoint-reasoning-${endpoint.id}`}>Reasoning effort AI</label>
                   <ReasoningSelect id={`endpoint-reasoning-${endpoint.id}`} hideAutomatic
@@ -986,6 +1015,16 @@ export default function App() {
               <option value="light">Leggera: 5 revisori (6 con fonti storiche), molto più veloce su modelli locali</option>
             </select>
             <span className="mt-1 block text-xs font-normal text-muted-foreground">Vale per i nuovi cicli di revisione; non riduce il direttore critico né i controlli di prova letterale.</span>
+          </label>
+          <label className="mb-3 block text-sm font-semibold">Revisori in parallelo
+            <select className="field mt-1" aria-label="Revisori in parallelo" disabled={current.status === "running"}
+              value={current.editorialConcurrency ?? 1} onChange={e => void updateBookConcurrency(Number(e.target.value))}>
+              <option value={1}>1 — in sequenza (predefinito)</option>
+              <option value={2}>2 richieste insieme</option>
+              <option value={3}>3 richieste insieme</option>
+              <option value={4}>4 richieste insieme</option>
+            </select>
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Utile con provider cloud o con un server locale configurato per più richieste simultanee. Non ha effetto con il budget AI attivo. Un server che serve una richiesta alla volta non diventa più veloce.</span>
           </label>
           <div className="grid gap-3 md:grid-cols-2">
             {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge","chapterAudit","chapterReaders","chapterJudge","chapterRepair"] as TaskKind[]).map(kind => {

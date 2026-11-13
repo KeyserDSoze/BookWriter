@@ -7,13 +7,16 @@ vi.mock("../infrastructure/ai", () => ({ callModel: modelCall }));
 vi.mock("./writer-guard", () => ({ withWriterGuard: writerGuard }));
 import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infrastructure/db";
 import { AutopilotRunner, MAX_LOCAL_AUTO_RETRIES } from "./autopilot";
+import { AUTO_RETRY_BACKOFF } from "./auto-retry";
 
-async function setup(options: { retry: boolean; local: boolean }) {
+async function setup(options: { retry: boolean; local: boolean; autoRetry?: boolean; max?: number }) {
   const db = await getDb();
   for (const store of ["books", "activities", "outbox", "meta"]) await db.clear(store);
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.endpoints[0] = { ...settings.endpoints[0]!, baseUrl: "http://localhost:1234/v1", secret: null,
-    authMode: options.local ? "none" : "api_key", localAutoRetry: options.retry };
+    authMode: options.local ? "none" : "api_key", localAutoRetry: options.retry,
+    ...(options.autoRetry === undefined ? {} : { autoRetry: options.autoRetry }),
+    ...(options.max === undefined ? {} : { autoRetryMax: options.max }) };
   await saveSettings(settings);
   const book = newBook("Due scimmie e un leone.", "La favola", "Ironico", "Bambini");
   book.status = "paused";
@@ -67,5 +70,54 @@ describe("Ritentativo automatico limitato su endpoint locale", () => {
       expect(modelCall).toHaveBeenCalledTimes(1);
       expect((await getBook(book.id))!.status).toBe("error");
     }
+  });
+});
+
+describe("Ritentativo automatico opt-in su qualsiasi endpoint", () => {
+  beforeEach(() => { AUTO_RETRY_BACKOFF.baseMs = 0; });
+
+  it("riprova anche su un endpoint con chiave se l'autore lo ha attivato", async () => {
+    const book = await setup({ retry: false, local: false, autoRetry: true });
+    const runner = new AutopilotRunner();
+    let n = 0;
+    modelCall.mockImplementation(async () => {
+      n++;
+      if (n === 1) throw new Error("Errore del provider AI (HTTP 503). Verifica disponibilità e configurazione.");
+      runner.stopAfterCurrent();
+      return ok("Idee LONG MID SHORT");
+    });
+    await runner.run(book.id, async () => undefined);
+    expect(modelCall).toHaveBeenCalledTimes(2);
+    expect((await getBook(book.id))!.phase).toBe("validate");
+    const statuses = (await listActivities(book.id)).filter(a => a.aiRequested)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(a => a.status);
+    expect(statuses).toEqual(["failed", "succeeded"]);
+  });
+
+  it("rispetta il numero massimo di tentativi configurato", async () => {
+    const book = await setup({ retry: false, local: false, autoRetry: true, max: 4 });
+    modelCall.mockRejectedValue(new Error("rete"));
+    await new AutopilotRunner().run(book.id, async () => undefined);
+    expect(modelCall).toHaveBeenCalledTimes(5);
+    expect((await getBook(book.id))!.status).toBe("error");
+  });
+
+  it("non ripete errori di credenziali o configurazione", async () => {
+    for (const message of ["Autenticazione API non valida (HTTP 401): controlla la chiave.",
+      "Seleziona il modello per l'attività brainstorm nelle Impostazioni."]) {
+      modelCall.mockReset();
+      const book = await setup({ retry: false, local: false, autoRetry: true });
+      modelCall.mockRejectedValue(new Error(message));
+      await new AutopilotRunner().run(book.id, async () => undefined);
+      expect(modelCall).toHaveBeenCalledTimes(1);
+      expect((await getBook(book.id))!.status).toBe("error");
+    }
+  });
+
+  it("autoRetry=false prevale sul vecchio flag locale", async () => {
+    const book = await setup({ retry: true, local: true, autoRetry: false });
+    modelCall.mockRejectedValue(new Error("rete"));
+    await new AutopilotRunner().run(book.id, async () => undefined);
+    expect(modelCall).toHaveBeenCalledTimes(1);
   });
 });

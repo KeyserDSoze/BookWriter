@@ -546,10 +546,24 @@ export function nextReviewSlot(book: BookProject, cycle: ChapterEditorialCycle):
   { role: EditorialRole; segment: ChapterSegment; segmentCount: number } | undefined {
   const { reportCount, expectedCount } = assertEditorialReviewCoverage(book, cycle);
   if (reportCount >= expectedCount) return;
-  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId)!;
+  return reviewSlotAt(book, cycle, reportCount);
+}
+/** The slot a report at position `index` will fill. The caller has already checked coverage. */
+export function reviewSlotAt(book: BookProject, cycle: ChapterEditorialCycle, index: number):
+  { role: EditorialRole; segment: ChapterSegment; segmentCount: number } | undefined {
+  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
+  if (!chapter || !Number.isSafeInteger(index) || index < 0) return;
   const segments = chapterSegments(chapter);
-  return { role: cycleRoles(book, cycle)[Math.floor(reportCount / segments.length)]!,
-    segment: segments[reportCount % segments.length]!, segmentCount: segments.length };
+  const role = cycleRoles(book, cycle)[Math.floor(index / segments.length)];
+  if (!role) return;
+  return { role, segment: segments[index % segments.length]!, segmentCount: segments.length };
+}
+export const MAX_REVIEW_CONCURRENCY = 4;
+/** Opt-in parallel reviewers. The AI budget guard reserves cost per call, so it stays sequential. */
+export function reviewConcurrency(book: BookProject): number {
+  if (book.aiBudget?.enabled) return 1;
+  const wanted = book.editorialConcurrency;
+  return Number.isSafeInteger(wanted) && wanted! > 1 ? Math.min(wanted!, MAX_REVIEW_CONCURRENCY) : 1;
 }
 export function reviewerTask(role: EditorialRole): TaskKind {
   return EDITORIAL_ROLES.indexOf(role) < 7 ? "chapterAudit" : "chapterReaders";
@@ -593,8 +607,10 @@ export function reviewerPrompt(book: BookProject, cycle: ChapterEditorialCycle,
   const historicalNotes = cycle.priorRounds.flatMap(round =>
     round.reports.filter(x => x.role === role).map(x => x.memoryNote))
     .filter(Boolean).slice(-3);
-  const personalNotes = [...historicalNotes,
-    ...cycle.reports.filter(x => x.role === role).map(x => x.memoryNote).filter(Boolean)]
+  // With parallel reviewers a slot cannot depend on the notes of a report still in flight.
+  const sameCycleNotes = reviewConcurrency(book) > 1 ? [] :
+    cycle.reports.filter(x => x.role === role).map(x => x.memoryNote).filter(Boolean);
+  const personalNotes = [...historicalNotes, ...sameCycleNotes]
     .slice(-6).join("\n");
   // A reader is truly blind to private secrets, character dossiers and future plot plans.
   const compactedPrevious = previous.length > 12000 ?

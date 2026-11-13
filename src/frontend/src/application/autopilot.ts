@@ -1,25 +1,25 @@
 import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
-import { callModel } from "../infrastructure/ai";
-import { endpointStreamMode } from "../infrastructure/ai-stream";
-import { addAiDelta, currentLiveAi, finishLiveAi, markAiHeader, markAiTransport, markNativePhase,
-  saveAiTrace, startLiveAi } from "../infrastructure/ai-observability";
+import type { ModelAnswer } from "../infrastructure/ai";
+import { launchModelCall, ReviewCallPool, startLiveFor, type LaunchInput } from "./model-call";
+import { currentLiveAi, finishLiveAi, saveAiTrace } from "../infrastructure/ai-observability";
 import { taskReasoningChoice } from "../domain/task-reasoning";
 import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
 import { keepObservedUsageOnRejectedReply, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
 import { assertScenePlausible } from "../domain/prose-sanity";
 import { applyMemoryResponse, assertCompactionShrinks, DELTA_REPLY_RULE, DELTA_REPLY_RULE_NO_SUMMARY,
   memoryNeedsCompaction, memorySchema } from "../domain/memory-delta";
-import { assertPromptFitsLoadedContext, PromptExceedsContextError } from "./context-guard";
-import { BookRevisionConflict, getBook, listActivities, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
+import { AUTO_RETRY_BACKOFF, DEFAULT_AUTO_RETRIES, endpointAutoRetry, isAutoRetryable, retryDelay } from "./auto-retry";
+import { PromptExceedsContextError } from "./context-guard";
+import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, nextReviewSlot, repairPrompt, reviewerPrompt, reviewerTask, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, nextReviewSlot, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
-import { AiBudgetStop, preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
+import { AiBudgetStop } from "../domain/ai-budget";
 import { markAuthorNotesApplied, pendingAuthorNotes, taskAcceptsAuthorNotes, withAuthorNotes } from "../domain/author-interventions";
 import { formatAuthorSynopsis } from "../domain/book-start";
 import type { EditorialRound } from "../domain/editorial-board";
@@ -70,8 +70,56 @@ type Work = {
   reason: string;
   nextStep: string;
   prompt: string;
+  /** Set on reviewer calls: the position lets later reviewers be started ahead of time (opt-in). */
+  reviewSlot?: { key: string; index: number; expected: number };
   apply: (book: BookProject, response: string) => void;
 };
+
+const reviewKey = (chapterId: string, round: number, index: number) => `${chapterId}:${round}:${index}`;
+
+type LaunchBase = Omit<LaunchInput, "persisted" | "live">;
+/** Start the reviewers that follow the current one, so up to `reviewConcurrency` run together.
+ * Their text is applied strictly in order later; any problem here is left to the sequential path. */
+async function launchReviewsAhead(
+  pool: ReviewCallPool, base: LaunchBase, slot: NonNullable<Work["reviewSlot"]>,
+): Promise<void> {
+  const { book, settings, signal } = base;
+  const cycle = book.editorialCycle;
+  const ahead = reviewConcurrency(book) - 1;
+  if (ahead < 1 || !cycle || cycle.stage !== "review") return;
+  for (let step = 1; step <= ahead; step++) {
+    const index = slot.index + step;
+    if (index >= slot.expected) return;
+    const key = reviewKey(cycle.chapterId, cycle.round, index);
+    if (pool.has(key)) continue;
+    try {
+      const next = reviewSlotAt(book, cycle, index);
+      if (!next) return;
+      const prompt = reviewerPrompt(book, cycle, next.role, next.segment, next.segmentCount);
+      const kind = reviewerTask(next.role);
+      const assignment = routeFor(kind, settings, book);
+      const endpoint = settings.endpoints.find(e => e.id === assignment.endpointId);
+      const requestedEffort = endpoint ? taskReasoningChoice(kind, settings, book, endpoint, assignment.modelId) : undefined;
+      const title = "Redazione: " + next.role + " " + (index + 1) + "/" + slot.expected;
+      const child = new AbortController();
+      signal.addEventListener("abort", () => child.abort(), { once: true });
+      const started: Activity = {
+        id: crypto.randomUUID(), bookId: book.id, runId: base.runId, phase: "chapterReview", title,
+        reason: "Una chat autonoma controlla solo la sua competenza, senza pareri degli altri agenti.",
+        nextStep: "Prossimo revisore o giudizio critico della redazione", status: "running",
+        createdAt: new Date().toISOString(), endpointId: assignment.endpointId, modelId: assignment.modelId,
+        aiRequested: false,
+        ...(requestedEffort === undefined ? {} : { requestedReasoningEffort: requestedEffort }),
+      };
+      const launched = await launchModelCall({
+        ...base, kind, title, systemPrompt: prompt.system, userPrompt: prompt.prompt, started, assignment,
+        configuredEndpoint: endpoint, signal: child.signal, persisted: false, live: false,
+        ...(requestedEffort === undefined ? {} : { requestedEffort }),
+      });
+      pool.add({ key, system: prompt.system, user: prompt.prompt, started, promise: launched.promise, abort: child });
+    } catch { return; }
+  }
+}
 
 function parseJson(raw: string): unknown {
   const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
@@ -416,6 +464,8 @@ function nextWork(book: BookProject): Work | null {
         const title = "Redazione: " + next.role + " " + (cycle.reports.length + 1) + "/" +
           (next.segmentCount * cycleRoles(book, cycle).length);
         return {
+          reviewSlot: { key: reviewKey(cycle.chapterId, cycle.round, cycle.reports.length),
+            index: cycle.reports.length, expected: next.segmentCount * cycleRoles(book, cycle).length },
           phase: "chapterReview", kind: reviewerTask(next.role), title,
           system: prompt.system,
           reason: "Una chat autonoma controlla solo la sua competenza, senza pareri degli altri agenti.",
@@ -703,7 +753,7 @@ function shortSummary(text: string): string {
 }
 
 /** Automatic retries per task on a free local endpoint (opt-in per endpoint). */
-export const MAX_LOCAL_AUTO_RETRIES = 2;
+export const MAX_LOCAL_AUTO_RETRIES = DEFAULT_AUTO_RETRIES;
 
 export class AutopilotRunner {
   private abort?: AbortController;
@@ -742,7 +792,9 @@ export class AutopilotRunner {
       // be retried a bounded number of times so an unattended run can continue.
       let retries = 0;
       let retryScope = "";
+      const pool = new ReviewCallPool();
 
+      try {
       while (!signal.aborted) {
         await guard.assertActive();
         const book = await getBook(bookId);
@@ -819,7 +871,10 @@ export class AutopilotRunner {
         // Author next-step notes go only to tasks that already see the private canon.
         const notes = !work.noAuthorNotes && taskAcceptsAuthorNotes(work.kind) ? pendingAuthorNotes(book) : [];
         const userPrompt = withAuthorNotes(work.prompt, notes);
-        const started: Activity = {
+        const systemPrompt = work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.";
+        // A reviewer call already made ahead of time, valid only for exactly these prompts.
+        const pooled = work.reviewSlot ? pool.take(work.reviewSlot.key, systemPrompt, userPrompt) : undefined;
+        const started: Activity = pooled?.started ?? {
           id: crypto.randomUUID(), bookId, runId,
           phase: work.phase, title: work.title, reason: work.reason,
           nextStep: work.nextStep, status: "running",
@@ -829,58 +884,22 @@ export class AutopilotRunner {
           ...(requestedEffort===undefined?{}:{requestedReasoningEffort:requestedEffort}),
           ...(notes.length ? { appliedInterventionIds: notes.map(note => note.id) } : {}),
         };
-        await saveActivity(started);
+        if (!pooled) await saveActivity(started);
         await onUpdate();
         try {
-          await guard.assertActive(); // Do not charge credits without verified ownership.
-          const systemPrompt = work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.";
-          const preflight = preflightBookAiBudget(
-            book, settings, await listActivities(bookId), work.kind, systemPrompt, userPrompt, runId,
-          );
-          await guard.assertActive();
-          if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");
-          if (configuredEndpoint)
-            await assertPromptFitsLoadedContext(configuredEndpoint, assignment.modelId, work.title,
-              systemPrompt, userPrompt, preflight?.reservedOutputTokens, signal);
-          // Store the author's validated price BEFORE the provider call.
-          // The quote belongs to this attempt even if its output is rejected.
-          const quote = snapshotPriceRate(settings, assignment.endpointId, assignment.modelId);
-          if (quote) started.priceRateSnapshot = quote;
-          // Persist the request attempt BEFORE network fetch: an interrupted browser
-          // must not misrepresent a possibly billed call as a free operation.
-          if(settings.inspectAiRequests) {
-            // Explicitly local, sensitive opt-in. Never stored in Activity
-            // or exported to ZIP, GitHub or sync.
-            await saveAiTrace({
-              activityId:started.id,bookId,createdAt:started.createdAt,
-              endpointId:assignment.endpointId,modelId:assignment.modelId,
-              systemPrompt,userPrompt,truncated:false,
-            });
-          }
-          started.aiRequested = true;
-          await saveActivity(started);
-          startLiveAi({
-            activityId:started.id,bookId,title:work.title,
-            endpointId:assignment.endpointId,modelId:assignment.modelId,
-            inspect:settings.inspectAiRequests === true,
-            ...(requestedEffort===undefined?{}:{requestedReasoning:requestedEffort}),
-            streamDeadlineSeconds:configuredEndpoint?.streamTimeoutSeconds??600,
-          });
-          const inspectStream = settings.inspectAiRequests===true ||
-            (configuredEndpoint!==undefined && endpointStreamMode(configuredEndpoint)==="sse") ||
-            configuredEndpoint?.apiProtocol==="lmstudio_native";
-          const result = await callModel(work.kind, systemPrompt, userPrompt, settings, book, signal,
-            preflight || inspectStream ? {
-              ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
-              ...(inspectStream ? {
-                onHeaders:()=>markAiHeader(started.id),
-                onProgress:(delta:import("../infrastructure/ai-stream").AiStreamDelta)=>addAiDelta(started.id,delta),
-                onTransport:(stats:import("../infrastructure/lmstudio-native").AiTransportStats)=>
-                  markAiTransport(started.id,stats),
-                onPhase:(phase:import("../infrastructure/lmstudio-native").LmStudioPhase)=>
-                  markNativePhase(started.id,phase),
-              } : {}),
-            } : undefined);
+          const launch = { book, settings, runId, guard, signal, kind: work.kind, title: work.title,
+            systemPrompt, userPrompt, started, assignment, configuredEndpoint,
+            ...(requestedEffort === undefined ? {} : { requestedEffort }) };
+          let call: Promise<ModelAnswer>;
+          if (pooled) {
+            await guard.assertActive();
+            startLiveFor({ ...launch });
+            call = pooled.promise;
+          } else call = (await launchModelCall({ ...launch, persisted: true, live: true })).promise;
+          // While this reviewer answers, the next ones start (opt-in, never with an AI budget).
+          if (work.reviewSlot && !this.stopAfter && !signal.aborted)
+            await launchReviewsAhead(pool, launch, work.reviewSlot);
+          const result = await call;
           // A provider reply may carry usage even when the editorial schema,
           // freshness gate or writer lease rejects its text. Capture the
           // observed counts before validation so the failed/cancelled Activity
@@ -953,23 +972,29 @@ export class AutopilotRunner {
           started.endedAt = new Date().toISOString();
           const retryKey = work.phase + ":" + work.title;
           if (retryScope !== retryKey) { retryScope = retryKey; retries = 0; }
+          const retryPolicy = endpointAutoRetry(configuredEndpoint);
           const willRetry = !aborted && !leaseFailure && !budgetStop && started.aiRequested === true &&
-            configuredEndpoint?.authMode === "none" && configuredEndpoint.localAutoRetry === true &&
-            retries < MAX_LOCAL_AUTO_RETRIES && !this.stopAfter && !signal.aborted;
+            retryPolicy.enabled && isAutoRetryable(error) &&
+            retries < retryPolicy.max && !this.stopAfter && !signal.aborted;
           if (willRetry) retries++;
           const latest = await getBook(bookId);
           if (latest) {
             latest.status = willRetry ? "running" : aborted || budgetStop ? "paused" : "error";
             latest.previousError = willRetry
-              ? `Tentativo ${retries}/${MAX_LOCAL_AUTO_RETRIES} fallito su «${work.title}»: ${started.error} Riprovo automaticamente.`
+              ? `Tentativo ${retries}/${retryPolicy.max} fallito su «${work.title}»: ${started.error} Riprovo automaticamente.`
               : started.error;
             await saveBookAndActivity(latest, started);
           } else await saveActivity(started);
           await onUpdate();
-          if (willRetry && latest) continue;
+          if (willRetry && latest) {
+            // A paid/remote provider may be rate limiting or overloaded: give it time.
+            if (configuredEndpoint?.authMode !== "none") await retryDelay(AUTO_RETRY_BACKOFF.baseMs * retries, signal);
+            continue;
+          }
           break;
         }
       }
+      } finally { await pool.drain(); }
       }); // release the GitHub writer lease and the browser Web Lock
     } catch (error) {
       // Acquisition errors happen before any task is started and must not change

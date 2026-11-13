@@ -289,6 +289,7 @@ const bookSchema = z.object({
   targetChapterCount: z.number().int().min(1).max(MAX_TARGET_CHAPTERS).optional(),
   pauseAfterOutline: z.boolean().optional(),
   editorialMode: z.enum(["full", "light"]).optional(),
+  editorialConcurrency: z.number().int().min(1).max(4).optional(),
   authorInterventions: z.array(authorInterventionSchema).max(MAX_AUTHOR_INTERVENTIONS).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),

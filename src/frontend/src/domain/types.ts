@@ -54,8 +54,12 @@ export interface EndpointProfile {
   apiProtocol?: "openai" | "lmstudio_native";
   /** Optional OpenAI-compatible reasoning_effort (provider dependent). */
   reasoningEffort?: "low" | "medium" | "high" | "xhigh";
-  /** Free local endpoints only (authMode none): retry a failed task up to 2 times by itself. */
+  /** Legacy: keyless local endpoints only. Superseded by `autoRetry`, still honoured when `autoRetry` is unset. */
   localAutoRetry?: boolean;
+  /** Opt-in: retry a failed task by itself on this endpoint (any endpoint; each retry may be billed on paid ones). */
+  autoRetry?: boolean;
+  /** Retries per task when `autoRetry` is on (1-5, default 2). */
+  autoRetryMax?: number;
   /** Read from the provider on an explicit «Leggi /models». null = model reports no reasoning control; missing = not checked. Not exported in backups. */
   modelReasoning?: Record<string, ModelReasoningInfo | null>;
 }
@@ -235,6 +239,8 @@ export interface BookProject {
   pauseAfterOutline?: boolean;
   /** "light" = reduced editorial board for new review cycles (opt-in, ADR 0151). Absent = full board. */
   editorialMode?: "full" | "light";
+  /** Reviewer calls in flight at once (1-4). Absent/1 = sequential (default). Ignored while the AI budget is active. */
+  editorialConcurrency?: number;
   /** Every author prompt given to the autopilot, never rewritten. */
   authorInterventions?: AuthorIntervention[];
   memory: NarrativeMemory;
