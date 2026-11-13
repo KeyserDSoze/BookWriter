@@ -92,6 +92,7 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
     };
   }));
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const board=page.getByRole("region",{name:"Redazione multi-agente"});
   await board.locator("summary").filter({hasText:"Indice eventi candidati"}).click();
   const notes=board.getByRole("textbox",{name:/Motivazione evento/});
@@ -159,6 +160,7 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   await page.getByRole("button",{name:"Riprendi"}).click();
 
   await expect.poll(async()=>{

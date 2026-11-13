@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import type { AiPriceRate, AppSettings, EndpointProfile } from "../../domain/types";
 import { reasoningSupport } from "../../domain/model-reasoning";
+import { declaredModelCapabilities } from "../../domain/model-capabilities";
 import { endpointAutoRetry } from "../../application/auto-retry";
 import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS } from "../../infrastructure/ai-header-timeout";
 import { ReasoningSelect } from "../ReasoningSelect";
@@ -58,6 +59,26 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
         <Button variant="outline" onClick={onDiscover}><RefreshCw size={16} /> Leggi /models</Button>
         {onRemove && <Button variant="destructive" onClick={onRemove}>Rimuovi</Button>}
       </div>
+      {endpoint.models.length > 0 && <ul className="flex flex-wrap gap-1.5 sm:col-span-2 lg:col-span-4" aria-label={`Modelli di ${endpoint.name}`}>
+        {endpoint.models.map(model => {
+          const roles = declaredModelCapabilities(endpoint, model);
+          const priced = (settings.aiPriceRates ?? []).some(r => r.endpointId === endpoint.id && r.modelId === model);
+          const isDefaultModel = isDefault && settings.defaultRoute.modelId === model;
+          return <li key={model} className={`flex min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1 text-xs ${isDefaultModel
+            ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40" : "border-slate-300 dark:border-slate-700"}`}>
+            <span className="max-w-[16rem] truncate font-mono font-semibold" title={model}>{model}</span>
+            {roles.length === 0
+              ? <span className="muted rounded bg-slate-200 px-1 text-[10px] dark:bg-slate-800" title="Nessuna capacità dichiarata: trattato come modello chat">chat?</span>
+              : roles.map(role => <span key={role} className="rounded bg-sky-100 px-1 text-[10px] font-semibold text-sky-800 dark:bg-sky-900 dark:text-sky-200">{role}</span>)}
+            {isDefaultModel && <span className="rounded bg-emerald-600 px-1 text-[10px] font-semibold text-white">predefinito</span>}
+            <span className={`rounded px-1 text-[10px] font-semibold ${priced
+              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+              : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"}`}>{priced ? "€ impostato" : "senza prezzo"}</span>
+            <button type="button" className="muted rounded px-1 hover:text-red-500" aria-label={`Rimuovi il modello ${model}`}
+              onClick={() => onUpdate({ models: endpoint.models.filter(m => m !== model) })}>×</button>
+          </li>;
+        })}
+      </ul>}
     </div>
 
     <details className="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700" open={!local && pricedModels.length > 0}>

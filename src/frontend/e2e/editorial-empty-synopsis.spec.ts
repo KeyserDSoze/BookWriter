@@ -67,6 +67,7 @@ test("un summary solo-spazi non congela un capitolo approvato (desktop/mobile)",
     };
   }));
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const nav=page.getByRole("navigation",{
     name:test.info().project.name==="mobile-chromium"?
       "Navigazione mobile":"Navigazione principale",
@@ -78,6 +79,7 @@ test("un summary solo-spazi non congela un capitolo approvato (desktop/mobile)",
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const panel=page.getByRole("region",{name:"Redazione multi-agente"});
   await expect(panel.getByText(/Tornata 1\/3/)).toBeVisible();
   await page.getByRole("button",{name:"Riprendi"}).click();

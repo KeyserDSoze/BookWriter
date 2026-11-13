@@ -70,6 +70,7 @@ test("redazione capitolo desktop/mobile: 12 agenti separati, giudice, freeze e r
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const panel=page.getByRole("region",{name:"Redazione multi-agente"});
   await expect(panel.getByText("Non ancora congelato")).toBeVisible();
   await page.getByRole("button",{name:"Riprendi"}).click();
@@ -213,6 +214,7 @@ test("divergenze documentali desktop/mobile: il report distingue posizioni e pro
     };
   }));
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const panel=page.getByRole("region",{name:"Redazione multi-agente"});
   await panel.locator("summary").filter({hasText:"Plausibilità e accuratezza storica"}).first().click();
   await expect(panel.getByText("Possibile divergenza fra fonti (interpretazione NON certificata)"))
@@ -272,6 +274,7 @@ test("relazioni tra fonti desktop/mobile: consenso, audit e riapertura capitoli"
     };
   }));
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const panel=page.getByRole("region",{name:"Redazione multi-agente"});
   await panel.locator("summary").filter({hasText:"Provenienza e dipendenze fra fonti"}).click();
   await panel.getByRole("combobox",{name:"Prima fonte relazione capitolo 1"})

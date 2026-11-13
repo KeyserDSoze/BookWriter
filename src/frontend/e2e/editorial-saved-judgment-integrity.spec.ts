@@ -118,6 +118,7 @@ test("giudizio importato duplicato: recovery senza chiamate AI (desktop/mobile)"
   await page.getByRole("textbox", { name: "Modello predefinito" }).fill("mock-historical-judge");
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
 
   const panel = page.getByRole("region", { name: "Redazione multi-agente" });
   await expect(panel.getByLabel("Checkpoint editoriale da recuperare")).toBeVisible();

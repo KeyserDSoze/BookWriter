@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { LibraryPage } from "./components/LibraryPage";
 import { readLastBookId, rememberLastBookId } from "./application/last-book";
+import { formatRoute, parseRoute, type Page } from "./application/route";
+import { BackgroundActivityToast } from "./components/BackgroundActivityToast";
 import { Button } from "./components/ui/button";
 import { SaveBar } from "./components/settings/SaveBar";
 import { EndpointCard } from "./components/settings/EndpointCard";
@@ -46,7 +48,6 @@ import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./ap
 import packageInfo from "../package.json";
 import { useWakeLock } from "./application/use-wake-lock";
 
-type Page = "library" | "dashboard" | "activities" | "costs" | "reader" | "atlas" | "settings" | "export" | "bookSettings";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
   { id: "library", label: "Libreria", icon: Library },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -91,9 +92,17 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>("dashboard");
+  const [initialRoute] = useState(() => parseRoute(window.location.hash));
+  const [page, setPage] = useState<Page>(initialRoute.page);
+  const [focusTaskId, setFocusTaskId] = useState(initialRoute.task ?? "");
+  const [chapterId, setChapterId] = useState(initialRoute.chapter ?? "");
   const [books, setBooks] = useState<BookProject[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedIdRaw] = useState("");
+  /** Changing book always drops the task / chapter focus of the previous one. */
+  const setSelectedId = (id: string) => {
+    if (id !== selectedId) { setFocusTaskId(""); setChapterId(""); }
+    setSelectedIdRaw(id);
+  };
   const [activities, setActivities] = useState<Activity[]>([]);
   const [liveAi,setLiveAi]=useState<LiveAiTrace|null>(()=>currentLiveAi());
   useEffect(()=>subscribeLiveAi(()=>setLiveAi(currentLiveAi())),[]);
@@ -156,11 +165,12 @@ export default function App() {
   const refresh = useCallback(async () => {
     const all = await listBooks();
     setBooks(all);
-    setSelectedId(prev => {
+    setSelectedIdRaw(prev => {
       if (prev && all.some(book => book.id === prev)) return prev;
       if (!prev && creatingNewBook.current) return "";
+      const fromUrl = parseRoute(window.location.hash).book;
       const last = readLastBookId();
-      return all.find(book => book.id === last)?.id ?? all[0]?.id ?? "";
+      return all.find(book => book.id === fromUrl)?.id ?? all.find(book => book.id === last)?.id ?? all[0]?.id ?? "";
     });
   }, []);
   useEffect(() => { rememberLastBookId(selectedId); }, [selectedId]);
@@ -209,6 +219,48 @@ export default function App() {
 
   const current = useMemo(() => books.find(x => x.id === selectedId), [books, selectedId]);
   const lastOpenedId = readLastBookId();
+  const booksRef = useRef(books);
+  booksRef.current = books;
+  const routeWritten = useRef(false);
+  useEffect(() => {
+    // State -> URL. Only after the first load, or the book in the URL would be overwritten by an empty selection.
+    if (!ready) return;
+    const next = formatRoute({
+      page, book: selectedId || undefined,
+      task: page === "activities" ? focusTaskId || undefined : undefined,
+      chapter: page === "reader" ? chapterId || undefined : undefined,
+    });
+    const here = parseRoute(window.location.hash);
+    const initialized = routeWritten.current;
+    routeWritten.current = true;
+    if (formatRoute(here) === next && window.location.hash !== "") return;
+    // A new page is a history entry (Back works); refinements and the first sync replace it.
+    if (initialized && here.page !== page) window.history.pushState(null, "", next);
+    else window.history.replaceState(null, "", next);
+  }, [ready, page, selectedId, focusTaskId, chapterId]);
+  useEffect(() => {
+    // URL -> state, for Back/Forward and hand-edited addresses.
+    const apply = () => {
+      const route = parseRoute(window.location.hash);
+      setPage(route.page);
+      setFocusTaskId(route.task ?? "");
+      setChapterId(route.chapter ?? "");
+      if (route.book && booksRef.current.some(book => book.id === route.book)) {
+        creatingNewBook.current = false;
+        setSelectedIdRaw(route.book);
+      }
+    };
+    window.addEventListener("popstate", apply);
+    window.addEventListener("hashchange", apply);
+    return () => { window.removeEventListener("popstate", apply); window.removeEventListener("hashchange", apply); };
+  }, []);
+  function openWork(bookId: string, activityId?: string) {
+    creatingNewBook.current = false;
+    setSelectedIdRaw(bookId);
+    setChapterId("");
+    setFocusTaskId(activityId ?? "");
+    setPage("activities");
+  }
   const runningActivity = current?.status === "running" ? activities.find(x => x.status === "running") : undefined;
   const runningHere = !!current && runnerBookId === current.id;
   useWakeLock(runningHere && current?.status === "running");
@@ -722,7 +774,8 @@ export default function App() {
       </div>}
 
       {page === "activities" && (current ?
-        <AiTaskWorkspace book={current} bookId={current.id} activities={activities} live={liveAi}
+        <AiTaskWorkspace key={current.id} book={current} bookId={current.id} activities={activities} live={liveAi}
+          focusId={focusTaskId} onFocusChange={setFocusTaskId}
           inspectionEnabled={settings.inspectAiRequests===true}
           onPrepareRevision={prepareActivityRevision}
           onForkCreated={async(forkBookId)=>{
@@ -747,7 +800,16 @@ export default function App() {
         </>}
         <Section title="Il libro" description="Le scene canoniche sono il testo approvato; bozze e scene pianificate sono ancora in lavorazione. Esporta EPUB, DOCX e PDF dall'Archivio.">
         {!current?.chapters.length ? <Empty>Non c'è ancora un piano capitoli. Avvia l'autopilot.</Empty>
-          : current.chapters.map(ch => <article key={ch.id} className="mb-8">
+          : <>
+          <nav aria-label="Capitoli" className="mb-4 flex flex-wrap gap-1">
+            {[{ id: "", label: "Tutto il libro" }, ...current.chapters.map(ch => ({ id: ch.id, label: `Cap. ${ch.number}` }))].map(item =>
+              <button key={item.id || "all"} type="button" aria-pressed={(chapterId || "") === item.id}
+                title={item.id ? current.chapters.find(ch => ch.id === item.id)?.title : undefined}
+                onClick={() => setChapterId(item.id)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${(chapterId || "") === item.id
+                  ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-400 dark:border-slate-600"}`}>{item.label}</button>)}
+          </nav>
+          {current.chapters.filter(ch => !chapterId || ch.id === chapterId).map(ch => <article key={ch.id} className="mb-8">
             <h3 className="mb-3 flex flex-wrap items-baseline gap-2 border-b border-slate-300 pb-2 text-xl font-bold dark:border-slate-700">
               <span>Capitolo {ch.number} — {ch.title}</span>
               {ch.frozenAt && <span className="rounded-full border border-emerald-600/50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">congelato</span>}
@@ -766,6 +828,7 @@ export default function App() {
               </div>}
             </section>)}
           </article>)}
+          </>}
         </Section>
       </div>}
 
@@ -890,6 +953,8 @@ export default function App() {
 
       <footer className="muted mt-10 flex flex-wrap items-center gap-2 text-xs"><BrainCircuit size={14} /> Autopilot nel browser aperto: nessuna attività garantita in background. <FileText size={14} /> Versione iniziale.</footer>
     </main>
+    <BackgroundActivityToast books={books} live={liveAi} currentBookId={selectedId}
+      currentActivities={activities} onOpen={openWork} />
 
 
   </div>;

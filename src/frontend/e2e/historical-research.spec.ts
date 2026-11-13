@@ -175,6 +175,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const editorial=page.getByRole("region",{name:"Redazione multi-agente"});
   const dossier=editorial.getByText(/Dossier storico/);
   await dossier.click();

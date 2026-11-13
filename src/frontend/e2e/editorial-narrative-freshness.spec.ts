@@ -90,6 +90,7 @@ test("testimone precedente ritirato: blocco del giudice e recupero senza AI (des
   await page.getByRole("textbox", { name:"Modello predefinito" }).fill("mock-narrative-judge");
   await page.getByRole("button", { name:"Salva impostazioni" }).click();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   const panel = page.getByRole("region", { name:"Redazione multi-agente" });
   await expect(panel.getByLabel("Checkpoint editoriale da recuperare")).toBeVisible();
   await expect(panel.getByText(/Testimone narrativo precedente non più corrente/)).toBeVisible();

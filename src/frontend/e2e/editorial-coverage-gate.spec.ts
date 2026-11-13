@@ -68,6 +68,7 @@ test("checkpoint incompleto non chiama il giudice e non congela il capitolo desk
     .fill("mock-coverage-judge");
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   await expect(page.getByRole("region", { name: "Redazione multi-agente" })).toBeVisible();
   await page.getByRole("button", { name: "Riprendi" }).click();
   const result = await expect.poll(async () => page.evaluate(() =>

@@ -121,6 +121,7 @@ test("conflitti da prosa NON attestata: 12 agenti, giudice critico e freeze desk
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect.poll(async()=>{
     const state=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{

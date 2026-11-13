@@ -143,6 +143,7 @@ test("passaggi di notizie: 12 agenti, giudice sui messaggi e freeze desktop/mobi
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   await page.getByRole("button",{name:"Riprendi"}).click();
   await expect.poll(async()=>{
     const state=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{

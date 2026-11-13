@@ -41,12 +41,15 @@ interface Props {
   onForkCreated?: (forkBookId: string) => Promise<void> | void;
   compact?: boolean;
   onOpenFull?: () => void;
+  /** Task focused through the URL, and the callback that mirrors the focus back into it. */
+  focusId?: string;
+  onFocusChange?: (id: string) => void;
 }
 
 /** Task-first, read-only inspector. Provisional tokens are NEVER canonical. */
 export function AiTaskWorkspace({
   book, bookId, activities, live, inspectionEnabled, onPrepareRevision, compact=false,
-  onOpenFull, onForkCreated,
+  onOpenFull, onForkCreated, focusId, onFocusChange,
 }: Props) {
   const [chosen,setChosen]=useState("");
   const [trace,setTrace]=useState<AiLocalTrace|null>(null);
@@ -69,7 +72,8 @@ export function AiTaskWorkspace({
   const [phaseFilter,setPhaseFilter]=useState("");
   const [order,setOrder]=useState<TimelineOrder>("newest");
   const [groupByRun,setGroupByRun]=useState(false);
-  const [focusedTaskId,setFocusedTaskId]=useState("");
+  const [focusedTaskId,setFocusedTaskId]=useState(focusId??"");
+  const lastBookId=useRef(bookId);
   const focusHeadingRef=useRef<HTMLHeadingElement>(null);
   // A request may settle after changing books, hiding inspection or choosing
   // another task. Never display stale local prompts or responses.
@@ -133,7 +137,8 @@ export function AiTaskWorkspace({
     setStructural(null);setStructuralMessage("");
     setProseCheckpoint(null);setProseMessage("");
     setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");
-    setGroupByRun(false);setFocusedTaskId("");
+    setGroupByRun(false);
+    if(lastBookId.current!==bookId){lastBookId.current=bookId;setFocusedTaskId("");}
     return ()=>{
       inspectionSequence.current.invalidate();
       checkpointSequence.current.invalidate();
@@ -151,6 +156,10 @@ export function AiTaskWorkspace({
     setProseCheckpoint(null);setProseMessage("");
     setFocusedTaskId(id);
   };
+  useEffect(()=>{onFocusChange?.(focusedTaskId);},[focusedTaskId]);
+  useEffect(()=>{
+    if(!compact&&(focusId??"")!==focusedTaskId)focusTask(focusId??"");
+  },[focusId]);
   const changeProseConsent=async(enabled:boolean)=>{
     const ticket=consentSequence.current.begin();
     setConsentBusy(true);setConsentMessage("");

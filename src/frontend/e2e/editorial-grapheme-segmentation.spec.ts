@@ -118,6 +118,7 @@ test("redazione a segmenti Unicode: i primi due prompt conservano interi i grafe
   }));
   await expect.poll(settingsPersisted).toBe(true);
   await page.reload();
+  await page.evaluate(() => { location.hash = "#/dashboard"; });
   await expect(page.getByRole("region", { name: "Redazione multi-agente" }))
     .toBeVisible();
   await expect.poll(settingsPersisted).toBe(true);
