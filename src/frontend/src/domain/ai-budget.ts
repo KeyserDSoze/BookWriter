@@ -67,7 +67,10 @@ export function isPriceRate(rate: unknown): rate is AiPriceRate {
     typeof r.inputEurPerMillion === "number" && Number.isFinite(r.inputEurPerMillion) &&
     r.inputEurPerMillion >= 0 && r.inputEurPerMillion <= MAX_SAFE_RATE &&
     typeof r.outputEurPerMillion === "number" && Number.isFinite(r.outputEurPerMillion) &&
-    r.outputEurPerMillion >= 0 && r.outputEurPerMillion <= MAX_SAFE_RATE;
+    r.outputEurPerMillion >= 0 && r.outputEurPerMillion <= MAX_SAFE_RATE &&
+    (r.cachedInputEurPerMillion === undefined ||
+      typeof r.cachedInputEurPerMillion === "number" && Number.isFinite(r.cachedInputEurPerMillion) &&
+      r.cachedInputEurPerMillion >= 0 && r.cachedInputEurPerMillion <= MAX_SAFE_RATE);
 }
 export function isBudgetValid(budget: BookAiBudget): boolean {
   return Number.isFinite(budget.limitEur) && budget.limitEur > 0 &&
@@ -92,8 +95,14 @@ export function snapshotPriceRate(
   const rate = lookupRate(settings, endpointId, modelId);
   return rate ? { ...rate } : undefined;
 }
-function pricedCost(input: number, output: number, rate: AiPriceRate): number {
-  return (input * rate.inputEurPerMillion + output * rate.outputEurPerMillion) / 1_000_000;
+/** Cached input tokens (a subset of input) use the cached price when one is set; otherwise every
+ * input token is priced as ordinary input. Unknown cache usage is never assumed. */
+export function pricedCost(input: number, output: number, rate: AiPriceRate, cached?: number): number {
+  const cachedTokens = cached !== undefined && rate.cachedInputEurPerMillion !== undefined
+    ? Math.min(cached, input) : 0;
+  return ((input - cachedTokens) * rate.inputEurPerMillion +
+    cachedTokens * (rate.cachedInputEurPerMillion ?? 0) +
+    output * rate.outputEurPerMillion) / 1_000_000;
 }
 export function isBillableAttempt(activity: Activity): boolean {
   return activity.aiRequested === true ||
@@ -106,6 +115,8 @@ export interface AiCostAssessment {
   /** Only provider-reported non-negative safe integers are admitted. */
   inputTokens?: number;
   outputTokens?: number;
+  /** Provider-reported cached share of inputTokens, when present. */
+  cachedInputTokens?: number;
   usageCoverage: AiUsageCoverage;
   rateOrigin: AiRateOrigin;
   rate?: AiPriceRate;
@@ -117,6 +128,7 @@ export interface AiCostAssessment {
 export function assessAiCostAttempt(activity: Activity, settings: AppSettings): AiCostAssessment {
   const inputTokens = validTokenCount(activity.inputTokens);
   const outputTokens = validTokenCount(activity.outputTokens);
+  const cachedInputTokens = validTokenCount(activity.cachedInputTokens);
   const usageCoverage: AiUsageCoverage = activity.status === "running" ? "in_corso" :
     inputTokens !== undefined && outputTokens !== undefined ? "completo" :
     inputTokens === undefined && outputTokens === undefined ? "mancante" : "parziale";
@@ -129,9 +141,9 @@ export function assessAiCostAttempt(activity: Activity, settings: AppSettings): 
   const rateOrigin: AiRateOrigin = invalidSnapshot ? "snapshot_non_valido" :
     !rate ? "tariffa_assente" : quote === undefined ? "listino_corrente" : "snapshot";
   return {
-    inputTokens, outputTokens, usageCoverage, rateOrigin, rate,
+    inputTokens, outputTokens, cachedInputTokens, usageCoverage, rateOrigin, rate,
     ...(usageCoverage === "completo" && rate ? {
-      estimatedEur: pricedCost(inputTokens!, outputTokens!, rate),
+      estimatedEur: pricedCost(inputTokens!, outputTokens!, rate, cachedInputTokens),
     } : {}),
   };
 }

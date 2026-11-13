@@ -118,6 +118,7 @@ export async function generateSceneMergeDraft(
       attempted.modelId = response.modelId;
       attempted.inputTokens = response.inputTokens;
       attempted.outputTokens = response.outputTokens;
+      attempted.cachedInputTokens = response.cachedInputTokens;
       await guard.assertActive();
       const text = validateSceneProposal(response.text);
       const original = review.local.chapters.find(ch => ch.id === chapterId)?.scenes.find(s => s.id === sceneId);

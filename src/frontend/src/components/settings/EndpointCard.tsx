@@ -1,10 +1,11 @@
 import { RefreshCw } from "lucide-react";
-import type { AppSettings, EndpointProfile } from "../../domain/types";
+import type { AiPriceRate, AppSettings, EndpointProfile } from "../../domain/types";
 import { reasoningSupport } from "../../domain/model-reasoning";
 import { endpointAutoRetry } from "../../application/auto-retry";
 import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS } from "../../infrastructure/ai-header-timeout";
 import { ReasoningSelect } from "../ReasoningSelect";
 import { Button } from "../ui/button";
+import { ModelPriceTable } from "./ModelPriceTable";
 
 function F({ label, hint, className = "", children }: { label: string; hint?: string; className?: string; children: React.ReactNode }) {
   return <label className={`block min-w-0 ${className}`}>
@@ -14,10 +15,11 @@ function F({ label, hint, className = "", children }: { label: string; hint?: st
 }
 
 /** One endpoint: the few fields everybody needs up front, everything else under «Opzioni avanzate». */
-export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdate, onDiscover, onRemove }: {
+export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdate, onRatesChange, onDiscover, onRemove }: {
   endpoint: EndpointProfile; settings: AppSettings; keyDraft: string;
   onKeyDraft: (value: string) => void;
   onUpdate: (update: Partial<EndpointProfile>) => void;
+  onRatesChange: (rates: AiPriceRate[]) => void;
   onDiscover: () => void;
   onRemove?: () => void;
 }) {
@@ -25,6 +27,12 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
   const isDefault = settings.defaultRoute.endpointId === endpoint.id;
   const defaultModel = isDefault ? settings.defaultRoute.modelId : "";
   const local = endpoint.authMode === "none";
+  const pricedModels = Array.from(new Set([
+    ...endpoint.models,
+    ...(isDefault && defaultModel.trim() ? [defaultModel.trim()] : []),
+    ...Object.values(settings.taskRoutes)
+      .filter(r => r && r.endpointId === endpoint.id && r.modelId.trim()).map(r => r!.modelId.trim()),
+  ]));
   return <div className="space-y-2 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <F label="Nome endpoint"><input className="field field-sm" value={endpoint.name} onChange={e => onUpdate({ name: e.target.value })} /></F>
@@ -52,8 +60,17 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
       </div>
     </div>
 
+    <details className="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700" open={!local && pricedModels.length > 0}>
+      <summary className="cursor-pointer text-sm font-semibold">Prezzi per modello (€ per 1M token)</summary>
+      <p className="muted mb-2 mt-1 text-xs">Per ogni modello inserisci il prezzo per milione di token di input, output e input in cache (facoltativo: se vuoto, l'input in cache è addebitato come input).
+        Il costo di ogni richiesta è calcolato dai token che il provider restituisce; senza usage o senza prezzo resta «non calcolabile».</p>
+      <ModelPriceTable endpointId={endpoint.id} models={pricedModels}
+        rates={settings.aiPriceRates ?? []} onChange={onRatesChange} />
+    </details>
+
     <details className="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700">
       <summary className="cursor-pointer text-sm font-semibold">Opzioni avanzate</summary>
+
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <F label="Protocollo AI per le richieste Chat">
           <select className="field field-sm" value={endpoint.apiProtocol ?? "openai"}

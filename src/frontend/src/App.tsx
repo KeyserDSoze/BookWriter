@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen, BrainCircuit, CheckCircle2, Database,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
-  Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet,
+  Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet, Library,
 } from "lucide-react";
+import { LibraryPage } from "./components/LibraryPage";
+import { readLastBookId, rememberLastBookId } from "./application/last-book";
 import { Button } from "./components/ui/button";
 import { SaveBar } from "./components/settings/SaveBar";
 import { EndpointCard } from "./components/settings/EndpointCard";
@@ -44,8 +46,9 @@ import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./ap
 import packageInfo from "../package.json";
 import { useWakeLock } from "./application/use-wake-lock";
 
-type Page = "dashboard" | "activities" | "costs" | "reader" | "atlas" | "settings" | "export";
+type Page = "library" | "dashboard" | "activities" | "costs" | "reader" | "atlas" | "settings" | "export" | "bookSettings";
 const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
+  { id: "library", label: "Libreria", icon: Library },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "activities", label: "Attività", icon: ListChecks },
   { id: "costs", label: "Costi", icon: Wallet },
@@ -156,9 +159,11 @@ export default function App() {
     setSelectedId(prev => {
       if (prev && all.some(book => book.id === prev)) return prev;
       if (!prev && creatingNewBook.current) return "";
-      return all[0]?.id ?? "";
+      const last = readLastBookId();
+      return all.find(book => book.id === last)?.id ?? all[0]?.id ?? "";
     });
   }, []);
+  useEffect(() => { rememberLastBookId(selectedId); }, [selectedId]);
   useEffect(() => {
     void (async () => {
       try {
@@ -203,6 +208,7 @@ export default function App() {
   }, [settings.theme]);
 
   const current = useMemo(() => books.find(x => x.id === selectedId), [books, selectedId]);
+  const lastOpenedId = readLastBookId();
   const runningActivity = current?.status === "running" ? activities.find(x => x.status === "running") : undefined;
   const runningHere = !!current && runnerBookId === current.id;
   useWakeLock(runningHere && current?.status === "running");
@@ -574,7 +580,7 @@ export default function App() {
     <main className="min-w-0 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
       <header className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold sm:text-2xl">{navigation.find(x => x.id === page)?.label}</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">{navigation.find(x => x.id === page)?.label ?? "Modelli e redazione"}</h1>
           <p className="muted text-sm">Progetto local-first · GitHub autosync opzionale <span className="sm:hidden">· v{packageInfo.version}</span></p>
         </div>
         <div className="flex items-center gap-2">
@@ -601,6 +607,8 @@ export default function App() {
           <option value="">{books.length ? "+ Nuovo libro" : "Nessun libro"}</option>
           {books.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
         </select>
+        {current && <Button variant="outline" size="sm" onClick={() => setPage("bookSettings")}>
+          <Settings2 size={15} /> Modelli e redazione</Button>}
       </div>
 
       {current && <div className="panel status-bar z-20 mb-4 flex flex-col gap-3 p-3 shadow-md sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
@@ -623,6 +631,19 @@ export default function App() {
           {pendingFused > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({pendingFused})</Button>}
         </div>
       </div>}
+
+      {page === "library" && <LibraryPage books={books} selectedId={selectedId} lastOpenedId={lastOpenedId}
+        onOpen={id => { creatingNewBook.current = false; setSelectedId(id); setPage("dashboard"); }}
+        onOpenSettings={id => { creatingNewBook.current = false; setSelectedId(id); setPage("bookSettings"); }}
+        onNew={() => { creatingNewBook.current = true; setSelectedId(""); setPage("dashboard"); }} />}
+
+      {page === "bookSettings" && (current
+        ? <BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
+          onRoute={(kind, endpointId, modelId) => void updateBookRoute(kind, endpointId, modelId)}
+          onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
+          onEditorialMode={mode => void updateBookEditorial(mode)}
+          onConcurrency={value => void updateBookConcurrency(value)} />
+        : <Empty>Scegli un libro dalla Libreria per configurarne modelli e redazione.</Empty>)}
 
       {page === "dashboard" && <div className="space-y-4">
         {ready && !current && <NewBookPanel onCreate={createProject}/>}
@@ -714,7 +735,7 @@ export default function App() {
       {page === "costs" && (current ?
         <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start">
           <AiBudgetPanel key={current.id} book={current} settings={settings}
-            activities={activities} onSaveSettings={persistSettings} onRefresh={refresh}/>
+            activities={activities} onRefresh={refresh}/>
           <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>
         </div>
         : <Section title="Costi AI"><Empty>Seleziona un libro per vedere consumi e budget.</Empty></Section>)}
@@ -826,6 +847,7 @@ export default function App() {
             keyDraft={keyDrafts[endpoint.id] ?? ""}
             onKeyDraft={value => setKeyDrafts(old => ({ ...old, [endpoint.id]: value }))}
             onUpdate={update => updateEndpoint(endpoint.id, update)}
+            onRatesChange={aiPriceRates => setSettings(s => ({ ...s, aiPriceRates }))}
             onDiscover={() => void discoverModels(endpoint.id)}
             onRemove={settings.endpoints.length > 1
               ? () => setSettings(s => ({ ...s, endpoints: s.endpoints.filter(x => x.id !== endpoint.id) })) : undefined} />)}
@@ -833,11 +855,8 @@ export default function App() {
         <ModelRouterTable settings={settings} setSettings={setSettings} labels={LABELS} notify={setNotice}
           onRecommendedThinking={applyRecommendedThinking} />
         <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
-        {current && <BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
-          onRoute={(kind, endpointId, modelId) => void updateBookRoute(kind, endpointId, modelId)}
-          onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
-          onEditorialMode={mode => void updateBookEditorial(mode)}
-          onConcurrency={value => void updateBookConcurrency(value)} />}
+        {current && <p className="muted text-xs">I modelli, il thinking, la redazione leggera e i revisori in parallelo di un singolo libro
+          si impostano nella pagina del libro. <button type="button" className="underline" onClick={() => setPage("bookSettings")}>Apri Modelli e redazione di «{current.title}»</button></p>}
         <Section title="Trasparenza e ispezione delle richieste AI" description="Le tracce contengono prompt, testi del romanzo e possibili segreti: restano solo nel database locale del browser, con il tuo consenso, mai nei ZIP o su GitHub.">
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests === true}

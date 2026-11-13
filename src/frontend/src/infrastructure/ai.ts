@@ -2,7 +2,7 @@ import type { AppSettings, BookProject, TaskKind } from "../domain/types";
 import { routeFor } from "../domain/types";
 import { effectiveReasoningEffort } from "../domain/task-reasoning";
 import { decryptLocal } from "./crypto";
-import { validTokenCount } from "../domain/ai-usage";
+import { cachedTokensFromUsage, validTokenCount } from "../domain/ai-usage";
 import { assertChatModelCapability } from "../domain/model-capabilities";
 import { EmptyProviderContentError, MalformedProviderContentError, TruncatedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
@@ -19,6 +19,8 @@ export type ModelAnswer = {
   modelId: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Provider-reported cached share of inputTokens (OpenAI-style prompt_tokens_details). */
+  cachedInputTokens?: number;
 };
 
 export function normalizeEndpoint(raw: string): string {
@@ -208,6 +210,7 @@ export async function callModel(
     text: text.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
     inputTokens: validTokenCount(data.usage?.prompt_tokens),
     outputTokens: validTokenCount(data.usage?.completion_tokens),
+    cachedInputTokens: cachedTokensFromUsage(data.usage),
   };
 }
 

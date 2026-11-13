@@ -59,6 +59,8 @@ test("parametro output scelto: persistito e inviato una volta senza fallback su 
   await output.selectOption("max_completion_tokens");
   await page.getByLabel("API key").fill("sk-fixture-only");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("reasoning-mock");
+  await page.getByRole("spinbutton",{name:"Prezzo input per milione: reasoning-mock"}).fill("3");
+  await page.getByRole("spinbutton",{name:"Prezzo output per milione: reasoning-mock"}).fill("9");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
@@ -74,10 +76,6 @@ test("parametro output scelto: persistito e inviato una volta senza fallback su 
 
   await page.getByRole("button",{name:"Costi",exact:true}).click();
   const budget=page.getByRole("region",{name:"Budget AI"});
-  await budget.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
-  await budget.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("9");
-  await budget.getByRole("button",{name:"Salva tariffa del modello"}).click();
-  await expect(budget.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await budget.getByRole("spinbutton",{name:"Soglia budget in euro"}).fill("5");
   await budget.getByRole("checkbox",{name:"Attiva limite stimato"}).check();
   await budget.getByRole("button",{name:"Salva budget del libro"}).click();

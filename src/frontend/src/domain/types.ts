@@ -70,6 +70,8 @@ export interface AiPriceRate {
   modelId: string;
   inputEurPerMillion: number;
   outputEurPerMillion: number;
+  /** Price of input tokens served from the provider's cache. Absent = billed as ordinary input. */
+  cachedInputEurPerMillion?: number;
 }
 /** Optional, opt-in guardrails for AI calls made by the book autopilot. */
 export interface BookAiBudget {
@@ -267,6 +269,8 @@ export interface Activity {
   modelId?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Part of inputTokens the provider reported as served from its prompt cache (when it says so). */
+  cachedInputTokens?: number;
   /** Requested value; does not attest that LM Studio honored the parameter. */
   requestedReasoningEffort?: TaskReasoning;
   /** Author-entered EUR/million quote captured BEFORE the provider attempt. */

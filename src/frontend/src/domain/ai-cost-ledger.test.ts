@@ -36,7 +36,7 @@ describe("Esportazione ledger economico locale per il solo libro", () => {
     const rows = lines(csv);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toContain("costo_stimato_eur;fattura_provider_eur;stato_fattura");
-    expect(rows[1]).toContain('"2000";"1000";"completo";"snapshot";"3";"9";"0.015";"";"non_disponibile"');
+    expect(rows[1]).toContain('"2000";"";"1000";"completo";"snapshot";"3";"9";"";"0.015";"";"non_disponibile"');
     expect(csv).not.toMatch(/Segreto|prompt privato|PROSA PRIVATA|MANOSCRITTO|API_KEY/);
     expect(csv).not.toContain("book-one");
   });
@@ -51,9 +51,9 @@ describe("Esportazione ledger economico locale per il solo libro", () => {
     const rows = lines(csv);
     expect(rows).toHaveLength(3);
     expect(rows[1]).toContain('"old"');
-    expect(rows[1]).toContain('"listino_corrente";"30";"90";"0.15"');
+    expect(rows[1]).toContain('"listino_corrente";"30";"90";"";"0.15"');
     expect(rows[2]).toContain('"new"');
-    expect(rows[2]).toContain('"snapshot";"3";"9";"0.015"');
+    expect(rows[2]).toContain('"snapshot";"3";"9";"";"0.015"');
   });
 
   it("non inventa costo per usage mancante, parziale, running o conteggio invalido", () => {
@@ -69,18 +69,18 @@ describe("Esportazione ledger economico locale per il solo libro", () => {
     for (const id of ["missing", "partial", "running", "invalid"]) {
       const row = data.find(line => line.includes('"' + id + '"'))!;
       expect(row).toContain(';"non_disponibile"');
-      expect(row).toMatch(/;"[^"]+";"3";"9";"";"";"non_disponibile"$/);
+      expect(row).toMatch(/;"[^"]+";"3";"9";"";"";"";"non_disponibile"$/);
     }
-    expect(data.find(line => line.includes('"partial"'))).toContain('"0";"";"parziale"');
+    expect(data.find(line => line.includes('"partial"'))).toContain('"0";"";"";"parziale"');
     expect(data.find(line => line.includes('"running"'))).toContain('"in_corso"');
-    expect(data.find(line => line.includes('"zero"'))).toContain('"0";"0";"completo";"listino_corrente";"3";"9";"0";""');
+    expect(data.find(line => line.includes('"zero"'))).toContain('"0";"";"0";"completo";"listino_corrente";"3";"9";"";"0";""');
   });
 
   it("rifiuta snapshot malformati, non li ricalcola con le tariffe presenti", () => {
     const csv = buildAiCostLedgerCsv("book-one", [
       activity({ priceRateSnapshot: { ...quote, modelId: "other" } }),
     ], settings());
-    expect(csv).toContain('"snapshot_non_valido";"";"";"";"";"non_disponibile"');
+    expect(csv).toContain('"snapshot_non_valido";"";"";"";"";"";"non_disponibile"');
     expect(csv).not.toContain('"0.015"');
   });
 
@@ -97,7 +97,7 @@ describe("Esportazione ledger economico locale per il solo libro", () => {
     expect(csv).not.toMatch(/different-book|manual|preflight|book-two/);
     expect(csv).toContain('"failed"');
     expect(csv).toContain('"cancelled"');
-    expect(csv).toContain('"20";"5";"completo"');
+    expect(csv).toContain('"20";"";"5";"completo"');
   });
 
   it("neutralizza formule CSV, delimitatori, newline e quote anche in route/import maliziosi", () => {

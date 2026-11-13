@@ -5,9 +5,11 @@ import { assessAiCostAttempt, isBillableAttempt } from "./ai-budget";
 /** A local reconciliation export, never a provider invoice or real credit balance. */
 const COLUMNS = [
   "attivita_id", "creata_utc", "terminata_utc", "stato_attivita",
-  "endpoint_id", "modello_id", "token_input_osservati", "token_output_osservati",
+  "endpoint_id", "modello_id", "token_input_osservati", "token_input_in_cache_osservati",
+  "token_output_osservati",
   "copertura_usage", "origine_tariffa", "prezzo_input_eur_milione",
-  "prezzo_output_eur_milione", "costo_stimato_eur", "fattura_provider_eur",
+  "prezzo_output_eur_milione", "prezzo_input_cache_eur_milione",
+  "costo_stimato_eur", "fattura_provider_eur",
   "stato_fattura",
 ] as const;
 
@@ -66,9 +68,10 @@ export function buildAiCostLedgerCsv(
     const fields: Array<string | number | undefined> = [
       row.id, row.createdAt, row.endedAt, row.status,
       row.endpointId, row.modelId,
-      estimate.inputTokens, estimate.outputTokens, estimate.usageCoverage,
+      estimate.inputTokens, estimate.cachedInputTokens, estimate.outputTokens, estimate.usageCoverage,
       estimate.rateOrigin, estimate.rate?.inputEurPerMillion,
-      estimate.rate?.outputEurPerMillion, estimate.estimatedEur,
+      estimate.rate?.outputEurPerMillion, estimate.rate?.cachedInputEurPerMillion,
+      estimate.estimatedEur,
       undefined, "non_disponibile",
     ];
     return fields.map(csvField).join(";");

@@ -324,7 +324,9 @@ const activitySchema = z.object({
     modelId: z.string().min(1).max(300),
     inputEurPerMillion: z.number().finite().min(0).max(10_000),
     outputEurPerMillion: z.number().finite().min(0).max(10_000),
+    cachedInputEurPerMillion: z.number().finite().min(0).max(10_000).optional(),
   }).strict().optional(),
+  cachedInputTokens: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   interventionId: zId.optional(),
   appliedInterventionIds: z.array(zId).max(MAX_AUTHOR_INTERVENTIONS).optional(),
 }).passthrough();
@@ -388,6 +390,7 @@ const backupSchema = z.object({
       endpointId: z.string(), modelId: z.string(),
       inputEurPerMillion: z.number().finite().min(0).max(10_000),
       outputEurPerMillion: z.number().finite().min(0).max(10_000),
+      cachedInputEurPerMillion: z.number().finite().min(0).max(10_000).optional(),
     })).max(200).optional(),
   }).refine(settings => {
     try {

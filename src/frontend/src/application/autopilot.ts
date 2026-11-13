@@ -908,6 +908,7 @@ export class AutopilotRunner {
           started.modelId = result.modelId;
           started.inputTokens = result.inputTokens;
           started.outputTokens = result.outputTokens;
+          started.cachedInputTokens = result.cachedInputTokens;
           await guard.assertActive(); // Discard result if the lease was lost during the AI call.
           const latest = await getBook(bookId);
           if (!latest || latest.status !== "running" || latest.phase !== work.phase ||

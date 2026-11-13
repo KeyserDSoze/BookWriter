@@ -1,6 +1,6 @@
 import type { Activity } from "./types";
 import { validTokenCount } from "./ai-usage";
-import { isPriceRate } from "./ai-budget";
+import { isPriceRate, pricedCost } from "./ai-budget";
 
 export type TimelineStatus = "all" | Activity["status"];
 export type TimelineOrder = "newest" | "oldest";
@@ -47,8 +47,7 @@ export function estimatedTaskCostEur(activity:Activity):number|undefined{
   if(!isPriceRate(quote)||input===undefined||output===undefined ||
     quote.endpointId!==activity.endpointId || quote.modelId!==activity.modelId)
     return undefined;
-  const estimate=(input*quote.inputEurPerMillion+
-    output*quote.outputEurPerMillion)/1_000_000;
+  const estimate=pricedCost(input,output,quote,validTokenCount(activity.cachedInputTokens));
   return Number.isFinite(estimate)&&estimate>=0?estimate:undefined;
 }
 

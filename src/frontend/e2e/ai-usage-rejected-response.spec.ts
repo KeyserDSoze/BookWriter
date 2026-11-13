@@ -58,16 +58,14 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   await nav.getByRole("button",{name:"Impostazioni"}).click();
   await page.getByLabel("API key").fill("sk-test-observed-usage-not-real");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("mock-usage-review");
+  await page.getByRole("spinbutton",{name:"Prezzo input per milione: mock-usage-review"}).fill("3");
+  await page.getByRole("spinbutton",{name:"Prezzo output per milione: mock-usage-review"}).fill("9");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
   await page.getByRole("button",{name:"Costi",exact:true}).click();
   const panel=page.getByRole("region",{name:"Budget AI"});
   await expect(panel.getByRole("heading",{name:"Budget AI del libro"})).toBeVisible();
-  await panel.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
-  await panel.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("9");
-  await panel.getByRole("button",{name:"Salva tariffa del modello"}).click();
-  await expect(panel.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await panel.getByRole("spinbutton",{name:"Soglia budget in euro"}).fill("5");
   await panel.getByRole("checkbox",{name:"Attiva limite stimato"}).check();
   await panel.getByRole("button",{name:"Salva budget del libro"}).click();
@@ -124,19 +122,17 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   await expect(ledger.getByText(/chiamate precedenti senza tariffa storicizzata/))
     .toHaveCount(0);
   // A tenfold price update must affect only future calls; test after reload.
-  await ledger.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("30");
-  await ledger.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("90");
-  await ledger.getByRole("button",{name:"Salva tariffa del modello"}).click();
-  await expect(ledger.getByText(/Tariffa salvata localmente/)).toBeVisible();
+  await nav.getByRole("button",{name:"Impostazioni"}).click();
+  await page.getByRole("spinbutton",{name:"Prezzo input per milione: mock-usage-review"}).fill("30");
+  await page.getByRole("spinbutton",{name:"Prezzo output per milione: mock-usage-review"}).fill("90");
+  await page.getByRole("button",{name:"Salva impostazioni"}).click();
+  await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
   await page.getByRole("button",{name:"Costi",exact:true}).click();
   const refreshed=page.getByRole("region",{name:"Budget AI"});
   await expect(refreshed.getByText(/Spesa stimata da usage noto:/).locator(".."))
     .toContainText("0,0014");
-  await expect(refreshed.getByRole("spinbutton",{name:"Prezzo input per milione"}))
-    .toHaveValue("30");
-  await expect(refreshed.getByRole("spinbutton",{name:"Prezzo output per milione"}))
-    .toHaveValue("90");
+  await expect(refreshed.getByText(/input 30 · output 90/)).toBeVisible();
   await expect(refreshed.getByText(/Consumi incerti/)).toHaveCount(0);
 });
 }

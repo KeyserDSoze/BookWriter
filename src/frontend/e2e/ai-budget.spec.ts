@@ -52,6 +52,8 @@ test("budget desktop/mobile: prevent provider spend and stop after missing usage
   await nav.getByRole("button",{name:"Impostazioni"}).click();
   await page.getByLabel("API key").fill("sk-test-budget-guard-not-real");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("budget-review-model");
+  await page.getByRole("spinbutton",{name:"Prezzo input per milione: budget-review-model"}).fill("3");
+  await page.getByRole("spinbutton",{name:"Prezzo output per milione: budget-review-model"}).fill("9");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await nav.getByRole("button",{name:"Dashboard"}).click();
@@ -59,10 +61,6 @@ test("budget desktop/mobile: prevent provider spend and stop after missing usage
   await page.getByRole("button",{name:"Costi",exact:true}).click();
   const panel=page.getByRole("region",{name:"Budget AI"});
   await expect(panel.getByRole("heading",{name:"Budget AI del libro"})).toBeVisible();
-  await panel.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
-  await panel.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("9");
-  await panel.getByRole("button",{name:"Salva tariffa del modello"}).click();
-  await expect(panel.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await panel.getByRole("spinbutton",{name:"Soglia budget in euro"}).fill("0.01");
   await panel.getByRole("checkbox",{name:"Attiva limite stimato"}).check();
   await panel.getByRole("button",{name:"Salva budget del libro"}).click();

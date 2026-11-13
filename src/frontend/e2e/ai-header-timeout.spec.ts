@@ -64,6 +64,8 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
   await nav.getByRole("button",{name:"Impostazioni"}).click();
   await page.getByLabel("API key").fill("sk-local-test-only");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("mock-json-boundary");
+  await page.getByRole("spinbutton",{name:"Prezzo input per milione: mock-json-boundary"}).fill("3");
+  await page.getByRole("spinbutton",{name:"Prezzo output per milione: mock-json-boundary"}).fill("9");
   await page.getByText("Opzioni avanzate").first().click();
   await page.getByRole("spinbutton",{name:"Attesa massima header AI (secondi)"}).fill("60");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
@@ -73,10 +75,6 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
 
   await page.getByRole("button",{name:"Costi",exact:true}).click();
   const budget=page.getByRole("region",{name:"Budget AI"});
-  await budget.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("3");
-  await budget.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("9");
-  await budget.getByRole("button",{name:"Salva tariffa del modello"}).click();
-  await expect(budget.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await budget.getByRole("spinbutton",{name:"Soglia budget in euro"}).fill("5");
 
   const state=()=>page.evaluate(()=>new Promise<{

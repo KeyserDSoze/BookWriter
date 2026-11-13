@@ -127,6 +127,7 @@ export class ReviewCallPool {
         started.modelId = settled.answer.modelId;
         started.inputTokens = settled.answer.inputTokens;
         started.outputTokens = settled.answer.outputTokens;
+        started.cachedInputTokens = settled.answer.cachedInputTokens;
       } else keepObservedUsageOnRejectedReply(started, settled.error);
       started.status = "cancelled";
       started.error = "Revisione in parallelo non applicata: la sessione si è fermata o il testo è cambiato prima di usarla.";

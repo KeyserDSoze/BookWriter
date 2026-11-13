@@ -29,12 +29,8 @@ async function bookState(page: Page) {
 }
 
 async function openSettings(page: Page) {
-  const mobile = test.info().project.name === "mobile-chromium";
-  const nav = page.getByRole("navigation", {
-    name: mobile ? "Navigazione mobile" : "Navigazione principale",
-  });
-  await nav.getByRole("button", { name: "Impostazioni" }).click();
-  await expect(page.getByRole("heading", { name: /Override del libro:/ })).toBeVisible();
+  await page.getByRole("button", { name: "Modelli e redazione" }).click();
+  await expect(page.getByRole("heading", { name: /Modelli e redazione:/ })).toBeVisible();
 }
 
 test("due schede: override modello stale rifiutato, writer attivo protetto, retry dopo rilascio", async ({ page }) => {

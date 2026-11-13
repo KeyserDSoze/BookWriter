@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Wallet } from "lucide-react";
-import type { Activity, AiPriceRate, AppSettings, BookProject, ModelRoute } from "../domain/types";
-import { accountBookAiBudget, accountSessionAiBudget, assessAiBudgetHeadroom, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid, isPriceRate } from "../domain/ai-budget";
+import type { Activity, AppSettings, BookProject, ModelRoute } from "../domain/types";
+import { accountBookAiBudget, accountSessionAiBudget, assessAiBudgetHeadroom, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid } from "../domain/ai-budget";
 import { getBook, saveBook } from "../infrastructure/db";
 import { exportAiCostLedgerCsv } from "../infrastructure/ai-ledger-export";
 import { isBillableAttempt } from "../domain/ai-budget";
@@ -18,10 +18,9 @@ function uniqueRoutes(book: BookProject, settings: AppSettings): ModelRoute[] {
   return Array.from(new Map(routes.map(x => [JSON.stringify([x.endpointId, x.modelId]), x])).values());
 }
 export function AiBudgetPanel({
-  book, settings, activities, onSaveSettings, onRefresh,
+  book, settings, activities, onRefresh,
 }: {
   book: BookProject; settings: AppSettings; activities: Activity[];
-  onSaveSettings: (next: AppSettings) => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const [limit, setLimit] = useState(String(book.aiBudget?.limitEur ?? 5));
@@ -29,19 +28,6 @@ export function AiBudgetPanel({
   const [sessionLimit, setSessionLimit] = useState(String(book.aiBudget?.sessionLimitEur ?? ""));
   const [enabled, setEnabled] = useState(book.aiBudget?.enabled ?? false);
   const routes = uniqueRoutes(book, settings);
-  const [selected, setSelected] = useState(JSON.stringify([
-    routes[0]?.endpointId ?? "", routes[0]?.modelId ?? "",
-  ]));
-  // Settings load after books on startup; use the first actual route until
-  // the author makes a selection, instead of retaining an empty initial key.
-  const selectedRoute = routes.find(x => JSON.stringify([x.endpointId, x.modelId]) === selected)
-    ?? routes[0];
-  const selectedValue = selectedRoute ? JSON.stringify([selectedRoute.endpointId, selectedRoute.modelId]) : "";
-  const savedRate = (settings.aiPriceRates ?? []).find(x =>
-    x.endpointId === selectedRoute?.endpointId && x.modelId === selectedRoute?.modelId);
-  const [draftInput, setDraftInput] = useState("");
-  const [draftOutput, setDraftOutput] = useState("");
-  const [editingPrice, setEditingPrice] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const snapshot = book.aiBudget?.enabled
@@ -60,33 +46,6 @@ export function AiBudgetPanel({
     ? assessAiBudgetHeadroom(snapshot, book.aiBudget.limitEur) : undefined;
   const sessionHeadroom = sessionBudget && sessionAccounting
     ? assessAiBudgetHeadroom(sessionAccounting, sessionBudget.sessionLimitEur!) : undefined;
-  const rateIn = editingPrice ? draftInput : String(savedRate?.inputEurPerMillion ?? "");
-  const rateOut = editingPrice ? draftOutput : String(savedRate?.outputEurPerMillion ?? "");
-
-  async function saveRate() {
-    if (!selectedRoute || !rateIn.trim() || !rateOut.trim()) {
-      setMessage("Seleziona un modello e inserisci entrambe le tariffe."); return;
-    }
-    const rate: AiPriceRate = {
-      ...selectedRoute,
-      inputEurPerMillion: Number(rateIn), outputEurPerMillion: Number(rateOut),
-    };
-    if (!isPriceRate(rate)) { setMessage("Tariffe non valide: usa importi non negativi e finiti."); return; }
-    setBusy(true);
-    try {
-      await onSaveSettings({
-        ...settings, aiPriceRates: [
-          ...(settings.aiPriceRates ?? []).filter(x =>
-            x.endpointId !== rate.endpointId || x.modelId !== rate.modelId),
-          rate,
-        ],
-      });
-      setEditingPrice(false);
-      setMessage("Tariffa salvata localmente. Verifica gli importi sul portale del provider.");
-    } catch (err) { setMessage(err instanceof Error ? err.message : "Salvataggio tariffa non riuscito."); }
-    finally { setBusy(false); }
-  }
-
   async function saveBudget() {
     const requested = {
       enabled, limitEur: Number(limit), maxOutputTokens: Number(outputMax),
@@ -234,30 +193,20 @@ export function AiBudgetPanel({
     </div>
     <AiCostHistoryPanel bookId={book.id} activities={activities} settings={settings}/>
     <div className="mt-4 space-y-2 border-t border-slate-300 pt-3 dark:border-slate-700">
-      <h3 className="text-sm font-semibold">Tariffe configurate dall'autore (€/milione di token)</h3>
-      <p className="muted text-xs">Ogni modello e provider necessita di una tariffa input e output; non vengono precompilate tariffe commerciali. Cambiare il prezzo vale solo per le nuove richieste che salvano la tariffa al momento del tentativo.</p>
-      {routes.length ? <>
-        <label className="block text-sm">Modello / endpoint
-          <select className="field mt-1" aria-label="Modello per tariffa"
-            value={selectedValue} onChange={e => { setSelected(e.target.value); setEditingPrice(false); }}>
-            {routes.map(r => <option key={JSON.stringify([r.endpointId,r.modelId])}
-              value={JSON.stringify([r.endpointId,r.modelId])}>{r.modelId} · {r.endpointId}</option>)}
-          </select>
-        </label>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="block text-sm">Prezzo input €/milione
-            <input className="field mt-1" aria-label="Prezzo input per milione" type="number"
-              min="0" step="0.0001" value={rateIn}
-              onChange={e => { if (!editingPrice) {setDraftOutput(rateOut);setEditingPrice(true);} setDraftInput(e.target.value); }}/>
-          </label>
-          <label className="block text-sm">Prezzo output €/milione
-            <input className="field mt-1" aria-label="Prezzo output per milione" type="number"
-              min="0" step="0.0001" value={rateOut}
-              onChange={e => { if (!editingPrice) {setDraftInput(rateIn);setEditingPrice(true);} setDraftOutput(e.target.value); }}/>
-          </label>
-        </div>
-        <Button size="sm" disabled={busy} variant="outline" onClick={() => void saveRate()}>Salva tariffa del modello</Button>
-      </> : <p className="muted text-sm">Configura prima un modello in Impostazioni → Router dei modelli.</p>}
+      <h3 className="text-sm font-semibold">Tariffe in uso (€/milione di token)</h3>
+      <p className="muted text-xs">Le tariffe si impostano per ogni modello nella card dell'endpoint, in Impostazioni.
+        Qui sono mostrate in sola lettura; cambiarle vale solo per le nuove richieste.</p>
+      {routes.length ? <ul className="space-y-1 text-sm">
+        {routes.map(r => {
+          const rate = (settings.aiPriceRates ?? []).find(x => x.endpointId === r.endpointId && x.modelId === r.modelId);
+          return <li key={JSON.stringify([r.endpointId, r.modelId])}>
+            <b>{r.modelId}</b> · {r.endpointId}:{" "}
+            {rate ? <>input {rate.inputEurPerMillion} · output {rate.outputEurPerMillion}
+              {rate.cachedInputEurPerMillion !== undefined && <> · input in cache {rate.cachedInputEurPerMillion}</>}</>
+              : <span className="text-amber-700 dark:text-amber-300">tariffa mancante</span>}
+          </li>;
+        })}
+      </ul> : <p className="muted text-sm">Configura prima un modello in Impostazioni.</p>}
     </div>
     <p className="muted mt-3 text-xs">
       Il modello potrebbe ignorare max_tokens e un provider potrebbe addebitare chiamate senza usage.

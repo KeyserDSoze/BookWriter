@@ -34,6 +34,15 @@ export function validTokenCount(value: unknown): number | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
     ? value : undefined;
 }
+/** Cached prompt tokens as reported by OpenAI-compatible providers (OpenAI, DeepSeek style). */
+export function cachedTokensFromUsage(usage: unknown): number | undefined {
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return undefined;
+  const u = usage as { prompt_tokens_details?: unknown; prompt_cache_hit_tokens?: unknown };
+  const details = u.prompt_tokens_details;
+  const nested = details && typeof details === "object" && !Array.isArray(details)
+    ? validTokenCount((details as { cached_tokens?: unknown }).cached_tokens) : undefined;
+  return nested ?? validTokenCount(u.prompt_cache_hit_tokens);
+}
 
 export function summarizeAiUsage(activities: readonly Activity[]): UsageSummary {
   const byModel = new Map<string, ModelUsage>();

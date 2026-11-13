@@ -20,8 +20,8 @@ export function BookOverrideTable({ book, settings, labels, resets, onRoute, onR
   const running = book.status === "running";
   return <section className="panel min-w-0 space-y-3 p-3 sm:p-4">
     <div>
-      <h2 className="text-lg font-semibold">Override del libro: {book.title}</h2>
-      <p className="muted text-xs">Valgono solo per questo libro e si applicano subito (non servono «Salva impostazioni»). Si modificano con l'autopilot fermo.</p>
+      <h2 className="text-lg font-semibold">Modelli e redazione: {book.title}</h2>
+      <p className="muted text-xs">Queste scelte valgono solo per questo libro e prevalgono sul router globale; si applicano subito (non serve «Salva impostazioni») e si modificano con l'autopilot fermo. Dove non imposti nulla vale il router delle Impostazioni.</p>
     </div>
     <div className="grid gap-2 sm:grid-cols-2">
       <label className="block text-xs font-semibold">Redazione dei capitoli

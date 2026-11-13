@@ -140,15 +140,13 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await nav.getByRole("button", { name: "Impostazioni" }).click();
   await page.getByLabel("API key").fill("sk-test-merge-provider-not-real");
   await page.getByRole("textbox", { name: "Modello predefinito" }).fill("demo-merge-model");
+  await page.getByRole("spinbutton", { name: "Prezzo input per milione: demo-merge-model" }).fill("3");
+  await page.getByRole("spinbutton", { name: "Prezzo output per milione: demo-merge-model" }).fill("9");
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
   // Wait for WebCrypto + IndexedDB; clicking does not await the async handler.
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await nav.getByRole("button", { name: "Costi", exact: true }).click();
   const budget = page.getByRole("region", { name: "Budget AI" });
-  await budget.getByRole("spinbutton", { name: "Prezzo input per milione" }).fill("3");
-  await budget.getByRole("spinbutton", { name: "Prezzo output per milione" }).fill("9");
-  await budget.getByRole("button", { name: "Salva tariffa del modello" }).click();
-  await expect(budget.getByText(/Tariffa salvata localmente/)).toBeVisible();
   await budget.getByRole("spinbutton", { name: "Soglia budget in euro" }).fill("5");
   await budget.getByRole("checkbox", { name: "Attiva limite stimato" }).check();
   await budget.getByRole("button", { name: "Salva budget del libro" }).click();
@@ -205,19 +203,17 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await expect(ledger.getByText(/chiamate precedenti senza tariffa storicizzata/))
     .toHaveCount(0);
   // Updating today's tariff tenfold must not reprice the historical draft.
-  await ledger.getByRole("spinbutton",{name:"Prezzo input per milione"}).fill("30");
-  await ledger.getByRole("spinbutton",{name:"Prezzo output per milione"}).fill("90");
-  await ledger.getByRole("button",{name:"Salva tariffa del modello"}).click();
-  await expect(ledger.getByText(/Tariffa salvata localmente/)).toBeVisible();
+  await nav.getByRole("button", { name: "Impostazioni" }).click();
+  await page.getByRole("spinbutton",{name:"Prezzo input per milione: demo-merge-model"}).fill("30");
+  await page.getByRole("spinbutton",{name:"Prezzo output per milione: demo-merge-model"}).fill("90");
+  await page.getByRole("button",{name:"Salva impostazioni"}).click();
+  await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Costi", exact: true }).click();
   const restored=page.getByRole("region",{name:"Budget AI"});
   await expect(restored.getByText(/Spesa stimata da usage noto:/).locator(".."))
     .toContainText("0,0014");
-  await expect(restored.getByRole("spinbutton",{name:"Prezzo input per milione"}))
-    .toHaveValue("30");
-  await expect(restored.getByRole("spinbutton",{name:"Prezzo output per milione"}))
-    .toHaveValue("90");
+  await expect(restored.getByText(/input 30 · output 90/)).toBeVisible();
   await expect(restored.getByText(/Consumi incerti/)).toHaveCount(0);
 
   await nav.getByRole("button", { name: "Libro" }).click();

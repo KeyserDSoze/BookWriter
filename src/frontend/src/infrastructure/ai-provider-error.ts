@@ -1,5 +1,5 @@
 import type { Activity } from "../domain/types";
-import { validTokenCount } from "../domain/ai-usage";
+import { cachedTokensFromUsage, validTokenCount } from "../domain/ai-usage";
 
 /** Valid HTTP 2xx + decoded JSON but unusable message content. Only public
  * route identifiers and sanitized provider token counts survive. Never store
@@ -9,6 +9,7 @@ export class ProviderContentError extends Error {
   readonly modelId: string;
   readonly inputTokens?: number;
   readonly outputTokens?: number;
+  readonly cachedInputTokens?: number;
 
   constructor(
     message: string, endpointId: string, modelId: string,
@@ -20,6 +21,7 @@ export class ProviderContentError extends Error {
     this.modelId = modelId;
     this.inputTokens = validTokenCount(usage?.prompt_tokens);
     this.outputTokens = validTokenCount(usage?.completion_tokens);
+    this.cachedInputTokens = cachedTokensFromUsage(usage);
   }
 }
 export class EmptyProviderContentError extends ProviderContentError {
@@ -61,4 +63,5 @@ export function keepObservedUsageOnRejectedReply(activity: Activity, error: unkn
   activity.modelId = error.modelId;
   activity.inputTokens = error.inputTokens;
   activity.outputTokens = error.outputTokens;
+  activity.cachedInputTokens = error.cachedInputTokens;
 }

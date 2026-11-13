@@ -66,9 +66,9 @@ test("ledger CSV desktop/mobile: download locale, costo stimato e dati privati e
   expect(csv.startsWith("\uFEFF")).toBe(true);
   expect(csv).toContain('"ledger-priced"');
   expect(csv).toContain('"\'=FORMULA"');
-  expect(csv).toContain('"2000";"1000";"completo";"snapshot";"3";"9";"0.015";"";"non_disponibile"');
+  expect(csv).toContain('"2000";"";"1000";"completo";"snapshot";"3";"9";"";"0.015";"";"non_disponibile"');
   expect(csv).toContain('"ledger-missing"');
-  expect(csv).toContain('"mancante";"tariffa_assente";"";"";"";"";"non_disponibile"');
+  expect(csv).toContain('"mancante";"tariffa_assente";"";"";"";"";"";"non_disponibile"');
   expect(csv).not.toMatch(/PROSA_SEGRETA|PROMPT_PRIVATO|MANOSCRITTO_PRIVATO|manual-dont-export|other-book-dont-export/);
   expect(csv.split("\r\n").filter(Boolean)).toHaveLength(3);
   await expect(panel.getByText(/CSV del ledger preparato localmente/)).toBeVisible();

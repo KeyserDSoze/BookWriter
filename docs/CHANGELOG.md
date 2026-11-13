@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## 0.13.0 — 2026-11-14 (main) — Libreria, impostazioni del libro e prezzi per modello
+
+- **Libreria:** nuova pagina «Libreria» con tutti i libri (stato, avanzamento, ultimo aggiornamento), «Apri», «Nuovo libro» e «Riprendi l'ultimo». All'avvio si riapre l'ultimo libro su cui hai lavorato (un semplice puntatore nel browser), non più il primo dell'elenco.
+- **Impostazioni del libro:** gli override per libro (modelli, thinking, redazione leggera, revisori in parallelo) escono dalle Impostazioni globali e vivono nella pagina «Modelli e redazione» del libro, raggiungibile dalla Libreria e dal pulsante accanto al libro attivo. Si applicano subito, con lock e controllo di revisione come prima.
+- **Prezzi per modello:** ogni endpoint ha ora una tabella «Prezzi per modello (€ per 1M token)» con input, output e **input in cache**. Fanno parte delle impostazioni da salvare; la pagina Costi li mostra in sola lettura. Nessun prezzo è precompilato.
+- **Token in cache:** il costo è calcolato dai token restituiti dal provider; se dichiara i token serviti dalla cache (`prompt_tokens_details.cached_tokens` o `prompt_cache_hit_tokens`) quella parte è addebitata al prezzo «input in cache» (se impostato, altrimenti come input). Senza usage o senza prezzo il costo resta «non calcolabile». La stima preventiva del budget resta prudente (tutto come input).
+- Il CSV del ledger ha due colonne in più (`token_input_in_cache_osservati`, `prezzo_input_cache_eur_milione`); backup ZIP: campi opzionali, archivi precedenti leggibili.
+
 ## 0.12.3 — 2026-11-13 (main) — Impostazioni più semplici e compatte
 
 - **Salvataggio sempre visibile:** una barra fissa in alto mostra «Modifiche non salvate» / «Tutto salvato» (con l'ora dell'ultimo salvataggio), con «Salva impostazioni» e «Annulla modifiche». Avviso se chiudi la pagina con modifiche non salvate. Tema e ispezione AI si salvano subito e non sporcano lo stato.
