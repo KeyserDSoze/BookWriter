@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## 0.12.2 — 2026-11-13 (main) — Risposte JSON con testo extra
+
+- **Fix:** un modello che aggiungeva una frase dopo (o prima) del JSON, o chiudeva male il blocco di codice, fermava l'autopilot con «Unexpected non-whitespace character after JSON». Ora si legge il primo valore JSON valido della risposta, ignorando il testo attorno; il contenuto resta validato dagli stessi schemi di prima e una risposta senza JSON valido viene comunque rifiutata.
+- Vale per memoria narrativa, piano, sinossi, revisioni e giudizi della redazione.
+
 ## 0.12.1 — 2026-11-13 (main) — Revisori in parallelo e ritentativo automatico su ogni endpoint (ADR 0151)
 
 - **Ritentativo automatico opt-in per qualsiasi endpoint** (Impostazioni, per endpoint): se un task fallisce l'autopilot lo ripete da solo, da 1 a 5 volte (default 2). Su un endpoint con chiave c'è una pausa crescente tra i tentativi e un avviso: ogni tentativo può essere fatturato. Non ritenta errori di credenziali (HTTP 401/403/404) o di configurazione, prompt troppo lungo, interruzioni dell'autore, perdita del lease, né oltre il budget AI. Ogni tentativo resta nelle Attività. Il vecchio flag per endpoint locali senza chiave continua a funzionare.

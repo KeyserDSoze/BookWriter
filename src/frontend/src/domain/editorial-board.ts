@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BookProject, Chapter, Scene, TaskKind } from "./types";
+import { parseJsonReply } from "./json-reply";
 import { activeHistoricalSources, activeHistoricalSourceRelations, validateHistoricalClaim, type HistoricalClaim } from "./historical-research";
 import { activeBibliography } from "./bibliography";
 import { activeArchivalItems } from "./archival-catalog";
@@ -341,12 +342,7 @@ export interface ChapterEditorialCycle {
   roles?: EditorialRole[];
 }
 function parseJson(raw: string): unknown {
-  const fence = String.fromCharCode(96).repeat(3);
-  const text = raw.trim();
-  const stripped = text.startsWith(fence) ?
-    text.slice(fence.length).replace(/^json\s*/i, "").replace(/\s*$/,"") : text;
-  const clean = stripped.endsWith(fence) ? stripped.slice(0,-fence.length) : stripped;
-  return JSON.parse(clean.trim()) as unknown;
+  return parseJsonReply(raw);
 }
 function bound(text: string, limit: number, label: string): string {
   if (text.length > limit)

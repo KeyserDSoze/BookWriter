@@ -11,6 +11,7 @@ import { applyMemoryResponse, assertCompactionShrinks, DELTA_REPLY_RULE, DELTA_R
   memoryNeedsCompaction, memorySchema } from "../domain/memory-delta";
 import { AUTO_RETRY_BACKOFF, DEFAULT_AUTO_RETRIES, endpointAutoRetry, isAutoRetryable, retryDelay } from "./auto-retry";
 import { PromptExceedsContextError } from "./context-guard";
+import { parseJsonReply } from "../domain/json-reply";
 import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
@@ -122,8 +123,7 @@ async function launchReviewsAhead(
 }
 
 function parseJson(raw: string): unknown {
-  const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
-  return JSON.parse(cleaned) as unknown;
+  return parseJsonReply(raw);
 }
 function outlineText(book: BookProject): string {
   return book.chapters.map(ch => `${ch.number}. ${ch.title}: ${ch.purpose}\n${ch.scenes.map(s => `  - ${s.id}: ${s.title}: ${s.objective}`).join("\n")}`).join("\n");
