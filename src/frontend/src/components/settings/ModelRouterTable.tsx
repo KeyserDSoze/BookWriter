@@ -57,6 +57,12 @@ export function ModelRouterTable({ settings, setSettings, labels, notify, onReco
   }, [group, query, onlyCustom, settings.taskRoutes, settings.taskReasoningEfforts, labels]);
   const chosen = visible.filter(kind => selected.has(kind));
   const allVisibleChosen = visible.length > 0 && chosen.length === visible.length;
+  const [bulk, setBulk] = useState({ endpointId: "", modelId: "", thinking: "" });
+  const chosenEndpoints = new Set(chosen.map(kind => effective(kind).endpointId));
+  const bulkCatalogEndpointId = bulk.endpointId || (chosenEndpoints.size === 1 ? [...chosenEndpoints][0]! : "");
+  const bulkCatalogEndpoint = settings.endpoints.find(e => e.id === bulkCatalogEndpointId);
+  const bulkModels = chatModels(bulkCatalogEndpoint);
+  const bulkHasChange = !!(bulk.endpointId || bulk.modelId || bulk.thinking);
 
   function setRoute(kind: TaskKind, endpointId: string, modelId: string) {
     setSettings(s => {
@@ -69,47 +75,65 @@ export function ModelRouterTable({ settings, setSettings, labels, notify, onReco
   function toggle(kind: TaskKind, on: boolean) {
     setSelected(old => { const next = new Set(old); if (on) next.add(kind); else next.delete(kind); return next; });
   }
-  function bulkModel(modelId: string) {
-    if (!modelId || chosen.length === 0) return;
+  /** Endpoint + model for a task after moving it to `endpointId`: keep the current model if the new
+   * endpoint lists it, otherwise fall back to that endpoint's first chat model (flagged to the author). */
+  function retarget(s: AppSettings, kind: TaskKind, endpointId: string, explicitModel: string): { route?: { endpointId: string; modelId: string }; adjusted: boolean } {
+    const cur = s.taskRoutes[kind];
+    const curEndpoint = cur?.endpointId || s.defaultRoute.endpointId;
+    const isDefaultEndpoint = endpointId === s.defaultRoute.endpointId;
+    const catalog = chatModels(s.endpoints.find(e => e.id === endpointId));
+    let modelId = explicitModel === DEFAULT_CHOICE ? "" : explicitModel || (cur?.modelId ?? "");
+    let adjusted = false;
+    if (!explicitModel && endpointId !== curEndpoint) {
+      const inherited = modelId || s.defaultRoute.modelId;
+      if (catalog.length > 0 && !catalog.includes(inherited)) { modelId = catalog[0]!; adjusted = true; }
+      else modelId = isDefaultEndpoint ? "" : inherited;
+    }
+    if (!modelId && isDefaultEndpoint) return { adjusted };
+    return { route: { endpointId, modelId }, adjusted };
+  }
+  function changeRowEndpoint(kind: TaskKind, endpointId: string) {
+    let adjusted: string | undefined;
     setSettings(s => {
       const taskRoutes = { ...s.taskRoutes };
-      for (const kind of chosen) {
-        const endpointId = taskRoutes[kind]?.endpointId ?? "";
-        const model = modelId === DEFAULT_CHOICE ? "" : modelId;
-        if (!model && (!endpointId || endpointId === s.defaultRoute.endpointId)) delete taskRoutes[kind];
-        else taskRoutes[kind] = { endpointId: endpointId || s.defaultRoute.endpointId, modelId: model };
-      }
+      if (!endpointId) { const m = taskRoutes[kind]?.modelId ?? ""; if (m) taskRoutes[kind] = { endpointId: s.defaultRoute.endpointId, modelId: m }; else delete taskRoutes[kind]; return { ...s, taskRoutes }; }
+      const result = retarget(s, kind, endpointId, "");
+      if (result.route) taskRoutes[kind] = result.route; else delete taskRoutes[kind];
+      if (result.adjusted) adjusted = result.route?.modelId;
       return { ...s, taskRoutes };
     });
-    notify(`Modello ${modelId === DEFAULT_CHOICE ? "predefinito ripristinato" : "«" + modelId + "» assegnato"} a ${chosen.length} attività; il thinking non è cambiato. Salva per conservarlo.`);
+    if (adjusted) notify(`Il modello precedente non esiste su questo endpoint: impostato «${adjusted}». Cambialo se vuoi.`);
   }
-  function bulkEndpoint(endpointId: string) {
-    if (!endpointId || chosen.length === 0) return;
-    setSettings(s => {
-      const taskRoutes = { ...s.taskRoutes };
-      for (const kind of chosen) {
-        const model = taskRoutes[kind]?.modelId ?? "";
-        if (!model && endpointId === s.defaultRoute.endpointId) delete taskRoutes[kind];
-        else taskRoutes[kind] = { endpointId, modelId: model };
-      }
-      return { ...s, taskRoutes };
-    });
-    notify(`Endpoint cambiato per ${chosen.length} attività. Salva per conservarlo.`);
-  }
-  function bulkThinking(choice: string) {
-    if (!choice || chosen.length === 0) return;
-    const level = choice === INHERIT_CHOICE ? undefined : choice as TaskReasoning;
+  function applyBulk() {
+    if (!bulkHasChange || chosen.length === 0) return;
+    const level = bulk.thinking === "" ? undefined : bulk.thinking === INHERIT_CHOICE ? null : bulk.thinking as TaskReasoning;
+    const adjustedKinds: TaskKind[] = [];
     const skipped: TaskKind[] = [];
-    const applied: TaskKind[] = [];
-    for (const kind of chosen) (level === undefined || reasoningLevelSupported(supportOf(kind), level) ? applied : skipped).push(kind);
     setSettings(s => {
+      const taskRoutes = { ...s.taskRoutes };
       const taskReasoningEfforts = { ...s.taskReasoningEfforts };
-      for (const kind of applied) { if (level === undefined) delete taskReasoningEfforts[kind]; else taskReasoningEfforts[kind] = level; }
-      return { ...s, taskReasoningEfforts };
+      for (const kind of chosen) {
+        if (bulk.endpointId || bulk.modelId) {
+          const endpointId = bulk.endpointId || taskRoutes[kind]?.endpointId || s.defaultRoute.endpointId;
+          const result = retarget(s, kind, endpointId, bulk.modelId);
+          if (result.route) taskRoutes[kind] = result.route; else delete taskRoutes[kind];
+          if (result.adjusted) adjustedKinds.push(kind);
+        }
+        if (level !== undefined) {
+          const e = s.endpoints.find(x => x.id === (taskRoutes[kind]?.endpointId || s.defaultRoute.endpointId));
+          const modelId = taskRoutes[kind]?.modelId || s.defaultRoute.modelId;
+          if (level === null) delete taskReasoningEfforts[kind];
+          else if (reasoningLevelSupported(reasoningSupport(e, modelId), level)) taskReasoningEfforts[kind] = level;
+          else skipped.push(kind);
+        }
+      }
+      return { ...s, taskRoutes, taskReasoningEfforts };
     });
-    notify(`Thinking ${level === undefined ? "ereditato" : REASONING_LEVEL_LABEL[level as keyof typeof REASONING_LEVEL_LABEL] ?? "automatico"} per ${applied.length} attività` +
-      (skipped.length ? `; ${skipped.length} saltate perché il loro modello non lo supporta (${skipped.map(k => labels[k]).join(", ")})` : "") +
-      ". Salva per conservarlo.");
+    setBulk({ endpointId: "", modelId: "", thinking: "" });
+    const parts = [`Modifiche applicate a ${chosen.length} attività`];
+    if (adjustedKinds.length) parts.push(`${adjustedKinds.length} non avevano il modello sul nuovo endpoint e usano il primo disponibile`);
+    if (skipped.length) parts.push(`thinking non applicato a ${skipped.map(k => labels[k]).join(", ")} (modello senza quel livello)`);
+    notify(parts.join("; ") + ". Il thinking non toccato resta com'era. Salva per conservare.");
   }
 
   return <section className="panel min-w-0 space-y-3 p-3 sm:p-4">
@@ -142,30 +166,42 @@ export function ModelRouterTable({ settings, setSettings, labels, notify, onReco
       <span className="muted ml-auto text-xs">{visible.length} di {TASK_KINDS.length} attività</span>
     </div>
 
-    {chosen.length > 0 && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-600/50 bg-emerald-50 p-2 text-xs dark:bg-emerald-950/40">
-      <strong className="text-sm">{chosen.length} selezionate</strong>
-      <label className="flex items-center gap-1">Modello
-        <select className="field field-sm w-auto" aria-label="Cambia modello alle attività selezionate" value=""
-          onChange={e => bulkModel(e.target.value)}>
-          <option value="">Scegli…</option>
-          <option value={DEFAULT_CHOICE}>Predefinito (nessun override)</option>
-          {chatModels(defaultEndpoint).map(model => <option key={model} value={model}>{model}</option>)}
-        </select></label>
-      <label className="flex items-center gap-1">Endpoint
-        <select className="field field-sm w-auto" aria-label="Cambia endpoint alle attività selezionate" value=""
-          onChange={e => bulkEndpoint(e.target.value)}>
-          <option value="">Scegli…</option>
-          {settings.endpoints.map(endpoint => <option key={endpoint.id} value={endpoint.id}>{endpoint.name}</option>)}
-        </select></label>
-      <label className="flex items-center gap-1">Thinking
-        <select className="field field-sm w-auto" aria-label="Cambia thinking alle attività selezionate" value=""
-          onChange={e => bulkThinking(e.target.value)}>
-          <option value="">Scegli…</option>
-          <option value={INHERIT_CHOICE}>Eredita dall'endpoint</option>
-          <option value="automatic">Automatico (non inviare)</option>
-          {REASONING_LEVELS.map(level => <option key={level} value={level}>{REASONING_LEVEL_LABEL[level]}</option>)}
-        </select></label>
-      <Button variant="outline" onClick={() => setSelected(new Set())}>Deseleziona</Button>
+    {chosen.length > 0 && <div className="space-y-2 rounded-lg border border-emerald-600/50 bg-emerald-50 p-2 text-xs dark:bg-emerald-950/40">
+      <div className="flex flex-wrap items-center gap-2">
+        <strong className="text-sm">{chosen.length} selezionate</strong>
+        <span className="muted">Scegli cosa cambiare (prima l'endpoint, poi il modello), poi premi «Applica». Nulla cambia finché non applichi; deseleziona dalle caselle della tabella.</span>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-0.5 font-semibold">1. Endpoint
+          <select className="field field-sm w-auto" aria-label="Cambia endpoint alle attività selezionate" value={bulk.endpointId}
+            onChange={e => setBulk({ ...bulk, endpointId: e.target.value, modelId: "" })}>
+            <option value="">Non cambiare</option>
+            {settings.endpoints.map(endpoint => <option key={endpoint.id} value={endpoint.id}>{endpoint.name}</option>)}
+          </select></label>
+        <label className="flex flex-col gap-0.5 font-semibold">2. Modello
+          {bulkCatalogEndpoint
+            ? <select className="field field-sm w-auto" aria-label="Cambia modello alle attività selezionate" value={bulk.modelId}
+                onChange={e => setBulk({ ...bulk, modelId: e.target.value })}>
+                <option value="">{bulk.endpointId ? "Mantieni se disponibile, altrimenti il primo" : "Non cambiare"}</option>
+                {(!bulk.endpointId || bulk.endpointId === settings.defaultRoute.endpointId) &&
+                  <option value={DEFAULT_CHOICE}>Predefinito (nessun override)</option>}
+                {bulkModels.map(model => <option key={model} value={model}>{model}</option>)}
+              </select>
+            : <select className="field field-sm w-auto" aria-label="Cambia modello alle attività selezionate" value="" disabled>
+                <option value="">Scegli prima l'endpoint</option>
+              </select>}
+        </label>
+        <label className="flex flex-col gap-0.5 font-semibold">3. Thinking
+          <select className="field field-sm w-auto" aria-label="Cambia thinking alle attività selezionate" value={bulk.thinking}
+            onChange={e => setBulk({ ...bulk, thinking: e.target.value })}>
+            <option value="">Lascia com'è</option>
+            <option value={INHERIT_CHOICE}>Eredita dall'endpoint</option>
+            <option value="automatic">Automatico (non inviare)</option>
+            {REASONING_LEVELS.map(level => <option key={level} value={level}>{REASONING_LEVEL_LABEL[level]}</option>)}
+          </select></label>
+        <Button disabled={!bulkHasChange} onClick={applyBulk}>Applica a {chosen.length} attività</Button>
+      </div>
+      {!bulkCatalogEndpoint && <p className="muted">Le attività selezionate usano endpoint diversi: scegli un endpoint per poter assegnare un modello.</p>}
     </div>}
 
     <div className="overflow-x-auto">
@@ -213,7 +249,7 @@ export function ModelRouterTable({ settings, setSettings, labels, notify, onReco
               </td>
               <td className="py-1 pr-2">
                 <select className="field field-sm" aria-label={`Endpoint per ${labels[kind]}`} value={route?.endpointId ?? ""}
-                  onChange={e => { setHintKind(kind); setRoute(kind, e.target.value, route?.modelId ?? ""); }}>
+                  onChange={e => { setHintKind(kind); changeRowEndpoint(kind, e.target.value); }}>
                   <option value="">Predefinito</option>
                   {settings.endpoints.map(endpoint => <option key={endpoint.id} value={endpoint.id}>{endpoint.name}</option>)}
                 </select>

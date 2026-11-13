@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## 0.13.1 — 2026-11-13 (main) — Modifica in blocco del router più chiara
+
+- **Modifica in blocco a passi:** con più attività selezionate la barra chiede prima l'endpoint, poi il modello (solo quelli del nuovo endpoint), poi il thinking, e applica tutto con «Applica a N attività». Nulla cambia finché non applichi; «Deseleziona» è stato rimosso (si deseleziona dalle caselle).
+- **Thinking conservato:** «Lascia com'è» è la scelta predefinita; cambiando endpoint o modello il thinking già impostato non viene toccato.
+- **Modello coerente col nuovo endpoint:** se il modello precedente non esiste sul nuovo endpoint si usa il primo modello di quell'endpoint (e il messaggio lo dice); vale anche per il selettore di endpoint della singola riga.
+
 ## 0.13.0 — 2026-11-14 (main) — Libreria, impostazioni del libro e prezzi per modello
 
 - **Libreria:** nuova pagina «Libreria» con tutti i libri (stato, avanzamento, ultimo aggiornamento), «Apri», «Nuovo libro» e «Riprendi l'ultimo». All'avvio si riapre l'ultimo libro su cui hai lavorato (un semplice puntatore nel browser), non più il primo dell'elenco.
