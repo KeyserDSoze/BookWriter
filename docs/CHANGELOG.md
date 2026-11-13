@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.12.3 — 2026-11-13 (main) — Impostazioni più semplici e compatte
+
+- **Salvataggio sempre visibile:** una barra fissa in alto mostra «Modifiche non salvate» / «Tutto salvato» (con l'ora dell'ultimo salvataggio), con «Salva impostazioni» e «Annulla modifiche». Avviso se chiudi la pagina con modifiche non salvate. Tema e ispezione AI si salvano subito e non sporcano lo stato.
+- **Router dei modelli a tabella:** una riga per attività con endpoint, modello e thinking; filtri per gruppo (Ideazione, Scrittura, Redazione), ricerca e «Solo personalizzate».
+- **Modifiche multiple:** selezioni più righe e cambi in un colpo solo modello, endpoint o thinking; il cambio di modello lascia il thinking com'è, e il thinking viene applicato solo dove il modello lo supporta (le altre righe sono elencate). «Seleziona i controlli» sceglie revisori, lettori, riassunti e memoria.
+- **Modelli da elenco:** i modelli sono menu a tendina alimentati dal catalogo dell'endpoint (solo quelli adatti alla chat), con «Altro…» per scrivere un ID a mano; senza catalogo resta il campo di testo.
+- **Endpoint compatti:** campi essenziali su due righe (nome, URL, autenticazione, chiave, modelli, «Leggi /models»); il resto sotto «Opzioni avanzate» e «Guida e avvertenze».
+- **Override del libro** in tabella, con gli stessi menu. Si applicano subito e non richiedono «Salva impostazioni».
+
+
 ## 0.12.2 — 2026-11-13 (main) — Risposte JSON con testo extra
 
 - **Fix:** un modello che aggiungeva una frase dopo (o prima) del JSON, o chiudeva male il blocco di codice, fermava l'autopilot con «Unexpected non-whitespace character after JSON». Ora si legge il primo valore JSON valido della risposta, ignorando il testo attorno; il contenuto resta validato dagli stessi schemi di prima e una risposta senza JSON valido viene comunque rifiutata.

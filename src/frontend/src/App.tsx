@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen, BrainCircuit, CheckCircle2, Database,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
-  RefreshCw, Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet,
+  Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
-import { applyFastCheckRoutes, clearFastCheckRoutes } from "./domain/model-routing-preset";
+import { SaveBar } from "./components/settings/SaveBar";
+import { EndpointCard } from "./components/settings/EndpointCard";
+import { ModelRouterTable } from "./components/settings/ModelRouterTable";
+import { BookOverrideTable } from "./components/settings/BookOverrideTable";
 import { usePwaInstall } from "./application/pwa";
 import { AutopilotRunner } from "./application/autopilot";
 import { recordAuthorIntervention } from "./application/author-intervention";
@@ -15,16 +18,12 @@ import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSub
 import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
 import { clearAiTraces, currentLiveAi, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
 import { confirmEditorialScene } from "./application/editorial-review";
-import { DEFAULT_SETTINGS, TASK_KINDS, newBook, routeFor, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
-import { declaredModelCapabilities } from "./domain/model-capabilities";
-import { reasoningSupport } from "./domain/model-reasoning";
+import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
 import { recommendedReasoningPreset } from "./domain/reasoning-presets";
 import { fetchLmStudioReasoningCatalog } from "./infrastructure/lmstudio-models";
-import { ReasoningHint, ReasoningSelect } from "./components/ReasoningSelect";
 import { bookProgress, describeNextAutopilotStep } from "./domain/autopilot-step";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
-import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "./infrastructure/ai-header-timeout";
 import { getBook, listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
@@ -40,7 +39,6 @@ import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
 import { updateBookEditorialConcurrency, updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
-import { endpointAutoRetry } from "./application/auto-retry";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
@@ -105,6 +103,8 @@ export default function App() {
     settingsRef.current = next;
     renderSettings(next);
   }
+  const [savedJson, setSavedJson] = useState("");
+  const [savedAt, setSavedAt] = useState<string>();
   const [keyDrafts, renderKeyDrafts] = useState<Record<string, string>>({});
   const keyDraftsRef = useRef(keyDrafts);
   function setKeyDrafts(update: React.SetStateAction<Record<string, string>>): void {
@@ -112,6 +112,19 @@ export default function App() {
     keyDraftsRef.current = next;
     renderKeyDrafts(next);
   }
+  /** Settings just read from or written to IndexedDB: they become the saved baseline. */
+  function adoptSaved(next: AppSettings): void {
+    setSettings(next);
+    setSavedJson(JSON.stringify(next));
+  }
+  const settingsDirty = savedJson !== "" && (JSON.stringify(settings) !== savedJson ||
+    Object.values(keyDrafts).some(value => value !== ""));
+  useEffect(() => {
+    if (!settingsDirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [settingsDirty]);
   const latestModelInventoryRequest = useRef<Record<string, number>>({});
   const endpointSettingsSave = useRef(new EndpointSettingsSaveCoordinator()).current;
   const [intervention, setIntervention] = useState("");
@@ -123,7 +136,6 @@ export default function App() {
   // Force only the affected uncontrolled model input to remount and display
   // the actually persisted value, never a draft that was refused by the lock.
   const [bookModelResets, setBookModelResets] = useState<Partial<Record<TaskKind, number>>>({});
-  const [fastCheckModel, setFastCheckModel] = useState("");
   const [ready, setReady] = useState(false);
   const [backupMode, setBackupMode] = useState<BackupMode>("content");
   const [backupPassword, setBackupPassword] = useState("");
@@ -152,7 +164,7 @@ export default function App() {
       try {
         await recoverInterruptedRuns();
         await refresh();
-        setSettings(await loadSettings());
+        adoptSaved(await loadSettings());
         setReady(true);
       } catch { setNotice("Impossibile aprire IndexedDB: verifica la modalità privacy del browser."); }
     })();
@@ -335,17 +347,29 @@ export default function App() {
   }
 
   async function persistSettings(next: AppSettings) {
-    await saveSettings(next); setSettings(next); setNotice("Impostazioni salvate in IndexedDB.");
+    await saveSettings(next); adoptSaved(next); setNotice("Impostazioni salvate in IndexedDB.");
   }
   async function toggleTheme() {
     const theme: AppSettings["theme"] = settingsRef.current.theme === "dark" ? "light" : "dark";
     setSettings(old => ({ ...old, theme }));
     // Persist only the theme: unsaved endpoint edits stay drafts until «Salva impostazioni».
-    try { await saveSettings({ ...await loadSettings(), theme }); }
+    try {
+      await saveSettings({ ...await loadSettings(), theme });
+      setSavedJson(old => old ? JSON.stringify({ ...(JSON.parse(old) as AppSettings), theme }) : old);
+    }
     catch { setNotice("Impossibile salvare il tema nel browser."); }
   }
   function updateEndpoint(id: string, update: Partial<EndpointProfile>) {
     setSettings(old => ({ ...old, endpoints: old.endpoints.map(e => e.id === id ? { ...e, ...update } : e) }));
+    // Without authentication there is no key to keep: drop any typed draft.
+    if (update.authMode === "none") setKeyDrafts(old => { const next = { ...old }; delete next[id]; return next; });
+  }
+  async function discardSettingsChanges() {
+    try {
+      adoptSaved(await loadSettings());
+      setKeyDrafts({});
+      setNotice("Modifiche annullate: ripristinate le impostazioni salvate.");
+    } catch { setNotice("Impossibile rileggere le impostazioni salvate."); }
   }
   async function saveEndpointSettings() {
     // Capture the actual inputs at the click, not a possibly stale render.
@@ -354,8 +378,9 @@ export default function App() {
       await endpointSettingsSave.save(snapshot,
         () => ({ settings: settingsRef.current, keyDrafts: keyDraftsRef.current }),
         encryptLocal, saveSettings, next => {
-          setSettings(next);
+          adoptSaved(next);
           setKeyDrafts({});
+          setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
           setNotice("Impostazioni salvate in IndexedDB.");
         });
     } catch (e) {
@@ -424,13 +449,6 @@ export default function App() {
   }
 
 
-  /** Thinking levels the provider declared for the model routed to this task. */
-  function taskSupport(kind: TaskKind) {
-    const route = settings.taskRoutes[kind];
-    const endpointId = route?.endpointId || settings.defaultRoute.endpointId;
-    return reasoningSupport(settings.endpoints.find(e => e.id === endpointId),
-      route?.modelId || settings.defaultRoute.modelId);
-  }
   function applyRecommendedThinking() {
     const result = recommendedReasoningPreset(settingsRef.current);
     setSettings(s => ({ ...s, taskReasoningEfforts: result.efforts }));
@@ -511,7 +529,7 @@ export default function App() {
         window.confirm("Il backup contiene le configurazioni, comprese le API key. Vuoi sostituire le impostazioni di questo browser? I libri vengono comunque aggiunti come copie.");
       if (!window.confirm("Importare " + restored.books.length + " libri come copie senza cancellare quelli esistenti?")) return;
       const count = await importBackup(restored, wantsSettings);
-      if (wantsSettings) setSettings(await loadSettings());
+      if (wantsSettings) adoptSaved(await loadSettings());
       await refresh();
       setImportFile(null); setRestorePassword("");
       setNotice(count + " libri importati come copie. I dati preesistenti non sono stati sovrascritti.");
@@ -793,279 +811,61 @@ export default function App() {
         </Section>
       </div>}
 
-      {ready && page === "settings" && <div className="space-y-4">
-        <Section title="Trasparenza e ispezione delle richieste AI" description="Le tracce complete contengono prompt, testi del romanzo e possibili segreti: soltanto con consenso esplicito vengono conservate nel database locale del browser, mai nei ZIP o su GitHub.">
+      {ready && page === "settings" && <div className="space-y-3">
+        <SaveBar dirty={settingsDirty} savedAt={savedAt}
+          onSave={() => void saveEndpointSettings()} onDiscard={() => void discardSettingsChanges()} />
+        <section className="panel min-w-0 space-y-3 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">Endpoint OpenAI-compatible</h2>
+              <p className="muted text-xs">Le chiavi sono cifrate nel browser, che parla direttamente con l'endpoint (nessun proxy). Senza autenticazione solo per localhost.</p>
+            </div>
+            <Button variant="outline" onClick={() => setSettings(s => ({ ...s, endpoints: [...s.endpoints, { id: crypto.randomUUID(), name: "Nuovo endpoint", baseUrl: "https://api.openai.com/v1", secret: null, models: [] }] }))}><Plus size={16} /> Aggiungi endpoint</Button>
+          </div>
+          {settings.endpoints.map(endpoint => <EndpointCard key={endpoint.id} endpoint={endpoint} settings={settings}
+            keyDraft={keyDrafts[endpoint.id] ?? ""}
+            onKeyDraft={value => setKeyDrafts(old => ({ ...old, [endpoint.id]: value }))}
+            onUpdate={update => updateEndpoint(endpoint.id, update)}
+            onDiscover={() => void discoverModels(endpoint.id)}
+            onRemove={settings.endpoints.length > 1
+              ? () => setSettings(s => ({ ...s, endpoints: s.endpoints.filter(x => x.id !== endpoint.id) })) : undefined} />)}
+        </section>
+        <ModelRouterTable settings={settings} setSettings={setSettings} labels={LABELS} notify={setNotice}
+          onRecommendedThinking={applyRecommendedThinking} />
+        <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
+        {current && <BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
+          onRoute={(kind, endpointId, modelId) => void updateBookRoute(kind, endpointId, modelId)}
+          onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
+          onEditorialMode={mode => void updateBookEditorial(mode)}
+          onConcurrency={value => void updateBookConcurrency(value)} />}
+        <Section title="Trasparenza e ispezione delle richieste AI" description="Le tracce contengono prompt, testi del romanzo e possibili segreti: restano solo nel database locale del browser, con il tuo consenso, mai nei ZIP o su GitHub.">
           <label className="flex items-start gap-3 text-sm">
-            <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests===true}
-              onChange={e=>{
-                const next={...settingsRef.current,inspectAiRequests:e.target.checked};
-                // Controlled checkbox must update synchronously; IndexedDB write is async.
-                setSettings(next);
-                void saveSettings(next).then(()=>setNotice("Preferenza d'ispezione salvata localmente."))
-                  .catch(()=>setNotice("Impossibile salvare la preferenza d'ispezione."));
-              }}/>
+            <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests === true}
+              onChange={e => {
+                const inspectAiRequests = e.target.checked;
+                // Controlled checkbox: update at once; persist only this preference, never other unsaved edits.
+                setSettings(old => ({ ...old, inspectAiRequests }));
+                void (async () => {
+                  try {
+                    await saveSettings({ ...await loadSettings(), inspectAiRequests });
+                    setSavedJson(old => old ? JSON.stringify({ ...(JSON.parse(old) as AppSettings), inspectAiRequests }) : old);
+                    setNotice("Preferenza d'ispezione salvata localmente.");
+                  } catch { setNotice("Impossibile salvare la preferenza d'ispezione."); }
+                })();
+              }} />
             <span>Ispezione locale richieste AI: mostra e conserva i messaggi system/user e le risposte dei prossimi task. Disattivata per impostazione predefinita, non retroattiva.</span>
           </label>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="outline" onClick={()=>void (async()=>{
-              if(!window.confirm("Eliminare definitivamente tutte le richieste e risposte AI conservate localmente in questo browser?"))return;
-              try{const count=await clearAiTraces();setNotice(`Eliminate ${count} tracce AI locali.`);}
-              catch{setNotice("Impossibile eliminare le tracce AI locali.");}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => void (async () => {
+              if (!window.confirm("Eliminare definitivamente tutte le richieste e risposte AI conservate localmente in questo browser?")) return;
+              try { const count = await clearAiTraces(); setNotice(`Eliminate ${count} tracce AI locali.`); }
+              catch { setNotice("Impossibile eliminare le tracce AI locali."); }
             })()}>Cancella tutte le tracce AI locali</Button>
-          </div>
-          <p className="muted mt-2 text-xs">Il registro attività salva già gli output delle attività confermate. Lo streaming è un'anteprima non approvata e l'eventuale reasoning è mostrato soltanto se il modello lo trasmette.</p>
-        </Section>
-        <Section title="Endpoint OpenAI-compatible" description="Configura servizi con chiavi cifrate in IndexedDB, oppure senza autenticazione per localhost. Il browser parla direttamente con l'endpoint, senza backend proxy.">
-          <div className="space-y-4">
-            {settings.endpoints.map(endpoint => <div key={endpoint.id} className="space-y-3 rounded-lg border border-slate-300 p-4 dark:border-slate-700">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Nome endpoint"><input className="field" value={endpoint.name} onChange={e => updateEndpoint(endpoint.id, { name: e.target.value })} /></Field>
-                <Field label="Base URL"><input className="field" inputMode="url" value={endpoint.baseUrl} onChange={e => updateEndpoint(endpoint.id, { baseUrl: e.target.value })} /></Field>
-                <div className="block min-w-0">
-                  <label className="mb-1 block text-sm font-semibold" htmlFor={`endpoint-auth-${endpoint.id}`}>Autenticazione AI</label>
-                  <select id={`endpoint-auth-${endpoint.id}`} className="field" value={endpoint.authMode ?? "api_key"}
-                    onChange={e => {
-                      const authMode = e.target.value as "api_key" | "none";
-                      updateEndpoint(endpoint.id, { authMode });
-                      if (authMode === "none") setKeyDrafts(old => {
-                        const next = { ...old };
-                        delete next[endpoint.id];
-                        return next;
-                      });
-                    }}>
-                    <option value="api_key">API key (Bearer)</option>
-                    <option value="none">Nessuna autenticazione (solo localhost)</option>
-                  </select>
-                </div>
-                {endpoint.authMode !== "none" && <Field label={endpoint.secret ? "Nuova API key (opzionale; già salvata)" : "API key"}>
-                  <input type="password" className="field" autoComplete="off" value={keyDrafts[endpoint.id] ?? ""} onChange={e => setKeyDrafts(old => ({ ...old, [endpoint.id]: e.target.value }))} placeholder={endpoint.secret ? "••••••••••" : "Inserisci la chiave"} />
-                </Field>}
-                <Field label="Modelli rilevati / manuali">
-                  <input className="field" value={endpoint.models.join(", ")} onChange={e => updateEndpoint(endpoint.id, { models: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })} placeholder="es. model-a, model-b" />
-                </Field>
-                <Field label="Protocollo AI per le richieste Chat">
-                  <select className="field" value={endpoint.apiProtocol??"openai"}
-                    onChange={e=>updateEndpoint(endpoint.id,
-                      {apiProtocol:e.target.value as "openai"|"lmstudio_native"})}>
-                    <option value="openai">OpenAI-compatible /v1/chat/completions</option>
-                    <option value="lmstudio_native">LM Studio nativo /api/v1/chat (solo localhost)</option>
-                  </select>
-                </Field>
-                <Field label="Streaming Chat Completions">
-                  <select className="field" value={endpoint.streamMode??(endpoint.authMode==="none"?"sse":"off")}
-                    onChange={e=>updateEndpoint(endpoint.id,{streamMode:e.target.value as "off"|"sse"})}>
-                    <option value="off">Compatibilità JSON (nessuno streaming)</option>
-                    <option value="sse">Streaming SSE (provider compatibile)</option>
-                  </select>
-                </Field>
-                <Field label="Tempo massimo senza dati dallo streaming (secondi)">
-                  <input className="field" type="number" min={600} max={3600} step={300}
-                    value={endpoint.streamTimeoutSeconds??600}
-                    onChange={e=>updateEndpoint(endpoint.id,{
-                      streamTimeoutSeconds:Number(e.target.value)})}/>
-                  <p className="muted mt-1 text-xs">Si azzera a ogni dato ricevuto: un modello lento ma costante non viene interrotto.</p>
-                </Field>
-                {(() => {
-                  const retry=endpointAutoRetry(endpoint);
-                  return <div className="min-w-0 space-y-2 sm:col-span-2">
-                    <label className="flex min-w-0 items-start gap-2 text-sm">
-                      <input type="checkbox" className="mt-1" checked={retry.enabled}
-                        onChange={e=>updateEndpoint(endpoint.id,{autoRetry:e.target.checked})}/>
-                      <span>Ritenta da solo i task falliti, così l'autopilot può proseguire senza supervisione.
-                        {endpoint.authMode==="none"
-                          ? " Endpoint locale senza chiave: i tentativi non hanno costo."
-                          : " Attenzione: su un provider con chiave ogni tentativo può essere fatturato, anche se fallisce. Tra un tentativo e l'altro c'è una pausa crescente."}
-                        {" "}Non ritenta errori di credenziali o configurazione, né oltre il budget AI. Ogni tentativo resta registrato nelle Attività.</span>
-                    </label>
-                    {retry.enabled && <label className="flex items-center gap-2 text-sm">Tentativi massimi per task
-                      <select className="field w-24" aria-label={`Tentativi massimi per ${endpoint.name}`} value={retry.max}
-                        onChange={e=>updateEndpoint(endpoint.id,{autoRetryMax:Number(e.target.value)})}>
-                        {[1,2,3,4,5].map(n=><option key={n} value={n}>{n}</option>)}
-                      </select>
-                    </label>}
-                  </div>;
-                })()}
-                <div className="min-w-0">
-                  <label className="mb-1 block text-sm font-semibold" htmlFor={`endpoint-reasoning-${endpoint.id}`}>Reasoning effort AI</label>
-                  <ReasoningSelect id={`endpoint-reasoning-${endpoint.id}`} hideAutomatic
-                    value={endpoint.reasoningEffort} inheritLabel="Automatico (non inviare parametro)"
-                    support={reasoningSupport(endpoint, settings.defaultRoute.endpointId===endpoint.id ? settings.defaultRoute.modelId : "")}
-                    onChange={value=>updateEndpoint(endpoint.id,{
-                      reasoningEffort:value as "low"|"medium"|"high"|"xhigh"|undefined,
-                    })}/>
-                  <ReasoningHint value={endpoint.reasoningEffort}
-                    support={reasoningSupport(endpoint, settings.defaultRoute.endpointId===endpoint.id ? settings.defaultRoute.modelId : "")}
-                    modelId={settings.defaultRoute.endpointId===endpoint.id ? settings.defaultRoute.modelId : ""}/>
-                </div>
-                {endpoint.apiProtocol==="lmstudio_native" && <p className="muted text-xs sm:col-span-2">
-                  Modalità nativa: BookWriter usa un'unica richiesta SSE a /api/v1/chat con store:false
-                  e mostra caricamento modello, avanzamento prompt e reasoning solo quando trasmessi da LM Studio.
-                  Il parametro richiesto è reasoning (Low/Medium/High); xhigh non è supportato da questa API.
-                  Non sono attivati tool, plugin o salvataggi della conversazione.
-                </p>}
-                <Field label="Parametro limite output API">
-                  <select className="field" value={endpoint.outputTokenParameter ?? "max_tokens"}
-                    onChange={e => updateEndpoint(endpoint.id, {
-                      outputTokenParameter: e.target.value as "max_tokens" | "max_completion_tokens",
-                    })}>
-                    <option value="max_tokens">max_tokens (compatibilità precedente)</option>
-                    <option value="max_completion_tokens">max_completion_tokens (modelli compatibili)</option>
-                  </select>
-                </Field>
-                <Field label="Attesa massima header AI (secondi)">
-                  <input className="field" type="number" min={MIN_CHAT_HEADER_TIMEOUT_SECONDS}
-                    max={MAX_CHAT_HEADER_TIMEOUT_SECONDS} step={60}
-                    value={endpoint.headerTimeoutSeconds ?? DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS}
-                    onChange={e => updateEndpoint(endpoint.id, { headerTimeoutSeconds: Number(e.target.value) })} />
-                </Field>
-              </div>
-              <p className="muted text-xs">Per LM Studio imposta http://localhost:1234/v1 e «Nessuna autenticazione» (solo localhost/127.0.0.1). Questa modalità elimina la chiave precedente al salvataggio e omette Authorization. Abilita CORS nel server locale per il browser; non esporre un server senza autenticazione in rete. Il parametro limite output si invia soltanto quando il budget AI imposta il tetto. Verifica il campo supportato dai modelli di questo endpoint: se il provider lo rifiuta, correggi la scelta e riprova manualmente, senza retry automatico e possibili doppi costi. max_completion_tokens può includere token di ragionamento non visibili. L'attesa degli header va da 60 a 1800 s (default 300), la lettura JSON ha un limite separato di 60 s e lo stream SSE un limite di dieci minuti; un timeout non esclude addebiti. Attiva SSE solo se supportato dall'endpoint: non eseguiamo retry automatici dopo un errore. Il campo reasoning_effort OpenAI-compatible è facoltativo e può essere rifiutato o ignorato da modelli non compatibili. La API LM Studio nativa usa invece il campo reasoning (non supporta xhigh), restituisce eventi concreti per caricamento/prompt e usa il limite SSE configurabile da 600 a 3600 secondi, con stop manuale sempre disponibile. Il browser comunica direttamente con localhost; verifica il Network della scheda che ospita BookWriter, non quello di altre applicazioni.</p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => void discoverModels(endpoint.id)}><RefreshCw size={16} /> Leggi /models</Button>
-                {settings.endpoints.length > 1 && <Button variant="destructive" onClick={() => setSettings(s => ({...s, endpoints:s.endpoints.filter(x => x.id !== endpoint.id)}))}>Rimuovi</Button>}
-              </div>
-            </div>)}
-            <Button variant="outline" onClick={() => setSettings(s => ({ ...s, endpoints:[...s.endpoints, {id:crypto.randomUUID(),name:"Nuovo endpoint",baseUrl:"https://api.openai.com/v1",secret:null,models:[]}] }))}><Plus size={16}/> Aggiungi endpoint</Button>
+            <span className="muted text-xs">Questa preferenza si salva subito. Lo streaming è un'anteprima non approvata; il reasoning compare solo se il modello lo trasmette.</span>
           </div>
         </Section>
-        <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
-        <Section title="Router dei modelli" description="Predefinito Chat e modello per ogni attività. Per ogni task puoi scegliere il reasoning: eredita dall'endpoint, Automatico (non invia il parametro), Low, Medium, High o Extra high. Il libro può avere override propri in pausa. LM Studio può ignorare la richiesta OpenAI-compatible.">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <Button variant="outline" onClick={applyRecommendedThinking}>Applica thinking consigliato</Button>
-            <p className="muted text-xs">Low per scrittura, consolidamento e riassunti; Medium per piano, validazione e analisi d'impatto; High per il direttore editoriale. Usa solo i livelli che ogni modello dichiara.</p>
-          </div>
-          <div className="mb-4 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
-            <p className="mb-2 text-sm font-semibold">Modello veloce per i controlli</p>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-0">
-                <label className="mb-1 block text-xs font-semibold" htmlFor="fast-check-model">Modello per revisori, lettori, riassunti e memoria</label>
-                <select id="fast-check-model" className="field" value={fastCheckModel} onChange={e => setFastCheckModel(e.target.value)}>
-                  <option value="">Scegli dal catalogo</option>
-                  {settings.endpoints.find(e => e.id === settings.defaultRoute.endpointId)?.models.map(modelId =>
-                    <option key={modelId} value={modelId}>{modelId}</option>)}
-                </select>
-              </div>
-              <Button variant="outline" disabled={!fastCheckModel} onClick={() => {
-                setSettings(s => ({ ...s, ...applyFastCheckRoutes(s, fastCheckModel) }));
-                setNotice("Modello veloce assegnato a revisori, lettori, riassunti e memoria. Premi Salva impostazioni per conservarlo.");
-              }}>Assegna ai task di controllo</Button>
-              <Button variant="outline" onClick={() => {
-                setSettings(s => ({ ...s, ...clearFastCheckRoutes(s) }));
-                setNotice("Assegnazione dei task di controllo rimossa: tornano al modello predefinito. Premi Salva impostazioni per conservarlo.");
-              }}>Torna al predefinito</Button>
-            </div>
-            <p className="muted mt-2 text-xs">Un capitolo richiede oltre dieci chiamate di controllo per ogni parte di testo: su una macchina lenta un modello piccolo qui fa risparmiare ore. Scrittura, piano e direttore editoriale restano sul modello predefinito.</p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Endpoint predefinito"><select className="field" value={settings.defaultRoute.endpointId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,endpointId:e.target.value}}))}>
-              {settings.endpoints.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
-            </select></Field>
-            <Field label="Modello predefinito"><input className="field" value={settings.defaultRoute.modelId} onChange={e => setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,modelId:e.target.value}}))} placeholder="Digita un ID modello Chat" /></Field>
-            <div className="min-w-0">
-              <label className="mb-1 block text-sm font-semibold" htmlFor="chat-model-catalog-select">Seleziona modello Chat dal catalogo</label>
-              <select id="chat-model-catalog-select" className="field"
-                value={settings.endpoints.find(e => e.id === settings.defaultRoute.endpointId)?.models.includes(settings.defaultRoute.modelId) ? settings.defaultRoute.modelId : ""}
-                onChange={e => {
-                  if (e.target.value) setSettings(s => ({...s,defaultRoute:{...s.defaultRoute,modelId:e.target.value}}));
-                }}>
-                <option value="">Scelta manuale / nessun modello catalogato</option>
-                {settings.endpoints.find(endpoint => endpoint.id === settings.defaultRoute.endpointId)?.models
-                  .filter(modelId => {
-                    const endpoint = settings.endpoints.find(e => e.id === settings.defaultRoute.endpointId)!;
-                    const roles = declaredModelCapabilities(endpoint, modelId);
-                    return roles.length === 0 || roles.includes("chat");
-                  }).map(modelId => <option key={modelId} value={modelId}>{modelId}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {TASK_KINDS.map(kind => {
-              const route = settings.taskRoutes[kind];
-              return <div key={kind} className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
-                <p className="mb-2 text-sm font-semibold">{LABELS[kind]}</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <select aria-label={`Endpoint per ${LABELS[kind]}`} className="field" value={route?.endpointId ?? ""} onChange={e => setSettings(s => ({...s,taskRoutes:{...s.taskRoutes,[kind]:{endpointId:e.target.value||s.defaultRoute.endpointId,modelId:route?.modelId??s.defaultRoute.modelId}}}))}>
-                    <option value="">Default</option>{settings.endpoints.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                  </select>
-                  <input className="field" aria-label={`Modello per ${LABELS[kind]}`} value={route?.modelId ?? ""} onChange={e => setSettings(s => ({...s,taskRoutes:{...s.taskRoutes,[kind]:{endpointId:route?.endpointId||s.defaultRoute.endpointId,modelId:e.target.value}}}))} placeholder="Default" />
-                </div>
-                <div className="mt-2">
-                  <label className="mb-1 block text-xs font-semibold" htmlFor={`task-reasoning-${kind}`}>Reasoning di {LABELS[kind]}</label>
-                  <ReasoningSelect id={`task-reasoning-${kind}`} emphasizeLevels
-                    value={settings.taskReasoningEfforts?.[kind]} inheritLabel="Eredita dall'endpoint"
-                    support={taskSupport(kind)}
-                    onChange={value=>setSettings(s=>{
-                      const next={...s.taskReasoningEfforts};
-                      if(value===undefined)delete next[kind];
-                      else next[kind]=value;
-                      return {...s,taskReasoningEfforts:next};
-                    })}/>
-                  <ReasoningHint value={settings.taskReasoningEfforts?.[kind]} support={taskSupport(kind)}
-                    modelId={route?.modelId||settings.defaultRoute.modelId}/>
-                </div>
-              </div>;
-            })}
-          </div>
-        </Section>
-        {current && <Section title={`Override del libro: ${current.title}`} description="Il modello scelto qui sostituisce quello globale soltanto per il libro attivo.">
-          <label className="mb-3 block text-sm font-semibold">Redazione dei capitoli
-            <select className="field mt-1" aria-label="Modalità di redazione" disabled={current.status === "running"}
-              value={current.editorialMode ?? "full"} onChange={e => void updateBookEditorial(e.target.value as "full" | "light")}>
-              <option value="full">Completa: 12 revisori indipendenti (consigliata con modelli veloci)</option>
-              <option value="light">Leggera: 5 revisori (6 con fonti storiche), molto più veloce su modelli locali</option>
-            </select>
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">Vale per i nuovi cicli di revisione; non riduce il direttore critico né i controlli di prova letterale.</span>
-          </label>
-          <label className="mb-3 block text-sm font-semibold">Revisori in parallelo
-            <select className="field mt-1" aria-label="Revisori in parallelo" disabled={current.status === "running"}
-              value={current.editorialConcurrency ?? 1} onChange={e => void updateBookConcurrency(Number(e.target.value))}>
-              <option value={1}>1 — in sequenza (predefinito)</option>
-              <option value={2}>2 richieste insieme</option>
-              <option value={3}>3 richieste insieme</option>
-              <option value={4}>4 richieste insieme</option>
-            </select>
-            <span className="mt-1 block text-xs font-normal text-muted-foreground">Utile con provider cloud o con un server locale configurato per più richieste simultanee. Non ha effetto con il budget AI attivo. Un server che serve una richiesta alla volta non diventa più veloce.</span>
-          </label>
-          <div className="grid gap-3 md:grid-cols-2">
-            {(["brainstorm","prose","continuity","revision","consolidate","summarize","merge","chapterAudit","chapterReaders","chapterJudge","chapterRepair"] as TaskKind[]).map(kind => {
-              const configured = current.modelRoutes?.[kind];
-              return <div className="space-y-2" key={kind}>
-                <p className="text-sm font-semibold">{LABELS[kind]}</p>
-                <select className="field" aria-label={`Endpoint libro per ${LABELS[kind]}`} value={configured?.endpointId ?? settings.defaultRoute.endpointId} onChange={e => void updateBookRoute(kind, e.target.value, configured?.modelId ?? settings.defaultRoute.modelId)}>
-                  {settings.endpoints.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-                </select>
-                <input
-                  key={`${current.id}:${kind}:${current.updatedAt}:${bookModelResets[kind] ?? 0}`}
-                  className="field" aria-label={`Modello libro per ${LABELS[kind]}`}
-                  defaultValue={configured?.modelId ?? ""}
-                  onBlur={e => {
-                    if (e.target.value !== (configured?.modelId ?? ""))
-                      void updateBookRoute(kind, configured?.endpointId ?? settings.defaultRoute.endpointId, e.target.value);
-                  }}
-                  placeholder="Modello per questo libro"
-                />
-                <label className="block text-xs font-semibold">Reasoning di {LABELS[kind]} nel libro
-                  <ReasoningSelect ariaLabel={`Reasoning libro per ${LABELS[kind]}`}
-                    disabled={current.status==="running"}
-                    value={current.taskReasoningEfforts?.[kind]} inheritLabel="Eredita dal task globale/endpoint"
-                    support={reasoningSupport(settings.endpoints.find(e=>e.id===routeFor(kind,settings,current).endpointId),
-                      routeFor(kind,settings,current).modelId)}
-                    onChange={value=>void updateBookReasoning(kind,value)}/>
-                </label>
-                <ReasoningHint value={current.taskReasoningEfforts?.[kind]}
-                  support={reasoningSupport(settings.endpoints.find(e=>e.id===routeFor(kind,settings,current).endpointId),
-                    routeFor(kind,settings,current).modelId)}
-                  modelId={routeFor(kind,settings,current).modelId}/>
-              </div>;
-            })}
-          </div>
-        </Section>}
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void saveEndpointSettings()}><CheckCircle2 size={17} /> Salva impostazioni</Button>
-        </div>
         <Section title="Google / Microsoft / GitHub" description="Login cloud non ancora attivi in questa versione.">
-          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Nessuna login Google/Microsoft simulata. Il PAT GitHub si configura nella sezione Archivio e resta cifrato nel browser.</p>
-          <p className="muted mt-2 text-sm">Sincronizzazione GitHub manuale, autosync opzionale e lease del writer sono nella sezione Archivio.</p>
+          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Nessun login Google/Microsoft simulato. Il PAT GitHub si configura nell'Archivio e resta cifrato nel browser; sincronizzazione manuale, autosync e lease del writer sono lì.</p>
         </Section>
       </div>}
 

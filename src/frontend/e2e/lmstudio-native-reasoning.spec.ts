@@ -53,8 +53,9 @@ test("LM Studio nativo: progresso vero del prompt, reasoning per task e nessun t
   await nav.getByRole("button",{name:"Impostazioni"}).click();
   await page.getByRole("textbox",{name:"Base URL"}).fill("http://localhost:1234/v1");
   await page.getByRole("combobox",{name:"Autenticazione AI"}).selectOption("none");
-  await page.getByRole("textbox",{name:"Modelli rilevati / manuali"}).fill("meta/muse-glimmer");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("meta/muse-glimmer");
+  await page.getByRole("textbox",{name:"Modelli rilevati / manuali"}).fill("meta/muse-glimmer");
+  await page.getByText("Opzioni avanzate").first().click();
   await page.getByRole("combobox",{name:"Protocollo AI per le richieste Chat"}).selectOption("lmstudio_native");
   await page.getByRole("combobox",{name:"Reasoning effort AI"}).selectOption("high");
   await page.getByRole("combobox",{name:"Reasoning di Brainstorming"}).selectOption("low");

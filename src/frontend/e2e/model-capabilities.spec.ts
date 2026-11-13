@@ -36,11 +36,8 @@ test("catalogo LM Studio: assegna chat/tools, voce e embedding con predefiniti p
   await voice.getByRole("checkbox",{name:"Voce"}).check();
   await embedding.getByRole("checkbox",{name:"Embedding"}).check();
   await chat.getByRole("button",{name:"Usa come predefinito Chat"}).click();
-  // The searchable catalog remains separate from the editable textbox used
-  // by legacy flows; a datalist would change its ARIA role into combobox.
-  await expect(page.getByRole("combobox",{name:"Seleziona modello Chat dal catalogo"}))
-    .toHaveValue("meta/muse-glimmer");
-  await expect(page.getByRole("textbox",{name:"Modello predefinito"}))
+  // The default model is now a dropdown fed by the catalog (chat-capable models only).
+  await expect(page.getByRole("combobox",{name:"Modello predefinito"}))
     .toHaveValue("meta/muse-glimmer");
   await catalog.getByRole("combobox",{name:"Predefinito Tool calling"})
     .selectOption({label:"OpenAI: meta/muse-glimmer"});
@@ -48,7 +45,7 @@ test("catalogo LM Studio: assegna chat/tools, voce e embedding con predefiniti p
     .selectOption({label:"OpenAI: phonon-40m-multilingual"});
   await catalog.getByRole("combobox",{name:"Predefinito Embedding"})
     .selectOption({label:"OpenAI: text-embedding-nomic"});
-  await expect(page.getByRole("textbox",{name:"Modello predefinito"})).toHaveValue("meta/muse-glimmer");
+  await expect(page.getByRole("combobox",{name:"Modello predefinito"})).toHaveValue("meta/muse-glimmer");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();
@@ -64,12 +61,12 @@ test("catalogo LM Studio: assegna chat/tools, voce e embedding con predefiniti p
     .toHaveValue(JSON.stringify(["openai","phonon-40m-multilingual"]));
   await expect(restored.getByRole("combobox",{name:"Predefinito Embedding"}))
     .toHaveValue(JSON.stringify(["openai","text-embedding-nomic"]));
-  await expect(page.getByRole("textbox",{name:"Modello predefinito"})).toHaveValue("meta/muse-glimmer");
+  await expect(page.getByRole("combobox",{name:"Modello predefinito"})).toHaveValue("meta/muse-glimmer");
   // Unsetting a role clears only that role's default. It must not rewrite Chat.
   await restored.getByRole("group",{name:"Ruoli per phonon-40m-multilingual (OpenAI)"})
     .getByRole("checkbox",{name:"Voce"}).uncheck();
   await expect(restored.getByRole("combobox",{name:"Predefinito Voce"})).toHaveValue("");
-  await expect(page.getByRole("textbox",{name:"Modello predefinito"})).toHaveValue("meta/muse-glimmer");
+  await expect(page.getByRole("combobox",{name:"Modello predefinito"})).toHaveValue("meta/muse-glimmer");
   const layout=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:window.innerWidth}));
   expect(layout.scroll).toBeLessThanOrEqual(layout.viewport+1);
 });

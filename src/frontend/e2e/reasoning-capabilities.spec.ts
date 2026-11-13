@@ -38,7 +38,7 @@ test("thinking: i livelli arrivano da LM Studio, i menu li rispettano e il prese
   await expect(page.getByText(/meta\/muse-glimmer supporta: Low, Medium, High, Extra high\. Con «Automatico» usa il suo livello predefinito: High\./).first()).toBeVisible();
 
   // A model that declares no thinking offers no level at all.
-  await page.getByRole("textbox", { name: "Modello per Scrittura" }).fill("plain-model");
+  await page.getByRole("combobox", { name: "Modello per Scrittura" }).selectOption("plain-model");
   const prose = page.getByRole("combobox", { name: "Reasoning di Scrittura" });
   await expect(prose.locator("option")).toHaveText(["Eredita dall'endpoint", "Automatico: non inviare il parametro"]);
   await expect(page.getByText(/plain-model non dichiara un controllo del thinking/).first()).toBeVisible();

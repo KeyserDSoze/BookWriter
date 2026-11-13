@@ -60,8 +60,8 @@ test("dashboard: task leggibile, intervento registrato durante il lavoro e appli
   await nav.getByRole("button", { name: "Impostazioni" }).click();
   await page.getByRole("textbox", { name: "Base URL" }).fill("http://localhost:1234/v1");
   await page.getByRole("combobox", { name: "Autenticazione AI" }).selectOption("none");
-  await page.getByRole("textbox", { name: "Modelli rilevati / manuali" }).fill("demo-model");
   await page.getByRole("textbox", { name: "Modello predefinito" }).fill("demo-model");
+  await page.getByRole("textbox", { name: "Modelli rilevati / manuali" }).fill("demo-model");
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await nav.getByRole("button", { name: "Dashboard" }).click();

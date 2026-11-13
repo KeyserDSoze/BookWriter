@@ -4,7 +4,7 @@ import type { TaskReasoning } from "../domain/types";
 type Level = (typeof REASONING_LEVELS)[number];
 
 /** Reasoning dropdown whose choices follow what the routed model declares. */
-export function ReasoningSelect({ id, ariaLabel, value, onChange, support, inheritLabel, disabled, emphasizeLevels, hideAutomatic }: {
+export function ReasoningSelect({ id, ariaLabel, value, onChange, support, inheritLabel, disabled, emphasizeLevels, hideAutomatic, compact }: {
   id?: string; ariaLabel?: string; value: TaskReasoning | undefined;
   onChange: (value: TaskReasoning | undefined) => void;
   support: ReasoningSupport; inheritLabel: string; disabled?: boolean;
@@ -12,13 +12,15 @@ export function ReasoningSelect({ id, ariaLabel, value, onChange, support, inher
   emphasizeLevels?: boolean;
   /** Endpoint level: the empty choice already means «do not send». */
   hideAutomatic?: boolean;
+  /** Table rows: smaller control. */
+  compact?: boolean;
 }) {
   const unsupportedChoice = value !== undefined && value !== "automatic" && !reasoningLevelSupported(support, value);
   const hint = (level: Level) => !emphasizeLevels ? "" :
     level === "low" ? " — rapido" : level === "xhigh" ? " — molto lento" : "";
   const defaultText = support.status === "options" && support.default
     ? ` (usa il predefinito del modello: ${REASONING_LEVEL_LABEL[support.default]})` : "";
-  return <select id={id} aria-label={ariaLabel} className="field" disabled={disabled} value={value ?? ""}
+  return <select id={id} aria-label={ariaLabel} className={compact ? "field field-sm" : "field"} disabled={disabled} value={value ?? ""}
     onChange={e => onChange(e.target.value === "" ? undefined : e.target.value as TaskReasoning)}>
     <option value="">{inheritLabel}</option>
     {!hideAutomatic && <option value="automatic">Automatico: non inviare il parametro{defaultText}</option>}

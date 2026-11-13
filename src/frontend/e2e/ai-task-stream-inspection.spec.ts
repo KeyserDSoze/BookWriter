@@ -44,8 +44,9 @@ test("SSE locale, reasoning opzionale, timeline per task e richieste solo con co
   await nav.getByRole("button",{name:"Impostazioni"}).click();
   await page.getByRole("textbox",{name:"Base URL"}).fill("http://localhost:1234/v1");
   await page.getByRole("combobox",{name:"Autenticazione AI"}).selectOption("none");
-  await page.getByRole("textbox",{name:"Modelli rilevati / manuali"}).fill("meta/muse-glimmer");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("meta/muse-glimmer");
+  await page.getByRole("textbox",{name:"Modelli rilevati / manuali"}).fill("meta/muse-glimmer");
+  await page.getByText("Opzioni avanzate").first().click();
   await page.getByRole("combobox",{name:"Streaming Chat Completions"}).selectOption("sse");
   await page.getByRole("combobox",{name:"Reasoning effort AI"}).selectOption("high");
   await page.getByRole("checkbox",{name:/Ispezione locale richieste AI/}).check();

@@ -64,6 +64,7 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
   await nav.getByRole("button",{name:"Impostazioni"}).click();
   await page.getByLabel("API key").fill("sk-local-test-only");
   await page.getByRole("textbox",{name:"Modello predefinito"}).fill("mock-json-boundary");
+  await page.getByText("Opzioni avanzate").first().click();
   await page.getByRole("spinbutton",{name:"Attesa massima header AI (secondi)"}).fill("60");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();

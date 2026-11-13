@@ -44,7 +44,7 @@ test("LM Studio localhost: /models, Save/reload e POST senza API key (desktop/mo
   const inventory=await page.evaluate(()=>(window as LocalProbe).localModels);
   expect(inventory).toHaveLength(1);
   expect(inventory?.[0]?.headers).toEqual({});
-  await page.getByRole("textbox",{name:"Modello predefinito"}).fill("model-locale");
+  await page.getByRole("combobox",{name:"Modello predefinito"}).selectOption("model-locale");
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await page.reload();

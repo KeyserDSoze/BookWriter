@@ -53,6 +53,7 @@ test("parametro output scelto: persistito e inviato una volta senza fallback su 
       "Navigazione mobile":"Navigazione principale",
   });
   await nav.getByRole("button",{name:"Impostazioni"}).click();
+  await page.getByText("Opzioni avanzate").first().click();
   const output=page.getByRole("combobox",{name:"Parametro limite output API"});
   await expect(output).toHaveValue("max_tokens");
   await output.selectOption("max_completion_tokens");
@@ -66,6 +67,7 @@ test("parametro output scelto: persistito e inviato una volta senza fallback su 
       "Navigazione mobile":"Navigazione principale",
   });
   await nav2.getByRole("button",{name:"Impostazioni"}).click();
+  await page.getByText("Opzioni avanzate").first().click();
   await expect(page.getByRole("combobox",{name:"Parametro limite output API"}))
     .toHaveValue("max_completion_tokens");
   await nav2.getByRole("button",{name:"Dashboard"}).click();

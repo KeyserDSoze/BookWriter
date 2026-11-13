@@ -13,6 +13,8 @@ input, select, textarea { outline-offset: 2px; }
 .dark .panel { border-color: #303b4a; background: #121923; }
 .field { width: 100%; min-height: 44px; border: 1px solid #94a3b8; background: transparent; border-radius: .6rem; padding: .65rem .85rem; }
 .dark .field { border-color: #475569; background: #19222e; }
+.field-sm { min-height: 34px; padding: .25rem .55rem; font-size: .85rem; border-radius: .45rem; }
+@media (max-width: 640px) { .field-sm { min-height: 44px; } }
 .field:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
 .muted { color: #64748b; }
 .dark .muted { color: #9aa8b9; }
