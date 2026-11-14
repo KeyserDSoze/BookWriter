@@ -55,7 +55,7 @@ export async function attachBibliographyToChapter(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=previousSynopsis;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
         book.currentSceneId=undefined;
@@ -63,7 +63,7 @@ export async function attachBibliographyToChapter(
         book.previousError="Bibliografia aggiornata: capitolo e successivi richiedono una nuova revisione.";
       } else if(book.status==="completed"&&chapter.scenes.length&&chapter.scenes.every(
         scene=>scene.status==="canon"&&scene.text.trim())) {
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";book.phase="chapterReview";
       }
       if(book.remote) book.remote.autoSync=false;

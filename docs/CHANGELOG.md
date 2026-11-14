@@ -1,5 +1,29 @@
 # Changelog — BookWriter
 
+## 0.20.0 — 2026-11-14 — Agenti con checklist, mondo del libro e modifiche con un prompt, preparazione locale non pubblicata (ADR 0161)
+
+- **Agenti.** Lo scrittore ha una checklist di regole (fino a 20, obbligatorie o consultive; quattro di partenza per «mostra, non spiegare») verificata una per una dalla sua rilettura, con esiti visibili per tornata. Se il direttore respinge la correzione di una regola obbligatoria il capitolo non si congela: l'autopilot si ferma e lo spiega. Linee guida facoltative del direttore aggiunte al contratto fisso del giudice, cicli massimi 1–3, versione per agente. Pannello Modelli e redazione rifatto con schede Scrittore / Lettori / Direttore / Ciclo e flusso visivo.
+- **Mondo del libro** (pagina «Mondo», ex «Memoria»; i vecchi link funzionano). Dopo il piano l'autopilot crea schede concise di personaggi, luoghi, oggetti e fazioni, eventi e timeline con identificativi stabili, relazioni, ordine della storia distinto dall'ordine del racconto, segreti e prospettive (sa, non sa, crede il falso, nasconde); le aggiorna a ogni scena con versioni e storico. Scrittura, specialisti e direttore ricevono solo le schede pertinenti; mai i lettori ciechi. Per i libri esistenti: «Genera le schede del libro».
+- **Modifiche con un prompt.** Su una scheda, un evento o una scena: analisi d'impatto (scene dirette, indirette, globale), nuova versione della scheda, riscrittura solo delle scene necessarie, aggiornamento di memoria e riassunti e nuova redazione dei capitoli toccati. Automatico per impostazione predefinita, oppure «Dopo la mia conferma». Una scena cambiata solo nello stile rivede soltanto il suo capitolo; un controllo locale di nomi e numeri tratta come cambio dei fatti ciò che il modello giudica stile. Storico con piano e ripristino protetto.
+- **Libro.** Capitoli come schede con stato; viste Testo completo, Scene (riassunto, elementi, modifiche) e Riassunto consolidato o provvisorio.
+- **Formato 2** esteso: campi strutturati delle schede nel frontmatter, `events/`, `timelines/`, report in `changes/`, JSON Schema generati in `schemas/`; import che ricostruisce la knowledge base e fallisce chiuso su riferimenti rotti. ZIP e snapshot validano knowledge base e operazioni. Nulla nel profilo cloud.
+- Limiti: schede e analisi sono proposte di un modello; l'indice è lessicale e strutturale; ogni modifica costa chiamate AI; copie per il ripristino limitate a 3 milioni di caratteri. Test sintetici con provider simulato. Comprende le preparazioni 0.18.0 e 0.19.0. Nessun push/deploy autorizzato. [Guida](narrative-workspace.md) · [Agenti](editorial-profiles.md).
+
+## 0.19.0 — 2026-11-14 — Cartelle estensibili e CMS editoriale, preparazione locale non pubblicata (ADR 0160)
+
+- Modelli e redazione: nomi e template dei lettori modificabili, fino a dieci e almeno uno attivo; fino a sei profili di scrittore con selezione, prompt di scrittura/rilettura, forza flessibile/bilanciata/forte e review aggiuntiva facoltativa. Senza configurazione restano i cinque lettori e il workflow standard.
+- Nuovi cicli catturano profili e ruoli, archiviati con i rapporti; quelli già avviati non cambiano. Conteggi dinamici, lettori indipendenti e scrittore-revisore senza segreti/dossier/rapporti altrui; gate testuali, giudice, remediation e freeze invariati. Più ruoli aumentano chiamate e possibile costo.
+- Salvataggio confermato con lock writer→outbox, CAS e audit generico atomico; autosync disattivato, coda svuotata, canone/cicli intatti e nessuna AI o pubblicazione al salvataggio. Draft conservati su conflitto fra schede.
+- Cartelle Markdown aggiuntive, anche annidate sotto chapters, conservate come dati opachi senza nuovi prompt impliciti. Formato 2 con template in profiles e rapporti per tornata in reviews/chapters; formati 1 e legacy ancora confrontabili. Template Markdown caricabili solo come bozza esplicita, da attivare con un distinto salvataggio confermato.
+- Comprende la preparazione 0.18.0, mai pubblicata separatamente. Stessi limiti di spazio, originali sensibili e test sintetici; nessuna prova su provider reali o qualità letteraria garantita. Nessun push/deploy autorizzato da questa preparazione. [Guida](editorial-profiles.md).
+
+## 0.18.0 — 2026-11-14 — Profilo Markdown portabile, implementazione locale non pubblicata (ADR 0159)
+
+- Cartelle e frontmatter allineati alle convenzioni di Book.Bot, **senza copiarne contenuto o strumenti**: scene `type: scene`, `pov`, riferimenti alle schede, `timeline/events.md`, piano rivelazioni e riassunti leggibili in `reviews/`. Prosa senza titoli artificiali aggiunti.
+- Import additivo dei libri scritti a mano o da altre IA, senza `.bookwriter/project.json`, con ID testuali, parser YAML limitato e validazione di cartelle/numeri/riferimenti. Conservazione dei documenti narrativi originali e metadati extra anche negli ZIP. Nessuna AI o scrittura GitHub all'import, nessun freeze/consenso dedotto da `canon`.
+- Confronto dei Markdown effettivi con il JSON, anche legacy: modifiche esterne non ignorate; copia locale separata dei soli Markdown su conferma, senza sostituire l'originale o importare giudizi/consensi.
+- Limiti espliciti, letture a HEAD fissa, verifica blob, deadline e dimensione HTTP; gate editoriali, lease e `force:false` invariati. Il collegamento vuoto resta tecnico e non pubblica bozze. Test sintetici, non prova sull'intero Book.Bot reale né su ogni variante YAML. [Formato ed esempi](markdown-book-format.md).
+
 ## 0.17.1 — 2026-11-14 — Via il 409 obsoleto dopo il collegamento alla repository vuota (ADR 0158)
 
 - Un libro già avviato localmente e già associato alla stessa repository poteva conservare l'errore del blocco letto quando la repository era ancora vuota. Dopo l'inizializzazione ora parte subito una nuova verifica, anche senza cambiare destinazione; le risposte vecchie arrivate in ritardo sono scartate. Nessun HTTP 409 viene reinterpretato come blocco assente.

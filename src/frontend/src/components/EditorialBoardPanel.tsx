@@ -5,7 +5,7 @@ import { NarrativeEventDecisionsPanel } from "./NarrativeEventDecisionsPanel";
 import { EditorialVerificationPlanPanel } from "./EditorialVerificationPlanPanel";
 import { EditorialArchiveComparisonPanel } from "./EditorialArchiveComparisonPanel";
 import { EditorialDiffLedgerPanel } from "./EditorialDiffLedgerPanel";
-import { EDITORIAL_ROLES, ROLE_LABELS, acceptedRepairs, cycleRoles, type EditorialRole,
+import { EDITORIAL_ROLES, ROLE_LABELS, reviewerLabel, acceptedRepairs, cycleRoles, type EditorialRole,
   buildEditorialRecommendationDisagreements, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
   type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
 import { editorialRecoveryProblem, recoverEditorialCheckpoint, reopenChapterReview } from "../application/editorial-control";
@@ -17,17 +17,19 @@ import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
 import { LocOcrPanel } from "./LocOcrPanel";
 import { LocIiifPanel } from "./LocIiifPanel";
 import type { HistoricalSource } from "../domain/historical-research";
+import type { EditorialProfiles } from "../domain/editorial-profiles";
 import { activeManualEvidence, allManualEvidence, type ManualDocumentExcerpt } from "../domain/manual-evidence";
 import { ManualEvidencePanel } from "./ManualEvidencePanel";
 import { WikisourcePanel } from "./WikisourcePanel";
 import { allWikisourceExcerpts, activeWikisourceExcerpts,
   wikisourceRevisionUrl, type WikisourceExcerpt } from "../domain/wikisource-excerpts";
 
-function RoundDetails({ round, reports, judgment, chapter, roles, sources = [], manualSources = [], activeManualIds = [],
+function RoundDetails({ round, reports, judgment, chapter, roles, profileSettings, sources = [], manualSources = [], activeManualIds = [],
   wikisourceSources = [], activeWikisourceIds = [] }: {
   round: number; reports: EditorialReport[]; judgment?: EditorialJudgment; chapter: Chapter;
   /** Reviewers of a running light cycle; archived rounds infer them from their reports. */
   roles?: readonly EditorialRole[];
+  profileSettings?: EditorialProfiles;
   sources?: HistoricalSource[];
   manualSources?: ManualDocumentExcerpt[];
   activeManualIds?: string[];
@@ -39,7 +41,7 @@ function RoundDetails({ round, reports, judgment, chapter, roles, sources = [], 
   const discrepancies=buildEditorialRecommendationDisagreements({reports},chapter);
   const corrections=new Map((judgment?.recommendationReconciliations??[])
     .map(x=>[JSON.stringify([...x.findingIds].sort()),x]));
-  const shownRoles = roles ?? (chapter.editorialMode === "light"
+  const shownRoles = roles ?? (reports.some(r => r.profileStamp) ? [...new Set(reports.map(r => r.role))] : chapter.editorialMode === "light"
     ? EDITORIAL_ROLES.filter(role => reports.some(r => r.role === role)) : EDITORIAL_ROLES);
   return <div className="space-y-3">
     <p className="text-sm font-semibold">Tornata {round} · {reports.length} verifiche · {findings.length} rilievi</p>
@@ -48,17 +50,24 @@ function RoundDetails({ round, reports, judgment, chapter, roles, sources = [], 
         const own = reports.filter(r => r.role === role);
         return <details key={role} className="rounded-lg border border-slate-300 p-3 text-xs dark:border-slate-700">
           <summary className="cursor-pointer font-semibold">
-            {ROLE_LABELS[role]} · {own.length} esami · {own.reduce((n,r)=>n+r.findings.length,0)} rilievi
+            {own[0]?.reviewerName ?? reviewerLabel(role, profileSettings)} · {own.length} esami · {own.reduce((n,r)=>n+r.findings.length,0)} rilievi
           </summary>
           {!own.length && <p className="muted mt-2">Revisore ancora da eseguire.</p>}
           {own.map(report => <div key={report.role + ":" + report.segmentIndex} className="mt-3 space-y-2 border-t border-slate-300 pt-2 dark:border-slate-700">
             <p><b>Segmento {report.segmentIndex + 1}/{report.segmentCount}:</b> {report.summary}</p>
+            {report.checklist?.length ? <ul aria-label={"Checklist delle regole, segmento " + (report.segmentIndex + 1)} className="flex flex-wrap gap-1.5">
+              {report.checklist.map(item => <li key={item.ruleId} title={item.note || undefined}
+                className={`rounded-full border px-2 py-0.5 font-semibold ${item.outcome === "fail" ? "border-rose-500/50 bg-rose-500/10 text-rose-800 dark:text-rose-300"
+                  : item.outcome === "pass" ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : "border-slate-400 muted"}`}>
+                {item.outcome === "fail" ? "✗" : item.outcome === "pass" ? "✓" : "–"} {profileSettings?.writers.find(w => w.id === profileSettings.selectedWriterId)?.rules?.find(r => r.id === item.ruleId)?.label ?? item.ruleId}
+              </li>)}
+            </ul> : null}
             {!report.findings.length && <p className="text-emerald-700 dark:text-emerald-300">Nessun problema segnalato.</p>}
             {report.findings.map(f => {
               const ruling = judged.get(f.id);
               const quoteVerified = isNarrativeEvidenceAnchorCurrent(chapter,f);
               return <div key={f.id} className="space-y-1 rounded-md bg-slate-100 p-2 dark:bg-slate-900">
-                <p className="font-semibold">{f.severity.toUpperCase()} · {f.category} · Scena {f.sceneId}</p>
+                <p className="font-semibold">{f.severity.toUpperCase()} · {f.category} · Scena {f.sceneId}{f.ruleId ? " · regola " + f.ruleId : ""}</p>
                 <p><b>Prova:</b> {f.evidence}</p>
                 {quoteVerified && f.evidenceAnchor ? <div className="space-y-1 rounded border border-emerald-600/40
                   p-2 break-words" aria-label={"Prova narrativa verificata " + f.id}>
@@ -367,8 +376,10 @@ export function EditorialBoardPanel({
   const chapter = cycle && book.chapters.find(ch => ch.id === cycle.chapterId);
   const recoveryProblem = editorialRecoveryProblem(book);
   const completedReports = cycle?.reports.length ?? 0;
+  let activeRoles: readonly EditorialRole[] = [];
+  try { if (cycle) activeRoles = cycleRoles(book, cycle); } catch { /* recoveryProblem explains invalid profiles */ }
   const totalSlots = cycle?.reports[0]?.segmentCount ?
-    cycle.reports[0].segmentCount * cycleRoles(book, cycle).length : null;
+    cycle.reports[0].segmentCount * activeRoles.length : null;
   // Imported checkpoints may have forged/missing decision IDs: display the
   // recovery notice instead of crashing before the author can archive them.
   let pending = 0;
@@ -398,7 +409,7 @@ export function EditorialBoardPanel({
   async function recoverCheckpoint() {
     if (busy || book.status === "running" || !recoveryProblem) return;
     if (!window.confirm(
-      "Vuoi archiviare il checkpoint non valido e ripetere DA ZERO tutti i " + (cycle ? cycleRoles(book, cycle).length : 12) + " revisori? " +
+      "Vuoi archiviare il checkpoint non valido e ripetere DA ZERO tutti i revisori previsti? " +
       "I rapporti precedenti resteranno consultabili, ma le nuove chiamate AI avranno un costo. " +
       "Il canone corrente non sarà modificato: eventuali correzioni già salvate non saranno annullate (non è un rollback). Autosync sarà disabilitato e l'outbox cancellata. " +
       "È consigliato un backup ZIP prima di procedere.",
@@ -416,7 +427,7 @@ export function EditorialBoardPanel({
   return <section aria-label="Redazione multi-agente" className="panel min-w-0 p-4 sm:p-5">
     <h2 className="flex items-center gap-2 text-lg font-semibold"><Users size={19}/> Redazione multi-agente</h2>
     <p className="muted mt-1 text-xs">
-      Sette specialisti e cinque lettori in chiamate AI separate. Ogni rilievo include prova, gravità e remediation;
+      Standard: sette specialisti e cinque lettori in chiamate AI separate; puoi personalizzare i lettori e aggiungere la rilettura dello scrittore in Modelli e redazione. Ogni rilievo include prova, gravità e remediation;
       il direttore può accettarlo o respingerlo motivando. Ogni capitolo completo deve essere congelato prima di avanzare.
       I capitoli dopo modifiche retroattive richiedono una nuova review, con campioni identificati delle scene precedenti.
     </p>
@@ -424,7 +435,7 @@ export function EditorialBoardPanel({
       <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <p className="font-semibold">Capitolo {chapter.number}: {chapter.title}</p>
         <p className="mt-1">Tornata {cycle.round}/3 · Fase: {
-          cycle.stage === "review" ? (cycleRoles(book, cycle).length === 12 ? "12 revisori indipendenti" : cycleRoles(book, cycle).length + " revisori indipendenti (redazione leggera)") :
+          cycle.stage === "review" ? (activeRoles.length ? activeRoles.length + " revisori indipendenti" + (cycle.profileSettings ? " (profili del libro)" : cycle.roles ? " (redazione leggera)" : "") : "Profili da verificare") :
           cycle.stage === "adjudicate" ? "Giudizio critico" :
           cycle.stage === "repair" ? "Remediation mirate" :
           cycle.stage === "reconcile" ? "Riconciliazione del canon" :
@@ -475,7 +486,7 @@ export function EditorialBoardPanel({
       <EditorialVerificationPlanPanel book={book} cycle={cycle}
         chapter={chapter} onRefresh={onRefresh}/>
       <EditorialArchiveComparisonPanel book={book} cycle={cycle} chapter={chapter}/>
-      <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment} roles={cycleRoles(book, cycle)}
+      <RoundDetails round={cycle.round} reports={cycle.reports} judgment={cycle.judgment} roles={activeRoles} profileSettings={cycle.profileSettings}
         chapter={chapter} sources={chapter.historicalDossier?.sources}
         manualSources={allManualEvidence(chapter.historicalDossier)}
         activeManualIds={activeManualEvidence(chapter.historicalDossier).map(x=>x.id)}

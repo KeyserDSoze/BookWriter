@@ -1,12 +1,13 @@
 import type { BookProject, Chapter, Scene } from "./types";
-import { ROLE_LABELS, acceptedRepairs, chapterSegments, cycleRoles } from "./editorial-board";
+import { reviewerLabel, acceptedRepairs, chapterSegments, createEditorialCycle, cycleRoles } from "./editorial-board";
+import { parseEditorialProfiles } from "./editorial-profiles";
 
 export type PipelineStage = "ideation" | "planning" | "writing" | "editing" | "done";
 export const PIPELINE_STAGES: ReadonlyArray<{ id: PipelineStage; label: string; description: string }> = [
   { id: "ideation", label: "Ideazione", description: "Brainstorming, validazione, cinque lettori e critica avversaria." },
   { id: "planning", label: "Piano", description: "Capitoli e scene da scrivere." },
   { id: "writing", label: "Scrittura", description: "Una scena alla volta: stesura, revisione e memoria narrativa." },
-  { id: "editing", label: "Redazione", description: "Per ogni capitolo: 12 revisori indipendenti, direttore, correzioni e congelamento." },
+  { id: "editing", label: "Redazione", description: "Per ogni capitolo: revisori indipendenti, direttore, correzioni e congelamento." },
   { id: "done", label: "Completato", description: "Tutti i capitoli scritti e congelati." },
 ];
 
@@ -89,6 +90,10 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
   const stage = pipelineStage(book);
   const view = (headline: string, extra: Partial<AutopilotStepView> = {}): AutopilotStepView =>
     ({ stage, headline, acceptsAuthorNotes: false, revision: book.phase === "revision", ...extra });
+  if (book.knowledge?.pending && book.chapters.length && book.status !== "completed" && book.phase !== "revision" &&
+      !["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase))
+    return view("Schede narrative, eventi e timeline del libro.", {
+      detail: "Personaggi, luoghi, oggetti, fazioni ed eventi con identificativi stabili: diventano il riferimento per scrittura e revisioni." });
   if (book.status === "completed" || book.phase === "completed")
     return view("Libro completato: tutti i capitoli sono scritti e congelati.", {
       detail: "Puoi esportarlo dall'Archivio oppure chiedere una revisione con un intervento." });
@@ -104,9 +109,13 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
     case "validate":
       return view("Validazione critica delle idee.", { acceptsAuthorNotes: true,
         detail: "Coerenza, causalità, originalità e fedeltà alle tue indicazioni." });
-    case "audience":
-      return view(`Panel dei lettori: profilo ${Math.min(book.audienceReviews.length + 1, 5)} di 5.`, {
-        acceptsAuthorNotes: true, detail: "Cinque lettori simulati valutano le idee in modo indipendente." });
+    case "audience": {
+      try {
+        const count = book.editorialProfiles ? parseEditorialProfiles(book.editorialProfiles).readers.filter(p => p.enabled).length : 5;
+        return view(`Panel dei lettori: profilo ${Math.min(book.audienceReviews.length + 1, count)} di ${count}.`, {
+          acceptsAuthorNotes: true, detail: "I lettori simulati valutano le idee in modo indipendente." });
+      } catch { return view("Profili dei lettori da verificare.", { blocked: "Apri Modelli e redazione e correggi i profili." }); }
+    }
     case "adversarial":
       return view("Critica avversaria della trama.", { acceptsAuthorNotes: true,
         detail: "Ricerca di buchi di trama, cliché, spoiler e motivazioni deboli." });
@@ -117,9 +126,13 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
         detail: book.pauseAfterOutline ? "Dopo il piano l'autopilot si ferma per la tua approvazione." : undefined });
     case "prose": {
       const ready = chapterReadyForEditing(book);
-      if (ready) return view(`Redazione del capitolo ${ready.number} «${ready.title}»: 12 revisori indipendenti e direttore editoriale.`, {
-        chapterNumber: ready.number,
-        detail: "Il capitolo viene congelato solo dopo il giudizio del direttore e le eventuali correzioni." });
+      if (ready) {
+        try {
+          const count = cycleRoles(book, createEditorialCycle(ready.id, book)).length;
+          return view(`Redazione del capitolo ${ready.number} «${ready.title}»: ${count} revisori indipendenti e direttore editoriale.`, {
+            chapterNumber: ready.number, detail: "Il capitolo viene congelato solo dopo il giudizio del direttore e le eventuali correzioni." });
+        } catch { return view("Profili della redazione da verificare.", { blocked: "Apri Modelli e redazione e correggi i profili." }); }
+      }
       for (const chapter of book.chapters) {
         const scene = chapter.scenes.find(s => s.status !== "canon");
         if (scene) return view(`Scrittura della ${sceneLabel(chapter, scene)}.`, {
@@ -155,7 +168,7 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
             const done = cycle.reports.length;
             const roles = cycleRoles(book, cycle);
             const role = roles[Math.floor(done / segments)];
-            if (role) return view(`Redazione del ${where}: revisore ${done + 1} di ${segments * roles.length} — ${ROLE_LABELS[role]}.`, {
+            if (role) return view(`Redazione del ${where}: revisore ${done + 1} di ${segments * roles.length} — ${reviewerLabel(role, cycle.profileSettings)}.`, {
               chapterNumber: chapter.number, detail: `Tornata ${cycle.round}/3. Ogni revisore è una chiamata AI indipendente che non vede gli altri pareri.` });
           } catch { /* the board panel explains invalid checkpoints */ }
           return view(`Redazione del ${where}.`, { chapterNumber: chapter.number });
@@ -183,6 +196,15 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
     case "revision": {
       const rev = book.revision;
       if (!rev) return view("Revisione richiesta dall'autore.", { blocked: "Revisione senza istruzione: registra di nuovo l'intervento." });
+      const change = rev.changeOperationId ? book.changeOperations?.find(op => op.id === rev.changeOperationId) : undefined;
+      if (change?.state === "awaiting_confirmation")
+        return view(`Piano della modifica di «${change.targetLabel}» pronto.`, { blocked: "Confermalo o annullalo nella pagina Mondo." });
+      if (change?.target.kind === "scene" && change.state === "pending")
+        return view(`Riscrittura su richiesta: «${change.targetLabel}».`, { detail: "«" + change.instruction.slice(0, 160) + "»" });
+      if (change?.target.kind === "scene" && change.state === "analyzing")
+        return view(`Confronto della modifica: «${change.targetLabel}».`, { detail: "Distingue un cambio di stile da un cambio dei fatti, per rivedere solo ciò che serve." });
+      if (change && rev.impactAnalysis === undefined)
+        return view(`Analisi della modifica di «${change.targetLabel}».`, { detail: "Nuova scheda, scene dirette e indirette, impatto globale: «" + change.instruction.slice(0, 140) + "»" });
       if (rev.impactAnalysis === undefined)
         return view("Analisi d'impatto della tua revisione.", { acceptsAuthorNotes: true,
           detail: "Individua le scene coinvolte: «" + rev.instruction.slice(0, 160) + (rev.instruction.length > 160 ? "…" : "") + "»" });

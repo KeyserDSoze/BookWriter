@@ -42,7 +42,7 @@ export async function attachManualEvidence(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=previousSummary;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
         book.currentSceneId=undefined;
@@ -50,7 +50,7 @@ export async function attachManualEvidence(
         book.previousError="Trascrizione documentale aggiornata: riesegui la review del capitolo e dei successivi.";
       } else if (book.status==="completed" && chapter.scenes.length &&
           chapter.scenes.every(scene => scene.status==="canon" && scene.text.trim())) {
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
       }

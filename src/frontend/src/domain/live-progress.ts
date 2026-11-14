@@ -1,4 +1,4 @@
-import { EDITORIAL_ROLES, ROLE_LABELS, type EditorialRole } from "./editorial-board";
+import { ALL_EDITORIAL_ROLES, ROLE_LABELS, type EditorialRole } from "./editorial-board";
 import { entryOf, finalText, openLeaf, parsePartialJson, type PartialNode, type PathStep } from "./partial-json";
 
 /** What a model reply says it has DONE so far, read while it is still being written.
@@ -68,7 +68,7 @@ export function describeSceneRef(id: string, resolve?: SceneResolver): string {
 export function describeHeadline(title: string): string {
   const match = /^Redazione: (\w+) (\d+)\/(\d+)$/.exec(title);
   const role = match?.[1] as EditorialRole | undefined;
-  if (match && role && (EDITORIAL_ROLES as readonly string[]).includes(role))
+  if (match && role && (ALL_EDITORIAL_ROLES as readonly string[]).includes(role))
     return `Revisione «${ROLE_LABELS[role]}» · rapporto ${match[2]} di ${match[3]}`;
   return title;
 }

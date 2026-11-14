@@ -16,16 +16,22 @@ import { parseJsonReply } from "../domain/json-reply";
 import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, nextReviewSlot, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, nextReviewSlot, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import { assertPriorChaptersFrozen, completeContinuityRecheck, markDownstreamContinuity } from "../domain/cross-chapter-continuity";
+import { assertPriorChaptersFrozen, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
 import { AiBudgetStop } from "../domain/ai-budget";
 import { markAuthorNotesApplied, pendingAuthorNotes, taskAcceptsAuthorNotes, withAuthorNotes } from "../domain/author-interventions";
 import { formatAuthorSynopsis } from "../domain/book-start";
-import type { EditorialRound } from "../domain/editorial-board";
 import { recordAuthorIntervention } from "./author-intervention";
+import { parseEditorialProfiles, profileStamp, writerInstructions } from "../domain/editorial-profiles";
+import { describeEntities, describeEvents, emptyKnowledge, KNOWLEDGE_REPLY_SHAPE, mergeKnowledgeReply, syncKnowledgeWithMemory,
+  MEMORY_FOLDER, findEntity, type KnowledgeBase } from "../domain/knowledge";
+import { analyzeImpact, dependentEvents, relevantKnowledge } from "../domain/knowledge-index";
+import { activeChange, changeAnalysisSchema, changeById, detectFactDrift, knownNames, replaceEntitySheet, replaceEventSheet,
+  sceneComparisonSchema, sceneSnapshots, validRewriteTargets } from "../domain/narrative-change";
+import { applyChangePlan, reopenForRewrite, settleAfterRewrite, settleChangeOperations } from "../domain/narrative-change-flow";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -171,6 +177,7 @@ function context(book: BookProject): string {
 function writingContext(book: BookProject): string {
   return [
     ...bookHeader(book),
+    ...(["prose", "review", "revision"].includes(book.phase) ? [writerInstructions(book.editorialProfiles)] : []),
     `Idee a lungo, medio e breve termine:\n${book.ideas ?? "Non disponibili"}`,
     `Outline:\n${outlineText(book)}`,
     `Stato narrativo consolidato:\n${JSON.stringify(book.memory)}`,
@@ -204,18 +211,18 @@ function sceneFocus(book: BookProject, sceneId: string): string {
   }
   const next = flat[index + 1];
   if (next) lines.push(`Scena successiva prevista: «${next.scene.title}» — ${next.scene.objective}`);
+  // Structured sheets as the reference for names, voices, relations and planned events.
+  const kb = book.knowledge;
+  if (kb && !kb.pending && kb.entities.length) {
+    const previousText = flat.slice(Math.max(0, index - 1), index).map(x => x.scene.text.slice(-2400)).join("\n");
+    const found = relevantKnowledge(book, kb, [here.scene.title, here.scene.objective, here.chapter.purpose, previousText].join("\n"),
+      here.scene.id, here.chapter.number);
+    if (found.entities.length) lines.push("SCHEDE NARRATIVE PERTINENTI (riferimento per nomi, voci, relazioni; non sono testo da copiare):\n" + describeEntities(found.entities, kb));
+    if (found.events.length) lines.push("EVENTI PREVISTI O GIÀ COLLEGATI A QUESTA SCENA (rispetta cause, prospettive e segreti):\n" + describeEvents(found.events, kb));
+  }
   return lines.join("\n\n");
 }
-/** Judged rounds of a discarded active review stay in the chapter history. */
-function archiveJudgedRounds(book: BookProject): void {
-  const cycle = book.editorialCycle;
-  if (!cycle) return;
-  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
-  if (!chapter) return;
-  const judged: EditorialRound[] = [...cycle.priorRounds];
-  if (cycle.judgment) judged.push({ round: cycle.round, reports: cycle.reports, judgment: cycle.judgment });
-  if (judged.length) chapter.editorialRounds = [...(chapter.editorialRounds ?? []), ...judged];
-}
+/** Judged rounds of a discarded active review stay in the chapter history (see narrative-change-flow). */
 function allScenes(book: BookProject): Scene[] {
   return book.chapters.flatMap(x => x.scenes);
 }
@@ -247,6 +254,8 @@ const scenesFor = (chapterIndex: number, scenes: Array<{ title: string; objectiv
   }));
 function finishOutline(b: BookProject): void {
   b.phase = "prose";
+  // The sheets, events and timelines are generated right after the plan.
+  if (!b.knowledge) b.knowledge = emptyKnowledge(true);
   // The author asked to read and approve the plan before any prose is written.
   if (b.pauseAfterOutline) b.status = "paused";
 }
@@ -310,6 +319,78 @@ function outlineChapterWork(book: BookProject, chapter: Chapter, base: string,
   };
 }
 
+function sceneIdsOf(book: BookProject): Set<string> {
+  return new Set(allScenes(book).map(scene => scene.id));
+}
+function knowledgeIndexText(kb: KnowledgeBase): string {
+  return [
+    "Schede esistenti (riusa ESATTAMENTE questi nomi): " + (kb.entities.map(e => `${e.name} [${e.type}]`).join("; ") || "nessuna"),
+    "Eventi esistenti: " + (kb.events.map(e => e.title).join("; ") || "nessuno"),
+    "Timeline esistenti: " + (kb.timelines.map(t => t.title).join("; ") || "nessuna"),
+  ].join("\n").slice(0, 9000);
+}
+/** Sheets, events and timelines right after the plan (or on the author's request for an older book). */
+function knowledgeGenerationWork(book: BookProject): Work {
+  const kb = book.knowledge ?? emptyKnowledge(true);
+  const written = allScenes(book).filter(scene => scene.text.trim());
+  const scenesList = book.chapters.map(ch => `Capitolo ${ch.number} «${ch.title}»: ${ch.purpose}\n` +
+    ch.scenes.map(s => `  - ${s.id}: ${s.title} — ${s.summary ?? s.objective}`).join("\n")).join("\n").slice(0, 30000);
+  return {
+    phase: book.phase, kind: "outline", noAuthorNotes: true,
+    title: "Schede narrative, eventi e timeline",
+    reason: "Costruire la memoria strutturata del libro: personaggi, luoghi, oggetti, fazioni, eventi e cronologia, collegati da ID stabili.",
+    nextStep: written.length ? "Riprende il lavoro dal punto in cui si era fermato" : "Scrittura della prima scena",
+    prompt: [
+      "Crea la knowledge base narrativa del libro a partire da piano, idee e memoria. Identifica i personaggi principali e secondari già necessari, i luoghi importanti, gli oggetti rilevanti, le fazioni (se esistono), gli eventi fondamentali e le timeline (una globale ed eventuali archi).",
+      "Schede CONCISE e funzionali: includi solo informazioni che servono alla storia (ruolo, motivazione, modo di parlare, background, relazioni). Non riempire campi per completezza e non inventare dettagli contraddittori con il piano.",
+      "Ogni evento: storyOrder = posizione nella CRONOLOGIA della storia (può differire dall'ordine del racconto: flashback e antefatti), chapter = capitolo in cui è raccontato, sceneIds = scene del piano in cui accade (usa gli ID esatti), involves = nomi delle schede, causes = titoli degli eventi da cui dipende.",
+      "Distingui la verità narrativa da ciò che i personaggi sanno: usa perspectives (knows, unaware, believes_false, conceals) per misteri, inganni e segreti, e secret=true per ciò che il lettore non deve ancora sapere.",
+      "Restituisci ESCLUSIVAMENTE JSON valido in questo formato, con nomi coerenti fra relazioni ed eventi: " + KNOWLEDGE_REPLY_SHAPE,
+      knowledgeIndexText(kb),
+      "PIANO E SCENE:\n" + scenesList,
+      "IDEE:\n" + (book.ideas ?? "Non disponibili").slice(0, 12000),
+      "MEMORIA NARRATIVA:\n" + JSON.stringify(book.memory).slice(0, 24000),
+      ...bookHeader(book),
+    ].join("\n\n"),
+    apply: (b, text) => {
+      const previous = b.knowledge ?? emptyKnowledge(true);
+      const now = new Date().toISOString();
+      let next = mergeKnowledgeReply(previous, parseJson(text), { origin: written.length ? "written" : "planned",
+        reason: "Generazione della knowledge base", now, sceneIds: sceneIdsOf(b) });
+      next = syncKnowledgeWithMemory(next, b.memory, now);
+      if (!next.entities.length) throw new Error("Nessuna scheda generata: servono almeno i personaggi principali.");
+      b.knowledge = { ...next, pending: undefined, generatedAt: now };
+      delete b.knowledge.pending;
+    },
+  };
+}
+const knowledgeUpdateSchema = z.object({
+  sceneEntities: z.array(z.string().min(1).max(120)).max(40).optional(),
+  sceneSummaries: z.record(z.string(), z.string().trim().min(20).max(800)).optional(),
+});
+/** Optional sheet/event updates sent with a memory delta. Unknown names fail closed. */
+function applyKnowledgeUpdate(b: BookProject, raw: unknown, reason: string, sceneId?: string): void {
+  if (!b.knowledge || b.knowledge.pending) return;
+  const now = new Date().toISOString();
+  const reply = raw as { knowledge?: unknown } | null;
+  let kb = b.knowledge;
+  if (reply && typeof reply === "object" && reply.knowledge !== undefined)
+    kb = mergeKnowledgeReply(kb, reply.knowledge, { origin: "written", reason, now, sceneIds: sceneIdsOf(b), ...(sceneId ? { defaultSceneId: sceneId } : {}) });
+  kb = syncKnowledgeWithMemory(kb, b.memory, now);
+  const extra = knowledgeUpdateSchema.parse(reply ?? {});
+  const scene = sceneId ? allScenes(b).find(s => s.id === sceneId) : undefined;
+  if (scene && extra.sceneEntities?.length) for (const name of extra.sceneEntities) {
+    const entity = findEntity(kb, undefined, name);
+    if (!entity) continue; // a mention without a sheet is not an error: the memory sync creates sheets
+    const folder = MEMORY_FOLDER[entity.type];
+    const list = folder === "characters" ? (scene.characters ??= []) : folder === "locations" ? (scene.locations ??= []) :
+      folder === "items" ? (scene.items ??= []) : (scene.factions ??= []);
+    if (!list.includes(entity.name) && list.length < 40) list.push(entity.name);
+  }
+  b.knowledge = kb;
+}
+const KNOWLEDGE_DELTA_RULE = "Se la knowledge base è attiva, aggiungi al JSON anche \"sceneEntities\":[nomi delle schede presenti nella scena] e, solo per ciò che è nuovo o cambiato, \"knowledge\":{\"entities\":[...],\"events\":[...]} nel formato " + KNOWLEDGE_REPLY_SHAPE + ". Gli eventi accaduti nella scena omettono sceneIds (si collegano a questa scena). Non ripetere schede invariate.";
+
 /** Shrinks canon memory so later prompts (and the model's context) can carry it. The reply must
  * be the complete memory and must be clearly smaller, otherwise the task fails instead of looping. */
 function memoryCompactionWork(book: BookProject): Work {
@@ -333,6 +414,9 @@ function memoryCompactionWork(book: BookProject): Work {
 
 function nextWork(book: BookProject): Work | null {
   const planning = ["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase);
+  // The structured sheets are built once the plan exists (new books, or on request).
+  if (book.knowledge?.pending && book.chapters.length && !planning && book.phase !== "revision")
+    return knowledgeGenerationWork(book);
   const base = planning ? context(book) : writingContext(book);
   const synopses = book.startMode === "synopsis" ? book.authorChapterSynopses ?? [] : [];
   const synopsisRule = synopses.length
@@ -360,16 +444,23 @@ function nextWork(book: BookProject): Work | null {
         apply: (b, text) => { b.validation = text; b.phase = "audience"; },
       };
     case "audience": {
-      const persona = PERSONAS[book.audienceReviews.length];
+      const profiles = book.editorialProfiles ? parseEditorialProfiles(book.editorialProfiles).readers.filter(p => p.enabled) : undefined;
+      const personas = profiles?.map(p => p.name + ": " + p.instructions) ?? PERSONAS;
+      const persona = personas[book.audienceReviews.length];
       if (!persona) return null;
+      const expected = JSON.stringify(profiles);
+      const audienceBase = profiles ? [...bookHeader(book), authorSynopsisBlock(book), "Idee:\n" + (book.ideas ?? ""),
+        "Validazione:\n" + (book.validation ?? "")].filter(Boolean).join("\n\n") : base;
       return {
-        phase: "audience", kind: "audience", title: `Audience review ${book.audienceReviews.length + 1}/5`,
+        phase: "audience", kind: "audience", title: `Audience review ${book.audienceReviews.length + 1}/${personas.length}`,
         reason: `Valutazione indipendente dal punto di vista di: ${persona}.`,
-        nextStep: book.audienceReviews.length === 4 ? "Adversarial review" : "Prossima persona del panel",
-        prompt: `Interpreta solo questo profilo: ${persona}. Esamina le idee come un lettore esigente: punti forti, critiche, noia, inconsistenze, curiosità, revisioni necessarie. Sii concreto, non compiacente.${synopsisRule}\n\n${base}`,
+        nextStep: book.audienceReviews.length === personas.length - 1 ? "Adversarial review" : "Prossima persona del panel",
+        prompt: `Interpreta solo questo profilo: ${persona}. Esamina le idee come un lettore esigente: punti forti, critiche, noia, inconsistenze, curiosità, revisioni necessarie. Sii concreto, non compiacente.${synopsisRule}\n\n${audienceBase}`,
         apply: (b, text) => {
+          const current = b.editorialProfiles ? parseEditorialProfiles(b.editorialProfiles).readers.filter(p => p.enabled) : undefined;
+          if (JSON.stringify(current) !== expected) throw new Error("Profili dei lettori cambiati durante la chiamata: risposta scartata.");
           b.audienceReviews.push(`[Persona ${b.audienceReviews.length + 1}] ${text}`);
-          if (b.audienceReviews.length >= 5) b.phase = "adversarial";
+          if (b.audienceReviews.length >= personas.length) b.phase = "adversarial";
         },
       };
     }
@@ -432,10 +523,12 @@ function nextWork(book: BookProject): Work | null {
         phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon",
         reason: "Aggiornare personaggi, luoghi, fazioni, oggetti, segreti e timeline dopo la scena.",
         nextStep: "Prossima scena o completamento del libro",
-        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE}\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
+        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE}${book.knowledge && !book.knowledge.pending ? " " + KNOWLEDGE_DELTA_RULE + "\n\n" + knowledgeIndexText(book.knowledge) : ""}\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => {
-          const update = applyMemoryResponse(b.memory, parseJson(text));
+          const reply = parseJson(text);
+          const update = applyMemoryResponse(b.memory, reply);
           b.memory = update.memory; b.currentSceneId = undefined;
+          applyKnowledgeUpdate(b, reply, "Consolidamento dopo la scena " + (scene?.id ?? ""), scene?.id);
           // A real summary of the scene (events and ending) replaces the opening-text fallback.
           if (update.sceneSummary) {
             const done = allScenes(b).find(s => s.id === scene?.id);
@@ -443,7 +536,7 @@ function nextWork(book: BookProject): Work | null {
           }
           const chapter = b.chapters.find(ch => ch.scenes.some(s => s.id === scene?.id));
           if (chapter && !chapter.frozenAt && chapter.scenes.every(s => s.status === "canon")) {
-            b.editorialCycle = createEditorialCycle(chapter.id);
+            b.editorialCycle = createEditorialCycle(chapter.id, b);
             b.phase = "chapterReview";
           } else b.phase = "prose";
         },
@@ -454,6 +547,11 @@ function nextWork(book: BookProject): Work | null {
       if (!cycle) throw new Error("Sessione di redazione mancante: fermati e chiedi intervento.");
       const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
       if (!chapter) throw new Error("Capitolo di redazione inesistente.");
+      const profileSnapshot = JSON.stringify([cycle.profileSettings, cycle.profileMode, cycle.roles]);
+      const assertProfilesCurrent = (current: typeof cycle | undefined) => {
+        if (!current || JSON.stringify([current.profileSettings, current.profileMode, current.roles]) !== profileSnapshot)
+          throw new Error("I profili della redazione sono cambiati durante la chiamata: risposta scartata.");
+      };
       if (cycle.stage === "blocked")
         throw new Error(cycle.blockedReason ?? "Redazione bloccata: intervento autore necessario.");
       if (cycle.stage === "review") {
@@ -462,6 +560,7 @@ function nextWork(book: BookProject): Work | null {
         const historicalSnapshot = next.role === "historical"
           ? captureHistoricalPromptDossier(book, cycle.chapterId, "review") : undefined;
         const prompt = reviewerPrompt(book, cycle, next.role, next.segment, next.segmentCount);
+        const expectedProfile = profileStamp(next.role, cycle.profileSettings);
         const title = "Redazione: " + next.role + " " + (cycle.reports.length + 1) + "/" +
           (next.segmentCount * cycleRoles(book, cycle).length);
         return {
@@ -476,6 +575,9 @@ function nextWork(book: BookProject): Work | null {
             const current = b.editorialCycle;
             const ch = b.chapters.find(c => c.id === cycle.chapterId);
             if (!current || !ch) throw new Error("Il ciclo editoriale è cambiato.");
+            assertProfilesCurrent(current);
+            if (profileStamp(next.role, current.profileSettings) !== expectedProfile)
+              throw new Error("Il profilo del revisore è cambiato durante la chiamata: risposta scartata.");
             // An author/import can replace historical material without updating
             // the book timestamp. Never approve a report based on old sources.
             if (historicalSnapshot) assertCurrentHistoricalPromptDossier(b, historicalSnapshot);
@@ -497,12 +599,13 @@ function nextWork(book: BookProject): Work | null {
         return {
           phase: "chapterReview", kind: "chapterJudge", system: prompt.system,
           title: "Direttore editoriale: accettazione o rifiuto motivato dei rilievi",
-          reason: "Il direttore valuta criticamente tutti e dodici i rapporti senza assumere che siano corretti.",
+          reason: "Il direttore valuta criticamente tutti i rapporti previsti dal ciclo senza assumere che siano corretti.",
           nextStep: "Correzioni accettate oppure preparazione del congelamento",
           prompt: prompt.prompt,
           apply: (b, text) => {
             const current = b.editorialCycle;
             if (!current) throw new Error("Ciclo editoriale non disponibile.");
+            assertProfilesCurrent(current);
             const chapter = b.chapters.find(c => c.id === current.chapterId);
             if (!chapter) throw new Error("Capitolo del giudice non disponibile.");
             assertCurrentHistoricalPromptDossier(b, historicalSnapshot);
@@ -511,6 +614,8 @@ function nextWork(book: BookProject): Work | null {
             current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
             current.repairCursor = 0;
             current.summaryCursor = 0;
+            // A rejected MANDATORY writer rule never freezes or repairs silently.
+            if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
           },
         };
       }
@@ -532,6 +637,7 @@ function nextWork(book: BookProject): Work | null {
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             const scene = ch?.scenes.find(x => x.id === sceneId);
             if (!scene || !b.editorialCycle) throw new Error("Scena da correggere assente.");
+            assertProfilesCurrent(b.editorialCycle);
             if (b.editorialCycle.stage !== "repair" ||
                 b.editorialCycle.chapterId !== cycle.chapterId)
               throw new Error("Ciclo editoriale cambiato durante la remediation.");
@@ -575,6 +681,7 @@ function nextWork(book: BookProject): Work | null {
             // The preflight/IndexedDB revision gate is not a substitute for
             // validating the exact checkpoint used by this editorial agent.
             const current = assertCurrentEditorialReconcileStep(b, checkpoint);
+            assertProfilesCurrent(current.cycle);
             const memory = applyMemoryResponse(b.memory, parseJson(text)).memory;
             b.memory = memory;
             current.cycle.reconcileCursor = checkpoint.cursor + 1;
@@ -610,7 +717,9 @@ function nextWork(book: BookProject): Work | null {
             "Aggiorna due sinossi progressive senza spoiler aggiuntivi e senza inventare fatti.",
             "Restituisci SOLO JSON {\"chapterSummary\":\"...\",\"bookSummary\":\"...\"}.",
             "Riassunto capitolo fino ad ora: " + (cycle.runningChapterSummary ?? ""),
-            "Riassunto libro precedente: " + (cycle.runningBookSummary ?? book.bookSummary ?? ""),
+            "Riassunto libro precedente: " + (cycle.runningBookSummary ??
+              (book.chapters.some(other => other.number > chapter.number && other.frozenAt)
+                ? synopsisBeforeChapter(book.chapters, chapter.number) : book.bookSummary ?? "")),
             "Segmento letto: " + segment.sceneId + "\n" + segment.text,
             "Il riassunto del libro deve descrivere quanto è stato realmente raccontato ai lettori.",
           ].join("\n\n"),
@@ -618,6 +727,7 @@ function nextWork(book: BookProject): Work | null {
             // Guard the EXACT stage/chapter/segment associated with this reply
             // before parsing or writing any summary fields.
             const current = assertCurrentEditorialSummaryStep(b,cycle.chapterId,index);
+            assertProfilesCurrent(current);
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             if (!ch) throw new Error("Sessione di sintesi non valida: capitolo assente.");
             const data = editorialSummarySchema.parse(parseJson(text));
@@ -634,15 +744,15 @@ function nextWork(book: BookProject): Work | null {
               completeContinuityRecheck(b, ch, freezeTime);
               ch.summary = data.chapterSummary;
               ch.bookSummaryAtFreeze = data.bookSummary;
-              b.bookSummary = data.bookSummary;
+              // A style-only edit reopens one chapter: later frozen chapters keep the full synopsis.
+              if (!b.chapters.some(other => other.number > ch.number && other.frozenAt)) b.bookSummary = data.bookSummary;
               ch.frozenAt = freezeTime;
-              if (current.roles) ch.editorialMode = "light"; else delete ch.editorialMode;
-              ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, {
-                round: current.round, reports: current.reports, judgment: current.judgment!,
-              }];
+              if (current.profileSettings ? current.profileMode === "light" : !!current.roles) ch.editorialMode = "light"; else delete ch.editorialMode;
+              ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, archiveEditorialRound(current)];
               b.editorialCycle = undefined;
               b.currentSceneId = undefined;
               b.phase = "prose";
+              settleChangeOperations(b, freezeTime);
             }
           },
         };
@@ -652,6 +762,12 @@ function nextWork(book: BookProject): Work | null {
     case "revision": {
       const rev = book.revision;
       if (!rev) throw new Error("Revisione senza richiesta dell'autore.");
+      const change = rev.changeOperationId ? changeById(book, rev.changeOperationId) : undefined;
+      if (rev.changeOperationId && !change) throw new Error("Operazione di modifica mancante: annullala dal pannello Mondo.");
+      if (change?.state === "awaiting_confirmation") throw new Error("Il piano della modifica attende la tua conferma.");
+      if (change?.target.kind === "scene" && change.state === "pending") return sceneEditWork(book, change, base);
+      if (change?.target.kind === "scene" && change.state === "analyzing") return sceneComparisonWork(book, change);
+      if (change && rev.impactAnalysis === undefined) return changeAnalysisWork(book, change, base);
       if (rev.impactAnalysis === undefined) {
         return {
           phase: "revision", kind: "revision", title: "Analisi d'impatto della correzione",
@@ -669,25 +785,7 @@ function nextWork(book: BookProject): Work | null {
             // means the instruction only constrains the future.
             request.affectedSceneIds = earliest < 0 ? [] : canonical.slice(earliest).map(x => x.id);
             // Reopen every affected chapter and its successors: retroactive edits invalidate prior votes.
-            const earliestChapter = b.chapters.find(ch => ch.scenes.some(s =>
-              request.affectedSceneIds.includes(s.id)));
-            if (earliestChapter) {
-              markDownstreamContinuity(b, earliestChapter, "retroactive_revision",
-                earliestChapter.scenes.filter(s => request.affectedSceneIds.includes(s.id))
-                  .map(s=>s.id));
-              earliestChapter.lastContinuityReview = undefined;
-              for (const chapter of b.chapters) {
-                if (chapter.number >= earliestChapter.number) {
-                  chapter.frozenAt = undefined;
-                  chapter.summary = undefined;
-                  chapter.bookSummaryAtFreeze = undefined;
-                }
-              }
-              // An interrupted review may hold judged rounds: keep them as history.
-              archiveJudgedRounds(b);
-              b.editorialCycle = undefined;
-              b.bookSummary = synopsisBeforeChapter(b.chapters, earliestChapter.number);
-            }
+            reopenForRewrite(b, request.affectedSceneIds, "downstream");
             // An empty rationale must not trigger a second (billed) analysis.
             request.impactAnalysis = impact.rationale.trim() || "Nessuna motivazione fornita dal modello.";
             request.cursor = 0;
@@ -701,16 +799,26 @@ function nextWork(book: BookProject): Work | null {
           .map(id => allScenes(book).find(scene => scene.id === id))
           .filter((scene): scene is Scene => !!scene);
         const last = rewritten.at(-1);
+        const changeContext = change ? changePromptContext(book, change) : "";
         return {
           phase: "revision", kind: "consolidate", title: "Memoria narrativa dopo la revisione",
           reason: "Allineare personaggi, segreti, oggetti e cronologia alle scene riscritte.",
           nextStep: "Nuova redazione dei capitoli toccati e ripresa della scrittura",
-          prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}\n\nULTIMA SCENA RISCRITTA:\n${last?.text ?? "Nessuna"}\n\nCONTESTO:\n${base}`,
+          prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}` +
+            (book.knowledge && !book.knowledge.pending ? ` Aggiungi anche "sceneSummaries":{"ID scena":"riassunto fedele della scena riscritta in 2-4 frasi"} per OGNI scena riscritta e, se cambiano schede o eventi, "knowledge":{"entities":[...],"events":[...]} nel formato ${KNOWLEDGE_REPLY_SHAPE}.\n\n${knowledgeIndexText(book.knowledge)}` : "") +
+            `${changeContext}\n\nULTIMA SCENA RISCRITTA:\n${last?.text ?? "Nessuna"}\n\nCONTESTO:\n${base}`,
           apply: (b, text) => {
-            const memory = applyMemoryResponse(b.memory, parseJson(text)).memory;
+            const reply = parseJson(text);
+            const memory = applyMemoryResponse(b.memory, reply).memory;
             const current = b.revision;
             if (!current || current.id !== rev.id) throw new Error("Revisione cambiata durante l'aggiornamento della memoria.");
             b.memory = memory;
+            applyKnowledgeUpdate(b, reply, "Aggiornamento dopo la revisione: " + rev.instruction.slice(0, 200));
+            const summaries = knowledgeUpdateSchema.parse(reply ?? {}).sceneSummaries ?? {};
+            for (const id of current.affectedSceneIds) {
+              const target = allScenes(b).find(s => s.id === id);
+              if (target && summaries[id]) target.summary = summaries[id];
+            }
             closeRevision(b, current);
           },
         };
@@ -721,10 +829,16 @@ function nextWork(book: BookProject): Work | null {
         phase: "revision", kind: "revision", title: `Revisione retroattiva: ${scene.title}`,
         reason: `Istruzione dell'autore: ${rev.instruction}`,
         nextStep: "Scena seguente o aggiornamento della memoria",
-        prompt: `Riscrivi SOLO la scena ${scene.id} in accordo alla nuova istruzione tassativa dell'autore. Preserva i fatti e le parti buone non coinvolte, ma correggi premesse, legami e rimandi per le conseguenze narrative. Restituisci SOLO prosa pronta per il libro.\n\nISTRUZIONE: ${rev.instruction}\n\nTESTO PRECEDENTE:\n${scene.text}\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, scene.id)}\n\nCONTESTO:\n${base}`,
+        prompt: `Riscrivi SOLO la scena ${scene.id} in accordo alla nuova istruzione tassativa dell'autore. Preserva i fatti e le parti buone non coinvolte, ma correggi premesse, legami e rimandi per le conseguenze narrative. Restituisci SOLO prosa pronta per il libro.\n\nISTRUZIONE: ${rev.instruction}${change ? changePromptContext(book, change) + "\nCambia SOLO ciò che la modifica richiede: non introdurre nuovi fatti, non eliminare indizi o motivazioni che non dipendono dalla modifica." : ""}\n\nTESTO PRECEDENTE:\n${scene.text}\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, scene.id)}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => {
           const target = allScenes(b).find(x => x.id === sceneId);
           if (!target || !b.revision) throw new Error("Revisione non più applicabile.");
+          const op = b.revision.changeOperationId ? changeById(b, b.revision.changeOperationId) : undefined;
+          if (op) {
+            assertScenePlausible(text, target.text);
+            op.report = [...op.report, { sceneId, at: new Date().toISOString(), drift: detectFactDrift(target.text, text, knownNames(b)) }].slice(-400);
+            op.updatedAt = new Date().toISOString();
+          }
           target.text = text; target.status = "canon"; target.summary = text.slice(0, 520); b.revision.cursor++;
         },
       };
@@ -736,10 +850,165 @@ function nextWork(book: BookProject): Work | null {
 const PLANNING_PHASES: readonly Phase[] = ["brainstorm", "validate", "audience", "adversarial", "outline"];
 /** Leave the revision phase: back to an interrupted review, to writing, or to planning. */
 export function closeRevision(book: BookProject, rev: RevisionRequest): void {
+  const change = rev.changeOperationId ? changeById(book, rev.changeOperationId) : undefined;
   book.revision = undefined;
   book.currentSceneId = undefined;
   book.phase = book.editorialCycle ? "chapterReview" : book.chapters.length ? "prose" :
     PLANNING_PHASES.includes(rev.beforePhase) ? rev.beforePhase : "brainstorm";
+  if (change) settleAfterRewrite(book, change, new Date().toISOString());
+}
+
+/** What the writer must know about the tracked change while rewriting or consolidating. */
+function changePromptContext(book: BookProject, change: NonNullable<ReturnType<typeof changeById>>): string {
+  const kb = book.knowledge;
+  const lines = ["", "MODIFICA RICHIESTA DALL'AUTORE su «" + change.targetLabel + "»: " + change.instruction];
+  if (change.plan?.interpretation) lines.push("Interpretazione: " + change.plan.interpretation);
+  if (change.plan?.changedFacts.length) lines.push("Fatti che cambiano: " + change.plan.changedFacts.join("; "));
+  const entity = kb && change.target.kind === "entity" ? kb.entities.find(e => e.id === change.target.id) : undefined;
+  if (entity && kb) lines.push("SCHEDA AGGIORNATA (fonte di riferimento):\n" + describeEntities([entity], kb, 4000));
+  const event = kb && change.target.kind === "event" ? kb.events.find(e => e.id === change.target.id) : undefined;
+  if (event && kb) lines.push("EVENTO AGGIORNATO (fonte di riferimento):\n" + describeEvents([event], kb, 3000));
+  return lines.join("\n");
+}
+function scenesCatalog(book: BookProject, ids: readonly string[], limit = 14000): string {
+  const wanted = new Set(ids);
+  let out = "";
+  for (const chapter of book.chapters) for (const scene of chapter.scenes) {
+    if (!wanted.has(scene.id)) continue;
+    const line = `- ${scene.id} (cap. ${chapter.number} «${chapter.title}», scena ${scene.number} «${scene.title}»): ${(scene.summary ?? scene.text.slice(0, 300)).replace(/\s+/g, " ")}`;
+    if ((out + line).length > limit) { out += "\n- … altre scene omesse per spazio."; return out; }
+    out += (out ? "\n" : "") + line;
+  }
+  return out || "nessuna";
+}
+/** Entity or event change: interpret, propose the new sheet, choose the scenes to rewrite. */
+function changeAnalysisWork(book: BookProject, change: NonNullable<ReturnType<typeof changeById>>, base: string): Work {
+  const kb = book.knowledge;
+  if (!kb || change.target.kind === "scene") throw new Error("Knowledge base non disponibile per la modifica.");
+  const impact = analyzeImpact(book, kb, { kind: change.target.kind, id: change.target.id });
+  const written = allScenes(book).filter(s => s.status !== "planned" && s.text.trim()).map(s => s.id);
+  const entity = change.target.kind === "entity" ? kb.entities.find(e => e.id === change.target.id) : undefined;
+  const event = change.target.kind === "event" ? kb.events.find(e => e.id === change.target.id) : undefined;
+  return {
+    phase: "revision", kind: "revision", noAuthorNotes: true,
+    title: "Analisi della modifica: " + change.targetLabel,
+    reason: "Interpretare la richiesta, aggiornare la scheda e trovare le scene da riscrivere senza toccare il resto del libro.",
+    nextStep: change.mode === "confirm" ? "Piano da confermare dall'autore" : "Riscrittura mirata delle scene coinvolte",
+    prompt: [
+      `L'autore chiede di modificare ${entity ? "la scheda" : "l'evento"} «${change.targetLabel}» con questa richiesta PRIORITARIA: "${change.instruction}".`,
+      "1) Interpreta la richiesta. 2) Prepara la NUOVA versione completa " + (entity ? "della scheda (entity)" : "dell'evento (event)") + ", concisa, conservando ciò che la richiesta non cambia. 3) Valuta l'impatto: scene DIRETTE (citano o usano l'elemento), INDIRETTE (dipendono da eventi, relazioni o conseguenze cambiate), GLOBALE (struttura dell'intero libro). 4) Scegli in rewriteSceneIds SOLO le scene già scritte che vanno davvero riscritte: non riscrivere tutto il libro. Una modifica di carattere o voce richiede le scene dove il personaggio agisce o parla; un cambio di ruolo può richiedere molto di più.",
+      "Rispondi ESCLUSIVAMENTE JSON: " + (entity
+        ? '{"interpretation":"...","rationale":"perché queste scene","global":false,"changedFacts":["..."],"rewriteSceneIds":["scene:001:001"],"entity":{"name":"...","aliases":[],"importance":"main|secondary|minor","summary":"...","attributes":{"role":"...","personality":"...","speech":"..."},"relationships":[{"target":"nome scheda","type":"...","note":"..."}]}}'
+        : '{"interpretation":"...","rationale":"...","global":false,"changedFacts":["..."],"rewriteSceneIds":["scene:001:001"],"event":{"title":"...","summary":"...","storyOrder":10,"when":"...","narration":"scene|flashback|foreshadowing|offscreen|backstory","involves":["nomi"],"causes":["titoli eventi"],"secret":false,"perspectives":[{"who":"nome","stance":"knows|unaware|believes_false|conceals","note":"..."}]}}'),
+      entity ? "SCHEDA ATTUALE:\n" + describeEntities([entity], kb, 5000) : "EVENTO ATTUALE:\n" + describeEvents(event ? [event] : [], kb, 4000),
+      "ANALISI LOCALE DELLE DIPENDENZE (indizi lessicali e strutturali, non prove):\n" + impact.reasons.join("\n"),
+      "SCENE DIRETTE:\n" + scenesCatalog(book, impact.direct),
+      "SCENE INDIRETTE:\n" + scenesCatalog(book, impact.indirect),
+      "ALTRE SCENE GIÀ SCRITTE (usa questi ID se l'impatto è più ampio):\n" + scenesCatalog(book, written.filter(id => !impact.direct.includes(id) && !impact.indirect.includes(id)), 8000),
+      knowledgeIndexText(kb),
+      "CONTESTO:\n" + base,
+    ].join("\n\n"),
+    apply: (b, text) => {
+      const op = b.revision?.changeOperationId ? changeById(b, b.revision.changeOperationId) : undefined;
+      if (!op || op.id !== change.id || op.state !== "pending" || !b.knowledge) throw new Error("La modifica è cambiata durante l'analisi.");
+      const parsed = changeAnalysisSchema.parse(parseJson(text));
+      if (op.target.kind === "entity" && !parsed.entity) throw new Error("L'analisi deve proporre la nuova scheda completa (entity).");
+      if (op.target.kind === "event" && !parsed.event) throw new Error("L'analisi deve proporre il nuovo evento completo (event).");
+      const now = new Date().toISOString();
+      const live = analyzeImpact(b, b.knowledge, { kind: op.target.kind as "entity" | "event", id: op.target.id });
+      const rewriteSceneIds = validRewriteTargets(b, parsed.rewriteSceneIds);
+      op.plan = { interpretation: parsed.interpretation, changeKind: "narrative", rationale: parsed.rationale,
+        direct: live.direct, indirect: live.indirect, global: parsed.global ?? live.global, rewriteSceneIds,
+        changedFacts: parsed.changedFacts ?? [], proposal: { ...(parsed.entity ? { entity: parsed.entity } : {}), ...(parsed.event ? { event: parsed.event } : {}) } };
+      op.before = { ...(op.target.kind === "entity" ? { entity: b.knowledge.entities.find(e => e.id === op.target.id) } : {}),
+        ...(op.target.kind === "event" ? { event: b.knowledge.events.find(e => e.id === op.target.id) } : {}),
+        scenes: sceneSnapshots(b, rewriteSceneIds), memoryJson: JSON.stringify(b.memory) };
+      // Validate the proposed sheet now: a bad proposal must not be stored for later confirmation.
+      if (parsed.entity) replaceEntitySheet(b.knowledge, op.target.id, parsed.entity, now, "verifica");
+      if (parsed.event) replaceEventSheet(b.knowledge, op.target.id, parsed.event, now, "verifica");
+      if (op.mode === "confirm") {
+        op.state = "awaiting_confirmation"; op.updatedAt = now;
+        b.status = "paused";
+        b.previousError = "Piano della modifica pronto: confermalo o annullalo nella pagina Mondo.";
+        return;
+      }
+      applyChangePlan(b, op, now);
+    },
+  };
+}
+/** A scene edited on request: rewrite first, then compare old and new versions. */
+function sceneEditWork(book: BookProject, change: NonNullable<ReturnType<typeof changeById>>, base: string): Work {
+  const scene = allScenes(book).find(s => s.id === change.target.id);
+  if (!scene || !scene.text.trim()) throw new Error("La scena da modificare non esiste più o non è scritta.");
+  return {
+    phase: "revision", kind: "revision", noAuthorNotes: true,
+    title: "Riscrittura su richiesta: " + scene.title,
+    reason: "Applicare la richiesta dell'autore a una sola scena, conservando ciò che non deve cambiare.",
+    nextStep: "Confronto con la versione precedente",
+    prompt: `Riscrivi la scena ${scene.id} secondo questa richiesta dell'autore: "${change.instruction}". Se la richiesta riguarda solo forma, tono o ritmo, NON cambiare fatti, informazioni rivelate, presenze dei personaggi, oggetti, date o esito della scena. Restituisci SOLO la prosa completa della scena.\n\nTESTO ATTUALE:\n${scene.text}\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, scene.id)}\n\nCONTESTO:\n${base}`,
+    apply: (b, text) => {
+      const op = b.revision?.changeOperationId ? changeById(b, b.revision.changeOperationId) : undefined;
+      const target = allScenes(b).find(s => s.id === change.target.id);
+      if (!op || op.id !== change.id || op.state !== "pending" || !target) throw new Error("La modifica è cambiata durante la riscrittura.");
+      assertScenePlausible(text, target.text);
+      const now = new Date().toISOString();
+      op.before = { scenes: sceneSnapshots(b, [target.id]), memoryJson: JSON.stringify(b.memory) };
+      op.report = [{ sceneId: target.id, at: now, drift: detectFactDrift(target.text, text, knownNames(b)) }];
+      target.text = text.trim();
+      // The chapter is no longer the frozen version: it must be reviewed again.
+      reopenForRewrite(b, [target.id], "single");
+      op.state = "analyzing"; op.updatedAt = now;
+    },
+  };
+}
+function sceneComparisonWork(book: BookProject, change: NonNullable<ReturnType<typeof changeById>>): Work {
+  const scene = allScenes(book).find(s => s.id === change.target.id);
+  const before = change.before.scenes.find(s => s.sceneId === change.target.id);
+  if (!scene || !before) throw new Error("Versione precedente della scena non disponibile.");
+  const flat = allScenes(book);
+  const position = flat.findIndex(s => s.id === scene.id);
+  const later = flat.slice(position + 1).filter(s => s.status !== "planned" && s.text.trim()).map(s => s.id);
+  const kb = book.knowledge;
+  const eventScenes = kb ? kb.events.filter(e => e.sceneIds.includes(scene.id)).flatMap(e => dependentEvents(kb, e.id)).flatMap(e => e.sceneIds) : [];
+  const drift = change.report[0]?.drift ?? [];
+  return {
+    phase: "revision", kind: "continuity", noAuthorNotes: true,
+    title: "Confronto della modifica: " + scene.title,
+    reason: "Capire se sono cambiati solo stile e forma oppure anche fatti narrativi, per rivedere solo ciò che serve.",
+    nextStep: "Nuova revisione del capitolo (e delle scene dipendenti se cambiano i fatti)",
+    prompt: [
+      "Confronta la versione PRECEDENTE e la NUOVA della scena. changeKind=style se cambiano solo forma, tono, ritmo o dialoghi senza nuove informazioni; changeKind=narrative se cambiano fatti, presenze, oggetti, rivelazioni, relazioni, motivazioni o esito.",
+      "Per narrative elenca changedFacts e in dependentSceneIds le scene SUCCESSIVE già scritte che diventerebbero incoerenti (solo ID dall'elenco). Scrivi anche un riassunto fedele della NUOVA scena (2-4 frasi, cosa accade).",
+      'Rispondi ESCLUSIVAMENTE JSON {"changeKind":"style|narrative","changedFacts":[],"dependentSceneIds":[],"summary":"...","rationale":"..."}',
+      drift.length ? "CONTROLLO LOCALE (nomi e numeri presenti in una sola versione): " + drift.join(" ") : "Il controllo locale non ha trovato nomi o numeri cambiati.",
+      "VERSIONE PRECEDENTE:\n" + before.text,
+      "VERSIONE NUOVA:\n" + scene.text,
+      "SCENE SUCCESSIVE GIÀ SCRITTE:\n" + scenesCatalog(book, [...new Set([...eventScenes, ...later])], 12000),
+    ].join("\n\n"),
+    apply: (b, text) => {
+      const op = b.revision?.changeOperationId ? changeById(b, b.revision.changeOperationId) : undefined;
+      const target = allScenes(b).find(s => s.id === change.target.id);
+      if (!op || op.id !== change.id || op.state !== "analyzing" || !target || target.text !== scene.text)
+        throw new Error("La scena è cambiata durante il confronto.");
+      const parsed = sceneComparisonSchema.parse(parseJson(text));
+      const now = new Date().toISOString();
+      // Fail safe: a local drift turns a «style» verdict into a narrative change.
+      const changeKind = parsed.changeKind === "style" && !drift.length ? "style" : "narrative";
+      const dependents = changeKind === "narrative" ? validRewriteTargets(b, parsed.dependentSceneIds, target.id)
+        .filter(id => later.includes(id)) : [];
+      target.summary = parsed.summary;
+      op.plan = { interpretation: parsed.rationale, changeKind, rationale: parsed.rationale, direct: [target.id], indirect: dependents,
+        global: false, rewriteSceneIds: dependents, changedFacts: parsed.changedFacts, drift };
+      op.before = { ...op.before, scenes: [...op.before.scenes, ...sceneSnapshots(b, dependents)] };
+      if (op.mode === "confirm" && dependents.length) {
+        op.state = "awaiting_confirmation"; op.updatedAt = now;
+        b.status = "paused";
+        b.previousError = "La modifica cambia fatti narrativi: conferma o annulla la riscrittura delle scene dipendenti.";
+        return;
+      }
+      applyChangePlan(b, op, now);
+    },
+  };
 }
 /** An analysed revision that touches no written scene needs no further AI call. */
 function revisionClosableLocally(book: BookProject): book is BookProject & { revision: RevisionRequest } {
@@ -817,7 +1086,7 @@ export class AutopilotRunner {
             .find(ch => book.chapters.every(prev =>
               prev.number >= ch.number || !!prev.frozenAt));
           if (ready) {
-            book.editorialCycle = createEditorialCycle(ready.id);
+            book.editorialCycle = createEditorialCycle(ready.id, book);
             book.phase = "chapterReview";
             await saveBook(book, false);
             await onUpdate();
@@ -831,18 +1100,27 @@ export class AutopilotRunner {
           await onUpdate();
           break;
         }
+        if (activeChange(book)?.state === "awaiting_confirmation") {
+          book.status = "paused";
+          book.previousError = "Piano della modifica pronto: confermalo o annullalo nella pagina Mondo.";
+          await saveBook(book, false);
+          await onUpdate();
+          break;
+        }
         if (revisionClosableLocally(book)) {
           const expected = book.updatedAt;
           const instruction = book.revision.instruction;
+          const change = activeChange(book);
           closeRevision(book, book.revision);
           const now = new Date().toISOString();
           await saveBookAndActivity(book, {
             id: crypto.randomUUID(), bookId, runId, phase: "revision",
-            title: "Revisione chiusa senza riscritture",
-            reason: "L'analisi d'impatto non ha individuato scene già scritte da cambiare.",
-            nextStep: "L'istruzione resta un vincolo permanente per i prossimi task.",
+            title: change ? "Modifica applicata: " + change.targetLabel : "Revisione chiusa senza riscritture",
+            reason: change ? (change.plan?.changeKind === "style" ? "Modifica di forma: nessun fatto cambiato, il capitolo viene rivisto di nuovo." :
+              "Scheda aggiornata; nessuna scena già scritta da riscrivere.") : "L'analisi d'impatto non ha individuato scene già scritte da cambiare.",
+            nextStep: change ? "Nuova redazione dei capitoli toccati, poi la modifica risulterà completata." : "L'istruzione resta un vincolo permanente per i prossimi task.",
             status: "succeeded", aiRequested: false, createdAt: now, endedAt: now,
-            summary: shortSummary("Nessuna scena riscritta per: " + instruction),
+            summary: shortSummary((change ? "Modifica senza altre riscritture: " : "Nessuna scena riscritta per: ") + instruction),
           }, expected);
           await onUpdate();
           continue;
@@ -919,6 +1197,9 @@ export class AutopilotRunner {
           if (!latest || latest.status !== "running" || latest.phase !== work.phase ||
               latest.updatedAt !== book.updatedAt)
             throw new DOMException("Il libro è cambiato durante la chiamata AI: risultato non applicato.", "AbortError");
+          if (["prose", "review", "revision"].includes(work.phase) &&
+              writerInstructions(latest.editorialProfiles) !== writerInstructions(book.editorialProfiles))
+            throw new DOMException("Il profilo dello scrittore è cambiato durante la chiamata AI: risultato non applicato.", "AbortError");
           try { work.apply(latest, result.text); }
           catch (error) { throw new ReplyRejectedError(error); }
           started.status = "succeeded"; started.endedAt = new Date().toISOString();

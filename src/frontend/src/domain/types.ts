@@ -27,6 +27,9 @@ import type { NarrativeKnowledgeTopicDecision } from "./narrative-knowledge-topi
 import type { NarrativeTransferAssessment } from "./narrative-transfer-assessments";
 import type { NarrativeTransferShareDecision } from "./narrative-transfer-sharing";
 import type { EditorialVerificationChoice } from "./editorial-verification-choices";
+import type { EditorialProfiles } from "./editorial-profiles";
+import type { KnowledgeBase } from "./knowledge";
+import type { NarrativeChangeOperation } from "./narrative-change";
 
 export interface EncryptedSecret { iv: string; data: string; }
 /** Author-declared roles; /models does not attest capabilities. */
@@ -167,6 +170,8 @@ export interface RevisionRequest {
   affectedSceneIds: string[];
   cursor: number;
   impactAnalysis?: string;
+  /** Set when the revision executes a tracked narrative change operation. */
+  changeOperationId?: string;
 }
 /** How the author started the book: free idea or binding chapter-by-chapter synopsis. */
 export type BookStartMode = "idea" | "synopsis";
@@ -196,6 +201,9 @@ export interface AuthorIntervention {
 }
 export interface BookProject {
   id: string;
+  /** Portable Markdown originals, not executable instructions or AI permissions.
+   * Preserves extra metadata/documents of an explicitly imported manuscript. */
+  markdownSource?: Record<string, string>;
   title: string;
   brief: string;
   writingStyle: string;
@@ -251,6 +259,14 @@ export interface BookProject {
   editorialMode?: "full" | "light";
   /** Reviewer calls in flight at once (1-4). Absent/1 = sequential (default). Ignored while the AI budget is active. */
   editorialConcurrency?: number;
+  /** Explicit per-book reader/writer templates. Absent preserves the standard workflow. */
+  editorialProfiles?: EditorialProfiles;
+  /** Structured sheets, events and timelines (stable IDs). Absent on legacy books. */
+  knowledge?: KnowledgeBase;
+  /** Tracked prompt-driven changes to entities, events or scenes, with restore data. */
+  changeOperations?: NarrativeChangeOperation[];
+  /** "auto" (default) rewrites dependent scenes at once; "confirm" pauses on the plan. */
+  changeMode?: "auto" | "confirm";
   /** Every author prompt given to the autopilot, never rewritten. */
   authorInterventions?: AuthorIntervention[];
   memory: NarrativeMemory;

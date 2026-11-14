@@ -1,6 +1,11 @@
 import { z } from "zod";
 import type { Activity, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { projectBook } from "../domain/narrarium";
+import { validMarkdownSource } from "../domain/markdown-document";
+import { assertMarkdownSnapshot, markdownIdentity, MarkdownSnapshotConflict, readGitHubMarkdown } from "./github-markdown";
+import { editorialProfilesSchema, profileSnapshotSchema } from "../domain/editorial-profiles";
+import { knowledgeBaseSchema } from "../domain/knowledge";
+import { changeOperationSchema, MAX_CHANGE_OPERATIONS } from "../domain/narrative-change";
 import { sanitizeAuthorInterventions } from "../domain/author-interventions";
 import { sanitizeBookStart } from "../domain/book-start";
 import { aiTracePolicy } from "../domain/ai-trace-policy";
@@ -19,6 +24,7 @@ const manifestSchema = z.object({
   schemaVersion: z.literal(1),
   bookId: z.string().uuid(),
   paths: z.array(z.string()).max(20_000),
+  markdownFormat: z.union([z.literal(1), z.literal(2)]).optional(),
 });
 
 export class RemoteConflict extends Error {
@@ -59,13 +65,33 @@ async function request<T>(
   const url = new URL(path, BASE);
   if (url.origin !== BASE || !url.pathname.startsWith("/repos/"))
     throw new Error("URL GitHub non autorizzato.");
-  let response: Response;
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let response: Response | undefined;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let rejectDeadline: (error: Error) => void = () => undefined;
+  const deadline = new Promise<never>((_, reject) => { rejectDeadline = reject; });
+  const cancel = () => {
+    controller.abort();
+    rejectDeadline(new DOMException("Operazione annullata", "AbortError"));
+  };
+  init.signal?.addEventListener("abort", cancel, { once: true });
+  if (init.signal?.aborted) cancel();
+  timer = setTimeout(() => {
+    controller.abort();
+    rejectDeadline(new Error("GitHub non raggiungibile entro il tempo previsto. Nessun tentativo automatico effettuato."));
+  }, 20_000);
+  const discard = (body?: ReadableStream<Uint8Array> | null) => {
+    try { void body?.cancel().catch(() => undefined); } catch { /* best effort */ }
+  };
   try {
-    response = await fetch(url.toString(), {
+    const pending = Promise.resolve().then(() => fetch(url.toString(), {
       method: init.method ?? "GET",
       mode: "cors",
       redirect: "error",
       cache: "no-store",
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: "Bearer " + token,
@@ -73,25 +99,59 @@ async function request<T>(
         ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      signal: init.signal,
-    });
-  } catch {
-    if (init.signal?.aborted) throw new DOMException("Operazione annullata", "AbortError");
-    throw new Error("GitHub non raggiungibile. Controlla rete e autorizzazioni del browser.");
+      signal: controller.signal,
+    }));
+    // A timed-out fetch may ignore AbortController; discard its late response.
+    void pending.then(late => { if (controller.signal.aborted) discard(late.body); }, () => undefined);
+    try { response = await Promise.race([pending, deadline]); }
+    catch {
+      if (init.signal?.aborted) throw new DOMException("Operazione annullata", "AbortError");
+      throw new Error("GitHub non raggiungibile. Controlla rete e autorizzazioni del browser.");
+    }
+    if (allow404 && response.status === 404) { discard(response.body); return null; }
+    if (!response.ok) { discard(response.body); throw apiError(response.status); }
+    const declared = response.headers.get("Content-Length");
+    if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > MAX_BYTES * 2)) {
+      discard(response.body); throw new Error("Risposta GitHub troppo grande o non valida.");
+    }
+    let raw = "";
+    if (response.body) {
+      const decoder = new TextDecoder("utf-8", { fatal: true });
+      let bytes = 0;
+      try {
+        reader = response.body.getReader();
+        while (true) {
+          const chunk = await Promise.race([reader.read(), deadline]);
+          if (chunk.done) break;
+          bytes += chunk.value.byteLength;
+          if (bytes > MAX_BYTES * 2) throw new Error("Risposta GitHub troppo grande.");
+          raw += decoder.decode(chunk.value, { stream: true });
+        }
+        raw += decoder.decode();
+      } catch {
+        if (init.signal?.aborted) throw new DOMException("Operazione annullata", "AbortError");
+        throw new Error("Risposta GitHub incompleta, troppo grande o non valida.");
+      }
+    }
+    if (!raw.trim()) return {} as T;
+    try { return JSON.parse(raw) as T; }
+    catch { throw new Error("GitHub ha restituito una risposta non valida."); }
+  } finally {
+    clearTimeout(timer);
+    init.signal?.removeEventListener("abort", cancel);
+    if (reader) {
+      try { void reader.cancel().catch(() => undefined); } catch { /* best effort */ }
+      try { reader.releaseLock(); } catch { /* best effort */ }
+    }
   }
-  if (allow404 && response.status === 404) return null;
-  if (!response.ok) throw apiError(response.status);
-  const raw = await response.text();
-  if (raw.length > MAX_BYTES * 2) throw new Error("Risposta GitHub troppo grande.");
-  if (!raw.trim()) return {} as T;
-  try { return JSON.parse(raw) as T; }
-  catch { throw new Error("GitHub ha restituito una risposta non valida."); }
 }
 
 function decodeBase64(text: string): string {
-  const normalized = text.replace(/\s/g, "");
-  const binary = atob(normalized);
-  return new TextDecoder().decode(Uint8Array.from(binary, x => x.charCodeAt(0)));
+  try {
+    const normalized = text.replace(/\s/g, "");
+    const binary = atob(normalized);
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Uint8Array.from(binary, x => x.charCodeAt(0)));
+  } catch { throw new Error("File GitHub non codificato in Base64/UTF-8 valido."); }
 }
 async function tokenFromVault(): Promise<string> {
   const settings = await loadSettings();
@@ -163,6 +223,10 @@ function parseRemoteBook(raw: string): BookProject {
     updatedAt: z.string(),
     status: z.enum(["idle", "running", "paused", "error", "completed"]),
     phase: z.string(),
+    editorialProfiles: editorialProfilesSchema.optional(),
+    knowledge: knowledgeBaseSchema.optional(),
+    changeOperations: z.array(changeOperationSchema).max(MAX_CHANGE_OPERATIONS).optional(),
+    changeMode: z.enum(["auto", "confirm"]).optional(),
     chapters: z.array(z.object({
       id: z.string(), number: z.number().int(), title: z.string(), purpose: z.string(),
       scenes: z.array(z.object({
@@ -183,6 +247,17 @@ function parseRemoteBook(raw: string): BookProject {
   }).passthrough().safeParse(data);
   if (!parsed.success) throw new Error("Il progetto remoto non segue lo schema BookWriter.");
   const project = parsed.data as unknown as BookProject;
+  try {
+    const cycles = [project.editorialCycle, ...(project.editorialRecoveryArchives ?? []).map(archive => archive.cycle)];
+    const snapshots = [...cycles.filter(Boolean), ...project.chapters.flatMap(chapter => chapter.editorialRounds ?? []),
+      ...cycles.flatMap(cycle => cycle?.priorRounds ?? [])];
+    if (snapshots.some(snapshot => !profileSnapshotSchema.safeParse(snapshot).success)) throw new Error();
+  } catch { throw new Error("Profili o revisori non validi nel progetto GitHub."); }
+  if (project.markdownSource !== undefined && !validMarkdownSource(project.markdownSource))
+    throw new Error("Documenti Markdown originali non validi nel progetto remoto.");
+  const trackedChange = project.revision?.changeOperationId;
+  if (trackedChange !== undefined && (typeof trackedChange !== "string" || !project.changeOperations?.some(op => op.id === trackedChange)))
+    throw new Error("Revisione collegata a una modifica inesistente nel progetto GitHub.");
   // Optional author fields come from an untrusted repository: rebuild them
   // from well-formed entries only, never pass arbitrary shapes to the UI/prompts.
   const { startMode: _mode, authorChapterSynopses: _synopses, targetChapterCount: _target,
@@ -209,8 +284,22 @@ async function snapshotAtRef(
   token: string, remote: GitHubRemote, ref: string, signal?: AbortSignal,
 ): Promise<RemoteBookSnapshot | null> {
   const project = await readFile(token, remote, ".bookwriter/project.json", ref, signal);
-  if (project === null) return null;
+  const get = (suffix: string) => request<unknown>(token, apiPath(remote, suffix), { signal });
+  if (project === null) {
+    if (await readFile(token, remote, ".bookwriter/manifest.json", ref, signal) !== null)
+      throw new Error("Snapshot BookWriter mancante: importa esplicitamente i Markdown come copia separata.");
+    const root = await readFile(token, remote, "book.md", ref, signal);
+    if (root === null) return null;
+    return { book: await readGitHubMarkdown(get, ref, remote, root), activities: [], head: ref };
+  }
   const book = parseRemoteBook(project);
+  const manifestRaw = await readFile(token, remote, ".bookwriter/manifest.json", ref, signal);
+  if (manifestRaw !== null) {
+    const manifest = manifestSchema.safeParse(parseJson<unknown>(manifestRaw, "Manifest"));
+    if (!manifest.success || manifest.data.bookId !== book.id) throw new Error("Manifest GitHub non coerente con il libro.");
+    await assertMarkdownSnapshot(get, ref, book, manifest.data.markdownFormat ?? 0);
+  } else if (await readFile(token, remote, "book.md", ref, signal) !== null)
+    await assertMarkdownSnapshot(get, ref, book, 0);
   const rawActivities = await readFile(token, remote, ".bookwriter/activities.json", ref, signal);
   const unknownActivities = rawActivities ? parseJson<unknown>(rawActivities, "Log remoto") : [];
   const parsedActivities = z.array(z.object({
@@ -234,19 +323,46 @@ export async function readGitHubSnapshot(remote: GitHubRemote, signal?: AbortSig
 
 /** Read-only setup preview, pinned to one HEAD. Never returns manuscript or audit. */
 export async function inspectGitHubDestination(remote: GitHubRemote): Promise<
-  { kind: "available" | "foreign" } | { kind: "book"; bookId: string; title: string }
+  { kind: "available" | "foreign" } | { kind: "book" | "markdown" | "divergent"; bookId: string; title: string; head: string }
 > {
   const target = validateRemote(remote);
   const token = await tokenFromVault();
   const head = await headSha(token, target);
+  const markdownPreview = async (kind: "markdown" | "divergent", root: string | null) => {
+    if (root === null) return { kind: "foreign" as const };
+    try {
+      const identity = await markdownIdentity(root, target);
+      return { kind, bookId: identity.id, title: identity.title, head };
+    } catch { return { kind: "foreign" as const }; }
+  };
   const project = await readFile(token, target, ".bookwriter/project.json", head);
   if (project !== null) {
-    const book = parseRemoteBook(project);
-    return { kind: "book", bookId: book.id, title: book.title };
+    let book: BookProject;
+    try { book = parseRemoteBook(project); }
+    catch { return markdownPreview("divergent", await readFile(token, target, "book.md", head)); }
+    const manifestRaw = await readFile(token, target, ".bookwriter/manifest.json", head);
+    if (manifestRaw !== null) {
+      const manifest = manifestSchema.safeParse(parseJson<unknown>(manifestRaw, "Manifest"));
+      if (!manifest.success || manifest.data.bookId !== book.id)
+        return markdownPreview("divergent", await readFile(token, target, "book.md", head));
+      try { await assertMarkdownSnapshot(suffix => request(token, apiPath(target, suffix)), head, book, manifest.data.markdownFormat ?? 0); }
+      catch (error) {
+        if (error instanceof MarkdownSnapshotConflict) return { kind: "divergent", bookId: book.id, title: book.title, head };
+        throw error;
+      }
+    } else if (await readFile(token, target, "book.md", head) !== null) {
+      try { await assertMarkdownSnapshot(suffix => request(token, apiPath(target, suffix)), head, book, 0); }
+      catch (error) {
+        if (error instanceof MarkdownSnapshotConflict) return { kind: "divergent", bookId: book.id, title: book.title, head };
+        throw error;
+      }
+    }
+    return { kind: "book", bookId: book.id, title: book.title, head };
   }
   const manifest = await readFile(token, target, ".bookwriter/manifest.json", head);
-  if (manifest !== null || await readFile(token, target, "book.md", head) !== null)
-    return { kind: "foreign" };
+  const root = await readFile(token, target, "book.md", head);
+  if (manifest !== null) return markdownPreview("divergent", root);
+  if (root !== null) return markdownPreview("markdown", root);
   return { kind: "available" };
 }
 
@@ -289,16 +405,21 @@ export async function isGitHubAncestor(
 }
 
 /** Restore only if the book ID does not exist locally. Never overwrite browser data. */
-export async function importGitHubBook(remote: GitHubRemote): Promise<BookProject> {
+export async function importGitHubBook(remote: GitHubRemote, isCurrent: () => boolean = () => true, expectedHead?: string): Promise<BookProject> {
   const source = await readGitHubSnapshot(remote);
   if (!source) throw new Error("Nessun libro BookWriter in questa repository.");
+  if (expectedHead && source.head !== expectedHead) throw new RemoteConflict("La repository è cambiata: ripeti l'anteprima.");
+  await confirmGitHubHead(remote, source.head);
   const db = await getDb();
+  if (!isCurrent()) throw new Error("Importazione superata: ripeti la scelta del libro.");
   const tx = db.transaction(["books", "activities"], "readwrite");
+  void tx.done.catch(() => undefined);
   const existing = await tx.objectStore("books").get(source.book.id);
   if (existing) {
     await tx.done;
     throw new RemoteConflict("Questo libro è già presente in IndexedDB. Esporta un backup e risolvi il conflitto prima di importare.");
   }
+  if (!isCurrent()) { tx.abort(); await tx.done.catch(() => undefined); throw new Error("Importazione superata: ripeti la scelta del libro."); }
   // Nothing runs here yet: a book saved as «running» by another device would look active.
   if (source.book.status === "running") {
     source.book.status = "paused";
@@ -310,15 +431,43 @@ export async function importGitHubBook(remote: GitHubRemote): Promise<BookProjec
     lastSyncedLocalUpdatedAt: source.book.updatedAt,
     lastSyncAt: new Date().toISOString(),
   };
-  await tx.objectStore("books").put(source.book, source.book.id);
-  for (const activity of source.activities) {
-    await tx.objectStore("activities").put(
-      activity.status === "running" ? { ...activity, status: "cancelled" } : activity,
-      activity.id,
-    );
+  try {
+    await tx.objectStore("books").add(source.book, source.book.id);
+    for (const activity of source.activities) {
+      await tx.objectStore("activities").add(
+        activity.status === "running" ? { ...activity, status: "cancelled" } : activity,
+        activity.id,
+      );
+    }
+    await tx.done;
+  } catch {
+    try { tx.abort(); } catch { /* already aborted */ }
+    await tx.done.catch(() => undefined);
+    throw new Error("Importazione non completata: spazio insufficiente o identificatori già presenti. Nessun libro o attività sostituito.");
   }
-  await tx.done;
   return source.book;
+}
+
+/** Explicit escape hatch for external Markdown edits: a detached new book,
+ * never a replacement, merge, snapshot recovery or permission import. */
+export async function importGitHubMarkdownCopy(remote: GitHubRemote, expectedHead: string,
+  isCurrent: () => boolean = () => true): Promise<BookProject> {
+  const target = validateRemote(remote);
+  const token = await tokenFromVault();
+  if (await headSha(token, target) !== expectedHead) throw new RemoteConflict("La repository è cambiata: ripeti l'anteprima.");
+  const root = await readFile(token, target, "book.md", expectedHead);
+  if (root === null) throw new Error("book.md mancante.");
+  const book = await readGitHubMarkdown(suffix => request(token, apiPath(target, suffix)), expectedHead, target, root);
+  book.id = crypto.randomUUID();
+  if (book.title.length + " (copia Markdown)".length <= 300) book.title += " (copia Markdown)";
+  await confirmGitHubHead(target, expectedHead);
+  const db = await getDb();
+  if (!isCurrent()) throw new Error("Importazione superata: ripeti la scelta del libro.");
+  const tx = db.transaction("books", "readwrite");
+  void tx.done.catch(() => undefined);
+  await tx.store.add(book, book.id);
+  await tx.done;
+  return book;
 }
 
 export interface PushOptions {
@@ -582,9 +731,19 @@ export async function pushGitHubBook(
     previousPaths = manifest.data.paths;
   } else {
     const preexistingBook = await readFile(token, remote, "book.md", head);
-    if (preexistingBook !== null)
+    if (preexistingBook !== null && current.markdownSource && current.remote.lastSyncedCommit === head &&
+        preexistingBook === current.markdownSource["book.md"]) {
+      // First explicitly requested publication of the imported manuscript.
+      // Editorial gates above still apply; adopt only the exact source tree.
+      const sourceBook = await readGitHubMarkdown(suffix => request(token, apiPath(remote, suffix)), head, remote, preexistingBook);
+      const actualSource = sourceBook.markdownSource!;
+      if (Object.keys(actualSource).length !== Object.keys(current.markdownSource).length ||
+          Object.entries(actualSource).some(([path, content]) => current.markdownSource![path] !== content))
+        throw new RemoteConflict("I documenti Markdown originali sono cambiati: confrontali prima di pubblicare.");
+      previousPaths = Object.keys(current.markdownSource);
+    } else if (preexistingBook !== null)
       throw new RemoteConflict("La repository contiene già book.md senza manifest BookWriter. Importarla tramite un adapter Narrarium prima di sincronizzare.");
-    if (current.remote.lastSyncedCommit)
+    else if (current.remote.lastSyncedCommit)
       throw new RemoteConflict("Il manifest remoto è stato eliminato da un altro dispositivo.");
   }
 

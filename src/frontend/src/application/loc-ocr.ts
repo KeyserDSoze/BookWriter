@@ -59,13 +59,13 @@ export async function attachLocOcrExcerpt(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=prior;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";book.phase="chapterReview";
         book.currentSceneId=undefined;book.revision=undefined;
         book.previousError="Estratto OCR istituzionale aggiornato: riesamina il capitolo e i successivi.";
       }else if(book.status==="completed"&&target.scenes.length&&
         target.scenes.every(s=>s.status==="canon"&&s.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";book.phase="chapterReview";
       }
       if(book.remote)book.remote.autoSync=false;

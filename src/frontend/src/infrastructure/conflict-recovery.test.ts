@@ -8,6 +8,8 @@ import {
   inspectBookConflict, applyBookConflictResolution, preserveRemoteVersion,
 } from "./conflict-recovery";
 import { RemoteConflict } from "./github-sync";
+import { projectBook } from "../domain/narrarium";
+import { gitBlobSha } from "./github-markdown";
 import { getSceneMergeDraft, rejectSceneMergeDraft, saveManualSceneMergeDraft } from "../application/scene-merge";
 
 const BASE = "a".repeat(40), HEAD = "b".repeat(40), NEXT = "c".repeat(40);
@@ -32,7 +34,10 @@ function githubSnapshots(base: BookProject, remote: BookProject) {
     expect(url.origin).toBe("https://api.github.com");
     expect(init?.redirect).toBe("error");
     if (path.endsWith("/git/ref/heads/main")) return reply({ object: { sha: head } });
-    const content = url.searchParams.get("ref") === BASE ? base : remote;
+    const content = url.searchParams.get("ref") === BASE || path.endsWith("/git/trees/" + BASE) ? base : remote;
+    const projection = projectBook(content, []).files;
+    if (path.includes("/git/trees/")) return reply({ truncated: false, tree: await Promise.all(
+      Object.entries(projection).map(async ([path, text]) => ({ path, sha: await gitBlobSha(text), mode: "100644", type: "blob" }))) });
     if (path.endsWith("/contents/.bookwriter/project.json")) {
       return reply({ type: "file", encoding: "base64", content: encode(JSON.stringify(content)) });
     }
@@ -45,6 +50,8 @@ function githubSnapshots(base: BookProject, remote: BookProject) {
       return reply({ type: "file", encoding: "base64",
         content: encode(JSON.stringify([remoteActivity])) });
     }
+    const file = projection[decodeURIComponent(path.split("/contents/")[1] ?? "")];
+    if (file !== undefined) return reply({ type: "file", encoding: "base64", content: encode(file) });
     return reply({ message: "Unexpected" }, 500);
   }));
   return {

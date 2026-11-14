@@ -2,6 +2,11 @@
 
 ## Progresso versionato
 
+- [x] Preparazione locale 0.20.0, non pubblicata: checklist delle regole dello scrittore con blocco delle regole obbligatorie respinte, linee guida del direttore, cicli 1–3 e versioni degli agenti; knowledge base di schede, eventi e timeline generata dopo il piano e aggiornata a ogni scena; modifiche via prompt su schede, eventi e scene con analisi d'impatto, riscrittura mirata, modalità automatica o con conferma, nuova redazione e ripristino protetto; pagine Mondo e Libro (testo, scene, riassunti); formato Markdown 2 con events/timelines/changes e JSON Schema (ADR 0161). [Guida](../docs/narrative-workspace.md).
+- [x] Preparazione locale 0.19.0, non pubblicata: cartelle Markdown estensibili; CMS per libro con 1–10 lettori, fino a sei scrittori, selezione/forza e rilettura indipendente facoltativa. Snapshot dei profili per ciclo, matrice dinamica e giudice invariati; salvataggio confermato atomico senza AI, import dei template solo come bozza e formato Markdown 2 con compatibilità 1/legacy (ADR 0160). [Guida](../docs/editorial-profiles.md).
+
+- [x] Implementazione locale 0.18.0, non pubblicata: profilo dati Markdown 1, import additivo senza JSON di manoscritti manuali/altra IA, metadati/note extra conservati, divergenze snapshot/Markdown e copia separata confermata; nessun freeze o consenso importato implicitamente (ADR 0159). [Contratto](../docs/markdown-book-format.md).
+
 - [x] v0.17.1: verifica del blocco aggiornata dopo il collegamento alla stessa repository inizializzata, risposte obsolete scartate, anteprima aggiornata e blocco editoriale del primo invio spiegato senza alterare il manoscritto locale (ADR 0158).
 
 - [x] v0.17.0: collegamento GitHub guidato, PAT mostrabile e riutilizzabile, repository vuote inizializzate senza manoscritto, import proposto e diagnosi del blocco con operazione/HTTP (ADR 0156); spiegazioni degli errori, retry opt-in dal task, motivo correttivo nel prompt dello stesso ruolo e avviso basato sulle route effettive (ADR 0157).

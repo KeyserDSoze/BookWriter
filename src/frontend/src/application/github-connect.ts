@@ -36,7 +36,8 @@ export async function connectGitHubBook(bookId: string, expectedUpdatedAt: strin
         await initializeEmptyGitHubRepository(target, consentPublic, async () => { await assertCurrent(); });
         info = await inspectGitHubSetup(target);
       }
-      if (info.kind === "book") throw new Error("La repository contiene già un libro: usa Importa, senza sostituire il libro locale.");
+      if (info.kind === "book" || info.kind === "markdown" || info.kind === "divergent")
+        throw new Error("La repository contiene già un libro: usa Importa, senza sostituire il libro locale.");
       if (info.kind !== "available") throw new Error("La repository contiene dati BookWriter o Narrarium non importabili: nessun contenuto modificato.");
       if (!info.canPush || (!info.private && !consentPublic)) throw new Error("Permessi o visibilità GitHub cambiati: ripeti la scelta.");
       const book = await assertCurrent();

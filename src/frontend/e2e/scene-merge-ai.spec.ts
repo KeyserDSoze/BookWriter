@@ -63,6 +63,10 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
       response = { type: "file", encoding: "base64", content: base64(JSON.stringify(remoteBook)) };
     } else if (method === "GET" && path === "/contents/.bookwriter/activities.json") {
       response = { type: "file", encoding: "base64", content: base64("[]") };
+    } else if (method === "GET" && (path === "/contents/.bookwriter/manifest.json" || path === "/contents/book.md")) {
+      // This legacy merge fixture deliberately has a JSON snapshot only.
+      // Missing files are 404, not a transport/server failure during preflight.
+      status = 404;
     } else if (method === "GET" && path === "/contents/.bookwriter/lease.json") {
       const commit = commits.get(url.searchParams.get("ref") ?? "");
       const file = trees.get(commit?.tree ?? "");

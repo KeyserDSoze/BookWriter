@@ -44,7 +44,7 @@ export async function quarantineWikisourceSource(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=oldSynopsis;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
         book.currentSceneId=undefined;
@@ -52,7 +52,7 @@ export async function quarantineWikisourceSource(
         book.previousError="Fonte Wikisource esclusa per anomalia di provenienza: rivedi capitolo e successivi.";
       }else if(book.status==="completed" && chapter.scenes.length &&
           chapter.scenes.every(scene=>scene.status==="canon" && scene.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
       }

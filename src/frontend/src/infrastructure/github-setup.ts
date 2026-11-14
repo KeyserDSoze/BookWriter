@@ -17,7 +17,7 @@ export interface GitHubRepository {
 }
 export type GitHubDestination = GitHubRepository & (
   | { kind: "empty" | "available" | "foreign" }
-  | { kind: "book"; bookId: string; title: string }
+  | { kind: "book" | "markdown" | "divergent"; bookId: string; title: string; head: string }
 );
 
 /** Fixed API only, bounded body + total deadline, no remote errors or URLs in messages. */

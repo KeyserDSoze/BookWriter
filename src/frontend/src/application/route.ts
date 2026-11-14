@@ -5,9 +5,10 @@ export interface Route { page: Page; book?: string; task?: string; chapter?: str
 // Hash routing: the app is static (GitHub Pages), so a refresh can only restore state from the fragment.
 const SEGMENT: Record<Page, string> = {
   library: "libreria", dashboard: "dashboard", activities: "attivita", costs: "costi",
-  reader: "libro", atlas: "memoria", settings: "impostazioni", export: "archivio", bookSettings: "modelli",
+  reader: "libro", atlas: "mondo", settings: "impostazioni", export: "archivio", bookSettings: "modelli",
 };
-const PAGE_OF = new Map(Object.entries(SEGMENT).map(([page, segment]) => [segment, page as Page]));
+const PAGE_OF = new Map([...Object.entries(SEGMENT).map(([page, segment]) => [segment, page as Page] as const),
+  ["memoria", "atlas" as Page] as const]); // old links keep working
 const MAX_ID = 120;
 
 const cleanId = (value: string | null): string | undefined =>

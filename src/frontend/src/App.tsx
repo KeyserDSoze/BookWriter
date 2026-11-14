@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
-  BookOpen, BrainCircuit, CheckCircle2, Database,
+  BookOpen, BrainCircuit, Globe2,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
   Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet, Library,
 } from "lucide-react";
@@ -13,6 +13,9 @@ import { SaveBar } from "./components/settings/SaveBar";
 import { EndpointCard } from "./components/settings/EndpointCard";
 import { ModelRouterTable } from "./components/settings/ModelRouterTable";
 import { BookOverrideTable } from "./components/settings/BookOverrideTable";
+import { EditorialProfilesPanel } from "./components/settings/EditorialProfilesPanel";
+import { WorldPage } from "./components/world/WorldPage";
+import { BookWorkspace } from "./components/book/BookWorkspace";
 import { usePwaInstall } from "./application/pwa";
 import { AutopilotRunner } from "./application/autopilot";
 import { recordAuthorIntervention } from "./application/author-intervention";
@@ -24,7 +27,7 @@ import { adoptLegacyAiTraces, clearAiTraces, currentLiveAi, pruneAiTraces, subsc
 import { AiTraceSettings } from "./components/settings/AiTraceSettings";
 import { aiTracePolicy, describeAiTraceRetention } from "./domain/ai-trace-policy";
 import { confirmEditorialScene } from "./application/editorial-review";
-import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type GitHubRemote, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
+import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type GitHubRemote, type TaskKind, type TaskReasoning } from "./domain/types";
 import { connectGitHubBook } from "./application/github-connect";
 import { recommendedReasoningPreset } from "./domain/reasoning-presets";
 import { fetchLmStudioReasoningCatalog } from "./infrastructure/lmstudio-models";
@@ -66,7 +69,7 @@ const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
   { id: "activities", label: "Attività", icon: ListChecks },
   { id: "costs", label: "Costi", icon: Wallet },
   { id: "reader", label: "Libro", icon: BookOpen },
-  { id: "atlas", label: "Memoria", icon: Database },
+  { id: "atlas", label: "Mondo", icon: Globe2 },
   { id: "settings", label: "Impostazioni", icon: Settings2 },
   { id: "export", label: "Archivio", icon: FileArchive },
 ];
@@ -84,9 +87,6 @@ const phaseText: Record<BookProject["phase"], string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience review",
   adversarial: "Adversarial review", outline: "Outline", prose: "Scrittura scena",
   review: "Review scena", consolidate: "Consolidamento canon", chapterReview: "Redazione indipendente del capitolo", revision: "Revisione autore", completed: "Completato",
-};
-const sceneStatusText: Record<Scene["status"], string> = {
-  planned: "pianificata", draft: "bozza", canon: "canonica",
 };
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -810,11 +810,12 @@ export default function App() {
         onForget={id => void cloud.removeBook(id)} onOpenCloud={() => setPage("settings")} />}
 
       {page === "bookSettings" && (current
-        ? <BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
+        ? <div className="space-y-4"><BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
           onRoute={(kind, endpointId, modelId) => void updateBookRoute(kind, endpointId, modelId)}
           onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
           onEditorialMode={mode => void updateBookEditorial(mode)}
           onConcurrency={value => void updateBookConcurrency(value)} />
+          <EditorialProfilesPanel key={current.id} book={current} onRefresh={refresh}/></div>
         : <Empty>Scegli un libro dalla Libreria per configurarne modelli e redazione.</Empty>)}
 
       {page === "dashboard" && <div className="space-y-4">
@@ -927,51 +928,17 @@ export default function App() {
           <VoiceReaderPanel book={current} settings={settings} />
           <SemanticSearchPanel book={current} settings={settings} />
         </>}
-        <Section title="Il libro" description="Le scene canoniche sono il testo approvato; bozze e scene pianificate sono ancora in lavorazione. Esporta EPUB, DOCX e PDF dall'Archivio.">
+        <Section title="Il libro" description="Ogni capitolo si legge per intero, scena per scena o in riassunto. Le scene canoniche sono il testo approvato; bozze e scene pianificate sono ancora in lavorazione. Esporta EPUB, DOCX e PDF dall'Archivio.">
         {!current?.chapters.length ? <Empty>Non c'è ancora un piano capitoli. Avvia l'autopilot.</Empty>
-          : <>
-          <nav aria-label="Capitoli" className="mb-4 flex flex-wrap gap-1">
-            {[{ id: "", label: "Tutto il libro" }, ...current.chapters.map(ch => ({ id: ch.id, label: `Cap. ${ch.number}` }))].map(item =>
-              <button key={item.id || "all"} type="button" aria-pressed={(chapterId || "") === item.id}
-                title={item.id ? current.chapters.find(ch => ch.id === item.id)?.title : undefined}
-                onClick={() => setChapterId(item.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${(chapterId || "") === item.id
-                  ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-400 dark:border-slate-600"}`}>{item.label}</button>)}
-          </nav>
-          {current.chapters.filter(ch => !chapterId || ch.id === chapterId).map(ch => <article key={ch.id} className="mb-8">
-            <h3 className="mb-3 flex flex-wrap items-baseline gap-2 border-b border-slate-300 pb-2 text-xl font-bold dark:border-slate-700">
-              <span>Capitolo {ch.number} — {ch.title}</span>
-              {ch.frozenAt && <span className="rounded-full border border-emerald-600/50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">congelato</span>}
-            </h3>
-            <p className="muted mb-4 text-sm">{ch.purpose}</p>
-            {ch.scenes.map(s => <section key={s.id} id={`book-scene-${s.id}`} className="mb-6 scroll-mt-24">
-              <h4 className="mb-2 font-semibold">{s.number}. {s.title} <span className="muted text-xs">({sceneStatusText[s.status]})</span></h4>
-              {s.text ? <p className="whitespace-pre-wrap break-words text-[1rem] leading-8">{s.text}</p>
-                : <p className="muted text-sm">Scena non ancora scritta. Obiettivo: {s.objective}</p>}
-              {current.editorialReviewSceneIds?.includes(s.id) && <div className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3">
-                <p className="text-sm">Questa scena fusa richiede la tua rilettura e conferma prima di riprendere l'autopilot.</p>
-                <Button variant="outline" disabled={busy || current.status === "running"}
-                  onClick={() => void approveEditorialScene(s.id)}>
-                  <CheckCircle2 size={16}/> Conferma scena come canonica
-                </Button>
-              </div>}
-            </section>)}
-          </article>)}
-          </>}
+          : <BookWorkspace book={current} chapterId={chapterId} onChapter={setChapterId} busy={busy}
+            onApprove={sceneId => void approveEditorialScene(sceneId)} onRefresh={refresh} onStart={startRunner}/>}
         </Section>
       </div>}
 
-      {page === "atlas" && <div className="grid gap-4 lg:grid-cols-2">
-        {(["characters", "locations", "factions", "items", "secrets"] as const).map(kind => <Section key={kind} title={{characters:"Personaggi",locations:"Luoghi",factions:"Fazioni",items:"Oggetti",secrets:"Segreti (solo autore)"}[kind]}>
-          {Object.entries(current?.memory[kind] ?? {}).length
-            ? Object.entries(current?.memory[kind] ?? {}).map(([key,value]) => <div key={key} className="mb-3"><b>{key}</b><p className="muted whitespace-pre-wrap text-sm">{value}</p></div>)
-            : <Empty>Nessuna informazione consolidata.</Empty>}
-        </Section>)}
-        <Section title="Timeline">
-          {current?.memory.timeline.length ? current.memory.timeline.map((x,i) => <p className="mb-2 text-sm" key={i}>• {x}</p>) : <Empty>Ancora nessun evento.</Empty>}
-        </Section>
-        <Section title="Stato corrente"><p className="whitespace-pre-wrap text-sm">{current?.memory.currentState || "Non ancora disponibile."}</p></Section>
-      </div>}
+      {page === "atlas" && (current
+        ? <WorldPage key={current.id} book={current} onRefresh={refresh} onStart={startRunner} runningHere={runningHere}
+          onOpenAgents={() => setPage("bookSettings")} onOpenBook={() => setPage("reader")}/>
+        : <Section title="Mondo del libro"><Empty>Seleziona un libro per consultarne personaggi, luoghi, eventi e timeline.</Empty></Section>)}
 
       {page === "export" && <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <div className="lg:col-span-2">

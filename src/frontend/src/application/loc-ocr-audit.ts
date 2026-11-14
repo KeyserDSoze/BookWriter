@@ -47,7 +47,7 @@ export async function quarantineLocOcrSource(
           ch.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=previousSynopsis;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
         book.currentSceneId=undefined;
@@ -55,7 +55,7 @@ export async function quarantineLocOcrSource(
         book.previousError="Fonte OCR LoC esclusa: riapprova questo capitolo e i successivi.";
       }else if(book.status==="completed"&&chapter.scenes.length&&
         chapter.scenes.every(s=>s.status==="canon"&&s.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
       }

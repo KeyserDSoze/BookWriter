@@ -3,7 +3,7 @@ import type { AppSettings, BookProject, GitHubRemote } from "../domain/types";
 import { connectGitHubBook } from "../application/github-connect";
 import { discoverGitHubRepositories, inspectGitHubSetup, type GitHubDestination, type GitHubRepository } from "../infrastructure/github-setup";
 import { getBook } from "../infrastructure/db";
-import { importGitHubBook } from "../infrastructure/github-sync";
+import { importGitHubBook, importGitHubMarkdownCopy } from "../infrastructure/github-sync";
 import { githubPublicationBlocker } from "../domain/github-publication";
 import { Button } from "./ui/button";
 
@@ -42,11 +42,15 @@ export function GitHubConnectionPicker({ book, token, request, onRefresh, onSele
     const result = await inspectGitHubSetup(repo.remote);
     if (!isCurrent()) return;
     setDestination(result);
-    if (result.kind === "book") {
+    if (result.kind === "divergent") {
+      setMessage("I Markdown e lo snapshot BookWriter sono diversi o non confrontabili. Non verranno ignorati né applicati al libro aperto: puoi importarli come copia locale separata.");
+      return;
+    }
+    if (result.kind === "book" || result.kind === "markdown") {
       const existing = await getBook(result.bookId);
       if (isCurrent()) setMessage(existing
         ? `«${result.title}» è già su questo dispositivo: puoi aprirlo.`
-        : `Trovato «${result.title}»: puoi importarlo senza cambiare il libro aperto.`);
+        : `Trovato «${result.title}»${result.kind === "markdown" ? " in formato Markdown" : ""}: puoi importarlo senza cambiare il libro aperto.`);
       return;
     }
     if (result.kind === "foreign") {
@@ -103,15 +107,24 @@ export function GitHubConnectionPicker({ book, token, request, onRefresh, onSele
         </Button>
       </li>)}
     </ul>}
-    {destination?.kind === "book" && <Button disabled={busy} onClick={() => void work(async isCurrent => {
+    {(destination?.kind === "book" || destination?.kind === "markdown") && <Button disabled={busy} onClick={() => void work(async isCurrent => {
       const existing = await getBook(destination.bookId);
       if (!isCurrent()) return;
       if (existing) { onSelectBook(existing.id); return; }
-      const imported = await importGitHubBook(destination.remote);
+      const imported = await importGitHubBook(destination.remote, isCurrent, destination.head);
       if (!isCurrent()) return;
       await onRefresh();
       if (isCurrent()) onSelectBook(imported.id);
     })}>Apri o importa «{destination.title}»</Button>}
+    {(destination?.kind === "divergent" || destination?.kind === "book") && <Button variant="outline" disabled={busy}
+      onClick={() => void work(async isCurrent => {
+        if (!window.confirm("Importare i soli Markdown in un nuovo libro locale separato? Il libro aperto e GitHub non cambiano. La copia non eredita freeze, giudizi, consensi AI o collegamento GitHub; controlla le impostazioni prima di riprendere.")) return;
+        const imported = await importGitHubMarkdownCopy(destination.remote, destination.head, isCurrent);
+        if (!isCurrent()) return;
+        await onRefresh();
+        if (isCurrent()) onSelectBook(imported.id);
+      })}>Importa Markdown come copia separata</Button>}
+    {destination?.kind === "markdown" && <p className="muted text-xs">Libro scritto a mano o con un'altra IA: importeremo capitoli, scene e schede senza nuove chiamate AI. Nessun freeze o giudizio editoriale viene dedotto da canon.</p>}
     {!book && destination && (destination.kind === "empty" || destination.kind === "available") &&
       <Button disabled={busy} onClick={() => onNewBook(destination.remote)}>Imposta un nuovo libro in questa repository</Button>}
     {destination?.kind === "empty" && <p className="muted text-xs">Repository vuota: al collegamento creiamo solo un file tecnico iniziale, senza testo del libro.</p>}

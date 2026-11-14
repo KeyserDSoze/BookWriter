@@ -1,5 +1,5 @@
 import type { Activity, BookProject } from "../domain/types";
-import { acceptedRepairs, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertSavedEditorialJudgmentIntegrity, createEditorialCycle, repairPrompt } from "../domain/editorial-board";
+import { acceptedRepairs, archiveEditorialRound, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertSavedEditorialJudgmentIntegrity, createEditorialCycle, repairPrompt } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { getBook, getDb } from "../infrastructure/db";
@@ -34,14 +34,10 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
         if (oldChapter?.editorialRounds) {
           // Keep all historical rounds, even ones that did not reach consensus.
           oldChapter.editorialRounds.push(...previous.priorRounds);
-          if (previous.judgment) oldChapter.editorialRounds.push({
-            round: previous.round, reports: previous.reports, judgment: previous.judgment,
-          });
+          if (previous.judgment) oldChapter.editorialRounds.push(archiveEditorialRound(previous));
         } else if (oldChapter) {
           oldChapter.editorialRounds = [...previous.priorRounds,
-            ...(previous.judgment ? [{
-              round: previous.round, reports: previous.reports, judgment: previous.judgment,
-            }] : [])];
+            ...(previous.judgment ? [archiveEditorialRound(previous)] : [])];
         }
       }
       if (instruction.trim()) book.authorConstraints.push(instruction.trim());
@@ -55,7 +51,7 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
         ch.bookSummaryAtFreeze = undefined;
       }
       book.bookSummary = synopsisBeforeChapter(book.chapters, target.number);
-      book.editorialCycle = createEditorialCycle(chapterId);
+      book.editorialCycle = createEditorialCycle(chapterId, book);
       book.status = "paused";
       book.phase = "chapterReview";
       book.revision = undefined;
@@ -155,7 +151,7 @@ export async function recoverEditorialCheckpoint(bookId: string, confirmed: bool
         chapterId: previous.chapterId, archivedAt: now,
         reason: reason.slice(0, 1000), cycle: structuredClone(previous),
       }];
-      book.editorialCycle = createEditorialCycle(previous.chapterId);
+      book.editorialCycle = createEditorialCycle(previous.chapterId, book);
       book.status = "paused";
       book.phase = "chapterReview";
       book.previousError = "Checkpoint precedente archiviato. Riavvia la redazione dal primo revisore.";
@@ -188,4 +184,3 @@ export async function recoverEditorialCheckpoint(bookId: string, confirmed: bool
     });
   });
 }
-

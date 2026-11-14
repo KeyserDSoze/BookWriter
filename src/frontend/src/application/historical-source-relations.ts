@@ -46,7 +46,7 @@ export async function attestHistoricalSourceRelation(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=priorSynopsis;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.phase="chapterReview";
         book.status="paused";
         book.currentSceneId=undefined;
@@ -54,7 +54,7 @@ export async function attestHistoricalSourceRelation(
         book.previousError="Dipendenza documentale dichiarata: il capitolo e i successivi richiedono nuova verifica.";
       } else if(book.status==="completed" && chapter.scenes.length &&
           chapter.scenes.every(scene=>scene.status==="canon"&&scene.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
       }

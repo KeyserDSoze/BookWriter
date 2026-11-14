@@ -32,7 +32,7 @@ describe("Proiezione deterministica Narrarium", () => {
     expect(projected.files["book.md"]).toContain("La città nascosta");
     expect(projected.files["chapters/001-l-ultima-via/001-la-dove-tutto-inizia.md"]).toContain('"secret:lettera"');
     expect(projected.files["secrets/lettera.md"]).toContain("Mara nasconde");
-    expect(projected.files["timelines/main.md"]).toContain("Primo giorno");
+    expect(projected.files["timeline/events.md"]).toContain("Primo giorno");
     expect(projected.manifest.paths).toContain(".bookwriter/project.json");
     expect(projected.manifest.paths).toContain("chapters/001-l-ultima-via/chapter.md");
   });

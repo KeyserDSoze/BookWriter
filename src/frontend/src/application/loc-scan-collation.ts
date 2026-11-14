@@ -55,7 +55,7 @@ export async function attachLocScanCollation(
           ch.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=oldSummary;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
         book.currentSceneId=undefined;
@@ -63,7 +63,7 @@ export async function attachLocScanCollation(
         book.previousError="Collazione visiva dell'autore registrata: riesamina capitolo e successivi.";
       }else if(book.status==="completed"&&chapter.scenes.length&&
         chapter.scenes.every(s=>s.status==="canon"&&s.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
       }

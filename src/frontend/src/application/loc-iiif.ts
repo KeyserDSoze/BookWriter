@@ -61,13 +61,13 @@ export async function attachLocIiifReference(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=oldSummary;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";book.phase="chapterReview";
         book.currentSceneId=undefined;book.revision=undefined;
         book.previousError="Riferimento IIIF aggiornato: riesamina il capitolo e i successivi.";
       }else if(book.status==="completed"&&target.scenes.length&&
         target.scenes.every(s=>s.status==="canon"&&s.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";book.phase="chapterReview";
       }
       if(book.remote)book.remote.autoSync=false;

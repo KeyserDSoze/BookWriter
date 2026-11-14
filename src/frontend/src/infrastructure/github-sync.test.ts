@@ -332,6 +332,8 @@ describe("GitHub sync conservativa", () => {
         return reply({ type: "file", encoding: "base64", content: btoa(source) });
       if (path.endsWith("/contents/.bookwriter/activities.json"))
         return reply({ type: "file", encoding: "base64", content: btoa("[]") });
+      if (path.endsWith("/contents/.bookwriter/manifest.json")) return reply({}, 404);
+      if (path.endsWith("/contents/book.md")) return reply({}, 404);
       return reply({ message: "not mocked" }, 500);
     });
     vi.stubGlobal("fetch", fake);
@@ -366,6 +368,8 @@ describe("GitHub sync conservativa", () => {
         return reply({ type: "file", encoding: "base64", content: btoa(source) });
       if (path.endsWith("/contents/.bookwriter/activities.json"))
         return reply({ type: "file", encoding: "base64", content: btoa("[]") });
+      if (path.endsWith("/contents/.bookwriter/manifest.json")) return reply({}, 404);
+      if (path.endsWith("/contents/book.md")) return reply({}, 404);
       return reply({ message: "not mocked" }, 500);
     }));
     await importGitHubBook({ owner: "test-owner", repository: "book-repo", branch: "main" });

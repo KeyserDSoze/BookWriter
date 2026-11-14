@@ -57,7 +57,7 @@ export async function attachArchiveCatalog(
           later.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=priorSynopsis;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.phase="chapterReview";
         book.status="paused";
         book.currentSceneId=undefined;
@@ -65,7 +65,7 @@ export async function attachArchiveCatalog(
         book.previousError="Catalogo archivistico aggiornato: ripeti la redazione del capitolo e dei successivi.";
       } else if (book.status==="completed" && chapter.scenes.length &&
           chapter.scenes.every(scene => scene.status==="canon" && scene.text.trim())) {
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.phase="chapterReview";
         book.status="paused";
       }

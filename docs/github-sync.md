@@ -2,7 +2,7 @@
 
 ## Stato
 
-Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Il lease GitHub per l'autopilot è disponibile (best effort) e la PR #14 aggiunge il confronto visuale dei conflitti. **Dalla 0.14.0** sono disponibili anche il vault Google/Microsoft per ritrovare PAT e chiavi su un nuovo PC, l'elenco dei libri nel cloud con «Scarica da GitHub» e l'aggiornamento fast-forward di un libro senza modifiche locali ([guida](cloud-profile-sync.md)). Non sono ancora disponibili l'import di repository Narrarium generiche e gli ZIP automatici remoti.
+Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Il lease GitHub per l'autopilot è disponibile (best effort) e la PR #14 aggiunge il confronto visuale dei conflitti. **Dalla 0.14.0** sono disponibili anche il vault Google/Microsoft per ritrovare PAT e chiavi su un nuovo PC, l'elenco dei libri nel cloud con «Scarica da GitHub» e l'aggiornamento fast-forward di un libro senza modifiche locali ([guida](cloud-profile-sync.md)). **In sviluppo locale per 0.18.0:** import di libri scritti a mano o da altre IA nel [profilo Markdown 1](markdown-book-format.md), anche senza JSON, e divergenze Markdown/JSON segnalate esplicitamente. Restano fuori gli ZIP automatici remoti e YAML arbitrario.
 
 ## DOI e sincronizzazione (v0.9.1)
 
@@ -79,7 +79,7 @@ Vedi `docs/scene-merge.md` e ADR 0009. Le bozze locali sono esportabili negli ZI
 ```text
 book.md
 context.md
-ghostwriters/default.md
+ghostwriters/default.md             # se presente nel libro importato/legacy
 guidelines/writing-style.md
 ideas.md
 story-design.md
@@ -91,8 +91,11 @@ locations/*.md
 factions/*.md
 items/*.md
 secrets/*.md
-timelines/main.md
+timeline/events.md
 state/current.md
+secrets/reveal-plan.md
+reviews/synopsis.md
+reviews/summary-001.md
 evaluations/total.md
 .bookwriter/project.json
 .bookwriter/activities.json
@@ -100,7 +103,11 @@ evaluations/total.md
 .bookwriter/sync.json
 ```
 
-Il JSON è necessario per recuperare senza perdita tutte le strutture del workspace, il progresso dell'autopilot, le idee e le operazioni. Il Markdown/frontmatter serve agli editor e reader Narrarium. Il file `manifest.json` identifica i path gestiti da BookWriter; nessun file esterno a quel manifest viene eliminato o modificato dal sincronizzatore.
+Il JSON conserva senza perdita le strutture del workspace, il progresso dell'autopilot, le idee e le operazioni. Nel contratto Markdown **non è obbligatorio per importare un libro esterno**: capitoli, scene, schede e riassunti hanno un contratto autonomo. Quando il JSON esiste, i Markdown effettivi vengono verificati rispetto alla sua proiezione; non si ignorano modifiche esterne, neppure nuove note in cartelle estese. La migrazione usa `scene`/`pov`, conserva la lettura legacy e non crea freeze. Il file `manifest.json` identifica i path gestiti da BookWriter. Il primo push di un libro Markdown importato adotta gli originali solo dopo verifiche esatte e normali gate editoriali; gli altri file restano nel repository. [Contratto, esempi, limiti e copia separata](markdown-book-format.md).
+
+La preparazione locale **0.19.0** scrive `markdownFormat:2` con profili di lettori/scrittori e review per tornata, continuando a verificare il formato 1 e legacy. I template importati solo come Markdown sono dati, non profili attivi: caricamento come bozza e salvataggio confermato nel [CMS del libro](editorial-profiles.md). Profili e rapporti possono essere riservati e aumentano snapshot e uso del limite di 12 MiB; non vanno nel profilo cloud e non autorizzano nuovi push.
+
+La preparazione locale **0.20.0** aggiunge al formato 2 le schede strutturate nel frontmatter, `events/`, `timelines/`, i report `changes/` e i JSON Schema in `schemas/` ([formato](markdown-book-format.md), [guida](narrative-workspace.md)). Lo snapshot `.bookwriter/project.json` contiene anche knowledge base, operazioni di modifica e le loro copie di ripristino (limitate a 3 milioni di caratteri): crescono le dimensioni e il consumo del limite di 12 MiB. Pull e import validano riferimenti e collegamento revisione→modifica; le modifiche via prompt non pubblicano nulla da sole e i gate editoriali restano gli stessi.
 
 ## Sicurezza
 

@@ -53,7 +53,7 @@ export async function attachInstitutionalInspection(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=oldSummary;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
         book.currentSceneId=undefined;
@@ -61,7 +61,7 @@ export async function attachInstitutionalInspection(
         book.previousError="Metadati LoC di accesso e diritti aggiornati: riesamina capitolo e successivi.";
       }else if(book.status==="completed"&&target.scenes.length&&
         target.scenes.every(s=>s.status==="canon"&&s.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.phase="chapterReview";
         book.status="paused";
       }

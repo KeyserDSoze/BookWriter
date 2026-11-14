@@ -55,7 +55,7 @@ export async function attachWikisourceResearch(
           dependent.bookSummaryAtFreeze=undefined;
         }
         book.bookSummary=beforeSynopsis;
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
         book.currentSceneId=undefined;
@@ -63,7 +63,7 @@ export async function attachWikisourceResearch(
         book.previousError="Trascrizioni Wikisource aggiornate: rifai le review di questo capitolo e dei successivi.";
       }else if(book.status==="completed" && chapter.scenes.length &&
         chapter.scenes.every(s=>s.status==="canon" && s.text.trim())){
-        book.editorialCycle=createEditorialCycle(chapterId);
+        book.editorialCycle=createEditorialCycle(chapterId,book);
         book.status="paused";
         book.phase="chapterReview";
       }

@@ -2,7 +2,10 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { z } from "zod";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import type { SceneMergeDraft } from "../domain/scene-merge";
-import { narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema, knowledgeReviewSchema, informationTransferReviewSchema, authorTransferCritiqueSchema, recommendationReconciliationSchema } from "../domain/editorial-board";
+import { MAX_EDITORIAL_REPORTS, narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema, knowledgeReviewSchema, informationTransferReviewSchema, authorTransferCritiqueSchema, recommendationReconciliationSchema } from "../domain/editorial-board";
+import { editorialProfilesSchema, profileSnapshotFields, refineProfileSnapshot } from "../domain/editorial-profiles";
+import { knowledgeBaseSchema } from "../domain/knowledge";
+import { changeOperationSchema, MAX_CHANGE_OPERATIONS } from "../domain/narrative-change";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "./ai";
@@ -19,6 +22,7 @@ import {MAX_EDITORIAL_VERIFICATION_CHOICES,type EditorialVerificationChoice}
   from "../domain/editorial-verification-choices";
 import {MAX_KNOWLEDGE_SHARE_DECISIONS,type NarrativeKnowledgeShareDecision}
   from "../domain/narrative-knowledge-sharing";
+import { validMarkdownSource } from "../domain/markdown-document";
 
 const VERSION = 1;
 const MAX_ZIP = 40 * 1024 * 1024;
@@ -100,6 +104,8 @@ const archivedFindingSchema = z.object({
 }).passthrough();
 const archivedReportSchema = z.object({
   findings: z.array(archivedFindingSchema).max(12),
+  reviewerName: z.string().max(120).optional(),
+  profileStamp: z.string().regex(/^\d+:[a-f0-9]{8}$/).optional(),
 }).passthrough();
 const archivedJudgmentSchema = z.object({
   authorTransferCritique:authorTransferCritiqueSchema.optional(),
@@ -111,17 +117,16 @@ const archivedJudgmentSchema = z.object({
   }).passthrough()).max(600),
 }).passthrough();
 const archivedRoundSchema = z.object({
-  reports: z.array(archivedReportSchema).max(480),
+  ...profileSnapshotFields,
+  reports: z.array(archivedReportSchema).max(MAX_EDITORIAL_REPORTS),
   judgment: archivedJudgmentSchema,
-}).passthrough();
+}).passthrough().superRefine(refineProfileSnapshot);
 const archivedCycleSchema = z.object({
-  reports: z.array(archivedReportSchema).max(480),
+  ...profileSnapshotFields,
+  reports: z.array(archivedReportSchema).max(MAX_EDITORIAL_REPORTS),
   judgment: archivedJudgmentSchema.optional(),
   priorRounds: z.array(archivedRoundSchema).max(3),
-  roles: z.array(z.enum(["continuity", "secrets", "timeline", "historical", "characterVoice", "style", "narrative",
-    "readerGenre", "readerCasual", "readerSkeptic", "readerCharacters", "readerMystery"]))
-    .min(1).max(12).refine(list => new Set(list).size === list.length).optional(),
-}).passthrough();
+}).passthrough().superRefine(refineProfileSnapshot);
 const editorialRecoveryArchiveSchema = z.object({
   chapterId: zId,
   archivedAt: z.string().datetime(),
@@ -265,6 +270,7 @@ const authorChapterSynopsisSchema = z.object({
 
 const bookSchema = z.object({
   id: zId, title: z.string(), brief: z.string(),
+  markdownSource: z.record(z.string(), z.string()).refine(validMarkdownSource, "Documenti Markdown originali non validi.").optional(),
   writingStyle: z.string(), audience: z.string(),
   authorConstraints: z.array(z.string()).default([]),
   createdAt: z.string(), updatedAt: z.string(),
@@ -290,6 +296,10 @@ const bookSchema = z.object({
   pauseAfterOutline: z.boolean().optional(),
   editorialMode: z.enum(["full", "light"]).optional(),
   editorialConcurrency: z.number().int().min(1).max(4).optional(),
+  editorialProfiles: editorialProfilesSchema.optional(),
+  knowledge: knowledgeBaseSchema.optional(),
+  changeOperations: z.array(changeOperationSchema).max(MAX_CHANGE_OPERATIONS).optional(),
+  changeMode: z.enum(["auto", "confirm"]).optional(),
   authorInterventions: z.array(authorInterventionSchema).max(MAX_AUTHOR_INTERVENTIONS).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),
@@ -308,12 +318,18 @@ const bookSchema = z.object({
     id: zId, instruction: z.string(), beforePhase: z.string(),
     affectedSceneIds: z.array(z.string()), cursor: z.number().int().nonnegative(),
     impactAnalysis: z.string().optional(),
+    changeOperationId: z.string().uuid().optional(),
   }).passthrough().optional(),
   modelRoutes: z.record(z.string(), routeSchema).optional(),
   taskReasoningEfforts: z.record(z.string(),z.enum(["automatic","low","medium","high","xhigh"])).superRefine((v,ctx)=>{
     try{validateTaskReasoningOverrides(v);}catch{ctx.addIssue({code:"custom",message:"Task reasoning non valido"});}
   }).optional(),
-}).passthrough();
+}).passthrough().superRefine((book, ctx) => {
+  // A tracked revision must point to an operation of the same book.
+  const id = (book.revision as { changeOperationId?: string } | undefined)?.changeOperationId;
+  if (id && !book.changeOperations?.some(op => op.id === id))
+    ctx.addIssue({ code: "custom", message: "Revisione collegata a una modifica inesistente." });
+});
 const activitySchema = z.object({
   id: zId, bookId: zId, runId: z.string(), phase: z.string(), title: z.string(),
   reason: z.string(), nextStep: z.string(), status: z.enum(["running", "succeeded", "cancelled", "failed"]),
