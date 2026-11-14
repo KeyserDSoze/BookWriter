@@ -1,5 +1,11 @@
 # BookWriter — istruzioni per agenti e sviluppatori
 
+## Repository vuota già collegata: aggiornamento del controllo — ADR 0158 / v0.17.1
+
+- Dopo il collegamento riuscito richiedere una nuova verifica del lease anche quando libro/owner/repository/branch non cambiano: `onConnected` → `refreshLeaseStatus`, vecchi risultati invalidati, stato checking e nuovo GET. Una risposta tardiva precedente non può ripristinare un errore vecchio. Non dipendere dal polling di 20 secondi per il successo dell'operazione appena richiesta.
+- Mai convertire un HTTP409 in blocco assente né dedurre libertà dal solo successo dell'inizializzazione. Clock guard, letture remote e fencing restano invariati; se la nuova verifica fallisce, mostrare errore. Nessun POST/PATCH del lease per aggiornare il pannello.
+- Anteprima della destinazione aggiornata dopo il successo; `githubPublicationBlocker` spiega i gate editoriali esistenti, non li autorizza né li aggira. Non raccomandare Sincronizza se è bloccato; conservare tutto il libro locale, review, memoria e freeze. I test browser riproducono 409 iniziale, risposta vecchia tardiva e 409 persistente, con uguaglianza del libro prima/dopo.
+
 ## Collegamento GitHub guidato e blocco di scrittura — ADR 0156 / v0.17.0
 
 - PAT del profilo condiviso: input nel libro, Mostra/Nascondi su clic, chiaro solo in RAM con fencing libro/token/generazione e reset su unmount. Mai nel BookProject, log, URL, ZIP o repository. Sostituirlo riguarda tutti i libri: dirlo. Il riuso apre un nuovo modulo, non duplica credenziali nel libro. Salvataggio fenced durante cifratura e prima del put.

@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
 import { decryptLocal, encryptLocal } from "../infrastructure/crypto";
 import { GitHubConnectionPicker } from "./GitHubConnectionPicker";
+import { githubPublicationBlocker } from "../domain/github-publication";
 import { connectBookRemote, setBookAutoSync } from "../application/github-book-settings";
 import { pushManualGitHubBook } from "../application/manual-github-push";
 import { reconcileSuspendedManualPush } from "../application/manual-push-reconciliation";
@@ -63,6 +64,13 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   const [writerLease, setWriterLease] = useState<WriterLeaseStatus | null>(null);
   const [leaseCheckError, setLeaseCheckError] = useState("");
   const [leaseCheckState, setLeaseCheckState] = useState<"checking" | "checked" | "error">("checking");
+
+  function refreshLeaseStatus() {
+    setWriterLease(null);
+    setLeaseCheckError("");
+    setLeaseCheckState("checking");
+    setLeaseRefresh(value => value + 1);
+  }
 
   useEffect(() => {
     revealGeneration.current++;
@@ -228,7 +236,9 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         throw error;
       }
       await onRefresh();
-      return "Libro collegato a " + repo.fullName + " (" + target.branch + "). Salva un checkpoint con Sincronizza.";
+      refreshLeaseStatus();
+      return "Libro collegato a " + repo.fullName + " (" + target.branch + "). " +
+        (githubPublicationBlocker(book) ? "Il lavoro locale è conservato; completa la verifica editoriale prima della pubblicazione." : "Salva un checkpoint con Sincronizza.");
     });
   }
 
@@ -338,6 +348,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   }
 
   const connected = book?.remote;
+  const publicationBlocker = book ? githubPublicationBlocker(book) : undefined;
   const dirty = !!connected && connected.lastSyncedLocalUpdatedAt !== book.updatedAt;
   const manualIntentDrifted = !!manualIntent && (!connected ||
     manualIntent.owner !== connected.owner ||
@@ -380,7 +391,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         <p className="muted mt-2 text-xs">Cifrato su questo dispositivo, mai nel libro o negli ZIP. Se attivi il profilo cloud, può seguirti nel vault Google/Microsoft. La cifratura locale non protegge da script malevoli.</p>
       </div>
       <GitHubConnectionPicker book={book} token={settings.githubToken} request={discoverRequest}
-        onRefresh={onRefresh} onSelectBook={onSelectBook} onNewBook={onNewBook}/>
+        onRefresh={onRefresh} onSelectBook={onSelectBook} onNewBook={onNewBook} onConnected={refreshLeaseStatus}/>
       <details>
       <summary className="muted min-h-11 cursor-pointer py-3 text-sm">Collegamento manuale (avanzato)</summary>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -426,7 +437,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <p className="font-semibold">Scrittura protetta tra dispositivi</p>
         <Button variant="outline" size="sm" className="min-h-11" disabled={busy || leaseCheckState === "checking"}
-          onClick={() => setLeaseRefresh(value => value + 1)}>Verifica blocco GitHub</Button>
+          onClick={refreshLeaseStatus}>Verifica blocco GitHub</Button>
         {leaseCheckState === "checking" && <p role="status" className="muted mt-2">Verifica del lock GitHub in corso…</p>}
         {leaseCheckState === "checked" && !writerLease && <p className="muted mt-2">Nessun lock remoto attivo. L'autopilot ne acquisisce uno prima di chiamare i modelli AI.</p>}
         {leaseCheckState === "checked" && writerLease && <div className="mt-2 space-y-1">
@@ -463,8 +474,10 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       {!!book?.editorialReviewSceneIds?.length && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">
         {book.editorialReviewSceneIds.length} scene fuse attendono conferma nel Lettore: push e riattivazione autosync bloccati.
       </p>}
+      {connected && publicationBlocker && !book?.editorialReviewSceneIds?.length &&
+        <p role="status" className="text-sm text-amber-700 dark:text-amber-300">{publicationBlocker}</p>}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync || !!book.editorialReviewSceneIds?.length || !!book.editorialCycle || book.chapters.some(ch => !ch.frozenAt && ch.scenes.some(s => s.status !== "planned"))}
+        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync || !!publicationBlocker}
           onClick={() => void push()}><Cloud size={17}/> Sincronizza su GitHub</Button>
       </div>
       {message && <p role="status" className="rounded-lg border border-amber-500/40 p-3 text-sm">{message}</p>}

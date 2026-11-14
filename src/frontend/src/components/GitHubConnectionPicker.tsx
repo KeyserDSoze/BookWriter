@@ -4,12 +4,14 @@ import { connectGitHubBook } from "../application/github-connect";
 import { discoverGitHubRepositories, inspectGitHubSetup, type GitHubDestination, type GitHubRepository } from "../infrastructure/github-setup";
 import { getBook } from "../infrastructure/db";
 import { importGitHubBook } from "../infrastructure/github-sync";
+import { githubPublicationBlocker } from "../domain/github-publication";
 import { Button } from "./ui/button";
 
-export function GitHubConnectionPicker({ book, token, request, onRefresh, onSelectBook, onNewBook }: {
+export function GitHubConnectionPicker({ book, token, request, onRefresh, onSelectBook, onNewBook, onConnected }: {
   book?: BookProject; token: AppSettings["githubToken"]; request: number;
   onRefresh: () => Promise<void>; onSelectBook: (id: string) => void;
   onNewBook: (remote?: GitHubRemote) => void;
+  onConnected: () => void;
 }) {
   const [repositories, setRepositories] = useState<GitHubRepository[]>();
   const [destination, setDestination] = useState<GitHubDestination>();
@@ -61,7 +63,15 @@ export function GitHubConnectionPicker({ book, token, request, onRefresh, onSele
     if (!consent || !isCurrent()) return;
     await connectGitHubBook(book.id, book.updatedAt, result.remote, !result.private, isCurrent);
     await onRefresh();
-    if (isCurrent()) setMessage(`Libro collegato a ${result.remote.owner}/${result.remote.repository}. Il manoscritto non è ancora stato pubblicato: usa Sincronizza.`);
+    if (isCurrent()) {
+      // The use case has now verified an initialized destination. The original
+      // preview ("empty") and any lease read from before the PUT are obsolete,
+      // even when owner/repository/branch and book ID have not changed.
+      setDestination({ ...result, kind: "available" });
+      onConnected();
+      setMessage(`Libro collegato a ${result.remote.owner}/${result.remote.repository}. Il manoscritto non è ancora stato pubblicato.` +
+        (githubPublicationBlocker(book) ? " Il lavoro locale è conservato; completa la verifica editoriale prima della pubblicazione." : " Quando vuoi, usa Sincronizza."));
+    }
   }
 
   const discover = () => work(async isCurrent => {

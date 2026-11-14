@@ -6,6 +6,8 @@
 
 ## Funzionalità disponibili
 
+- **Collegamento di libri già avviati e repository vuote (0.17.1).** La verifica del blocco viene aggiornata subito dopo l'inizializzazione, senza conservare un vecchio HTTP 409; il manoscritto locale resta intatto e l'eventuale gate editoriale del primo invio viene spiegato. [Guida](docs/github-sync.md) · [ADR 0158](ADR/0158-refresh-lease-after-repository-initialization.md).
+
 - **GitHub semplice e blocchi spiegati (0.17.0).** PAT rileggibile con Mostra/Nascondi e riutilizzabile per un altro libro, repository e ramo rilevati, collegamento privato univoco automatico, supporto repository vuote con commit tecnico neutro e importazione proposta per libri esistenti. I rifiuti del blocco di scrittura indicano operazione e HTTP, senza inventare un altro browser. Errori del revisore spiegati, tentativi opt-in attivabili dal pannello e prompt correttivo nel retry dello stesso task. [GitHub](docs/github-sync.md) · [Errori AI](docs/ai-task-inspection.md).
 
 - **Azioni del modello in tempo reale (0.16.0, ADR 0155).** Mentre il modello scrive vedi cosa sta facendo: quale revisione, i rilievi e le decisioni già completi come schede (le ultime due), quello che sta scrivendo adesso e il testo che scorre. Solo lettura: una scheda non approva nulla. [Guida](docs/ai-task-inspection.md) · [ADR 0155](ADR/0155-live-model-actions.md).

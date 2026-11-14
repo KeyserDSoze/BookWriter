@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## 0.17.1 — 2026-11-14 — Via il 409 obsoleto dopo il collegamento alla repository vuota (ADR 0158)
+
+- Un libro già avviato localmente e già associato alla stessa repository poteva conservare l'errore del blocco letto quando la repository era ancora vuota. Dopo l'inizializzazione ora parte subito una nuova verifica, anche senza cambiare destinazione; le risposte vecchie arrivate in ritardo sono scartate. Nessun HTTP 409 viene reinterpretato come blocco assente.
+- L'anteprima non continua a dire «repository vuota» dopo il collegamento riuscito. Non si confonde il commit tecnico con una pubblicazione del manoscritto.
+- Se il capitolo è in redazione, in revisione o ha scene da approvare, il motivo del blocco di pubblicazione è visibile: niente invito ingannevole a premere Sincronizza. Tutti i gate editoriali e il testo locale restano invariati.
+- Regressioni desktop/mobile su lavoro locale preservato, vecchio 409 tardivo e nuovo 409 che deve restare bloccante. Test con GitHub simulato, non attestazione della causa di ogni errore remoto.
+
 ## 0.17.0 — 2026-11-14 — Collegamento GitHub guidato e errori comprensibili (ADR 0156–0157)
 
 - PAT salvato nella pagina del libro, Mostra/Nascondi, riuso con «Usa lo stesso PAT per un altro libro» e alternativa di importazione. Resta un PAT di profilo condiviso: sostituirlo riguarda anche gli altri libri, senza copiarlo nel manoscritto.

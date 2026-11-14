@@ -2,6 +2,8 @@
 
 ## Progresso versionato
 
+- [x] v0.17.1: verifica del blocco aggiornata dopo il collegamento alla stessa repository inizializzata, risposte obsolete scartate, anteprima aggiornata e blocco editoriale del primo invio spiegato senza alterare il manoscritto locale (ADR 0158).
+
 - [x] v0.17.0: collegamento GitHub guidato, PAT mostrabile e riutilizzabile, repository vuote inizializzate senza manoscritto, import proposto e diagnosi del blocco con operazione/HTTP (ADR 0156); spiegazioni degli errori, retry opt-in dal task, motivo correttivo nel prompt dello stesso ruolo e avviso basato sulle route effettive (ADR 0157).
 
 - [x] v0.16.0: azioni del modello mostrate mentre scrive (lettore JSON tollerante, schede per rilievi/decisioni/piano/memoria/sinossi, ultime due + azione in corso + testo che scorre, solo lettura, schede stabili) (ADR 0155).

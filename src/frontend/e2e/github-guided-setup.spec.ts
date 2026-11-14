@@ -9,9 +9,15 @@ const nav = (page: Page) => page.getByRole("navigation", {
   name: test.info().project.name === "mobile-chromium" ? "Navigazione mobile" : "Navigazione principale",
 });
 
-async function prepare(page: Page, options: { multiple?: boolean; existing?: boolean; rejectLease?: boolean } = {}) {
+async function prepare(page: Page, options: { multiple?: boolean; existing?: boolean; rejectLease?: boolean;
+  localProgress?: boolean; delayedInitialLease?: boolean; leaseConflictAfterInitialization?: boolean } = {}) {
   let empty = !options.existing;
   let puts = 0, leasePosts = 0;
+  let postInitializationLeaseReads = 0;
+  let initialLeaseConflict!: () => void;
+  const initialLeaseRead = new Promise<void>(resolve => { initialLeaseConflict = resolve; });
+  let releaseInitialLease!: () => void;
+  const delayedLease = new Promise<void>(resolve => { releaseInitialLease = resolve; });
   const remoteBook = newBook("Synthetic remote idea", "Remote manuscript", "", "");
   await page.route("https://api.github.com/**", async route => {
     const req = route.request();
@@ -29,6 +35,7 @@ async function prepare(page: Page, options: { multiple?: boolean; existing?: boo
     if (path === "/branches") return reply(empty ? [] : [{ name: "trunk" }]);
     if (path === "/git/ref/heads/trunk") return reply({ object: { sha: HEAD } });
     if (path === "/contents/.bookwriter/initialization.json" && method === "PUT") {
+      if (options.localProgress) await initialLeaseRead;
       const body = req.postDataJSON() as { content: string; sha?: string };
       expect(body.sha).toBeUndefined();
       expect(Buffer.from(body.content, "base64").toString()).toBe('{"schemaVersion":1,"purpose":"bookwriter-initialization"}\n');
@@ -39,7 +46,19 @@ async function prepare(page: Page, options: { multiple?: boolean; existing?: boo
       return reply({ type: "file", encoding: "base64", content: Buffer.from(JSON.stringify(remoteBook)).toString("base64") });
     if (path === "/contents/.bookwriter/activities.json" && options.existing)
       return reply({ type: "file", encoding: "base64", content: btoa("[]") });
-    if (path.startsWith("/git/ref/heads/bookwriter-lock/")) return reply({}, 404);
+    if (path.startsWith("/git/ref/heads/bookwriter-lock/")) {
+      if (empty) {
+        if (options.delayedInitialLease) {
+          initialLeaseConflict();
+          await delayedLease;
+        }
+        await reply({}, 409);
+        initialLeaseConflict();
+        return;
+      }
+      postInitializationLeaseReads++;
+      return reply({}, options.leaseConflictAfterInitialization ? 409 : 404);
+    }
     if (path.startsWith("/git/commits/")) return reply({ tree: { sha: "b".repeat(40) } });
     if (path === "/git/trees") return reply({ sha: "c".repeat(40) });
     if (path === "/git/commits") return reply({ sha: "d".repeat(40) });
@@ -49,11 +68,87 @@ async function prepare(page: Page, options: { multiple?: boolean; existing?: boo
   await page.goto("/");
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Local manuscript");
   await page.getByRole("button", { name: "Crea libro", exact: true }).click();
+  const before = options.localProgress ? await page.evaluate(async () => {
+    const { getDb, saveBook } = await import("/src/infrastructure/db.ts");
+    const db = await getDb();
+    const book = (await db.getAll("books"))[0];
+    book.remote = { owner: "setup-owner", repository: "novel", branch: "trunk" };
+    book.status = "paused";
+    book.phase = "chapterReview";
+    book.chapters = [{ id: "ch-1", number: 1, title: "Capitolo iniziato in locale", purpose: "Sviluppare la storia.",
+      scenes: [{ id: "scene:001:001", number: 1, title: "Prima scena", objective: "Presentare Mara.",
+        text: "Mara raggiunge il porto quando il sole è già tramontato.", status: "canon" }] }];
+    book.editorialCycle = { chapterId: "ch-1", round: 1, stage: "review", reports: [], repairCursor: 0, priorRounds: [] };
+    book.memory.currentState = "Una memoria locale da conservare senza modifiche.";
+    await saveBook(book, false);
+    return book;
+  }) : undefined;
+  if (options.localProgress) await page.reload();
   await nav(page).getByRole("button", { name: "Archivio", exact: true }).click();
   await page.getByLabel("PAT GitHub", { exact: true }).fill(TOKEN);
   await page.getByRole("button", { name: "Salva PAT cifrato", exact: true }).click();
-  return { puts: () => puts, leasePosts: () => leasePosts, remoteBook };
+  return { puts: () => puts, leasePosts: () => leasePosts, postInitializationLeaseReads: () => postInitializationLeaseReads,
+    releaseInitialLease, remoteBook, before };
 }
+
+test("repository vuota già collegata e libro in redazione: ricontrolla subito il blocco senza perdere il lavoro locale", async ({ page }) => {
+  const api = await prepare(page, { localProgress: true });
+  await expect(page.getByText(/Libro collegato a setup-owner\/novel/)).toBeVisible();
+  await expect(page.getByText(/Nessun lock remoto attivo/)).toBeVisible();
+  expect(api.postInitializationLeaseReads()).toBeGreaterThan(0);
+  await expect(page.getByText(/GitHub ha rifiutato la lettura.*HTTP 409/)).toHaveCount(0);
+  await expect(page.getByText(/Repository vuota: al collegamento/)).toHaveCount(0);
+  await expect(page.getByText(/Completa la redazione.*prima di pubblicare/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sincronizza su GitHub", exact: true })).toBeDisabled();
+  await expect(page.getByText(/manoscritto non è ancora stato pubblicato: usa Sincronizza/)).toHaveCount(0);
+  const after = await page.evaluate(async () => {
+    const { getDb } = await import("/src/infrastructure/db.ts");
+    return (await (await getDb()).getAll("books"))[0];
+  });
+  const { remote: _beforeRemote, updatedAt: _beforeRevision, ...beforeNarrative } = api.before!;
+  const { remote: _afterRemote, updatedAt: _afterRevision, ...afterNarrative } = after;
+  expect(afterNarrative).toEqual(beforeNarrative);
+  expect(api.puts()).toBe(1);
+  expect(api.leasePosts()).toBe(0);
+});
+
+test("una risposta 409 precedente arrivata in ritardo non sostituisce la verifica successiva al collegamento", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = async (...args: Parameters<typeof fetch>) => {
+      const response = await original(...args);
+      if (response.status === 409 && response.url.includes("/git/ref/heads/bookwriter-lock/"))
+        (window as Window & { sawOldLeaseConflict?: boolean }).sawOldLeaseConflict = true;
+      return response;
+    };
+  });
+  const api = await prepare(page, { localProgress: true, delayedInitialLease: true });
+  await expect(page.getByText(/Libro collegato a setup-owner\/novel/)).toBeVisible();
+  await expect(page.getByText(/Nessun lock remoto attivo/)).toBeVisible();
+  api.releaseInitialLease();
+  // Production deliberately cancels the HTTP error body, so do not wait for
+  // response.finished(): synchronize on fetch resolving in the page instead.
+  await page.waitForFunction(() => (window as Window & { sawOldLeaseConflict?: boolean }).sawOldLeaseConflict === true);
+  // Wait for the response's React updates to paint, not for an arbitrary timeout.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(page.getByText(/Nessun lock remoto attivo/)).toBeVisible();
+  await expect(page.getByText(/Impossibile verificare il lock GitHub/)).toHaveCount(0);
+  expect(api.leasePosts()).toBe(0);
+});
+
+test("un nuovo 409 dopo l'inizializzazione rimane un errore: non viene interpretato come blocco assente", async ({ page }) => {
+  const api = await prepare(page, { localProgress: true, leaseConflictAfterInitialization: true });
+  await expect(page.getByText(/Libro collegato a setup-owner\/novel/)).toBeVisible();
+  await expect.poll(api.postInitializationLeaseReads).toBeGreaterThan(0);
+  await expect(page.getByText(/GitHub ha rifiutato la lettura.*HTTP 409/)).toBeVisible();
+  await expect(page.getByText(/Nessun lock remoto attivo/)).toHaveCount(0);
+  const before = api.postInitializationLeaseReads();
+  await page.getByRole("button", { name: "Verifica blocco GitHub", exact: true }).click();
+  await expect.poll(api.postInitializationLeaseReads).toBeGreaterThan(before);
+  await expect(page.getByText(/GitHub ha rifiutato la lettura.*HTTP 409/)).toBeVisible();
+  await expect(page.getByText(/Nessun lock remoto attivo/)).toHaveCount(0);
+  expect(api.leasePosts()).toBe(0);
+});
 
 test("PAT mostrabile e riutilizzabile, repository vuota collegata senza campi manuali", async ({ page }) => {
   const api = await prepare(page);
