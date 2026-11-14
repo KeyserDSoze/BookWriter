@@ -8,6 +8,7 @@ vi.mock("./writer-guard", () => ({ withWriterGuard: writerGuard }));
 import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infrastructure/db";
 import { AutopilotRunner, MAX_LOCAL_AUTO_RETRIES } from "./autopilot";
 import { AUTO_RETRY_BACKOFF } from "./auto-retry";
+import { createEditorialCycle } from "../domain/editorial-board";
 
 async function setup(options: { retry: boolean; local: boolean; autoRetry?: boolean; max?: number }) {
   const db = await getDb();
@@ -75,6 +76,50 @@ describe("Ritentativo automatico limitato su endpoint locale", () => {
 
 describe("Ritentativo automatico opt-in su qualsiasi endpoint", () => {
   beforeEach(() => { AUTO_RETRY_BACKOFF.baseMs = 0; });
+
+  it("dopo un rapporto scartato comunica il motivo SOLO al nuovo tentativo dello stesso ruolo", async () => {
+    const book = await setup({ retry: false, local: true, autoRetry: true });
+    book.phase = "chapterReview";
+    book.chapters = [{ id: "ch-1", number: 1, title: "Il porto", purpose: "Presentare la protagonista.",
+      scenes: [{ id: "scene:001:001", number: 1, title: "Il molo", objective: "Entrare nella città.",
+        text: "Mara camminava verso il molo e guardava le barche abbandonate.", status: "canon", summary: "Arrivo." }] }];
+    book.editorialCycle = createEditorialCycle("ch-1");
+    await saveBook(book, false);
+    const runner = new AutopilotRunner();
+    const prompts: string[] = [];
+    modelCall.mockImplementation(async (_kind: string, _system: string, prompt: string) => {
+      prompts.push(prompt);
+      if (prompts.length === 1) return ok(JSON.stringify({ verdict: "issues", summary: "Un problema da controllare nel testo.",
+        findings: [{ sceneId: "scene:001:001", severity: "major", category: "Continuita",
+          evidence: "Questa frase non esiste nel segmento di Mara.", reason: "Una spiegazione sufficientemente lunga del problema.",
+          remediation: "Una proposta dettagliata di correzione della scena." }], memoryNote: "" }));
+      if (prompts.length === 3) runner.stopAfterCurrent();
+      return ok(JSON.stringify({ verdict: "pass", summary: "Nessun problema verificabile nel segmento.", findings: [], memoryNote: "" }));
+    });
+    await runner.run(book.id, async () => undefined);
+    expect(prompts).toHaveLength(3);
+    expect(prompts[0]).not.toContain("La tua risposta precedente è stata scartata");
+    expect(prompts[1]).toContain("La tua risposta precedente è stata scartata");
+    expect(prompts[1]).toContain("Prova narrativa non presente letteralmente");
+    expect(prompts[2]).not.toContain("La tua risposta precedente è stata scartata");
+    const saved = (await getBook(book.id))!;
+    expect(saved.editorialCycle?.reports).toHaveLength(2);
+    expect(saved.editorialCycle?.reports[0]!.role).toBe("continuity");
+    expect(saved.chapters[0]!.scenes[0]!.text).toBe(book.chapters[0]!.scenes[0]!.text);
+    const failed = (await listActivities(book.id)).find(activity => activity.status === "failed")!;
+    expect(failed).toMatchObject({ inputTokens: 1, outputTokens: 1, aiRequested: true });
+    expect(failed.error).toContain("Prova narrativa non presente letteralmente");
+    expect(failed.output).toBeUndefined();
+  });
+
+  it("un errore di rete non viene inserito nel prompt come se fosse una risposta da correggere", async () => {
+    const book = await setup({ retry: false, local: true, autoRetry: true });
+    const runner = new AutopilotRunner();
+    modelCall.mockRejectedValueOnce(new Error("rete"));
+    modelCall.mockImplementationOnce(async () => { runner.stopAfterCurrent(); return ok("Idee LONG MID SHORT"); });
+    await runner.run(book.id, async () => undefined);
+    expect(modelCall.mock.calls[1]![2]).not.toContain("CORREZIONE DEL TENTATIVO PRECEDENTE");
+  });
 
   it("riprova anche su un endpoint con chiave se l'autore lo ha attivato", async () => {
     const book = await setup({ retry: false, local: false, autoRetry: true });

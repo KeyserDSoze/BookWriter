@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("https://api.github.com/user/repos?**", route => route.fulfill({ json: [] }));
+});
+
 test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, editable draft only", async ({ page }) => {
   const MAIN = "d".repeat(40), BASE_TREE = "e".repeat(40);
   let remoteBook: Record<string, unknown> | null = null;
@@ -155,6 +159,7 @@ test("AI merge mobile/desktop: consent, model routing, GitHub writer lease, edit
   await nav.getByRole("button", { name: "Archivio", exact: true }).click();
   await page.getByLabel("PAT GitHub").fill("github_pat_ai_merge_test_not_real_2026");
   await page.getByRole("button", { name: "Salva PAT cifrato" }).click();
+  await page.getByText("Collegamento manuale (avanzato)", { exact: true }).click();
   await page.getByRole("textbox", { name: "Owner GitHub" }).fill("ai-merge");
   await page.getByRole("textbox", { name: "Repository del libro" }).fill("novel");
   await page.getByRole("button", { name: "Verifica repository" }).click();

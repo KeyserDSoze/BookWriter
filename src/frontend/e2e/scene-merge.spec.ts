@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("https://api.github.com/user/repos?**", route => route.fulfill({ json: [] }));
+});
+
 test("mobile/desktop: diff di scena, bozza manuale persistente e approvazione senza push", async ({ page }) => {
   let remoteBook: Record<string, unknown> | null = null;
   const HEAD = "d".repeat(40);
@@ -74,6 +78,7 @@ test("mobile/desktop: diff di scena, bozza manuale persistente e approvazione se
   await nav.getByRole("button", { name: "Archivio", exact: true }).click();
   await page.getByLabel("PAT GitHub").fill("github_pat_mock_merge_novel_2026");
   await page.getByRole("button", { name: "Salva PAT cifrato" }).click();
+  await page.getByText("Collegamento manuale (avanzato)", { exact: true }).click();
   await page.getByRole("textbox", { name: "Owner GitHub" }).fill("merge-owner");
   await page.getByRole("textbox", { name: "Repository del libro" }).fill("merge-novel");
   await page.getByRole("button", { name: "Verifica repository" }).click();

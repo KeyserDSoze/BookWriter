@@ -10,6 +10,7 @@ import { assertScenePlausible } from "../domain/prose-sanity";
 import { applyMemoryResponse, assertCompactionShrinks, DELTA_REPLY_RULE, DELTA_REPLY_RULE_NO_SUMMARY,
   memoryNeedsCompaction, memorySchema } from "../domain/memory-delta";
 import { AUTO_RETRY_BACKOFF, DEFAULT_AUTO_RETRIES, endpointAutoRetry, isAutoRetryable, retryDelay } from "./auto-retry";
+import { correctiveRetryNote, ReplyRejectedError } from "./reply-rejected";
 import { PromptExceedsContextError } from "./context-guard";
 import { parseJsonReply } from "../domain/json-reply";
 import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
@@ -792,6 +793,7 @@ export class AutopilotRunner {
       // be retried a bounded number of times so an unattended run can continue.
       let retries = 0;
       let retryScope = "";
+      let rejectedReplyReason = "";
       const pool = new ReviewCallPool();
 
       try {
@@ -864,6 +866,9 @@ export class AutopilotRunner {
           await saveBook(book); await onUpdate(); break;
         }
         const settings = await loadSettings();
+        const retryKey = work.phase + ":" + work.title;
+        if (retryScope !== retryKey) { retryScope = retryKey; retries = 0; rejectedReplyReason = ""; }
+        if (retries > 0 && rejectedReplyReason) work.prompt += correctiveRetryNote(rejectedReplyReason);
         const assignment = routeFor(work.kind, settings, book);
         const configuredEndpoint=settings.endpoints.find(e=>e.id===assignment.endpointId);
         const requestedEffort=configuredEndpoint
@@ -914,7 +919,8 @@ export class AutopilotRunner {
           if (!latest || latest.status !== "running" || latest.phase !== work.phase ||
               latest.updatedAt !== book.updatedAt)
             throw new DOMException("Il libro è cambiato durante la chiamata AI: risultato non applicato.", "AbortError");
-          work.apply(latest, result.text);
+          try { work.apply(latest, result.text); }
+          catch (error) { throw new ReplyRejectedError(error); }
           started.status = "succeeded"; started.endedAt = new Date().toISOString();
           started.summary = shortSummary(result.text); started.output = result.text;
           // Atomic with the canon commit below: a failed task leaves notes pending.
@@ -927,6 +933,7 @@ export class AutopilotRunner {
           await saveBookAndActivity(latest, started, book.updatedAt);
           finishLiveAi(started.id,"completata");
           retries = 0;
+          rejectedReplyReason = "";
           await onUpdate();
         } catch (error) {
           const message=error instanceof ProviderResponseReadError || error instanceof TruncatedProviderContentError ||
@@ -961,13 +968,14 @@ export class AutopilotRunner {
             ? "Attività interrotta; nessun output canonizzato."
             : error instanceof Error ? error.message : "Errore sconosciuto.");
           started.endedAt = new Date().toISOString();
-          const retryKey = work.phase + ":" + work.title;
-          if (retryScope !== retryKey) { retryScope = retryKey; retries = 0; }
           const retryPolicy = endpointAutoRetry(configuredEndpoint);
           const willRetry = !aborted && !leaseFailure && !budgetStop && started.aiRequested === true &&
             retryPolicy.enabled && isAutoRetryable(error) &&
             retries < retryPolicy.max && !this.stopAfter && !signal.aborted;
-          if (willRetry) retries++;
+          if (willRetry) {
+            retries++;
+            if (error instanceof ReplyRejectedError) rejectedReplyReason = error.message;
+          }
           const latest = await getBook(bookId);
           if (latest) {
             latest.status = willRetry ? "running" : aborted || budgetStop ? "paused" : "error";

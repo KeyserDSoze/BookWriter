@@ -2,6 +2,10 @@
 
 ## Progresso versionato
 
+- [x] v0.17.0: collegamento GitHub guidato, PAT mostrabile e riutilizzabile, repository vuote inizializzate senza manoscritto, import proposto e diagnosi del blocco con operazione/HTTP (ADR 0156); spiegazioni degli errori, retry opt-in dal task, motivo correttivo nel prompt dello stesso ruolo e avviso basato sulle route effettive (ADR 0157).
+
+- [x] v0.16.0: azioni del modello mostrate mentre scrive (lettore JSON tollerante, schede per rilievi/decisioni/piano/memoria/sinossi, ultime due + azione in corso + testo che scorre, solo lettura, schede stabili) (ADR 0155).
+
 - [x] v0.15.0: il testo in arrivo dal modello si vede **sempre** (nessun consenso per guardarlo); richiesta e risposta di ogni task si salvano in modo temporaneo con scadenza impostabile (default ultimi 20 task / 10 giorni, da 30 minuti a 90 giorni, 1–500 task); «conserva senza scadenza» e «scrivi anche su GitHub con il libro» come scelte separate e facoltative; potatura best effort che non ferma mai un task; rimosso il testo «Login cloud non ancora attivi» (ADR 0154).
 
 - [x] v0.14.0: profilo cloud su Google Drive `appDataFolder` / OneDrive `approot` (impostazioni AI, vault PAT+chiavi con passphrase o solo account, elenco libri con stato), «Scarica/Aggiorna da GitHub» dalla Libreria e aggiornamento Git fast-forward di un libro senza modifiche locali; Client ID pubblici da variabili del repository; guida STE-100 per le app registration; GitHub App non supportata (ADR 0153).

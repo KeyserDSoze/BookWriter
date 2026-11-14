@@ -14,13 +14,27 @@ Il dossier storico di ciascun capitolo viene salvato con il progetto locale e in
 
 ## Per iniziare (senza token nel repository del sito)
 
-1. Su GitHub crea una **repository privata** per ciascun libro e inizializzala con un README o un commit. La Git Data API non può partire da una repository completamente senza branch.
+1. Su GitHub crea una **repository privata** per ciascun libro. Dalla 0.17.0 può essere completamente vuota: BookWriter prepara il primo commit tecnico al collegamento, senza pubblicare il manoscritto.
 2. Nelle impostazioni GitHub crea un **fine-grained personal access token** con `Contents: read/write`, limitato alle sole repository dei libri. Non usare il secret `PASSWORD` o un PAT con permessi globali.
 3. Apri `https://ghostwriting.ws`, vai in **Archivio → GitHub — sincronizzazione del libro**, incolla il PAT e salvalo. È cifrato nel browser via Web Crypto e non incluso nella repository.
-4. Seleziona un libro locale, specifica owner, repository e branch; premi **Verifica repository** e **Collega questo libro**.
+4. Seleziona un libro locale e salva il PAT: BookWriter cerca le repository e rileva proprietario e ramo. Una sola destinazione privata viene collegata automaticamente; con più destinazioni scegli quella del libro. Puoi ripetere con **Trova le repository del PAT**. Se trova già un libro, offre **Apri o importa** senza sostituire quello locale. I campi manuali restano in **Collegamento manuale (avanzato)**.
 5. Metti l'autopilot in pausa. Premi **Sincronizza su GitHub**. Vedrai il commit SHA e lo stato; il salvataggio contiene la prosa, la memoria narrativa e lo storico attività, ma nessuna API key o PAT.
 6. Dopo la prima sincronizzazione riuscita puoi selezionare **Sincronizzazione automatica ai checkpoint**: ogni outline, scena con review, consolidamento o revisione genera una richiesta in IndexedDB, inviata a GitHub mentre la pagina resta aperta. Se una repository è pubblica serve consenso esplicito aggiuntivo.
-7. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner. **Dalla 0.14.0** puoi evitare tutto questo accedendo con Google o Microsoft: PAT, endpoint e chiavi arrivano dal vault cloud e i libri compaiono in **Libreria → Dagli altri tuoi dispositivi** ([guida](cloud-profile-sync.md)).
+7. Su un nuovo dispositivo salva un PAT autorizzato, cerca le repository e scegli **Apri o importa** sul libro trovato. L'importazione non cancella nessun libro preesistente. Configura endpoint e modelli AI prima di riprendere il runner. **Dalla 0.14.0** puoi evitare di reinserire le credenziali accedendo con Google o Microsoft: arrivano dal vault cloud e i libri compaiono in **Libreria → Dagli altri tuoi dispositivi** ([guida](cloud-profile-sync.md)).
+
+### PAT visibile e un altro libro — 0.17.0
+
+Il PAT salvato resta nella pagina del libro: **Mostra PAT** lo rivela, **Nascondi PAT** lo copre. Al cambio libro o ricaricamento torna mascherato. È un segreto: non mostrarlo durante condivisioni dello schermo. È il PAT del profilo, condiviso fra i libri: **sostituirlo cambia la credenziale anche per gli altri libri**. Deve avere accesso alle repository necessarie, non a tutto l'account. Il campo è nella pagina del libro ma il token non è salvato nel manoscritto.
+
+**Usa lo stesso PAT per un altro libro** apre il modulo per un nuovo libro con la credenziale già disponibile; da lì puoi anche scegliere di importare un libro trovato su GitHub. Un elenco non identifica una sola destinazione se il PAT ne vede più di una: serve un clic, non nomi o branch scritti a mano. I permessi mostrati da GitHub descrivono l'account, non certificano che il PAT abbia ogni permesso necessario. Una repository pubblica richiede conferma esplicita.
+
+Su una repository senza rami, al collegamento si crea solo `.bookwriter/initialization.json`, contenuto tecnico fisso, senza prosa o ID del libro. Se la risposta si perde, il collegamento non viene dichiarato riuscito: premi di nuovo dopo aver verificato lo stato. Non si ritenta né si sovrascrive il file alla cieca. I successivi push restano soggetti ai gate editoriali. [ADR 0156](../ADR/0156-guided-github-setup-and-lease-diagnostics.md).
+
+### «Lease» non è una fase del libro
+
+È il blocco che evita due scritture AI contemporanee. Il vecchio messaggio «Lease aggiornato da un altro browser» **non dimostrava** che ci fosse un altro browser: anche altri rifiuti HTTP 409/422 venivano tradotti così. La 0.17.0 riporta l'operazione e il codice HTTP. In Archivio, **Verifica blocco GitHub** legge di nuovo lo stato senza forzarlo. Controlla PAT Contents read/write, repository inizializzata e regole GitHub che permettano i rami `bookwriter-lock/`. Un errore di rete o permessi non significa «libro libero». Non cancellare il ramo e non recuperare un blocco ancora attivo.
+
+Se il ref è stato salvato e si perde solo la risposta, l'acquisizione può essere confermata rileggendo il commit esatto e la stessa sessione ancora attiva: nessun secondo POST/PATCH. Se manca questa prova, l'autopilot non parte. Un blocco lasciato da una pagina chiusa scade dopo due minuti e richiede un ulteriore minuto prima del recupero manuale. Non si ricostruisce retroattivamente la causa del vecchio messaggio.
 
 ## Lease di scrittura AI tra dispositivi (v0.5.0)
 

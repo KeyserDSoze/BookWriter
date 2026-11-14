@@ -30,6 +30,8 @@ function githubServer(resetHeader:()=>string|null=()=>
   );
   const calls: Array<{ method: string; path: string; body: unknown; token: string }> = [];
   let patchFailure: "none" | "http409" | "network_before" | "network_after" = "none";
+  let createFailure: "none" | "http422" | "network_before" | "network_after" = "none";
+  let treeFailure = false;
   let counter = 1;
   const sha = () => (counter++).toString(16).padStart(40, "0");
   const filename = "/contents/.bookwriter/lease.json";
@@ -53,6 +55,7 @@ function githubServer(resetHeader:()=>string|null=()=>
       return commit ? reply({ tree: { sha: commit.tree } }) : reply({}, 404);
     }
     if (method === "POST" && path === "/git/trees") {
+      if (treeFailure) return reply({ message: TOKEN }, 422);
       const payload = body as { tree: Array<{ content?: string }> };
       const id = sha();
       trees.set(id, payload.tree[0]?.content ?? "");
@@ -68,7 +71,10 @@ function githubServer(resetHeader:()=>string|null=()=>
       const payload = body as { ref: string; sha: string };
       const key = payload.ref.replace("refs/heads/", "");
       if (lockRefs.has(key)) return reply({ message: "already exists" }, 422);
+      if (createFailure === "http422") return reply({ message: TOKEN }, 422);
+      if (createFailure === "network_before") throw new TypeError(TOKEN);
       lockRefs.set(key, payload.sha);
+      if (createFailure === "network_after") throw new TypeError(TOKEN);
       return reply({ object: { sha: payload.sha } }, 201);
     }
     if (method === "PATCH" && path.startsWith("/git/refs/heads/")) {
@@ -100,6 +106,8 @@ function githubServer(resetHeader:()=>string|null=()=>
     failNextPatch(mode: "http409" | "network_before" | "network_after") {
       patchFailure = mode;
     },
+    failCreate(mode: typeof createFailure) { createFailure = mode; },
+    failTree() { treeFailure = true; },
     expireLock(bookId: string) {
       const id = lockRefs.get("bookwriter-lock/" + bookId)!;
       const commit = commits.get(id)!;
@@ -117,6 +125,44 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks();vi.unstubAllGlobals(); });
 
 describe("Lease distribuito GitHub (branch fast-forward only)", () => {
+  it.each(["http422", "network_before"] as const)("acquisizione %s: non attribuisce a un altro browser una causa non verificata", async failure => {
+    const server = githubServer();
+    server.failCreate(failure);
+    const bookId = crypto.randomUUID();
+    const error = await acquireWriterLease(remote, bookId, crypto.randomUUID()).catch(error => error as Error);
+    expect(error).toBeInstanceOf(RemoteWriterLost);
+    if (!(error instanceof Error)) throw new Error("L'acquisizione doveva fallire.");
+    expect(error.message).not.toContain("aggiornato da un altro browser");
+    expect(error.message).not.toContain(TOKEN);
+    if (failure === "http422") {
+      expect(error.message).toContain("creazione del ramo");
+      expect(error.message).toContain("HTTP 422");
+      expect(error.message).toContain("regole GitHub");
+    }
+    expect(await inspectWriterLease(remote, bookId)).toBeNull();
+    expect(server.calls.filter(call => call.method === "POST" && call.path === "/git/refs")).toHaveLength(1);
+    expect(server.calls.filter(call => call.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("conferma l'acquisizione se il POST è riuscito ma la risposta si perde: nessun secondo POST", async () => {
+    const server = githubServer();
+    server.failCreate("network_after");
+    const bookId = crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+    const acquired = await acquireWriterLease(remote, bookId, sessionId);
+    expect(acquired.sessionId).toBe(sessionId);
+    expect((await inspectWriterLease(remote, bookId))?.headSha).toBe(acquired.headSha);
+    expect(server.calls.filter(call => call.method === "POST" && call.path === "/git/refs")).toHaveLength(1);
+  });
+
+  it("un tree rifiutato non è un commit concorrente e non avvia un secondo tentativo", async () => {
+    const server = githubServer();
+    server.failTree();
+    await expect(acquireWriterLease(remote, crypto.randomUUID(), crypto.randomUUID()))
+      .rejects.toThrow(/preparazione dei dati.*HTTP 422/);
+    expect(server.calls.filter(call => call.method !== "GET")).toHaveLength(1);
+  });
+
   it("impedisce due autopilot simultanei; rinnova e rilascia senza force push", async () => {
     const server = githubServer();
     const bookId = newBook("Una trama", "Il libro", "", "").id;

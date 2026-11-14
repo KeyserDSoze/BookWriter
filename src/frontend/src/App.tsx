@@ -24,10 +24,15 @@ import { adoptLegacyAiTraces, clearAiTraces, currentLiveAi, pruneAiTraces, subsc
 import { AiTraceSettings } from "./components/settings/AiTraceSettings";
 import { aiTracePolicy, describeAiTraceRetention } from "./domain/ai-trace-policy";
 import { confirmEditorialScene } from "./application/editorial-review";
-import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
+import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type GitHubRemote, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
+import { connectGitHubBook } from "./application/github-connect";
 import { recommendedReasoningPreset } from "./domain/reasoning-presets";
 import { fetchLmStudioReasoningCatalog } from "./infrastructure/lmstudio-models";
 import { bookProgress, describeNextAutopilotStep } from "./domain/autopilot-step";
+import { missingModelRoutes } from "./domain/model-routes";
+import { routeFor, TASK_KINDS } from "./domain/types";
+import { DEFAULT_AUTO_RETRIES } from "./application/auto-retry";
+import { enableFailedTaskRetries } from "./infrastructure/failed-task-retry";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
 import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
 import { getBook, listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
@@ -183,6 +188,15 @@ export default function App() {
   const runPromise = useRef<Promise<void> | null>(null);
   // "+ Nuovo libro" is an explicit choice: periodic refreshes must not undo it.
   const creatingNewBook = useRef(false);
+  const [newBookDestination, setNewBookDestination] = useState<GitHubRemote>();
+
+  function newBookWithPat(remote?: GitHubRemote) {
+    setNewBookDestination(remote);
+    creatingNewBook.current = true;
+    setSelectedId("");
+    setPage("dashboard");
+    setNotice("Nuovo libro: il PAT già salvato è disponibile, non occorre reinserirlo. Puoi anche importare un libro da GitHub.");
+  }
 
   const refresh = useCallback(async () => {
     const all = await listBooks();
@@ -328,16 +342,31 @@ export default function App() {
   const progressInfo = useMemo(() => current ? bookProgress(current) : undefined, [current]);
   const pendingFused = current?.editorialReviewSceneIds?.length ?? 0;
   const modelWarning = useMemo(() => {
-    const route = settings.defaultRoute;
-    const endpoint = settings.endpoints.find(e => e.id === route.endpointId);
-    if (!endpoint) return "Nessun endpoint AI predefinito: configuralo nelle Impostazioni prima di avviare.";
-    if (!route.modelId.trim()) return "Nessun modello predefinito: scegline uno nelle Impostazioni prima di avviare.";
-    try {
-      if (endpointAuthMode(endpoint.authMode, endpoint.baseUrl) === "api_key" && !endpoint.secret)
-        return "L'endpoint predefinito non ha una API key salvata: inseriscila nelle Impostazioni.";
-    } catch { return "L'endpoint predefinito non è valido: correggilo nelle Impostazioni."; }
+    if (!current) return undefined;
+    const missing = missingModelRoutes(settings, current);
+    if (missing.length) return "Modello o endpoint mancanti per: " + missing.map(kind => LABELS[kind]).join(", ") + ". Configurali nelle Impostazioni.";
+    for (const kind of TASK_KINDS) {
+      const route = routeFor(kind, settings, current);
+      const endpoint = settings.endpoints.find(e => e.id === route.endpointId)!;
+      try {
+        if (endpointAuthMode(endpoint.authMode, endpoint.baseUrl) === "api_key" && !endpoint.secret)
+          return `Manca una API key salvata per «${LABELS[kind]}»: controlla le Impostazioni.`;
+      } catch { return `L'endpoint per «${LABELS[kind]}» non è valido: correggilo nelle Impostazioni.`; }
+    }
     return undefined;
-  }, [settings]);
+  }, [settings, current]);
+
+  async function enableRetry(activity: Activity) {
+    if (!current || activity.bookId !== current.id) return;
+    if (!window.confirm("Attivare fino a due nuovi tentativi automatici per task sull'endpoint che ha fallito, anche negli altri libri? Ogni richiesta può essere addebitata. L'AI non riparte finché non premi Riprendi.")) return;
+    try {
+      const saved = await enableFailedTaskRetries(current.id, activity.id, DEFAULT_AUTO_RETRIES);
+      setSettings(previous => ({ ...previous, endpoints: previous.endpoints.map(endpoint => endpoint.id === activity.endpointId
+        ? { ...endpoint, autoRetry: true, autoRetryMax: DEFAULT_AUTO_RETRIES } : endpoint) }));
+      setSavedJson(JSON.stringify(saved));
+      setNotice("Tentativi automatici attivati. Premi Riprendi per continuare dal task fallito.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Impossibile attivare i tentativi automatici."); }
+  }
   useEffect(() => {
     // A scope that became unavailable (e.g. book completed) switches to a usable one.
     if (!current || !interventionScopeBlocker(current, interventionScope)) return;
@@ -349,9 +378,19 @@ export default function App() {
     const book = newBook(draft.brief, draft.title, draft.writingStyle, draft.audience, draft.options);
     try { await saveBook(book); }
     catch { setNotice("Impossibile salvare il libro in IndexedDB."); return false; }
+    let connectionError = "";
+    if (newBookDestination) {
+      try {
+        const consent = window.confirm(`Collegare il nuovo libro a ${newBookDestination.owner}/${newBookDestination.repository}? ` +
+          "Se la repository è PUBBLICA, autorizzi che una successiva sincronizzazione renda visibili testo, trama e segreti.");
+        if (consent) await connectGitHubBook(book.id, book.updatedAt, newBookDestination, true);
+        else connectionError = "Collegamento GitHub annullato.";
+      } catch (error) { connectionError = error instanceof Error ? error.message : "Collegamento GitHub non riuscito."; }
+    }
+    setNewBookDestination(undefined);
     creatingNewBook.current = false;
     await refresh(); setSelectedId(book.id);
-    setNotice("Libro creato in IndexedDB. Configura un modello e avvia l'autopilot.");
+    setNotice(connectionError ? "Libro creato sul dispositivo. " + connectionError : "Libro creato in IndexedDB. Configura un modello e avvia l'autopilot.");
     return true;
   }
   function startRunner(bookId: string) {
@@ -463,8 +502,12 @@ export default function App() {
     }
   }
 
-  async function persistSettings(next: AppSettings) {
-    await saveSettings(next); adoptSaved(next); setNotice("Impostazioni salvate in IndexedDB.");
+  async function persistSettings(next: AppSettings, isCurrent?: () => boolean) {
+    const previous = settingsRef.current;
+    const fence = () => settingsRef.current === previous && (!isCurrent || isCurrent());
+    await saveSettings(next, fence);
+    if (!fence()) throw new Error("Impostazioni cambiate durante il salvataggio: ricarica lo stato salvato.");
+    adoptSaved(next); setNotice("Impostazioni salvate in IndexedDB.");
   }
   /** Saves only these device preferences, never other unsaved edits of the form. */
   async function changeAiTracePreference(patch: Partial<Pick<AppSettings,
@@ -758,7 +801,7 @@ export default function App() {
       {page === "library" && <LibraryPage books={books} selectedId={selectedId} lastOpenedId={lastOpenedId}
         onOpen={id => { creatingNewBook.current = false; setSelectedId(id); setPage("dashboard"); }}
         onOpenSettings={id => { creatingNewBook.current = false; setSelectedId(id); setPage("bookSettings"); }}
-        onNew={() => { creatingNewBook.current = true; setSelectedId(""); setPage("dashboard"); }}
+        onNew={() => { setNewBookDestination(undefined); creatingNewBook.current = true; setSelectedId(""); setPage("dashboard"); }}
         cloud={cloudState.link ? {
           views: libraryView(cloudState.library, books, cloudState.device?.id ?? ""),
           connected: cloudState.phase === "connected", busy: cloudState.busy, hasPat: !!settings.githubToken,
@@ -775,12 +818,20 @@ export default function App() {
         : <Empty>Scegli un libro dalla Libreria per configurarne modelli e redazione.</Empty>)}
 
       {page === "dashboard" && <div className="space-y-4">
-        {ready && !current && <NewBookPanel onCreate={createProject}/>}
+        {ready && !current && <>
+          {settings.githubToken && <section className="panel space-y-2 p-4 text-sm" aria-label="GitHub per il nuovo libro">
+            <p>Il PAT GitHub è già salvato: sarà disponibile anche per questo libro.</p>
+            {newBookDestination && <p>Repository scelta: <b>{newBookDestination.owner}/{newBookDestination.repository}</b>.</p>}
+            <Button variant="outline" onClick={() => setPage("export")}>Importa invece un libro da GitHub</Button>
+          </section>}
+          <NewBookPanel onCreate={createProject}/>
+        </>}
         {current && <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
             <div className="order-1 min-w-0 xl:order-none">
               <AutopilotFocusPanel book={current} activities={activities} live={liveAi}
                 runningHere={runningHere}
+                settings={settings} onEnableRetry={enableRetry}
                 modelWarning={modelWarning} onOpenReader={() => setPage("reader")} onOpenSettings={() => setPage("settings")}/>
             </div>
             <div className="order-4 min-w-0 xl:order-none">
@@ -925,7 +976,7 @@ export default function App() {
       {page === "export" && <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <div className="lg:col-span-2">
           <GitHubSyncPanel book={current} settings={settings} onRefresh={refresh}
-            onSaveSettings={persistSettings} onSelectBook={setSelectedId}/>
+            onSaveSettings={persistSettings} onSelectBook={setSelectedId} onNewBook={newBookWithPat}/>
         </div>
         <div className="lg:col-span-2">
           <ConflictReviewPanel book={current} settings={settings} hasGitHubToken={!!settings.githubToken}

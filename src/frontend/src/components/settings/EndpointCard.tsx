@@ -140,7 +140,8 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
           <span>Ritenta da solo i task falliti, così l'autopilot può proseguire senza supervisione.
             {local ? " Endpoint locale senza chiave: i tentativi non hanno costo."
               : " Attenzione: su un provider con chiave ogni tentativo può essere fatturato, anche se fallisce; tra un tentativo e l'altro c'è una pausa crescente."}
-            {" "}Non ritenta errori di credenziali o configurazione, né oltre il budget AI.</span>
+            {" "}Non ritenta errori di credenziali o configurazione, né oltre il budget AI.
+            {" "}Se la risposta viene scartata per formato o citazioni, il nuovo tentativo riceve il motivo dello scarto.</span>
         </label>
         {retry.enabled && <label className="flex items-center gap-2 text-sm">Tentativi massimi per task
           <select className="field field-sm w-24" aria-label={`Tentativi massimi per ${endpoint.name}`} value={retry.max}

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cloud, Download, Github, LockKeyhole, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
-import { encryptLocal } from "../infrastructure/crypto";
+import { decryptLocal, encryptLocal } from "../infrastructure/crypto";
+import { GitHubConnectionPicker } from "./GitHubConnectionPicker";
 import { connectBookRemote, setBookAutoSync } from "../application/github-book-settings";
 import { pushManualGitHubBook } from "../application/manual-github-push";
 import { reconcileSuspendedManualPush } from "../application/manual-push-reconciliation";
@@ -21,9 +22,10 @@ import {
 interface Props {
   book?: BookProject;
   settings: AppSettings;
-  onSaveSettings: (next: AppSettings) => Promise<void>;
+  onSaveSettings: (next: AppSettings, isCurrent?: () => boolean) => Promise<void>;
   onRefresh: () => Promise<void>;
   onSelectBook: (bookId: string) => void;
+  onNewBook: (remote?: GitHubRemote) => void;
 }
 
 function InputField({ label, value, onChange, placeholder, type = "text" }: {
@@ -38,8 +40,17 @@ function InputField({ label, value, onChange, placeholder, type = "text" }: {
 }
 
 /** PAT never leaves IndexedDB except as Bearer token to api.github.com. */
-export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onSelectBook }: Props) {
+export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onSelectBook, onNewBook }: Props) {
   const [patDraft, setPatDraft] = useState("");
+  const [revealedPat, setRevealedPat] = useState<{ token: AppSettings["githubToken"]; bookId?: string; value: string }>();
+  const revealGeneration = useRef(0);
+  const revealContext = useRef({ token: settings.githubToken, bookId: book?.id });
+  revealContext.current = { token: settings.githubToken, bookId: book?.id };
+  const settingsSnapshot = useRef(settings);
+  settingsSnapshot.current = settings;
+  const patEditGeneration = useRef(0);
+  const [discoverRequest, setDiscoverRequest] = useState(0);
+  const [leaseRefresh, setLeaseRefresh] = useState(0);
   const [owner, setOwner] = useState("");
   const [repository, setRepository] = useState("");
   const [branch, setBranch] = useState("main");
@@ -54,12 +65,32 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   const [leaseCheckState, setLeaseCheckState] = useState<"checking" | "checked" | "error">("checking");
 
   useEffect(() => {
+    revealGeneration.current++;
+    patEditGeneration.current++;
+    setRevealedPat(undefined);
+    setPatDraft("");
+    return () => { revealGeneration.current++; patEditGeneration.current++; };
+  }, [book?.id, settings.githubToken]);
+
+  async function revealPat() {
+    if (revealedPat) { revealGeneration.current++; setRevealedPat(undefined); return; }
+    const token = settings.githubToken;
+    if (!token) return;
+    const ticket = ++revealGeneration.current;
+    try {
+      const value = await decryptLocal(token);
+      if (ticket === revealGeneration.current && revealContext.current.token === token && revealContext.current.bookId === book?.id)
+        setRevealedPat({ token, bookId: book?.id, value });
+    } catch { setMessage("Impossibile leggere il PAT salvato su questo dispositivo."); }
+  }
+
+  useEffect(() => {
     setOwner(book?.remote?.owner ?? "");
     setRepository(book?.remote?.repository ?? "");
     setBranch(book?.remote?.branch ?? "main");
     setInfo(null);
     setPublicConsent(false);
-  }, [book?.id]);
+  }, [book?.id, book?.remote?.owner, book?.remote?.repository, book?.remote?.branch]);
 
   useEffect(() => {
     let active = true;
@@ -101,10 +132,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
           setLeaseCheckError("");
           setLeaseCheckState("checked");
         }
-      }).catch(() => {
+      }).catch(error => {
         if (mounted && requestId === requestSequence) {
           setWriterLease(null);
-          setLeaseCheckError("Impossibile verificare il lock GitHub; non presumere che il libro sia libero.");
+          setLeaseCheckError("Impossibile verificare il lock GitHub; non presumere che il libro sia libero. " +
+            (error instanceof Error ? error.message : "Riprova la verifica prima di riprendere."));
           setLeaseCheckState("error");
         }
       });
@@ -112,7 +144,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     checkLease();
     const timer = setInterval(checkLease, 20_000);
     return () => { mounted = false; requestSequence++; clearInterval(timer); };
-  }, [book?.id, book?.remote?.branch, book?.remote?.repository, book?.remote?.owner, settings.githubToken]);
+  }, [book?.id, book?.remote?.branch, book?.remote?.repository, book?.remote?.owner, settings.githubToken, leaseRefresh]);
 
   async function recoverWriter() {
     return doWork(async () => {
@@ -144,9 +176,15 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   async function savePat(): Promise<void> {
     return doWork(async () => {
       if (patDraft.trim().length < 20) throw new Error("Inserisci un PAT GitHub fine-grained valido.");
+      const previous = settings;
+      const selectedBook = book?.id;
+      const ticket = patEditGeneration.current;
+      const isCurrent = () => settingsSnapshot.current === previous && selectedBook === revealContext.current.bookId && ticket === patEditGeneration.current;
       const encrypted = await encryptLocal(patDraft.trim());
-      await onSaveSettings({ ...settings, githubToken: encrypted });
+      if (!isCurrent()) throw new Error("Configurazione o PAT cambiati durante il salvataggio: ripeti l'operazione.");
+      await onSaveSettings({ ...settings, githubToken: encrypted }, isCurrent);
       setPatDraft("");
+      setDiscoverRequest(value => value + 1);
       return "PAT salvato cifrato nel browser. Non è stato inviato al repository del libro.";
     });
   }
@@ -198,7 +236,13 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     return doWork(async () => {
       if (!book) throw new Error("Nessun libro selezionato.");
       if (book.remote?.autoSync) throw new Error("Con autosync attivo, usa il controllo della coda invece della sincronizzazione manuale.");
-      const result = await pushManualGitHubBook(book.id, publicConsent);
+      let consent = publicConsent;
+      if (book.remote && !consent) {
+        const inspected = await inspectRepository(book.remote);
+        if (!inspected.private) consent = window.confirm("Repository PUBBLICA: autorizzi la pubblicazione del libro, della trama e dei segreti su GitHub?");
+        if (!inspected.private && !consent) return "Pubblicazione annullata.";
+      }
+      const result = await pushManualGitHubBook(book.id, consent);
       // The GitHub client has already confirmed book metadata and outbox
       // together: never acknowledge a potentially newer queue item here.
       setOutbox(await getOutbox(book.id));
@@ -265,7 +309,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         const inspected = await inspectRepository(book.remote);
         setInfo(inspected);
         if (!inspected.private && !allowPublicSync) {
-          if (!publicConsent) throw new Error("Repository pubblica: verifica e autorizza esplicitamente la sincronizzazione automatica dei contenuti.");
+          if (!publicConsent && !window.confirm("Repository PUBBLICA: autorizzi la sincronizzazione automatica del libro, della trama e dei segreti su GitHub?"))
+            return "Attivazione della sincronizzazione automatica annullata.";
           allowPublicSync = true;
         }
       }
@@ -300,9 +345,18 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
     manualIntent.branch !== connected.branch ||
     manualIntent.baseSha !== connected.lastSyncedCommit);
 
+  const patEditor = <>
+    <InputField type="password" label={settings.githubToken ? "Sostituisci PAT" : "PAT GitHub"}
+      placeholder="github_pat_..." value={patDraft} onChange={value => { patEditGeneration.current++; setPatDraft(value); }}/>
+    <div className="mt-3 flex flex-wrap gap-2">
+      <Button disabled={!patDraft.trim() || busy} onClick={() => void savePat()}>Salva PAT cifrato</Button>
+      {settings.githubToken && <Button variant="destructive" disabled={busy} onClick={() => void removePat()}>Rimuovi PAT locale</Button>}
+    </div>
+  </>;
+
   return <section className="panel min-w-0 p-4 sm:p-5">
     <h2 className="flex items-center gap-2 text-lg font-semibold"><Github size={20}/> GitHub — sincronizzazione del libro</h2>
-    <p className="muted mt-1 text-sm">Ogni libro usa una sua repository. Salvataggio Markdown leggibile + checkpoint JSON senza credenziali.</p>
+    <p className="muted mt-1 text-sm">Inserisci il PAT una volta: cerchiamo le repository e compiliamo il collegamento. Lo stesso PAT può servire più libri, ciascuno nella propria repository.</p>
     <div className="mt-4 space-y-4">
       <div className="rounded-lg border border-slate-300 p-3 dark:border-slate-700">
         <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><LockKeyhole size={16}/> PAT fine-grained</p>
@@ -310,18 +364,25 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
           {settings.githubToken ? "Configurato nel browser." : "Non configurato."}
           {" "}Crea un PAT con permesso Contents read/write limitato alle repository dei libri. Non usare un token con accesso globale.
         </p>
-        <InputField type="password" label={settings.githubToken ? "Sostituisci PAT" : "PAT GitHub"}
-          placeholder="github_pat_..." value={patDraft} onChange={setPatDraft}/>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button disabled={!patDraft.trim() || busy} onClick={() => void savePat()}>
-            Salva PAT cifrato
-          </Button>
-          {settings.githubToken && <Button variant="destructive" disabled={busy} onClick={() => void removePat()}>
-            Rimuovi PAT locale
-          </Button>}
-        </div>
-        <p className="muted mt-2 text-xs">Questo token è protetto da Web Crypto nello stesso browser, non è E2EE contro script malevoli. Non viene incluso negli ZIP e non viene recuperato automaticamente su un nuovo dispositivo.</p>
+        {settings.githubToken && <div className="mb-3 space-y-2">
+          <label className="block text-sm font-semibold">PAT salvato
+            <input className="field mt-1 font-mono" readOnly autoComplete="off" type="text"
+              value={revealedPat?.token === settings.githubToken && revealedPat.bookId === book?.id ? revealedPat.value : "••••••••••••••••"}/>
+          </label>
+          <Button variant="outline" disabled={busy} onClick={() => void revealPat()}>{revealedPat ? "Nascondi PAT" : "Mostra PAT"}</Button>
+          <p className="muted text-xs">Disponibile per tutti i libri su questo dispositivo. Mostralo solo se nessuno può leggere lo schermo.</p>
+        </div>}
+        {settings.githubToken ? <details>
+          <summary className="muted min-h-11 cursor-pointer py-3 text-sm">Sostituisci o rimuovi il PAT condiviso</summary>
+          <p className="mb-2 text-xs">La modifica riguarda tutti i libri che usano questo PAT.</p>
+          {patEditor}
+        </details> : patEditor}
+        <p className="muted mt-2 text-xs">Cifrato su questo dispositivo, mai nel libro o negli ZIP. Se attivi il profilo cloud, può seguirti nel vault Google/Microsoft. La cifratura locale non protegge da script malevoli.</p>
       </div>
+      <GitHubConnectionPicker book={book} token={settings.githubToken} request={discoverRequest}
+        onRefresh={onRefresh} onSelectBook={onSelectBook} onNewBook={onNewBook}/>
+      <details>
+      <summary className="muted min-h-11 cursor-pointer py-3 text-sm">Collegamento manuale (avanzato)</summary>
       <div className="grid gap-3 sm:grid-cols-2">
         <InputField label="Owner GitHub" value={owner} onChange={value => { setOwner(value); setInfo(null); setPublicConsent(false); }} placeholder="KeyserDSoze"/>
         <InputField label="Repository del libro" value={repository} onChange={value => { setRepository(value); setInfo(null); setPublicConsent(false); }} placeholder="romanzo-privato"/>
@@ -342,6 +403,10 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         <input type="checkbox" checked={publicConsent} onChange={e => setPublicConsent(e.target.checked)} className="mt-1"/>
         Autorizzo esplicitamente la pubblicazione di libro, trame e segreti su GitHub.
       </label>}
+      <Button variant="secondary" disabled={!settings.githubToken || busy} onClick={() => void importRemote()}>
+        <Download size={17}/> Importa un libro remoto
+      </Button>
+      </details>
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <p><b>Repository:</b> {connected.owner}/{connected.repository} · {connected.branch}</p>
         <p className="muted">Ultimo commit: {connected.lastSyncedCommit?.slice(0, 12) ?? "Mai sincronizzato"}</p>
@@ -360,6 +425,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <p className="font-semibold">Scrittura protetta tra dispositivi</p>
+        <Button variant="outline" size="sm" className="min-h-11" disabled={busy || leaseCheckState === "checking"}
+          onClick={() => setLeaseRefresh(value => value + 1)}>Verifica blocco GitHub</Button>
         {leaseCheckState === "checking" && <p role="status" className="muted mt-2">Verifica del lock GitHub in corso…</p>}
         {leaseCheckState === "checked" && !writerLease && <p className="muted mt-2">Nessun lock remoto attivo. L'autopilot ne acquisisce uno prima di chiamare i modelli AI.</p>}
         {leaseCheckState === "checked" && writerLease && <div className="mt-2 space-y-1">
@@ -373,7 +440,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
             </Button>}
         </div>}
         {leaseCheckState === "error" && leaseCheckError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">{leaseCheckError}</p>}
-        <p className="muted mt-2 text-xs">Ogni attività AI richiede un lease GitHub valido per i libri collegati. Il lock viene rinnovato finché la pagina scrive, e liberato al termine. In assenza di rete l'autopilot si arresta. La verifica dell'orologio GitHub è approssimativa: rileva solo scarti molto grandi tramite la finestra X-RateLimit-Reset; il takeover resta manuale con margine di sicurezza.</p>
+        <p className="muted mt-2 text-xs">È un blocco di scrittura, non una fase del libro. Evita che due dispositivi scrivano insieme. Un rifiuto GitHub non prova da solo che ci sia un altro browser attivo. Se la pagina si chiude, il blocco può restare attivo per due minuti; il recupero richiede un altro minuto di sicurezza e una conferma.</p>
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <label className="flex items-center gap-3">
@@ -399,9 +466,6 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       <div className="flex flex-wrap gap-2">
         <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync || !!book.editorialReviewSceneIds?.length || !!book.editorialCycle || book.chapters.some(ch => !ch.frozenAt && ch.scenes.some(s => s.status !== "planned"))}
           onClick={() => void push()}><Cloud size={17}/> Sincronizza su GitHub</Button>
-        <Button variant="secondary" disabled={!settings.githubToken || busy} onClick={() => void importRemote()}>
-          <Download size={17}/> Importa un libro remoto
-        </Button>
       </div>
       {message && <p role="status" className="rounded-lg border border-amber-500/40 p-3 text-sm">{message}</p>}
       <p className="muted text-xs">

@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("https://api.github.com/user/repos?**", route => route.fulfill({ json: [] }));
+});
+
 async function gotoArchive(page: Page) {
   const nav = page.getByRole("navigation", {
     name: test.info().project.name === "mobile-chromium" ? "Navigazione mobile" : "Navigazione principale",
@@ -81,6 +85,7 @@ test("due tab: collegamento stale e toggle autosync protetti da writer/outbox lo
     await gotoArchive(second);
 
     const configure = async (tab: Page) => {
+      await tab.getByText("Collegamento manuale (avanzato)", { exact: true }).click();
       await tab.getByRole("textbox", { name: "Owner GitHub" }).fill("sync-fence");
       await tab.getByRole("textbox", { name: "Repository del libro" }).fill("novel");
     };

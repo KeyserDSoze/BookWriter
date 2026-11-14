@@ -4,7 +4,9 @@ import type { Activity, BookProject } from "../domain/types";
 import { bookProgress, describeNextAutopilotStep } from "../domain/autopilot-step";
 import type { LiveAiTrace } from "../infrastructure/ai-observability";
 import { liveStageText } from "./LiveTaskStream";
+import { describeHeadline } from "../domain/live-progress";
 import { AiStreamText } from "./AiStreamText";
+import { LiveActionFeed } from "./LiveActionFeed";
 
 /** Small bottom-right card: which books the autopilot is working on and what the last task is.
  * The text arriving from the model is always shown here: no opt-in is needed to watch it. */
@@ -53,9 +55,10 @@ export function BackgroundActivityToast({ books, live, currentBookId, currentAct
     </button>
     </div>
     {!previewHidden&&<div className="min-w-0 space-y-2 border-t border-slate-300 px-3 py-2 dark:border-slate-700">
-      <p className="text-sm font-semibold [overflow-wrap:anywhere]">{first.taskTitle??first.step.headline}</p>
+      <p className="text-sm font-semibold [overflow-wrap:anywhere]">{first.taskTitle?describeHeadline(first.taskTitle):first.step.headline}</p>
       {active&&<>
         <p className="muted text-xs">{liveStageText(active)}</p>
+        <LiveActionFeed active={active} book={first.book} compact/>
         {(text||reasoning)&&<div role="region" aria-label="Anteprima ultime cinque righe">
           <p className="muted text-xs">{text?"Risposta in arrivo":"Reasoning del provider"} · provvisorio</p>
           <AiStreamText key={active.activityId+(text?":text":":reasoning")}

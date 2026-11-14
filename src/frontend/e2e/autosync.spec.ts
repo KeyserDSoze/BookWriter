@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("https://api.github.com/user/repos?**", route => route.fulfill({ json: [] }));
+});
+
 test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mobile", async ({ page }) => {
   const previous = "a".repeat(40);
   const tree = "b".repeat(40);
@@ -87,12 +91,13 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   await nav.getByRole("button", { name: "Archivio" }).click();
   await page.getByLabel("PAT GitHub").fill("github_pat_test_only_autosync_2026");
   await page.getByRole("button", { name: "Salva PAT cifrato" }).click();
+  await page.getByText("Collegamento manuale (avanzato)", { exact: true }).click();
   await page.getByRole("textbox", { name: "Owner GitHub" }).fill("sync-owner");
   await page.getByRole("textbox", { name: "Repository del libro" }).fill("book-archive");
   await page.getByRole("button", { name: "Verifica repository" }).click();
   await expect(page.getByText(/Repository privata verificata/)).toBeVisible();
   await page.getByRole("button", { name: "Collega questo libro" }).click();
-  await expect(page.getByText(/La verifica dell'orologio GitHub è approssimativa/)).toBeVisible();
+  await expect(page.getByText(/È un blocco di scrittura, non una fase del libro/)).toBeVisible();
   await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
   await expect.poll(() => commits).toBe(1);
   const toggle = page.getByRole("checkbox", { name: /Sincronizzazione automatica ai checkpoint/ });

@@ -17,6 +17,9 @@ input, select, textarea { outline-offset: 2px; }
 @media (max-width: 640px) { .field-sm { min-height: 44px; } }
 .field:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
 .muted { color: #64748b; }
+@keyframes live-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.live-card-in { animation: live-card-in .32s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .live-card-in { animation: none; } }
 .dark .muted { color: #9aa8b9; }
 .site-nav { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100dvh; }
 .sidebar { border-right: 1px solid #cbd5e1; padding: 1.25rem; position: sticky; top: 0; align-self: start; height: 100dvh; }

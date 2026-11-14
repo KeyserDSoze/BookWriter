@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("https://api.github.com/user/repos?**", route => route.fulfill({ json: [] }));
+});
+
 test("mobile/desktop: confronto GitHub, selezione consapevole e doppio backup locale", async ({ page }) => {
   let remoteBook: Record<string, unknown> | null = null;
   const HEAD = "b".repeat(40);
@@ -65,6 +69,7 @@ test("mobile/desktop: confronto GitHub, selezione consapevole e doppio backup lo
   await page.getByLabel("PAT GitHub").fill("github_pat_test_only_conflict_2026");
   await page.getByRole("button", { name: "Salva PAT cifrato" }).click();
   await expect(page.getByText(/PAT salvato cifrato nel browser/)).toBeVisible();
+  await page.getByText("Collegamento manuale (avanzato)", { exact: true }).click();
   await page.getByRole("textbox", { name: "Owner GitHub" }).fill("conflict-owner");
   await page.getByRole("textbox", { name: "Repository del libro" }).fill("book-one");
   await page.getByRole("button", { name: "Verifica repository" }).click();

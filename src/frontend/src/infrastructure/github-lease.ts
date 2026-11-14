@@ -88,12 +88,24 @@ function assertPlausibleClock(response:Response):void {
       local>reset+CLOCK_MARGIN_MS)
     throw new RemoteWriterLost("L'orologio del dispositivo non è compatibile con la finestra temporale GitHub. Correggi data e ora automatiche prima di riprendere.");
 }
-function responseError(status: number): Error {
+function operation(method: string, path: string): string {
+  if (method === "GET") return "lettura del blocco di scrittura";
+  if (path.endsWith("/git/trees")) return "preparazione dei dati del blocco di scrittura";
+  if (path.endsWith("/git/commits")) return "creazione del commit del blocco di scrittura";
+  if (method === "POST") return "creazione del ramo del blocco di scrittura";
+  return "modifica del ramo del blocco di scrittura";
+}
+
+function responseError(status: number, method: string, path: string): Error {
   if (status === 401) return new Error("PAT GitHub non valido (HTTP 401). Scrittura AI non avviata.");
   if (status === 403) return new Error("GitHub ha negato l'accesso al lease (HTTP 403). Verifica Contents: write.");
   if (status === 409 || status === 422)
-    return new RemoteWriterLost("Lease aggiornato da un altro browser: GitHub ha rifiutato il commit concorrente.");
+    return new RemoteWriterLost(`GitHub ha rifiutato la ${operation(method, path)} (HTTP ${status}). ` +
+      "Questo non dimostra che un altro browser stia scrivendo. Verifica in Archivio lo stato del blocco, " +
+      "che la repository sia inizializzata e che il PAT e le regole GitHub consentano di creare e aggiornare i rami bookwriter-lock/. Nessuna scrittura forzata.");
   if (status === 404) return new Error("Repository GitHub o branch non disponibile per il lease (HTTP 404).");
+  if (status >= 500)
+    return new RemoteWriterLost(`GitHub non ha confermato la ${operation(method, path)} (HTTP ${status}). Scrittura bloccata; verifica di nuovo lo stato in Archivio.`);
   return new Error("Verifica GitHub lease fallita (HTTP " + status + ").");
 }
 async function api<T>(secret: string, path: string,
@@ -127,7 +139,11 @@ async function api<T>(secret: string, path: string,
     assertPlausibleClock(response);
     return null;
   }
-  if (!response.ok) throw responseError(response.status);
+  if (!response.ok) {
+    // Never expose the remote error body (which may echo request data).
+    try { void response.body?.cancel().catch(() => undefined); } catch { /* best effort */ }
+    throw responseError(response.status, method, path);
+  }
   assertPlausibleClock(response);
   const raw = await response.text();
   if (raw.length > 20_000) throw new Error("Risposta GitHub lease troppo grande.");
@@ -259,15 +275,24 @@ export async function acquireWriterLease(
     acquiredAt: now, renewedAt: now, expiresAt: new Date(Date.now() + LEASE_TTL_MS).toISOString(),
   };
   const created = await writeLease(secret, remote, bookId, parent, next);
-  if (!oldSha) {
-    await api(secret, resource(remote, "/git/refs"), "POST", {
-      ref: "refs/heads/" + branch(bookId), sha: created,
-    });
-  } else {
-    await api(secret, patchPath(remote, bookId), "PATCH", { sha: created, force: false });
+  let writeError: unknown;
+  try {
+    if (!oldSha) {
+      await api(secret, resource(remote, "/git/refs"), "POST", {
+        ref: "refs/heads/" + branch(bookId), sha: created,
+      });
+    } else {
+      await api(secret, patchPath(remote, bookId), "PATCH", { sha: created, force: false });
+    }
+  } catch (error) {
+    // The ref may have been saved before the connection failed. Only a read
+    // of OUR EXACT commit can confirm acquisition; never issue a second write.
+    if (!(error instanceof RemoteWriterLost)) throw error;
+    writeError = error;
   }
   const latest = await getRef(secret, remote, bookId);
-  if (!latest) throw new RemoteWriterLost("Impossibile verificare il lock dopo l'acquisizione.");
+  if (latest !== created)
+    throw writeError ?? new RemoteWriterLost("Acquisizione del blocco GitHub non confermata: il ramo non punta al commit richiesto. Nessuna chiamata AI avviata.");
   const status = await leaseAt(secret, remote, bookId, latest);
   if (status.sessionId !== sessionId || !active(status))
     throw new RemoteWriterLost("Il lock è cambiato immediatamente dopo l'acquisizione.");
@@ -296,6 +321,7 @@ export async function renewWriterLease(current: WriterLeaseHandle): Promise<Writ
     expiresAt: new Date(Date.now() + LEASE_TTL_MS).toISOString(),
   };
   const commit = await writeLease(secret, current.remote, current.bookId, sha, updated);
+  let writeError: RemoteWriterLost | undefined;
   try {
     await api(secret, patchPath(current.remote, current.bookId), "PATCH", { sha: commit, force: false });
   } catch (error) {
@@ -303,6 +329,7 @@ export async function renewWriterLease(current: WriterLeaseHandle): Promise<Writ
     // 409/422 or a lost request must NOT silently renew the old active lease.
     // Read back the exact Git ref below; never retry or force-update it.
     if (!(error instanceof RemoteWriterLost)) throw error;
+    writeError = error;
   }
   // The previous owner/session alone is insufficient evidence of renewal:
   // GitHub may still point to the old, unextended lease or to another commit.
@@ -311,7 +338,8 @@ export async function renewWriterLease(current: WriterLeaseHandle): Promise<Writ
   const confirmed = await inspectWriterLease(current.remote, current.bookId);
   if (!confirmed || confirmed.headSha !== commit ||
       confirmed.sessionId !== current.sessionId || !active(confirmed))
-    throw new RemoteWriterLost("Rinnovo del lease GitHub non confermato: scrittura sospesa.");
+    throw new RemoteWriterLost("Rinnovo del lease GitHub non confermato: scrittura sospesa." +
+      (writeError ? " " + writeError.message : " Il ramo non punta al commit richiesto. Verifica lo stato del blocco in Archivio."));
   return handle(current.remote, confirmed);
 }
 

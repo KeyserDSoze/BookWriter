@@ -1,5 +1,24 @@
 # Changelog — BookWriter
 
+## 0.17.0 — 2026-11-14 — Collegamento GitHub guidato e errori comprensibili (ADR 0156–0157)
+
+- PAT salvato nella pagina del libro, Mostra/Nascondi, riuso con «Usa lo stesso PAT per un altro libro» e alternativa di importazione. Resta un PAT di profilo condiviso: sostituirlo riguarda anche gli altri libri, senza copiarlo nel manoscritto.
+- Repository e ramo rilevati: una destinazione scrivibile privata univoca si collega dopo il salvataggio, più destinazioni richiedono solo una scelta. Libro remoto proposto per import additivo; book.md estraneo non sovrascritto. Campi manuali spostati nelle opzioni avanzate. Nessun push implicito o consenso pubblico presunto.
+- Repository completamente vuote: un file tecnico neutro create-only inizializza il ramo al collegamento, con readback della HEAD, lock writer/outbox e CAS; nessun testo, titolo o ID libro. Nessun retry del PUT ambiguo.
+- Corretto il messaggio fuorviante «Lease aggiornato da un altro browser»: HTTP 409/422 indicano operazione e codice, non una causa non provata. Nuova verifica manuale del blocco; acquisizione con risposta persa riconosciuta solo sul commit esatto, senza secondo POST/PATCH. Nessun allentamento della protezione o recupero forzato.
+- Pannello errore: «Cosa significa», «Cosa fare» e attivazione confermata di due retry sull'endpoint del task fallito, senza avviare AI. Al retry automatico dello stesso task il modello riceve il motivo bounded dello scarto della risposta, non errori di rete o rapporti altrui. Errori Zod/JSON resi leggibili e avviso modello basato sulle route effettive, non sul solo default.
+- Limiti: GitHub e provider simulati nei test; non è determinabile retroattivamente la causa del vecchio messaggio. Permessi account nell'elenco non certificano tutti i permessi del PAT; scelte ambigue richiedono clic. Nessuna transazione distribuita o certezza che un retry riesca e non venga addebitato.
+
+## 0.16.0 — 2026-11-14 — Le azioni del modello, mostrate mentre le compie (ADR 0155)
+
+- **Non solo testo che scorre.** BookWriter legge la risposta **mentre arriva** e mostra cosa sta facendo il modello: se fa una revisione, vedi quale (ad esempio «Revisione «Coerenza e causalità» · rapporto 3 di 36»); ogni rilievo, decisione, capitolo, scena o voce di memoria che il modello ha **finito** di scrivere diventa una scheda leggibile, con gravità, motivo e dove (capitolo e scena).
+- **Le ultime due azioni, quella in corso e il testo.** Nel riquadro in basso a destra e in Dashboard/Attività: conteggi, le ultime due schede, l'azione che sta scrivendo adesso (con le ultime parole, tratteggiata) e, sotto, il testo che scorre come prima. Nella vista completa anche «Tutte le azioni fatte finora».
+- **Riconosce** rapporti dei revisori, giudizio del direttore, piano dei capitoli e delle scene, aggiornamenti di memoria, sinossi e analisi d'impatto; per i testi liberi mostra parole, paragrafi e sezioni con titolo. Una risposta di formato non riconosciuto mostra solo il testo che scorre.
+- **Solo lettura.** Una scheda non approva nulla: «rilievo» vuol dire che il modello l'ha scritto, non che sia valido; i controlli del canone restano gli stessi. Non si salva nulla, non parte nessuna chiamata, nessun consenso.
+- **Affidabilità.** Una scheda compare solo quando è completa e non cambia né sparisce più: lo verifica un test che taglia la risposta in ogni punto, per ogni tipo. Ha già trovato un errore reale del lettore (un numero come `0.5` tagliato a `0.` valeva `0`) e due di progetto.
+- **Limiti.** Se il modello scrive prima un lungo ragionamento non ci sono ancora schede; sul telefono il riquadro è più alto (si ripiega con «Riduci anteprima streaming»); l'identificativo del rilievo nelle decisioni del direttore è mostrato accorciato, non tradotto in categoria.
+- Guida: [richieste AI](ai-task-inspection.md).
+
 ## 0.15.0 — 2026-11-14 — Testo AI sempre visibile e conservazione delle conversazioni impostabile (ADR 0154)
 
 - **Il testo in arrivo si vede sempre.** Risposta e reasoning compaiono mentre arrivano, con le scritte su cosa sta facendo il modello, nella Dashboard, nel riquadro in basso a destra e in Attività: **nessun consenso da attivare**. Sparito l'invito «Abilita l'ispezione per vedere il testo», che non spiegava cosa fosse né dove si abilitasse.

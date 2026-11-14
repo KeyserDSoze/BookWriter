@@ -1,5 +1,27 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## Se il revisore cita una frase che non c'è — 0.17.0
+
+«Prova narrativa non presente letteralmente nel segmento esaminato» significa che il modello non ha copiato una citazione esatta dal segmento affidato al suo ruolo. Non è necessariamente un guasto di rete: il rapporto viene scartato, questo tentativo non modifica il libro, ma la chiamata può essere addebitata.
+
+Il pannello **Fermo per un errore** ora spiega **Cosa significa** e **Cosa fare**. **Attiva tentativi automatici** propone, con conferma, due nuovi tentativi per task sull'endpoint che ha fallito (anche negli altri libri). Attivare non riavvia il lavoro: premi **Riprendi**. Puoi modificare il massimo da 1 a 5 nelle opzioni avanzate dell'endpoint.
+
+Durante un retry automatico nella stessa sessione, se la risposta è stata scartata dal validatore il nuovo prompt riporta il motivo e chiede di rispettare formato e citazione letterale. Non si passano rapporti fra revisori e non si indeboliscono i gate. Errori di rete non diventano falsi errori di contenuto. Errori Zod/JSON hanno messaggi leggibili senza blocchi tecnici. Ogni tentativo può costare e può fallire di nuovo. Un default globale vuoto non produce più un avviso se ogni task ha già una route effettiva. [ADR 0157](../ADR/0157-explained-errors-and-corrective-retry.md).
+
+## Le azioni del modello, mentre le compie — 0.16.0
+
+Oltre al testo che scorre, ora vedi **cosa sta facendo**. Quasi tutte le risposte che decidono qualcosa sono un elenco di piccole azioni: BookWriter le legge **mentre arrivano** e, appena una è completa, la mostra come scheda. Compaiono, nel riquadro in basso a destra e in Dashboard/Attività:
+
+- **L'intestazione** in parole: per un revisore, ad esempio, «Revisione «Coerenza e causalità» · rapporto 3 di 36».
+- **I conteggi** (rilievi, di cui critici e maggiori; accettati e respinti; capitoli e scene; voci di memoria aggiornate).
+- **Le ultime due azioni completate**, come schede: un rilievo (gravità, categoria, motivo, capitolo e scena), una decisione del direttore (accetta o respinge, e perché), un capitolo o una scena del piano, una voce di memoria, una sinossi, una scena da rivedere.
+- **L'azione in corso**, tratteggiata, con le ultime parole che il modello sta scrivendo: «Sta scrivendo il rilievo 2 · motivo — «Contrad…»».
+- **Il testo che scorre**, sotto, come prima. Nella vista completa c'è anche **Tutte le azioni fatte finora (N)**.
+
+Per i testi liberi (brainstorming, validazione, scrittura) compaiono i conteggi di parole e paragrafi e, se ci sono, le sezioni con titolo; la prosa semplice non ha schede.
+
+Cosa **non** è: una scheda non approva niente. «Rilievo» significa che il modello ha scritto un rilievo, non che sia valido: citazioni, ancore e giudice restano i controlli. Non si salva nulla (è calcolato dal testo già in memoria), non parte nessuna chiamata, e se cancelli le conversazioni le schede ripartono da quello che arriva dopo. Se un modello risponde in un formato diverso da quello richiesto, vedi solo il testo che scorre. Sul telefono il riquadro è più alto: **Riduci anteprima streaming** lo ripiega. [ADR 0155](../ADR/0155-live-model-actions.md).
+
 ## Il testo si vede sempre; quanto restano le conversazioni lo decidi tu — 0.15.0
 
 **Non serve attivare niente per vedere cosa sta facendo il modello.** Il testo che arriva (risposta e reasoning, se il modello lo trasmette) compare mentre arriva: nella Dashboard, nel riquadro in basso a destra e in Attività, insieme alle scritte su cosa sta succedendo («il modello si sta caricando», «sta ragionando», «sta scrivendo: N caratteri»…). Il vecchio invito «Abilita l'ispezione per vedere il testo» non esiste più.

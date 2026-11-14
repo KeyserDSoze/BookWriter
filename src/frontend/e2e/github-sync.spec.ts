@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("https://api.github.com/user/repos?**", route => route.fulfill({ json: [] }));
+});
+
 test("collegamento GitHub usa un PAT locale e persiste tra reload", async ({ page }) => {
   await page.route("https://api.github.com/repos/demo-owner/book-one", async route => {
     await route.fulfill({
@@ -29,6 +33,7 @@ test("collegamento GitHub usa un PAT locale e persiste tra reload", async ({ pag
   await page.getByRole("button", { name: "Salva PAT cifrato" }).click();
   await expect(page.getByText(/PAT salvato cifrato nel browser/)).toBeVisible();
 
+  await page.getByText("Collegamento manuale (avanzato)", { exact: true }).click();
   await page.getByRole("textbox", { name: "Owner GitHub" }).fill("demo-owner");
   await page.getByRole("textbox", { name: "Repository del libro" }).fill("book-one");
   await page.getByRole("textbox", { name: "Branch" }).fill("main");

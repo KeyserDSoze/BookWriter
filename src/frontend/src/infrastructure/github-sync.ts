@@ -232,6 +232,24 @@ export async function readGitHubSnapshot(remote: GitHubRemote, signal?: AbortSig
   return snapshotAtRef(token, remote, ref, signal);
 }
 
+/** Read-only setup preview, pinned to one HEAD. Never returns manuscript or audit. */
+export async function inspectGitHubDestination(remote: GitHubRemote): Promise<
+  { kind: "available" | "foreign" } | { kind: "book"; bookId: string; title: string }
+> {
+  const target = validateRemote(remote);
+  const token = await tokenFromVault();
+  const head = await headSha(token, target);
+  const project = await readFile(token, target, ".bookwriter/project.json", head);
+  if (project !== null) {
+    const book = parseRemoteBook(project);
+    return { kind: "book", bookId: book.id, title: book.title };
+  }
+  const manifest = await readFile(token, target, ".bookwriter/manifest.json", head);
+  if (manifest !== null || await readFile(token, target, "book.md", head) !== null)
+    return { kind: "foreign" };
+  return { kind: "available" };
+}
+
 /** Read the common ancestor at a concrete SHA, never a mutable branch name. */
 export async function readGitHubSnapshotAt(
   remote: GitHubRemote, commitSha: string, signal?: AbortSignal,

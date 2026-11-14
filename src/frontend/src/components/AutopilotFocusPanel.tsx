@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { AlertTriangle, BookOpen, CheckCircle2, Circle, CircleDot, Loader2, PauseCircle, Settings2 } from "lucide-react";
-import type { Activity, BookProject } from "../domain/types";
+import type { Activity, AppSettings, BookProject } from "../domain/types";
+import { explainAutopilotError } from "../domain/autopilot-error";
+import { endpointAutoRetry } from "../application/auto-retry";
 import { PIPELINE_STAGES, bookProgress, describeNextAutopilotStep } from "../domain/autopilot-step";
 import { describeEta, estimateBookEta } from "../domain/book-eta";
 import type { LiveAiTrace } from "../infrastructure/ai-observability";
@@ -16,6 +18,8 @@ interface Props {
   modelWarning?: string;
   onOpenReader: () => void;
   onOpenSettings: () => void;
+  settings: AppSettings;
+  onEnableRetry: (activity: Activity) => Promise<void>;
 }
 
 function Meter({ label, value, total, text }: { label: string; value: number; total: number; text: string }) {
@@ -38,7 +42,7 @@ function RunningTask({ activity }: { activity: Activity }) {
 
 /** Read-only, plain-language view of what the autopilot is doing and what comes next. */
 export function AutopilotFocusPanel({
-  book, activities, live, runningHere, modelWarning, onOpenReader, onOpenSettings,
+  book, activities, live, runningHere, modelWarning, onOpenReader, onOpenSettings, settings, onEnableRetry,
 }: Props) {
   const step = useMemo(() => describeNextAutopilotStep(book), [book]);
   const progress = useMemo(() => bookProgress(book), [book]);
@@ -47,6 +51,10 @@ export function AutopilotFocusPanel({
   const runningActivity = running ? activities.find(a => a.status === "running") : undefined;
   const active = live?.bookId === book.id ? live : null;
   const lastFinished = activities.find(a => a.status !== "running" && !a.interventionId);
+  const help = book.status === "error" && book.previousError ? explainAutopilotError(book.previousError) : undefined;
+  const failed = activities.find(activity => activity.bookId === book.id && activity.aiRequested && activity.status === "failed");
+  const failedEndpoint = settings.endpoints.find(endpoint => endpoint.id === failed?.endpointId);
+  const retry = endpointAutoRetry(failedEndpoint);
   const stageIndex = PIPELINE_STAGES.findIndex(stage => stage.id === step.stage);
   const planReady = book.phase === "prose" && !!book.pauseAfterOutline && progress.scenes > 0 &&
     progress.writtenScenes === 0 && book.status === "paused";
@@ -111,7 +119,7 @@ export function AutopilotFocusPanel({
           {(runningActivity.appliedInterventionIds?.length ?? 0) > 0 &&
             <p className="font-semibold text-emerald-700 dark:text-emerald-300">Questo task sta usando le tue indicazioni.</p>}
         </div> : <p className="muted mt-2 text-xs">Preparazione del prossimo task…</p>}
-        {active && <LiveTaskStream active={active}/>}
+        {active && <LiveTaskStream active={active} book={book}/>}
       </> : <>
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
           {book.status === "error" || step.blocked ? <AlertTriangle size={15} aria-hidden="true"/> : <PauseCircle size={15} aria-hidden="true"/>}
@@ -125,6 +133,15 @@ export function AutopilotFocusPanel({
           Riprendi oppure chiedi modifiche con l'intervento «Rivedi anche il già scritto».</p>}
         {book.status === "error" && book.previousError && <p className="mt-2 break-words text-sm text-red-700 dark:text-red-300">
           {book.previousError}</p>}
+        {help && <section aria-label="Spiegazione dell'errore" className="mt-3 space-y-2 text-sm">
+          <p><b>Cosa significa:</b> {help.meaning}</p>
+          <p><b>Cosa fare:</b> {help.action}</p>
+          {help.retryMayHelp && failedEndpoint && failed && <>
+            {retry.enabled ? <p>Tentativi automatici attivi su «{failedEndpoint.name}»: massimo {retry.max} nuovi tentativi per task.</p>
+              : <Button variant="outline" onClick={() => void onEnableRetry(failed)}>Attiva tentativi automatici</Button>}
+            <p className="muted text-xs">Vale per l'endpoint «{failedEndpoint.name}», anche negli altri libri. Ogni tentativo può costare. Attivare non avvia l'AI: premi Riprendi quando vuoi.</p>
+          </>}
+        </section>}
         {book.status !== "error" && book.previousError && book.previousError !== step.blocked &&
           <p className="muted mt-2 break-words text-xs">Ultimo messaggio: {book.previousError}</p>}
         <p className="muted mt-2 text-xs">{book.status === "completed"
@@ -139,7 +156,7 @@ export function AutopilotFocusPanel({
           new Date(lastFinished.endedAt ?? lastFinished.createdAt).toLocaleString("it-IT")}</p>}
         {active && <details className="mt-2">
           <summary className="cursor-pointer text-xs font-semibold">Ultima richiesta al modello</summary>
-          <LiveTaskStream active={active}/>
+          <LiveTaskStream active={active} book={book}/>
         </details>}
       </>}
       {modelWarning && !running && book.status !== "completed" && <p role="note"

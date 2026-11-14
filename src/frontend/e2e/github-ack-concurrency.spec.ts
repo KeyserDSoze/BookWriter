@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("https://api.github.com/user/repos?**", route => route.fulfill({ json: [] }));
+});
+
 const PREVIOUS = "a".repeat(40);
 const COMMIT = "c".repeat(40);
 const BASE_TREE = "b".repeat(40);

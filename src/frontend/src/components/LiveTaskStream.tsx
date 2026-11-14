@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import type { LiveAiTrace } from "../infrastructure/ai-observability";
+import type { BookProject } from "../domain/types";
+import { describeHeadline } from "../domain/live-progress";
 import { AiStreamText } from "./AiStreamText";
+import { LiveActionFeed } from "./LiveActionFeed";
 
 /** Plain-language state of the in-flight provider request. */
 export function liveStageText(active: LiveAiTrace): string {
@@ -36,13 +39,14 @@ export function formatElapsed(seconds: number): string {
 /** Provisional, never canonical. Always shown: what the model sends is visible while it
  * arrives, with no setting to enable. How long it stays readable afterwards is a separate
  * choice (Impostazioni → «Richieste e risposte dell'AI»). */
-export function LiveTaskStream({ active }: { active: LiveAiTrace }) {
+export function LiveTaskStream({ active, book }: { active: LiveAiTrace; book?: Pick<BookProject, "chapters"> }) {
   const elapsed = useElapsedSeconds(active.startedAt, active.endedAt);
   const cleared = active.previewClearedAt !== undefined;
   return <div role="region" aria-label="Streaming task corrente"
     className="mt-3 space-y-2 rounded-lg border border-emerald-600/40 p-3">
-    <p className="font-semibold">{active.title}</p>
+    <p className="font-semibold">{describeHeadline(active.title)}</p>
     <p className="text-sm" aria-live="polite">{liveStageText(active)}</p>
+    <LiveActionFeed active={active} book={book} />
     {active.error && <p role="alert" className="text-sm text-red-500 dark:text-red-300">{active.error}</p>}
     {active.reasoningPreview && <details className="min-w-0 rounded-lg border border-slate-400/30 p-2" open>
       <summary className="cursor-pointer text-sm font-semibold">Reasoning trasmesso dal provider (provvisorio)</summary>

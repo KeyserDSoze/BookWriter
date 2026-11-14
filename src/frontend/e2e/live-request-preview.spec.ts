@@ -227,3 +227,63 @@ test("conservazione impostabile: tempo e numero di task, poi senza scadenza e Gi
   await section.screenshot({path:test.info().outputPath("conservazione-conversazioni.png")});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+test("mostra le azioni mentre il modello scrive: ultime due schede, quella in corso e il testo che scorre",async({page})=>{
+  test.setTimeout(60_000);
+  await prepare(page);
+  const toast=page.getByRole("complementary",{name:"Lavoro in background"});
+  const feed=toast.getByRole("region",{name:"Azioni del modello"});
+  const emit=(text:string)=>page.evaluate(piece=>(window as StreamProbe).emit(piece),text);
+
+  // The verdict is complete, the summary is still being typed.
+  await emit('{"verdict":"issues","summary":"Due problemi: un clich');
+  await expect(feed.getByLabel("Ultime azioni completate")).toContainText("Esito: ha trovato dei problemi");
+  await expect(feed.getByLabel("Azione in corso")).toContainText("Sta scrivendo la sintesi del rapporto");
+  await expect(feed.getByLabel("Azione in corso")).toContainText("Due problemi: un clich");
+
+  // The summary is complete; the first finding is half written: its text is shown as it arrives.
+  await emit('é e una svista.","findings":[{"sceneId":"scene:001:002","category":"Cliché","severity":"minor","evidence":"Il sole tramontava","reason":"Immagine abu');
+  const writing=feed.getByLabel("Azione in corso");
+  await expect(writing).toContainText("Sta scrivendo il rilievo 1 · motivo");
+  await expect(writing).toContainText("Minore");
+  await expect(writing).toContainText("Immagine abu");
+  await expect(feed.getByLabel("Ultime azioni completate").getByRole("listitem")).toHaveCount(2);
+
+  // Finding 1 is complete and finding 2 begins: only the LAST TWO completed actions stay as cards.
+  await emit('sata.","remediation":"Variare."},{"sceneId":"scene:001:003","category":"Cronologia","severity":"critical","evidence":"Alle tre","reason":"Contrad');
+  const cards=feed.getByLabel("Ultime azioni completate").getByRole("listitem");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0)).toContainText("Sintesi del revisore");
+  await expect(cards.nth(1)).toContainText("Cliché");
+  await expect(cards.nth(1)).toContainText("Immagine abusata");
+  await expect(feed.getByLabel("Esito: ha trovato dei problemi")).toHaveCount(0);
+  await expect(writing).toContainText("Sta scrivendo il rilievo 2");
+  await expect(writing).toContainText("Critico");
+  await expect(feed.getByLabel("Conteggi")).toContainText("1 Rilievo");
+
+  // The scrolling text is still there, with the raw reply.
+  await expect(toast.getByLabel("Ultime cinque righe ricevute")).toContainText("Contrad");
+  await toast.screenshot({path:test.info().outputPath("azioni-riquadro.png")});
+
+  // The rest of the reply: finding 2 and the memory note become cards, nothing is being written any more.
+  await emit('azione.","remediation":"Spostare l\'ora."}],"memoryNote":"Mara non sa della lettera."}');
+  await expect(cards.nth(0)).toContainText("Cronologia");
+  await expect(cards.nth(1)).toContainText("Nota per i prossimi segmenti");
+  await expect(feed.getByLabel("Azione in corso")).toHaveCount(0);
+  await expect(feed.getByLabel("Conteggi")).toContainText("2 Rilievi");
+  await expect(feed.getByLabel("Conteggi")).toContainText("1 critici");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+
+  // The dashboard shows the same actions in full, with the scene and every action so far.
+  // On a phone the floating card covers the page: reduce it first, as an author would.
+  await toast.getByRole("button",{name:"Riduci anteprima streaming"}).click();
+  const stream=page.getByRole("region",{name:"Streaming task corrente"}).first();
+  const full=stream.getByRole("region",{name:"Azioni del modello"});
+  await expect(full.getByLabel("Ultime azioni completate").getByRole("listitem").nth(0)).toContainText("capitolo 1 · scena 3");
+  await full.getByText(/Tutte le azioni fatte finora \(5\)/).click();
+  await expect(full.getByLabel("Tutte le azioni completate")).toContainText("Esito: ha trovato dei problemi");
+  await expect(full.getByLabel("Tutte le azioni completate").getByRole("listitem")).toHaveCount(5);
+  await stream.screenshot({path:test.info().outputPath("azioni-completo.png")});
+  await page.evaluate(()=>(window as StreamProbe).finish());
+  await expect(toast).toHaveCount(0);
+});
