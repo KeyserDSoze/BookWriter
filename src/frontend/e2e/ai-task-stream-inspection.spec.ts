@@ -49,7 +49,6 @@ test("SSE locale, reasoning opzionale, timeline per task e richieste solo con co
   await page.getByText("Opzioni avanzate").first().click();
   await page.getByRole("combobox",{name:"Streaming Chat Completions"}).selectOption("sse");
   await page.getByRole("combobox",{name:"Reasoning effort AI"}).selectOption("high");
-  await page.getByRole("checkbox",{name:/Ispezione locale richieste AI/}).check();
   await page.getByRole("button",{name:"Salva impostazioni"}).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await nav.getByRole("button",{name:"Dashboard"}).click();

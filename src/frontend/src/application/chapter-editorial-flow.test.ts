@@ -320,7 +320,7 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
       endpointId:"openai",modelId:"mock-budget-model"});
     await new AutopilotRunner().run(source.id,async()=>undefined);
     expect(modelCall).toHaveBeenCalledTimes(1);
-    expect(modelCall.mock.calls[0]?.[6]).toEqual({maxOutputTokens:8192});
+    expect(modelCall.mock.calls[0]?.[6]).toMatchObject({maxOutputTokens:8192});
     const blocked=await getBook(source.id);
     expect(blocked?.status).toBe("paused");
     expect(blocked?.editorialCycle?.reports).toHaveLength(1);

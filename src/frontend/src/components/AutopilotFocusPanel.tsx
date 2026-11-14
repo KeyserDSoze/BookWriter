@@ -11,7 +11,6 @@ interface Props {
   book: BookProject;
   activities: Activity[];
   live: LiveAiTrace | null;
-  inspectionEnabled: boolean;
   /** This browser tab owns the running autopilot of this book. */
   runningHere: boolean;
   modelWarning?: string;
@@ -39,7 +38,7 @@ function RunningTask({ activity }: { activity: Activity }) {
 
 /** Read-only, plain-language view of what the autopilot is doing and what comes next. */
 export function AutopilotFocusPanel({
-  book, activities, live, inspectionEnabled, runningHere, modelWarning, onOpenReader, onOpenSettings,
+  book, activities, live, runningHere, modelWarning, onOpenReader, onOpenSettings,
 }: Props) {
   const step = useMemo(() => describeNextAutopilotStep(book), [book]);
   const progress = useMemo(() => bookProgress(book), [book]);
@@ -112,7 +111,7 @@ export function AutopilotFocusPanel({
           {(runningActivity.appliedInterventionIds?.length ?? 0) > 0 &&
             <p className="font-semibold text-emerald-700 dark:text-emerald-300">Questo task sta usando le tue indicazioni.</p>}
         </div> : <p className="muted mt-2 text-xs">Preparazione del prossimo task…</p>}
-        {active && <LiveTaskStream active={active} inspectionEnabled={inspectionEnabled} onOpenInspection={onOpenSettings}/>}
+        {active && <LiveTaskStream active={active}/>}
       </> : <>
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
           {book.status === "error" || step.blocked ? <AlertTriangle size={15} aria-hidden="true"/> : <PauseCircle size={15} aria-hidden="true"/>}
@@ -140,7 +139,7 @@ export function AutopilotFocusPanel({
           new Date(lastFinished.endedAt ?? lastFinished.createdAt).toLocaleString("it-IT")}</p>}
         {active && <details className="mt-2">
           <summary className="cursor-pointer text-xs font-semibold">Ultima richiesta al modello</summary>
-          <LiveTaskStream active={active} inspectionEnabled={inspectionEnabled} onOpenInspection={onOpenSettings}/>
+          <LiveTaskStream active={active}/>
         </details>}
       </>}
       {modelWarning && !running && book.status !== "completed" && <p role="note"

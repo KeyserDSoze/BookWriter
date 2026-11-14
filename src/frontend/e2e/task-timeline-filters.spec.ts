@@ -804,8 +804,6 @@ test("traccia opt-in non rimane visibile cambiando libro",async({page})=>{
   const nav=page.getByRole("navigation",{
     name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale",
   });
-  await nav.getByRole("button",{name:"Impostazioni"}).click();
-  await page.getByRole("checkbox",{name:/Ispezione locale richieste AI/}).check();
   await nav.getByRole("button",{name:"Attività"}).click();
   const list=page.getByRole("list",{name:"Storico task"}).getByRole("listitem");
   await expect(list).toHaveCount(1);

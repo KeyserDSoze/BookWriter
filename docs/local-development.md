@@ -61,11 +61,11 @@ Vedi `docs/github-sync.md`. Serve una repository GitHub con un commit iniziale (
 
 In **Archivio**, salva il PAT, verifica repository e branch, collega il libro e premi **Sincronizza su GitHub** (primo commit manuale con autopilot in pausa). Successivamente puoi attivare **Sincronizzazione automatica ai checkpoint**. I progressi vengono accodati in IndexedDB e inviati mentre il tab rimane attivo. Il PAT e le API key non vengono committati.
 
-Per aprire da altro browser, inserisci manualmente il PAT autorizzato, configura il repository in Archivio e importa il libro. L'import rifiuta gli ID locali già presenti per prevenire sovrascritture.
+Per aprire da altro browser puoi inserire manualmente il PAT autorizzato, configurare il repository in Archivio e importare il libro; **dalla 0.14.0** basta accedere con Google o Microsoft ([guida](cloud-profile-sync.md)). L'import rifiuta gli ID locali già presenti per prevenire sovrascritture; un libro presente e senza modifiche locali si aggiorna con «Aggiorna da GitHub».
 
 ## Limiti e sviluppi in coda
 
-- Login Google/Microsoft e vault credenziali multi-dispositivo non ancora attivi; nessun login fittizio.
+- Login Google/Microsoft e vault credenziali: implementati nella 0.14.0 (richiedono le app registration: [guida STE-100](cloud-app-registration-ste100.md)). Provati con server finti, non con provider reali; GitHub App non supportata.
 - Autosync e lease GitHub per il runner AI sono implementati ma il fencing tra dispositivi non è transazionale perfetto. Il confronto dei conflitti è disponibile dalla PR #14, mentre diff parola-per-parola, merge automatico e ZIP remoti periodici restano da sviluppare.
 - Supporto a repository Narrarium preesistenti non gestite da BookWriter da sviluppare; ora si importa uno snapshot `.bookwriter/project.json`.
 - Manca l'applicazione rigorosa delle soglie di rivelazione dei segreti, ricerca fattuale verificata con fonti, copertine e impaginazione editoriale avanzata.

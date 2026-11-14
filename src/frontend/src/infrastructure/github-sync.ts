@@ -3,6 +3,11 @@ import type { Activity, BookProject, GitHubRemote, SyncOutboxItem } from "../dom
 import { projectBook } from "../domain/narrarium";
 import { sanitizeAuthorInterventions } from "../domain/author-interventions";
 import { sanitizeBookStart } from "../domain/book-start";
+import { aiTracePolicy } from "../domain/ai-trace-policy";
+import {
+  CONVERSATIONS_BUDGET_BYTES, CONVERSATIONS_MAX_FILES, isConversationPath, projectConversations,
+} from "../domain/conversation-export";
+import { collectKeptAiTraces } from "./ai-observability";
 import { decryptLocal } from "./crypto";
 import { getDb, getBook, listActivities, loadSettings } from "./db";
 import type { ManualPushIntent } from "./manual-push-intent";
@@ -247,6 +252,24 @@ export async function confirmGitHubHead(
     throw new RemoteConflict("La repository è cambiata durante il confronto. Ricarica le versioni e ripeti la scelta.");
 }
 
+/** Is `base` reachable from `head`? Walks the commit list of `head`, bounded to
+ * 1.000 commits, with light requests (the compare endpoint would also return
+ * every changed file with its patch, megabytes for a book). */
+export async function isGitHubAncestor(
+  remote: GitHubRemote, base: string, head: string, signal?: AbortSignal,
+): Promise<"ancestor" | "not_found" | "too_far"> {
+  if (!shaPattern.test(base) || !shaPattern.test(head)) throw new Error("SHA di confronto GitHub non valido.");
+  const token = await tokenFromVault();
+  for (let page = 1; page <= 10; page++) {
+    const commits = await request<Array<{ sha?: string }>>(
+      token, apiPath(remote, "/commits?sha=" + head + "&per_page=100&page=" + page), { signal });
+    if (!Array.isArray(commits)) throw new Error("GitHub ha restituito un elenco di commit non valido.");
+    if (commits.some(commit => commit.sha?.toLowerCase() === base.toLowerCase())) return "ancestor";
+    if (commits.length < 100) return "not_found";
+  }
+  return "too_far";
+}
+
 /** Restore only if the book ID does not exist locally. Never overwrite browser data. */
 export async function importGitHubBook(remote: GitHubRemote): Promise<BookProject> {
   const source = await readGitHubSnapshot(remote);
@@ -257,6 +280,11 @@ export async function importGitHubBook(remote: GitHubRemote): Promise<BookProjec
   if (existing) {
     await tx.done;
     throw new RemoteConflict("Questo libro è già presente in IndexedDB. Esporta un backup e risolvi il conflitto prima di importare.");
+  }
+  // Nothing runs here yet: a book saved as «running» by another device would look active.
+  if (source.book.status === "running") {
+    source.book.status = "paused";
+    source.book.previousError = "Importato da GitHub mentre era in esecuzione su un altro dispositivo: riprendi quando vuoi.";
   }
   source.book.remote = {
     ...validateRemote(remote),
@@ -544,6 +572,16 @@ export async function pushGitHubBook(
 
   const activities = await listActivities(bookId);
   const projection = projectBook(current, activities);
+  // Optional, separately consented copy of the kept AI conversations (newest first, bounded).
+  if (aiTracePolicy(await loadSettings()).sendToGitHub) {
+    const baseBytes = JSON.stringify(Object.entries(projection.files)
+      .map(([path, content]) => ({ path, mode: "100644", type: "blob", content }))).length;
+    const room = Math.max(0, Math.min(CONVERSATIONS_BUDGET_BYTES, MAX_BYTES - baseBytes - 256 * 1024));
+    const kept = await collectKeptAiTraces(bookId, room, CONVERSATIONS_MAX_FILES);
+    const conversations = projectConversations(bookId, kept.traces, kept.omitted, room);
+    Object.assign(projection.files, conversations.files);
+    projection.manifest.paths = [...new Set([...projection.manifest.paths, ...Object.keys(conversations.files)])].sort();
+  }
   // The operation marker allows a crash/retry to prove that the previous write succeeded.
   projection.files[".bookwriter/sync.json"] = JSON.stringify({
     operationId, sourceRevision: current.updatedAt, bookId,
@@ -554,7 +592,7 @@ export async function pushGitHubBook(
   const removed = previousPaths.filter(p =>
     !projection.files[p] &&
     (p === ".bookwriter/project.json" || p === ".bookwriter/activities.json" ||
-     p === ".bookwriter/manifest.json" || p.endsWith(".md")) &&
+     p === ".bookwriter/manifest.json" || p.endsWith(".md") || isConversationPath(p)) &&
     !p.includes("..") && !p.startsWith("/"),
   );
   const treeEntries: Array<{

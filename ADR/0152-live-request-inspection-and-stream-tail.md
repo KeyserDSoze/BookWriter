@@ -4,6 +4,7 @@
 - Data: 2026-11-14
 - Versione: 0.13.2
 - Integra ADR 0134, 0136 e 0138; non modifica i gate canonici.
+- **Aggiornamento (0.15.0): il punto 1 (consenso `inspectAiRequests`) è superato dall'[ADR 0154](0154-always-visible-ai-text-and-conversation-retention.md)**: il testo in arrivo si vede sempre; il consenso riguarda solo la conservazione.
 
 ## Contesto
 

@@ -4,6 +4,7 @@
 - Data: 2026-11-12
 - Issue: #156 adapter/trace, #157 dashboard task-first, #158 rewind futuro, #150 tool calling
 - Ambito: Chat Completions /v1/chat/completions, Activity, UI task, IndexedDB meta
+- **Aggiornamento (0.15.0): il punto 4 (consenso `inspectAiRequests`, tracce solo con consenso, mai su GitHub) è superato dall'[ADR 0154](0154-always-visible-ai-text-and-conversation-retention.md)**: salvataggio temporaneo di default, conservazione senza scadenza e scrittura su GitHub come scelte separate e facoltative.
 
 ## Contesto
 

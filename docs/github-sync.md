@@ -2,7 +2,7 @@
 
 ## Stato
 
-Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Il lease GitHub per l'autopilot è disponibile (best effort) e la PR #14 aggiunge il confronto visuale dei conflitti. Non sono ancora disponibili l'import di repository Narrarium generiche, il vault Google/Microsoft e gli ZIP automatici remoti.
+Disponibili il **primo commit manuale** e l'**autosync opzionale** dei checkpoint. Ogni libro ha la propria repository GitHub, con canon Markdown e snapshot JSON ripristinabile. Il lease GitHub per l'autopilot è disponibile (best effort) e la PR #14 aggiunge il confronto visuale dei conflitti. **Dalla 0.14.0** sono disponibili anche il vault Google/Microsoft per ritrovare PAT e chiavi su un nuovo PC, l'elenco dei libri nel cloud con «Scarica da GitHub» e l'aggiornamento fast-forward di un libro senza modifiche locali ([guida](cloud-profile-sync.md)). Non sono ancora disponibili l'import di repository Narrarium generiche e gli ZIP automatici remoti.
 
 ## DOI e sincronizzazione (v0.9.1)
 
@@ -20,7 +20,7 @@ Il dossier storico di ciascun capitolo viene salvato con il progetto locale e in
 4. Seleziona un libro locale, specifica owner, repository e branch; premi **Verifica repository** e **Collega questo libro**.
 5. Metti l'autopilot in pausa. Premi **Sincronizza su GitHub**. Vedrai il commit SHA e lo stato; il salvataggio contiene la prosa, la memoria narrativa e lo storico attività, ma nessuna API key o PAT.
 6. Dopo la prima sincronizzazione riuscita puoi selezionare **Sincronizzazione automatica ai checkpoint**: ogni outline, scena con review, consolidamento o revisione genera una richiesta in IndexedDB, inviata a GitHub mentre la pagina resta aperta. Se una repository è pubblica serve consenso esplicito aggiuntivo.
-7. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner.
+7. Su un nuovo dispositivo salva un PAT autorizzato, inserisci owner/repository/branch e premi **Importa un libro remoto**. L'importazione non cancella nessun libro preesistente. Configura nuovamente endpoint e modelli AI prima di riprendere il runner. **Dalla 0.14.0** puoi evitare tutto questo accedendo con Google o Microsoft: PAT, endpoint e chiavi arrivano dal vault cloud e i libri compaiono in **Libreria → Dagli altri tuoi dispositivi** ([guida](cloud-profile-sync.md)).
 
 ## Lease di scrittura AI tra dispositivi (v0.5.0)
 
@@ -99,10 +99,14 @@ Il JSON è necessario per recuperare senza perdita tutte le strutture del worksp
 - Il lease AI tra dispositivi è conservativo; serve ancora hardening del fencing transazionale e gestione delle modifiche manuali concorrenti.
 - Il recupero seleziona scene ed entità per versione e aggiorna la baseline locale; manca il diff testuale fine e la riconciliazione automatica.
 - ZIP snapshot periodici su GitHub, retenzione e bootstrap incrementale.
-- OAuth Google/Microsoft e vault portabile delle credenziali senza richiedere un PAT manuale a ogni browser.
+- ~~OAuth Google/Microsoft e vault portabile delle credenziali senza richiedere un PAT manuale a ogni browser.~~ Implementato nella 0.14.0 (ADR 0153). Resta fuori una **GitHub App**: da una pagina senza server non si può ottenere il suo token (supporto SPA di GitHub in pausa da agosto 2026).
 - Evoluzione del canon a schema Narrarium completo con metadata di scena e tracking dei segreti verificabile.
 
 Vedi `docs/sync.md`, `docs/security.md`, `ADR/0003-github-canon-sync.md`, `ADR/0005-github-manual-sync.md`.
+
+## v0.14.0 — aggiornare un libro da GitHub quando un altro PC ha pubblicato (ADR 0153)
+
+Prima l'import GitHub rifiutava un libro già presente e l'unica strada per ricevere i commit di un altro dispositivo era il confronto manuale per unità. Ora **Libreria → Aggiorna da GitHub** fa un vero *fast-forward* locale, solo quando è dimostrabilmente sicuro: libro identico all'ultimo stato sincronizzato, nessuna outbox, nessun push manuale sospeso, autopilot fermo e HEAD remoto discendente dall'ultimo commit sincronizzato (verificato leggendo la lista dei commit, fino a 1.000, senza scaricare le patch). Esegue sotto Web Lock writer+outbox, riconferma l'HEAD e ripete il controllo `updatedAt` nella transazione. Tiene destinazione e autosync del dispositivo, non cancella log locali, mette in pausa un libro lasciato «in esecuzione» altrove e **non fa mai push**. Ogni altro caso resta al confronto di Archivio. Anche l'import di un libro nuovo ora mette in pausa un libro salvato «in esecuzione» da un altro dispositivo. [ADR 0153](../ADR/0153-cloud-profile-sync-google-drive-onedrive.md).
 
 ## v0.11.42 — controllo conservativo dello scarto dell'orologio (ADR 0075)
 

@@ -1,6 +1,6 @@
 # ADR 0002 — Identità cloud e vault credenziali
 
-- **Stato**: Accettato con threat model esplicito
+- **Stato**: Accettato con threat model esplicito — **attuato nella 0.14.0** dall'[ADR 0153](0153-cloud-profile-sync-google-drive-onedrive.md) (impostazioni, vault ed elenco libri su Drive/OneDrive; modalità «Scelgo io»: passphrase o solo account).
 - **Data**: 2026-11-05
 
 ## Contesto

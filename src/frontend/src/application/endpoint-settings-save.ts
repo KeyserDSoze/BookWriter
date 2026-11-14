@@ -22,6 +22,28 @@ export class StaleEndpointSettingsSave extends Error {
   }
 }
 
+/** Validate every declared setting before any encryption, persistence or network use.
+ * Also applied to profiles read from the cloud, which are untrusted input. */
+export function verifyEndpointSettings(settings: AppSettings) {
+  assertModelCapabilitySettings(settings);
+  validateTaskReasoningOverrides(settings.taskReasoningEfforts);
+  return settings.endpoints.map(profile => {
+    const baseUrl = normalizeEndpoint(profile.baseUrl);
+    chatHeaderTimeoutSeconds(profile.headerTimeoutSeconds);
+    chatOutputTokenParameter(profile.outputTokenParameter);
+    chatReasoningEffort(profile.reasoningEffort);
+    chatStreamMode(profile.streamMode);
+    chatStreamTimeoutSeconds(profile.streamTimeoutSeconds);
+    if(lmStudioNativeProtocol(profile.apiProtocol)==="lmstudio_native"){
+      lmStudioNativeEndpoint(baseUrl);
+      if(profile.reasoningEffort!==undefined)
+        lmStudioNativeReasoning(chatReasoningEffort(profile.reasoningEffort));
+    }
+    const authMode = endpointAuthMode(profile.authMode, baseUrl);
+    return { profile, baseUrl, authMode };
+  });
+}
+
 /** Intra-tab optimistic fencing for explicit endpoint-settings Save.
  * React state is replaced immutably; compare exact object identity and
  * draft identity instead of persisting any plaintext-key fingerprint.
@@ -47,25 +69,9 @@ export class EndpointSettingsSaveCoordinator {
       if (!isCurrent()) throw new StaleEndpointSettingsSave(attempt !== this.latest);
     };
     try {
-      // Validate all declared model tags and defaults before encryption/IndexedDB.
-      assertModelCapabilitySettings(snapshot.settings);
-      validateTaskReasoningOverrides(snapshot.settings.taskReasoningEfforts);
-      // Validate all endpoint profiles before starting any encryption.
-      const verified = snapshot.settings.endpoints.map(profile => {
-        const baseUrl = normalizeEndpoint(profile.baseUrl);
-        chatHeaderTimeoutSeconds(profile.headerTimeoutSeconds);
-        chatOutputTokenParameter(profile.outputTokenParameter);
-        chatReasoningEffort(profile.reasoningEffort);
-        chatStreamMode(profile.streamMode);
-        chatStreamTimeoutSeconds(profile.streamTimeoutSeconds);
-        if(lmStudioNativeProtocol(profile.apiProtocol)==="lmstudio_native"){
-          lmStudioNativeEndpoint(baseUrl);
-          if(profile.reasoningEffort!==undefined)
-            lmStudioNativeReasoning(chatReasoningEffort(profile.reasoningEffort));
-        }
-        const authMode = endpointAuthMode(profile.authMode, baseUrl);
-        return { profile, baseUrl, authMode };
-      });
+      // Validate all declared model tags, defaults and endpoint profiles before
+      // starting any encryption.
+      const verified = verifyEndpointSettings(snapshot.settings);
       const endpoints = await Promise.all(verified.map(async ({ profile, baseUrl, authMode }) => {
         const draft = snapshot.keyDrafts[profile.id];
         return {

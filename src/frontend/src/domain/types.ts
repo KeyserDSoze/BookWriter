@@ -104,8 +104,16 @@ export interface AppSettings {
   /** Selected defaults for future adapters; Chat continues to use defaultRoute. */
   capabilityRoutes?: Partial<Record<AuxiliaryModelCapability, ModelRoute>>;
   aiPriceRates?: AiPriceRate[];
-  /** Author opt-in: retain sensitive prompts/replies in local IndexedDB meta. */
+  /** Legacy (≤0.13.x): the old opt-in to keep prompts/replies. Read only when
+   * keepAiConversations is absent; see aiTracePolicy. */
   inspectAiRequests?: boolean;
+  /** Keep every conversation (prompt + reply) until the author deletes it. Default off:
+   * conversations are temporary and pruned by aiTraceRetention. Device-only. */
+  keepAiConversations?: boolean;
+  /** Also write the kept conversations to the book's GitHub repository on push. Device-only. */
+  syncAiConversationsToGitHub?: boolean;
+  /** Temporary conversations: keep at most maxTasks, none older than maxMinutes. Device-only. */
+  aiTraceRetention?: { maxTasks: number; maxMinutes: number };
   theme: "dark" | "light" | "system";
 }
 export interface Scene {

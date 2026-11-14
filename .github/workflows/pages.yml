@@ -32,6 +32,11 @@ jobs:
         working-directory: src/frontend
         env:
           GITHUB_PAGES: "true"
+          # Public OAuth client identifiers (they appear in every sign-in URL). They are
+          # repository VARIABLES, never secrets, and no client secret exists for this app.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          VITE_MICROSOFT_CLIENT_ID: ${{ vars.MICROSOFT_CLIENT_ID }}
+          VITE_MICROSOFT_TENANT: ${{ vars.MICROSOFT_TENANT }}
         run: npm run build
       - name: Configure Pages
         uses: actions/configure-pages@v5

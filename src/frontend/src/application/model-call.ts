@@ -1,11 +1,11 @@
 import type { Activity, AppSettings, BookProject, EndpointProfile, TaskKind, TaskReasoning } from "../domain/types";
 import { callModel, type ModelAnswer } from "../infrastructure/ai";
-import { endpointStreamMode } from "../infrastructure/ai-stream";
 import type { AiStreamDelta } from "../infrastructure/ai-stream";
 import type { AiTransportStats, LmStudioPhase } from "../infrastructure/lmstudio-native";
 import { addAiDelta, aiInspectionGeneration, currentTaskAi, finishLiveAi, markAiHeader, markAiTransport, markNativePhase,
-  receiveAiResponse, saveAiTrace, startLiveAi,
+  pruneAiTraces, receiveAiResponse, saveAiTrace, startLiveAi,
 } from "../infrastructure/ai-observability";
+import { aiTracePolicy } from "../domain/ai-trace-policy";
 import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
 import { listActivities, saveActivity } from "../infrastructure/db";
 import { preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
@@ -30,8 +30,10 @@ export interface LaunchInput {
  * path and the parallel reviewers. The returned promise is NOT awaited here. */
 export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promise<ModelAnswer> }> {
   const { book, settings, started, guard, signal, assignment } = i;
+  const policy = aiTracePolicy(settings);
+  // «Delete everything» during the call must stop this request from saving anything.
   const inspectionGeneration=aiInspectionGeneration();
-  const inspectionCurrent=()=>settings.inspectAiRequests===true&&aiInspectionGeneration()===inspectionGeneration;
+  const inspectionCurrent=()=>aiInspectionGeneration()===inspectionGeneration;
   await guard.assertActive(); // Do not charge credits without verified ownership.
   const preflight = preflightBookAiBudget(
     book, settings, await listActivities(book.id), i.kind, i.systemPrompt, i.userPrompt, i.runId,
@@ -48,34 +50,28 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   // Persist the request attempt BEFORE network fetch: an interrupted browser
   // must not misrepresent a possibly billed call as a free operation.
   if (inspectionCurrent()) {
-    // Explicitly local, sensitive opt-in. Never stored in Activity
-    // or exported to ZIP, GitHub or sync.
+    // Local and sensitive: temporary by default (see aiTracePolicy). Never stored in
+    // Activity or ZIP. Best effort: a full disk must never stop a task.
     await saveAiTrace({
       activityId: started.id, bookId: book.id, createdAt: started.createdAt,
       endpointId: assignment.endpointId, modelId: assignment.modelId,
       systemPrompt: i.systemPrompt, userPrompt: i.userPrompt, truncated: false,
-    },inspectionCurrent);
+      kept: policy.keepForever,
+    },inspectionCurrent).catch(()=>undefined);
   }
   started.aiRequested = true;
   await saveActivity(started);
-  startLiveFor({...i,settings:{...settings,inspectAiRequests:inspectionCurrent()}},i.live);
-  const inspectStream = settings.inspectAiRequests === true ||
-    (i.configuredEndpoint !== undefined && endpointStreamMode(i.configuredEndpoint) === "sse") ||
-    i.configuredEndpoint?.apiProtocol === "lmstudio_native";
-  const provider = callModel(i.kind, i.systemPrompt, i.userPrompt, settings, book, signal,
-    preflight || inspectStream ? {
-      ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
-      ...(inspectStream ? {
-        onHeaders: () => markAiHeader(started.id),
-        onProgress: (delta: AiStreamDelta) => addAiDelta(started.id, delta),
-        onTransport: (stats: AiTransportStats) => markAiTransport(started.id, stats),
-        onPhase: (phase: LmStudioPhase) => markNativePhase(started.id, phase),
-      } : {}),
-    } : undefined);
+  startLiveFor(i,i.live);
+  const provider = callModel(i.kind, i.systemPrompt, i.userPrompt, settings, book, signal, {
+    ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
+    onHeaders: () => markAiHeader(started.id),
+    onProgress: (delta: AiStreamDelta) => addAiDelta(started.id, delta),
+    onTransport: (stats: AiTransportStats) => markAiTransport(started.id, stats),
+    onPhase: (phase: LmStudioPhase) => markNativePhase(started.id, phase),
+  });
   const retainReply=async(response?:string)=>{
     if(!inspectionCurrent())return;
     const request=currentTaskAi(book.id,started.id);
-    if(!request?.inspect)return; // Consent was disabled or traces cleared during the call.
     // A failed/cancelled request can still have a useful partial reply. Keep it
     // private, never in Activity.output, and never mask the provider error/usage.
     await saveAiTrace({activityId:started.id,bookId:book.id,createdAt:started.createdAt,
@@ -83,8 +79,11 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
       systemPrompt:i.systemPrompt,userPrompt:i.userPrompt,
       response:response??request?.textPreview,reasoning:request?.reasoningPreview,
       truncated:!!request&&(request.textCharacters>request.textPreview.length ||
-        request.reasoningCharacters>request.reasoningPreview.length),
-    },()=>inspectionCurrent()&&currentTaskAi(book.id,started.id)?.inspect===true).catch(()=>undefined);
+        request.reasoningCharacters>request.reasoningPreview.length)&&request.previewClearedAt===undefined,
+      kept:policy.keepForever,
+    },inspectionCurrent).catch(()=>undefined);
+    // Old temporary conversations go away as soon as a task is settled.
+    await pruneAiTraces(policy).catch(()=>undefined);
   };
   const promise=provider.then(async answer=>{
     receiveAiResponse(started.id,answer.text);
@@ -97,12 +96,11 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   return { promise };
 }
 
-export function startLiveFor(i: Pick<LaunchInput, "settings" | "started" | "title" | "assignment" |
+export function startLiveFor(i: Pick<LaunchInput, "started" | "title" | "assignment" |
   "requestedEffort" | "configuredEndpoint" | "book">,foreground=true): void {
   startLiveAi({
     activityId: i.started.id, bookId: i.book.id, title: i.title,
     endpointId: i.assignment.endpointId, modelId: i.assignment.modelId,
-    inspect: i.settings.inspectAiRequests === true,
     ...(i.requestedEffort === undefined ? {} : { requestedReasoning: i.requestedEffort }),
     streamDeadlineSeconds: i.configuredEndpoint?.streamTimeoutSeconds ?? 600,
   },foreground);

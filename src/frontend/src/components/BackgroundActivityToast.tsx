@@ -6,13 +6,11 @@ import type { LiveAiTrace } from "../infrastructure/ai-observability";
 import { liveStageText } from "./LiveTaskStream";
 import { AiStreamText } from "./AiStreamText";
 
-/** Small bottom-right card: which books the autopilot is working on and what the last task is. */
-export function BackgroundActivityToast({ books, live, currentBookId, currentActivities, onOpen,
-  inspectionEnabled, onOpenInspection }: {
+/** Small bottom-right card: which books the autopilot is working on and what the last task is.
+ * The text arriving from the model is always shown here: no opt-in is needed to watch it. */
+export function BackgroundActivityToast({ books, live, currentBookId, currentActivities, onOpen }: {
   books: BookProject[]; live: LiveAiTrace | null; currentBookId: string; currentActivities: Activity[];
   onOpen: (bookId: string, activityId?: string) => void;
-  inspectionEnabled:boolean;
-  onOpenInspection:()=>void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewHidden,setPreviewHidden]=useState(false);
@@ -32,9 +30,8 @@ export function BackgroundActivityToast({ books, live, currentBookId, currentAct
   });
   const first = rows[0]!;
   const active=first.liveHere;
-  const showText=inspectionEnabled&&active?.inspect;
-  const text=showText?(active.textTail||active.textPreview):"";
-  const reasoning=showText?(active.reasoningTail||active.reasoningPreview):"";
+  const text=active?(active.textTail||active.textPreview):"";
+  const reasoning=active?(active.reasoningTail||active.reasoningPreview):"";
 
   return <aside role="complementary" aria-label="Lavoro in background"
     className="fixed bottom-3 right-3 z-50 max-h-[calc(100dvh-6rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-emerald-600/60 bg-white shadow-xl dark:bg-slate-900">
@@ -68,8 +65,8 @@ export function BackgroundActivityToast({ books, live, currentBookId, currentAct
           Output: {active.textCharacters.toLocaleString("it-IT")} caratteri · Reasoning: {active.reasoningCharacters.toLocaleString("it-IT")}
           <span className="block">{active.transportEvents.toLocaleString("it-IT")} eventi · {active.transportBytes.toLocaleString("it-IT")} byte</span>
         </p>
-        {!showText&&<button type="button" className="min-h-11 text-left text-xs underline"
-          onClick={onOpenInspection}>Abilita l'ispezione per vedere il testo dalle prossime richieste</button>}
+        {!text&&!reasoning&&active.previewClearedAt!==undefined&&<p className="muted text-xs">
+          Hai cancellato il testo salvato: da qui in poi il testo in arrivo ricompare.</p>}
       </>}
       <button type="button" className="min-h-11 text-left text-xs font-semibold text-emerald-700 dark:text-emerald-400"
         onClick={()=>onOpen(first.book.id,first.activityId)}>Ispeziona il task in Attività →</button>

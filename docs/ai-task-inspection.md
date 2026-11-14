@@ -1,14 +1,35 @@
 # Osservare e controllare le richieste AI in BookWriter — #156 / #157
 
+## Il testo si vede sempre; quanto restano le conversazioni lo decidi tu — 0.15.0
+
+**Non serve attivare niente per vedere cosa sta facendo il modello.** Il testo che arriva (risposta e reasoning, se il modello lo trasmette) compare mentre arriva: nella Dashboard, nel riquadro in basso a destra e in Attività, insieme alle scritte su cosa sta succedendo («il modello si sta caricando», «sta ragionando», «sta scrivendo: N caratteri»…). Il vecchio invito «Abilita l'ispezione per vedere il testo» non esiste più.
+
+Cosa si sceglie è **per quanto tempo restano consultabili richiesta e risposta di ogni task**, in **Impostazioni → Richieste e risposte dell'AI**:
+
+| Scelta | Cosa fa | Predefinito |
+| --- | --- | --- |
+| **Conservazione temporanea** | Si salvano nel browser e si cancellano da sole: restano gli **ultimi N task** e nulla di più vecchio del tempo scelto (vale il limite che scatta per primo). | 20 task, 10 giorni |
+| **Conserva senza scadenza** | Non si cancellano più da sole. Vale dai prossimi task. | spenta |
+| **Scrivi anche su GitHub, insieme al libro** | Le conversazioni conservate di quel libro vengono scritte nella sua repository a ogni sincronizzazione. Si attiva solo dopo la precedente, con conferma. | spenta |
+
+- Il tempo si sceglie da **30 minuti** a **90 giorni**; il numero di task da 1 a 500. Anche a mezz'ora il testo in arrivo si vede: la scadenza riguarda solo la rilettura dopo.
+- La pulizia parte all'avvio, ogni 5 minuti, a fine task e appena cambi l'impostazione. Non cancella mai un task ancora in corso né una conversazione conservata.
+- **Cancella tutte le conversazioni salvate in questo browser** elimina temporanee e conservate. Il testo della richiesta in corso, da quel momento in poi, ricompare.
+- Le preferenze valgono solo su questo dispositivo (non vanno nel profilo cloud né nello ZIP).
+- **Su GitHub finiscono testo del romanzo e segreti narrativi.** Usa solo repository private: cancellarle dopo non le toglie dalla cronologia di Git. Si scrivono le più recenti per prime, fino a 6 MiB per sincronizzazione (le altre sono dichiarate nell'indice `.bookwriter/conversations/index.json`). BookWriter **non le rilegge** da GitHub: servono a consultarle e archiviarle. Un push non parte da solo per le sole conversazioni nuove.
+- In **Attività → task → Ispeziona richiesta e risposta** vedi se quella conversazione è temporanea o conservata. Se è già stata cancellata dalla scadenza, il testo completo era comunque visibile mentre arrivava.
+
+[ADR 0154](../ADR/0154-always-visible-ai-text-and-conversation-retention.md). Le sezioni seguenti descrivono il comportamento fino alla 0.13.x: dove parlano di «Ispezione locale richieste AI» o di consenso, vale quanto scritto qui sopra.
+
 ## Testo in arrivo e anteprima compatta — 0.13.2
 
-Se aumentano gli eventi/byte e i caratteri di reasoning ma l'output è zero, il provider sta inviando reasoning, non ancora la risposta. I testi restano nascosti se **Ispezione locale richieste AI** è disattivata. Da Attività o dal riquadro in basso a destra puoi aprire direttamente le impostazioni: attiva il consenso **prima della prossima richiesta**. Non recupera testo di richieste partite senza consenso.
+Se aumentano gli eventi/byte e i caratteri di reasoning ma l'output è zero, il provider sta inviando reasoning, non ancora la risposta. Dalla 0.15.0 i testi si vedono sempre (vedi la sezione precedente): non c'è più nessun consenso da attivare per guardarli.
 
 In **Attività → task → Ispeziona richiesta e risposta** trovi system e user effettivamente inviati, reasoning se trasmesso e risposta che si compone senza dover ricaricare l'ispezione. La vista segue l'ultima scrittura; risalendo per leggere il passato l'autoscroll si ferma. **Segui il testo in arrivo** lo riattiva. Le tracce concluse restano consultabili con lo stesso pulsante, anche dopo reload: comprendono le risposte ricevute prima dei controlli e, quando disponibili, i frammenti di richieste fallite o interrotte. **Ricevuto non significa applicato**: controlla sempre l'esito del task. Un crash prima della conclusione può perdere i delta volatili.
 
 Il riquadro in basso a destra mostra titolo, fase reale, contatori e le **ultime cinque righe visuali**, con sfumatura superiore mentre il testo precedente esce dalla vista. Prima della risposta mostra soltanto il reasoning realmente trasmesso, etichettato separatamente. **Ispeziona il task in Attività** porta alla richiesta. Con **Riduci anteprima streaming** resta solo la testata: utile sul telefono per liberare i controlli sottostanti; **Mostra anteprima streaming** riapre il testo. Funziona nella scheda che esegue il runner, anche navigando su altre pagine/libri; un'altra scheda non riceve automaticamente il testo privato.
 
-Restano i limiti locali: **120.000 caratteri per prompt system/user e risposta, 20.000 per reasoning**. Le omissioni sono segnalate; la coda compatta (max 4.000 caratteri per canale) continua a scorrere anche oltre il limite della trascrizione. Disattivare l'ispezione nasconde e svuota subito i testi in memoria e impedisce nuovi salvataggi delle risposte già in corso; le tracce precedentemente salvate si eliminano con il pulsante separato. Nessuna traccia va in ZIP, GitHub, outbox o canone; nessuna nuova chiamata AI. [ADR 0152](../ADR/0152-live-request-inspection-and-stream-tail.md).
+Restano i limiti locali: **120.000 caratteri per prompt system/user e risposta, 20.000 per reasoning**. Le omissioni sono segnalate; la coda compatta (max 4.000 caratteri per canale) continua a scorrere anche oltre il limite della trascrizione. «Cancella tutte le conversazioni» svuota subito i testi in memoria e impedisce nuovi salvataggi delle risposte già in corso. Nessuna traccia va in ZIP, outbox o canone; vanno su GitHub solo con la scelta separata descritta sopra; nessuna nuova chiamata AI. [ADR 0152](../ADR/0152-live-request-inspection-and-stream-tail.md).
 
 ## Bozza di piano storico: scegliere prima/dopo e verificare la baseline — #174
 
@@ -129,13 +150,13 @@ In **Impostazioni → Endpoint OpenAI-compatible** seleziona il server `http://l
 - **Reasoning effort AI:** seleziona Automatico (omette il parametro), Low, Medium, High oppure Extra high (`xhigh`). Il parametro è `reasoning_effort` di Chat Completions e la compatibilità dipende dal modello/provider. Un modello può usarlo, ignorarlo o rifiutarlo. Non va confuso con il selettore di reasoning dell'interfaccia chat di LM Studio: quella interfaccia ha sessioni e impostazioni proprie.
 - Premi **Salva impostazioni**. La versione frontend numerata resta indipendente dal commit di funzione.
 
-In **Trasparenza e ispezione delle richieste AI**, attiva **Ispezione locale richieste AI** *prima* di avviare la generazione. Questa scelta è disattivata per default, perché i messaggi system e user possono includere testo del libro, fatti riservati, istruzioni e dati privati. Le credenziali non vengono registrate. È possibile cancellare tutte le tracce locali con il pulsante dedicato.
+Non serve nessuna opzione per vedere il testo in arrivo. Richiesta e risposta (system e user possono includere testo del libro, fatti riservati e istruzioni) si salvano per default in modo temporaneo: vedi **Impostazioni → Richieste e risposte dell'AI** per tenerle più a lungo, senza scadenza o anche su GitHub. Le credenziali non vengono mai registrate.
 
 ## 2. Vedere ciò che accade
 
 ### Vista task completa (issue #162)
 
-Dal Dashboard premi **Apri registro completo e filtri** (oppure usa la scheda **Attività**). Puoi cercare per titolo, motivo, prossima azione, fase, modello, endpoint e run, filtrare per stato o fase, ordinare dal più vecchio al più recente, e **Azzera filtri** per tornare alla lista completa. La ricerca non esamina il testo del romanzo, le risposte AI o i prompt riservati: per questi ultimi usa **Ispeziona richiesta e risposta** dopo il consenso locale esplicito.
+Dal Dashboard premi **Apri registro completo e filtri** (oppure usa la scheda **Attività**). Puoi cercare per titolo, motivo, prossima azione, fase, modello, endpoint e run, filtrare per stato o fase, ordinare dal più vecchio al più recente, e **Azzera filtri** per tornare alla lista completa. La ricerca non esamina il testo del romanzo, le risposte AI o i prompt riservati: per questi ultimi usa **Ispeziona richiesta e risposta** (finché la conversazione è ancora conservata).
 
 Ogni attività conclusa mostra la **durata rilevata** soltanto se i timestamp di avvio/fine sono disponibili e coerenti. La **stima costo task** usa esclusivamente i token input/output realmente riferiti dal provider e la tariffa inserita dall'autore **al momento della chiamata**. Se manca anche un solo elemento, compare “non determinabile”, non zero. La panoramica distingue i report con costo stimabile dai tentativi senza certezza: una richiesta fallita o interrotta può comunque avere un costo. Gli importi non sono fatture ufficiali né saldi disponibili.
 

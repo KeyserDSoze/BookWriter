@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Activity, BookProject } from "../domain/types";
 import { RewindSafetyBackupPanel } from "./RewindSafetyBackupPanel";
 import { TaskBookHistoryPanel } from "./TaskBookHistoryPanel";
@@ -27,7 +27,7 @@ import {
   type TimelineOrder, type TimelineStatus,
 } from "../domain/task-timeline";
 import {
-  loadAiTrace, type AiLocalTrace, type LiveAiTrace,
+  aiInspectionGeneration, loadAiTrace, subscribeLiveAi, type AiLocalTrace, type LiveAiTrace,
 } from "../infrastructure/ai-observability";
 import { LiveTaskStream } from "./LiveTaskStream";
 import { AiRequestTrace } from "./AiRequestTrace";
@@ -37,7 +37,6 @@ interface Props {
   bookId: string;
   activities: Activity[];
   live: LiveAiTrace | null;
-  inspectionEnabled: boolean;
   onPrepareRevision: (activity: Activity) => void;
   onForkCreated?: (forkBookId: string) => Promise<void> | void;
   compact?: boolean;
@@ -45,14 +44,18 @@ interface Props {
   /** Task focused through the URL, and the callback that mirrors the focus back into it. */
   focusId?: string;
   onFocusChange?: (id: string) => void;
-  onOpenInspection?:()=>void;
+  /** Plain-language retention of the stored conversations, and the way to change it. */
+  retentionText?: string;
+  onOpenTraceSettings?: () => void;
 }
 
 /** Task-first, read-only inspector. Provisional tokens are NEVER canonical. */
 export function AiTaskWorkspace({
-  book, bookId, activities, live, inspectionEnabled, onPrepareRevision, compact=false,
-  onOpenFull, onForkCreated, focusId, onFocusChange, onOpenInspection,
+  book, bookId, activities, live, onPrepareRevision, compact=false,
+  onOpenFull, onForkCreated, focusId, onFocusChange, retentionText, onOpenTraceSettings,
 }: Props) {
+  // Bumped when the author deletes the stored conversations: whatever was opened must go.
+  const traceGeneration=useSyncExternalStore(subscribeLiveAi,aiInspectionGeneration);
   const [chosen,setChosen]=useState("");
   const [trace,setTrace]=useState<AiLocalTrace|null>(null);
   const [structural,setStructural]=useState<TaskStructuralCheckpoint|null>(null);
@@ -146,7 +149,7 @@ export function AiTaskWorkspace({
       checkpointSequence.current.invalidate();
       proseSequence.current.invalidate();
     };
-  },[bookId,inspectionEnabled]);
+  },[bookId,traceGeneration]);
   const active=!compact&&live?.bookId===bookId?live:null;
   // Switching a focused task always revokes any in-flight IndexedDB inspection.
   const focusTask=(id:string)=>{
@@ -281,15 +284,13 @@ export function AiTaskWorkspace({
   const inspect=async(id:string)=>{
     const ticket=inspectionSequence.current.begin();
     setChosen(id);setTrace(null);setMessage("");
-    if(!inspectionEnabled) {
-      setMessage("Attiva l'ispezione locale in Impostazioni per registrare le prossime richieste. Le attività precedenti non contengono il prompt integrale.");
-      return;
-    }
     try{
       const saved=await loadAiTrace(bookId,id);
       if(!inspectionSequence.current.isCurrent(ticket))return;
       setTrace(saved);
-      if(!saved)setMessage("Nessuna richiesta integrale conservata per questo task. L'ispezione non è retroattiva.");
+      if(!saved)setMessage("Per questo task non c'è più una richiesta salvata: "+
+        (retentionText?`le conversazioni temporanee si tengono ${retentionText} e poi si cancellano da sole. `:"")+
+        "Il testo completo era visibile mentre arrivava; per tenerlo senza scadenza attiva la spunta in Impostazioni (vale dai prossimi task).");
     }catch{
       if(inspectionSequence.current.isCurrent(ticket))
         setMessage("Impossibile leggere il tracciato locale da IndexedDB.");
@@ -325,14 +326,12 @@ export function AiTaskWorkspace({
       con consumo o tariffa non determinabili. Non è una fattura né un saldo;
       anche gli errori possono generare addebiti.
     </p>}
-    {active&&(!focused||focused.id===active.activityId)&&<LiveTaskStream active={active}
-      inspectionEnabled={inspectionEnabled} onOpenInspection={onOpenInspection}/>}
-    {!compact&&!inspectionEnabled&&onOpenInspection&&!active&&<div className="mt-3 space-y-2 text-sm">
-      <p className="muted">Prompt, risposte in arrivo e reasoning possono contenere dati riservati.
-        Attiva l'ispezione locale prima delle prossime richieste per consultarli qui; non è retroattiva.</p>
-      <button type="button" className="min-h-11 rounded-lg border border-slate-400 px-3"
-        onClick={onOpenInspection}>Apri impostazioni d'ispezione</button>
-    </div>}
+    {active&&(!focused||focused.id===active.activityId)&&<LiveTaskStream active={active}/>}
+    {!compact&&retentionText&&<p className="muted mt-3 text-xs">
+      Il testo che arriva dal modello si vede sempre mentre arriva. Dopo, richiesta e risposta di ogni task restano consultabili qui
+      ({retentionText}).{" "}
+      {onOpenTraceSettings&&<button type="button" className="min-h-11 underline" onClick={onOpenTraceSettings}>
+        Cambia quanto tenerle</button>}</p>}
     {!compact&&<section aria-label="Consenso copie testuali per il rewind"
       className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3 text-sm">
       <p className="font-semibold">Copie locali della prosa canonica per task (opt-in)</p>
@@ -671,7 +670,7 @@ export function AiTaskWorkspace({
               </div>
               {chosen===item.id&&<div className="space-y-2 rounded border border-slate-400/30 p-2">
                 {message&&<p role="status" className="muted text-xs">{message}</p>}
-                {inspectionEnabled&&trace?.bookId===bookId&&trace.activityId===item.id&&
+                {trace?.bookId===bookId&&trace.activityId===item.id&&
                   <AiRequestTrace key={bookId+":"+item.id} trace={trace}/>}
               </div>}
               <p className="muted text-xs">La revisione usa il sistema di correzioni supervisionate del libro attuale: non ripristina automaticamente il checkpoint storico. Il vero rewind controllato è tracciato nella issue #158.</p>

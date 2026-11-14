@@ -1,5 +1,29 @@
 # Changelog — BookWriter
 
+## 0.15.0 — 2026-11-14 — Testo AI sempre visibile e conservazione delle conversazioni impostabile (ADR 0154)
+
+- **Il testo in arrivo si vede sempre.** Risposta e reasoning compaiono mentre arrivano, con le scritte su cosa sta facendo il modello, nella Dashboard, nel riquadro in basso a destra e in Attività: **nessun consenso da attivare**. Sparito l'invito «Abilita l'ispezione per vedere il testo», che non spiegava cosa fosse né dove si abilitasse.
+- **Conservazione temporanea di default.** Richiesta e risposta di ogni task si salvano nel browser e si cancellano da sole: **ultimi 20 task, non più vecchi di 10 giorni**. Impostabili in **Impostazioni → Richieste e risposte dell'AI**: da 1 a 500 task e da **30 minuti** a 90 giorni (vale il limite che scatta per primo). Anche a mezz'ora il testo in arrivo si vede: la scadenza riguarda la rilettura.
+- **Due scelte facoltative, spente di default:** «Conserva richieste e risposte senza scadenza» e, dopo questa, «Scrivi le conversazioni conservate anche su GitHub, insieme al libro» (con conferma). Su GitHub: `.bookwriter/conversations/<id>.json` + `index.json`, più recenti prime, fino a 6 MiB e 400 file per sincronizzazione, con le omesse dichiarate; elencate nel manifest e rimosse solo quando non più incluse. **Non** sono rilette in import.
+- **Compatibilità.** Chi aveva attivato l'ispezione nelle versioni precedenti mantiene le sue tracce come conservate; nulla passa a GitHub senza una nuova scelta.
+- **Robustezza.** Il salvataggio non può fermare un task (disco pieno compreso); la pulizia legge solo metadati, non tocca richieste in corso né conversazioni conservate e usa sempre le impostazioni salvate. «Cancella tutte le conversazioni» svuota anche il testo in memoria; quello nuovo ricompare.
+- **Correzioni.** Rimossa da Impostazioni la sezione obsoleta «Login cloud non ancora attivi in questa versione». Test del controller cloud resi deterministici (`idle()` al posto di attese fisse).
+- **Limiti.** 20 task sono pochi per una revisione di capitolo (più di 13 chiamate): per questo è impostabile. Le conversazioni su Git contengono testo del romanzo e segreti narrativi e restano nella cronologia anche se cancellate: usare solo repository private. Il push non parte da solo per le sole conversazioni nuove.
+- Guida: [richieste AI](ai-task-inspection.md).
+
+## 0.14.0 — 2026-11-14 — Profilo cloud su Google Drive e OneDrive, libreria multi-PC e aggiornamento Git (ADR 0153)
+
+- **Audit:** Google Drive e OneDrive **non erano implementati** (solo ADR 0002). Ora lo sono, con i vincoli reali delle piattaforme dichiarati nell'[ADR 0153](../ADR/0153-cloud-profile-sync-google-drive-onedrive.md).
+- **Account cloud** (Impostazioni): accesso con Google (Google Identity Services, scope `drive.appdata`) o Microsoft (codice + PKCE in finestra popup, scope `Files.ReadWrite.AppFolder`, tenant `common`). Nessun client secret, token d'accesso solo in memoria; il refresh token Microsoft (24 h) è conservato cifrato con la chiave del dispositivo.
+- **Cosa va nel cloud:** impostazioni AI (endpoint, modelli, router, thinking, tag, tariffe), **vault** con PAT GitHub e chiavi API, ed elenco dei libri con stato, avanzamento e repository. **Mai** testo, trama, memoria narrativa, segreti o log: il libro resta su **GitHub**. Tema e consenso all'ispezione restano per dispositivo.
+- **Vault a scelta:** con **passphrase** (PBKDF2-SHA256 600.000 iterazioni + AES-GCM-256, E2EE) oppure **solo account** (non E2EE, dichiarato). Chiave derivata ricordabile sul dispositivo; nessun recupero se si dimentica la passphrase.
+- **Conflitti:** il profilo ha una revisione; se un altro PC l'ha cambiato non si sovrascrive in silenzio (scelta esplicita). L'elenco libri si fonde per voce e non fa regredire un libro già avanzato altrove. File cloud trattati come input ostile.
+- **Libreria multi-PC:** «Dagli altri tuoi dispositivi» con **Scarica da GitHub** (senza digitare owner/repository) e **Aggiorna da GitHub**.
+- **Aggiorna da GitHub (fast-forward):** solo per un libro senza modifiche locali, senza outbox né push sospeso, con HEAD discendente dall'ultimo commit sincronizzato (verifica sulla lista commit, max 1.000). Non fa mai push e non cancella log locali.
+- **Limiti:** Google richiede un clic circa ogni ora (nessun refresh token senza server); Microsoft rinnova per 24 ore. Controllo di concorrenza cloud non atomico (versione + rilettura + Web Lock). Provato con server finti, non con provider reali; documentazione Microsoft ambigua sugli account aziendali. **GitHub App non supportata** (supporto SPA di GitHub in pausa da agosto 2026): resta il PAT.
+- **Correzioni:** il service worker non salva più qualunque navigazione come shell offline di `/`; l'import GitHub mette in pausa un libro salvato «in esecuzione» altrove.
+- **Guide:** [profilo cloud](cloud-profile-sync.md) e [creazione delle app registration (STE-100, inglese)](cloud-app-registration-ste100.md). Il workflow Pages legge i Client ID da **variabili** del repository (`GOOGLE_CLIENT_ID`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT`).
+
 ## 0.13.2 — 2026-11-14 — Ispezione live e ultime righe del task (ADR 0152)
 
 - **Attività:** l'ispezione della singola richiesta mostra prompt e risposta che si compone, con reasoning del provider separato; autoscroll sospendibile risalendo nel testo e pulsante «Segui il testo in arrivo».

@@ -17,8 +17,8 @@ Browser React/Vite (Pages)
     ├─ Web Crypto: vault locale, export ZIP cifrato opzionale
     ├─ API OpenAI-compatible (HTTPS+CORS): modelli multipli/endpoint
     ├─ GitHub REST: versioning canon, branches, SHAs e snapshot
-    ├─ Google Drive appDataFolder: bootstrap profilo + vault opzionale
-    └─ Microsoft Graph OneDrive approot: bootstrap alternativo
+    ├─ Google Drive appDataFolder: profilo (impostazioni + vault) ed elenco libri (0.14.0, ADR 0153)
+    └─ Microsoft Graph OneDrive approot: stesso profilo, account alternativo (0.14.0, ADR 0153)
 ```
 
 Nessun servizio server custom necessario per il primo rilascio. Il processo AI gira in una **pagina in primo piano**; non promettere elaborazioni durante chiusura browser o sospensione mobile. Background worker persistente sarebbe un prodotto/fase separati.

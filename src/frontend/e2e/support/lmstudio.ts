@@ -63,7 +63,7 @@ export function navigation(page: Page, projectName: string) {
   });
 }
 
-/** Configura l'endpoint reale: nessuna chiave, streaming SSE e ispezione per vedere il testo in tempo reale. */
+/** Configura l'endpoint reale: nessuna chiave, streaming SSE (il testo in arrivo si vede sempre, senza opzioni). */
 export async function configureLmStudio(page: Page, lm: LmStudioTarget, projectName: string,
   options: { streamTimeoutSeconds?: number } = {}): Promise<void> {
   const nav = navigation(page, projectName);
@@ -77,7 +77,6 @@ export async function configureLmStudio(page: Page, lm: LmStudioTarget, projectN
   await page.getByRole("combobox", { name: "Streaming Chat Completions" }).selectOption("sse");
   if (options.streamTimeoutSeconds)
     await page.getByRole("spinbutton", { name: "Tempo massimo senza dati dallo streaming (secondi)" }).fill(String(options.streamTimeoutSeconds));
-  await page.getByRole("checkbox", { name: /Ispezione locale richieste AI/ }).check();
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
   await expect(page.getByText("Impostazioni salvate in IndexedDB.")).toBeVisible();
   await nav.getByRole("button", { name: "Dashboard" }).click();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   BookOpen, BrainCircuit, CheckCircle2, Database,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
@@ -20,7 +20,9 @@ import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
 import { AutopilotFocusPanel } from "./components/AutopilotFocusPanel";
 import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSubmitMode } from "./components/AuthorInterventionPanel";
 import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
-import { clearAiTraces, currentLiveAi, disableLiveAiInspection, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
+import { adoptLegacyAiTraces, clearAiTraces, currentLiveAi, pruneAiTraces, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
+import { AiTraceSettings } from "./components/settings/AiTraceSettings";
+import { aiTracePolicy, describeAiTraceRetention } from "./domain/ai-trace-policy";
 import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
 import { recommendedReasoningPreset } from "./domain/reasoning-presets";
@@ -32,6 +34,11 @@ import { getBook, listActivities, listBooks, loadSettings, recoverInterruptedRun
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
 import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
+import { CloudSyncPanel } from "./components/CloudSyncPanel";
+import { CloudController } from "./application/cloud-controller";
+import { libraryView, type LibraryEntry } from "./domain/cloud-profile";
+import { pullBookFastForward } from "./application/book-pull";
+import { importGitHubBook, validateRemote } from "./infrastructure/github-sync";
 import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
@@ -106,6 +113,19 @@ export default function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [liveAi,setLiveAi]=useState<LiveAiTrace|null>(()=>currentLiveAi());
   useEffect(()=>subscribeLiveAi(()=>setLiveAi(currentLiveAi())),[]);
+  // Temporary conversations expire on their own: at start, every few minutes, and after each task.
+  // The policy is always read from the SAVED settings: at start the page still holds the defaults.
+  useEffect(()=>{
+    const prune=async()=>{
+      try{await pruneAiTraces(aiTracePolicy(await loadSettings()));}catch{/* best effort */}
+    };
+    void (async()=>{
+      try{await adoptLegacyAiTraces();}catch{/* best effort */}
+      await prune();
+    })();
+    const timer=window.setInterval(()=>void prune(),5*60_000);
+    return ()=>window.clearInterval(timer);
+  },[]);
   // The inventory fetch may finish between user events and React's batched render.
   // Keep the last synchronous update available to async completion checks.
   const [settings, renderSettings] = useState<AppSettings>(structuredClone(DEFAULT_SETTINGS));
@@ -139,6 +159,8 @@ export default function App() {
   }, [settingsDirty]);
   const latestModelInventoryRequest = useRef<Record<string, number>>({});
   const endpointSettingsSave = useRef(new EndpointSettingsSaveCoordinator()).current;
+  const cloud = useRef(new CloudController()).current;
+  const cloudState = useSyncExternalStore(cloud.subscribe, cloud.getSnapshot);
   const [intervention, setIntervention] = useState("");
   const [interventionScope, setInterventionScope] = useState<AuthorInterventionScope>("next_step");
   const [interventionBusy, setInterventionBusy] = useState(false);
@@ -174,6 +196,20 @@ export default function App() {
     });
   }, []);
   useEffect(() => { rememberLastBookId(selectedId); }, [selectedId]);
+  useEffect(() => {
+    // After the cloud profile was applied, React must show what IndexedDB now holds.
+    cloud.onSettingsApplied = async () => { adoptSaved(await loadSettings()); setKeyDrafts({}); };
+    void cloud.init();
+    // Google gives ~1 h access tokens and no refresh token: the tick only acts while the sign-in is valid.
+    const timer = window.setInterval(() => cloud.tick(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [cloud]);
+  useEffect(() => {
+    cloud.setBooks(books);
+    // Let a burst of checkpoints settle, then refresh the cloud index once.
+    const timer = window.setTimeout(() => cloud.tick(), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [cloud, books]);
   useEffect(() => {
     void (async () => {
       try {
@@ -260,6 +296,29 @@ export default function App() {
     setChapterId("");
     setFocusTaskId(activityId ?? "");
     setPage("activities");
+  }
+  /** First download of a book another device started: the text comes from GitHub, never from the cloud index. */
+  async function downloadCloudBook(entry: LibraryEntry) {
+    if (!entry.remote) return;
+    setNotice("Download di «" + entry.title + "» da GitHub in corso…");
+    try {
+      // The cloud index is untrusted input: validate owner, repository and branch first.
+      const imported = await importGitHubBook(validateRemote(entry.remote));
+      await refresh();
+      setNotice("«" + imported.title + "» scaricato da GitHub. Controlla modelli e chiavi AI prima di riprendere la scrittura.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Download da GitHub non riuscito."); }
+  }
+  async function pullCloudBook(bookId: string) {
+    setNotice("Aggiornamento da GitHub in corso…");
+    try {
+      const result = await pullBookFastForward(bookId);
+      await refresh();
+      setNotice(result.status === "up_to_date" ? "«" + result.title + "» è già aggiornato."
+        : "«" + result.title + "» aggiornato al commit " + result.commit.slice(0, 12) + ".");
+    } catch (error) {
+      await refresh();
+      setNotice(error instanceof Error ? error.message : "Aggiornamento da GitHub non riuscito.");
+    }
   }
   const runningActivity = current?.status === "running" ? activities.find(x => x.status === "running") : undefined;
   const runningHere = !!current && runnerBookId === current.id;
@@ -406,6 +465,18 @@ export default function App() {
 
   async function persistSettings(next: AppSettings) {
     await saveSettings(next); adoptSaved(next); setNotice("Impostazioni salvate in IndexedDB.");
+  }
+  /** Saves only these device preferences, never other unsaved edits of the form. */
+  async function changeAiTracePreference(patch: Partial<Pick<AppSettings,
+    "keepAiConversations" | "syncAiConversationsToGitHub" | "aiTraceRetention">>) {
+    setSettings(old => ({ ...old, ...patch }));
+    try {
+      const saved = { ...await loadSettings(), ...patch };
+      await saveSettings(saved);
+      setSavedJson(old => old ? JSON.stringify({ ...(JSON.parse(old) as AppSettings), ...patch }) : old);
+      await pruneAiTraces(aiTracePolicy(saved)); // a shorter retention applies at once
+      setNotice("Preferenza salvata su questo dispositivo.");
+    } catch { setNotice("Impossibile salvare la preferenza."); }
   }
   async function toggleTheme() {
     const theme: AppSettings["theme"] = settingsRef.current.theme === "dark" ? "light" : "dark";
@@ -687,7 +758,13 @@ export default function App() {
       {page === "library" && <LibraryPage books={books} selectedId={selectedId} lastOpenedId={lastOpenedId}
         onOpen={id => { creatingNewBook.current = false; setSelectedId(id); setPage("dashboard"); }}
         onOpenSettings={id => { creatingNewBook.current = false; setSelectedId(id); setPage("bookSettings"); }}
-        onNew={() => { creatingNewBook.current = true; setSelectedId(""); setPage("dashboard"); }} />}
+        onNew={() => { creatingNewBook.current = true; setSelectedId(""); setPage("dashboard"); }}
+        cloud={cloudState.link ? {
+          views: libraryView(cloudState.library, books, cloudState.device?.id ?? ""),
+          connected: cloudState.phase === "connected", busy: cloudState.busy, hasPat: !!settings.githubToken,
+        } : undefined}
+        onDownload={entry => void downloadCloudBook(entry)} onPull={id => void pullCloudBook(id)}
+        onForget={id => void cloud.removeBook(id)} onOpenCloud={() => setPage("settings")} />}
 
       {page === "bookSettings" && (current
         ? <BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
@@ -703,12 +780,12 @@ export default function App() {
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
             <div className="order-1 min-w-0 xl:order-none">
               <AutopilotFocusPanel book={current} activities={activities} live={liveAi}
-                inspectionEnabled={settings.inspectAiRequests===true} runningHere={runningHere}
+                runningHere={runningHere}
                 modelWarning={modelWarning} onOpenReader={() => setPage("reader")} onOpenSettings={() => setPage("settings")}/>
             </div>
             <div className="order-4 min-w-0 xl:order-none">
               <AiTaskWorkspace bookId={current.id} activities={activities}
-                live={liveAi} inspectionEnabled={settings.inspectAiRequests===true}
+                live={liveAi}
                 onPrepareRevision={prepareActivityRevision} onOpenFull={()=>setPage("activities")} compact/>
             </div>
           </div>
@@ -776,8 +853,8 @@ export default function App() {
       {page === "activities" && (current ?
         <AiTaskWorkspace key={current.id} book={current} bookId={current.id} activities={activities} live={liveAi}
           focusId={focusTaskId} onFocusChange={setFocusTaskId}
-          inspectionEnabled={settings.inspectAiRequests===true}
-          onOpenInspection={()=>setPage("settings")}
+          retentionText={describeAiTraceRetention(aiTracePolicy(settings))+(aiTracePolicy(settings).keepForever?", più quelle conservate senza scadenza":"")}
+          onOpenTraceSettings={()=>setPage("settings")}
           onPrepareRevision={prepareActivityRevision}
           onForkCreated={async(forkBookId)=>{
             await refresh();
@@ -899,6 +976,7 @@ export default function App() {
       {ready && page === "settings" && <div className="space-y-3">
         <SaveBar dirty={settingsDirty} savedAt={savedAt}
           onSave={() => void saveEndpointSettings()} onDiscard={() => void discardSettingsChanges()} />
+        <CloudSyncPanel controller={cloud} settingsDirty={settingsDirty} />
         <section className="panel min-w-0 space-y-3 p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -921,43 +999,22 @@ export default function App() {
         <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
         {current && <p className="muted text-xs">I modelli, il thinking, la redazione leggera e i revisori in parallelo di un singolo libro
           si impostano nella pagina del libro. <button type="button" className="underline" onClick={() => setPage("bookSettings")}>Apri Modelli e redazione di «{current.title}»</button></p>}
-        <Section title="Trasparenza e ispezione delle richieste AI" description="Le tracce contengono prompt, testi del romanzo e possibili segreti: restano solo nel database locale del browser, con il tuo consenso, mai nei ZIP o su GitHub.">
-          <label className="flex items-start gap-3 text-sm">
-            <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests === true}
-              onChange={e => {
-                const inspectAiRequests = e.target.checked;
-                if(!inspectAiRequests)disableLiveAiInspection();
-                // Controlled checkbox: update at once; persist only this preference, never other unsaved edits.
-                setSettings(old => ({ ...old, inspectAiRequests }));
-                void (async () => {
-                  try {
-                    await saveSettings({ ...await loadSettings(), inspectAiRequests });
-                    setSavedJson(old => old ? JSON.stringify({ ...(JSON.parse(old) as AppSettings), inspectAiRequests }) : old);
-                    setNotice("Preferenza d'ispezione salvata localmente.");
-                  } catch { setNotice("Impossibile salvare la preferenza d'ispezione."); }
-                })();
-              }} />
-            <span>Ispezione locale richieste AI: mostra e conserva i messaggi system/user e le risposte dei prossimi task. Disattivata per impostazione predefinita, non retroattiva.</span>
-          </label>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => void (async () => {
-              if (!window.confirm("Eliminare definitivamente tutte le richieste e risposte AI conservate localmente in questo browser?")) return;
-              try { const count = await clearAiTraces(); setNotice(`Eliminate ${count} tracce AI locali.`); }
-              catch { setNotice("Impossibile eliminare le tracce AI locali."); }
-            })()}>Cancella tutte le tracce AI locali</Button>
-            <span className="muted text-xs">Questa preferenza si salva subito. Lo streaming è un'anteprima non approvata; il reasoning compare solo se il modello lo trasmette.</span>
-          </div>
+        <Section title="Richieste e risposte dell'AI" description="Il testo in arrivo dal modello si vede sempre. Qui scegli per quanto tempo restano consultabili richiesta e risposta di ogni task: contengono prompt, testo del romanzo e possibili segreti.">
+          <AiTraceSettings settings={settings} onChange={patch => changeAiTracePreference(patch)}
+            onClear={async () => {
+              try { const count = await clearAiTraces(); setNotice(`Eliminate ${count} conversazioni AI salvate in questo browser.`); return count; }
+              catch { setNotice("Impossibile eliminare le conversazioni AI salvate."); return 0; }
+            }} />
         </Section>
-        <Section title="Google / Microsoft / GitHub" description="Login cloud non ancora attivi in questa versione.">
-          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Nessun login Google/Microsoft simulato. Il PAT GitHub si configura nell'Archivio e resta cifrato nel browser; sincronizzazione manuale, autosync e lease del writer sono lì.</p>
+        <Section title="GitHub" description="Il PAT GitHub si configura in Archivio; con l'account cloud qui sopra lo ritrovi su ogni PC.">
+          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Il PAT resta cifrato nel browser. Sincronizzazione manuale, autosync e lease del writer sono in Archivio.</p>
         </Section>
       </div>}
 
       <footer className="muted mt-10 flex flex-wrap items-center gap-2 text-xs"><BrainCircuit size={14} /> Autopilot nel browser aperto: nessuna attività garantita in background. <FileText size={14} /> Versione iniziale.</footer>
     </main>
     <BackgroundActivityToast books={books} live={liveAi} currentBookId={selectedId}
-      currentActivities={activities} onOpen={openWork}
-      inspectionEnabled={settings.inspectAiRequests===true} onOpenInspection={()=>setPage("settings")} />
+      currentActivities={activities} onOpen={openWork} />
 
 
   </div>;

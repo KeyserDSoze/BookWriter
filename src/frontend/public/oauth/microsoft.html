@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>BookWriter · accesso Microsoft</title>
+</head>
+<body>
+  <p>Accesso completato. Questa finestra si chiude da sola.</p>
+  <script>
+    // Hand the redirect query to the BookWriter tab that opened this window, then close.
+    // The tab only accepts it with the secret `state` it generated; nothing is stored here.
+    (function () {
+      var message = { type: "bookwriter-oauth", provider: "microsoft", search: window.location.search };
+      try { if (window.opener) window.opener.postMessage(message, window.location.origin); } catch (e) { /* opener may be cut off */ }
+      try {
+        var channel = new BroadcastChannel("bookwriter-oauth");
+        channel.postMessage(message);
+        setTimeout(function () { channel.close(); }, 500);
+      } catch (e) { /* BroadcastChannel unavailable */ }
+      try { window.history.replaceState(null, "", window.location.pathname); } catch (e) { /* ignore */ }
+      setTimeout(function () { window.close(); }, 300);
+    })();
+  </script>
+</body>
+</html>

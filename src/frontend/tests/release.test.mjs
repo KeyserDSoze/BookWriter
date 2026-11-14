@@ -97,3 +97,38 @@ test("Non compilare segreti nel frontend", async () => {
   const config = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
   assert.doesNotMatch(config, /VITE_(?:PASSWORD|PAT|API_KEY|SECRET)/);
 });
+
+test("Gli identificativi OAuth pubblici arrivano da variabili del repository, mai da secret", async () => {
+  const pages = await readFile(new URL("../../../.github/workflows/pages.yml", import.meta.url), "utf8");
+  for (const [name, variable] of [["VITE_GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_ID"],
+    ["VITE_MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_ID"], ["VITE_MICROSOFT_TENANT", "MICROSOFT_TENANT"]])
+    assert.ok(pages.includes(`${name}: \${{ vars.${variable} }}`), "Variabile pubblica mancante nel workflow Pages: " + name);
+  assert.doesNotMatch(pages, /secrets\.(?:GOOGLE|MICROSOFT)/i);
+  assert.doesNotMatch(pages, /VITE_[A-Z_]*(?:SECRET|PASSWORD|TOKEN)/);
+});
+
+test("Nessun client secret nel codice del cloud e pagina di ritorno OAuth minimale", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const directory = new URL("../src/infrastructure/cloud/", import.meta.url);
+  for (const file of await readdir(directory)) {
+    if (!file.endsWith(".ts") || file.endsWith(".test.ts")) continue;
+    assert.doesNotMatch(await readFile(new URL(file, directory), "utf8"), /client_secret/i, "client_secret in " + file);
+  }
+  const callback = await readFile(new URL("../public/oauth/microsoft.html", import.meta.url), "utf8");
+  assert.match(callback, /postMessage\(message, window\.location\.origin\)/);
+  assert.doesNotMatch(callback, /postMessage\([^)]*["']\*["']/);
+  assert.doesNotMatch(callback, /client_secret|localStorage|sessionStorage|fetch\(/i);
+});
+
+test("La guida STE-100 contiene gli stessi valori usati dal codice", async () => {
+  const guide = await readFile(new URL("../../../docs/cloud-app-registration-ste100.md", import.meta.url), "utf8");
+  const microsoft = await readFile(new URL("../src/infrastructure/cloud/microsoft-graph.ts", import.meta.url), "utf8");
+  const google = await readFile(new URL("../src/infrastructure/cloud/google-drive.ts", import.meta.url), "utf8");
+  const callbackPath = /MICROSOFT_CALLBACK_PATH = "([^"]+)"/.exec(microsoft)?.[1];
+  const driveScope = /GOOGLE_DRIVE_SCOPE = "([^"]+)"/.exec(google)?.[1];
+  assert.ok(callbackPath && driveScope, "Costanti del codice non trovate");
+  for (const value of [callbackPath, driveScope, "Files.ReadWrite.AppFolder", "offline_access",
+    "https://ghostwriting.ws", "http://localhost:5173", "GOOGLE_CLIENT_ID", "MICROSOFT_CLIENT_ID", "Single-page application"])
+    assert.ok(guide.includes(value), "La guida non riporta: " + value);
+  assert.match(guide, /ASD-STE100/);
+});

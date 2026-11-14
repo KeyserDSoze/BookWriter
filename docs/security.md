@@ -13,7 +13,7 @@ BookWriter è una SPA statica distribuita tramite GitHub Pages. Il codice JavaSc
 
 ## Stato dei collegamenti GitHub (fase 1)
 
-Il PAT GitHub fine-grained viene inserito in **Archivio**, cifrato con Web Crypto e conservato in IndexedDB. Viene decifrato solo per chiamare `https://api.github.com` (CORS, `redirect: error`), mai inserito nel repository narrativo o nello ZIP. L'archivio locale cifrato non è un vault E2EE; per aprire il libro da altro dispositivo occorre inserire un nuovo PAT autorizzato. Il vault Google/Microsoft per recuperare il PAT resta in progettazione (ADR 0002).
+Il PAT GitHub fine-grained viene inserito in **Archivio**, cifrato con Web Crypto e conservato in IndexedDB. Viene decifrato solo per chiamare `https://api.github.com` (CORS, `redirect: error`), mai inserito nel repository narrativo o nello ZIP. L'archivio locale cifrato non è un vault E2EE. Per aprire il libro da un altro dispositivo si può inserire un nuovo PAT oppure, **dalla 0.14.0**, recuperarlo dal vault dell'account Google/Microsoft ([ADR 0153](../ADR/0153-cloud-profile-sync-google-drive-onedrive.md)): con passphrase (E2EE) o «solo account» (non E2EE, dichiarato).
 
 Prima della prima sincronizzazione su repository **pubblica**, la UI richiede una scelta esplicita. L'import remoto non sovrascrive copie locali; la scrittura remota si interrompe se lo SHA è divergente. Non garantiamo ancora single-writer senza lease cross-device, quindi l'uso contemporaneo su più browser non è supportato.
 
@@ -80,9 +80,9 @@ L'AI usa Web Locks e lease GitHub, ricontrolla SHA e revisione locale, poi salva
 - Raccomandare credenziali limitate per repository e revocabili; per GitHub fine-grained PAT con **Contents R/W** sul solo gruppo di repository del libro. Le chiavi OpenAI-compatible possono fatturare: evitare log e invio a domini inattesi.
 - Ogni endpoint deve essere HTTPS (eccetto localhost solo in sviluppo); fetch con `redirect: "error"`, nessuna key in query string, errori redatti.
 - **Vault locale**: IndexedDB conserva credenziali cifrate con AES-GCM e CryptoKey non estraibile quando disponibile; questo riduce l'esposizione a letture accidentali del DB, non protegge da XSS attivo nello stesso origin.
-- **Vault senza password condiviso tra dispositivi**: salvare configurazione/credenziali in storage privato del provider con il suo controllo di accesso. Una chiave recuperabile automaticamente da quello stesso account non rappresenta E2EE: la protezione deriva dall'account e dal servizio cloud.
-- **Vault E2EE opzionale**: richiedere passphrase di recupero indipendente; derivazione PBKDF2/Argon2id (secondo disponibilità), salt random, AES-256-GCM, nonce random univoco; nessun hash della password usato direttamente come chiave. La modalità E2EE richiede unlock su nuovo dispositivo.
-- Valutare in futuro GitHub App / gateway BFF per togliere il PAT dal browser; necessita di una nuova decisione e infrastruttura.
+- **Vault cloud «solo account» (implementato 0.14.0)**: PAT e chiavi nell'app folder dell'account Google/Microsoft, leggibili da chi entra nell'account. Una chiave recuperabile automaticamente da quello stesso account non rappresenta E2EE: la protezione deriva dall'account e dal servizio cloud. La UI lo dichiara.
+- **Vault cloud E2EE con passphrase (implementato 0.14.0)**: PBKDF2-SHA256 con 600.000 iterazioni, salt random di 16 byte, AES-256-GCM, IV random a ogni cifratura, AAD di versione; nessun hash della password usato come chiave; passphrase ≥ 12 caratteri, mai salvata. Su un nuovo dispositivo serve la passphrase; senza non c'è recupero. Facoltativamente si ricorda la sola chiave derivata (non estraibile) nel browser.
+- Una **GitHub App** (per togliere il PAT dal browser) non è praticabile senza un gateway server: il supporto SPA di GitHub è in pausa; resta una decisione futura con nuova infrastruttura.
 
 ## Repository del libro
 

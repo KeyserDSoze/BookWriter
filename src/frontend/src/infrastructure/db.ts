@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import { DEFAULT_SETTINGS } from "../domain/types";
 import { enqueueCheckpoint } from "./outbox";
+import { markCloudProfileDirty } from "./cloud/cloud-dirty";
 import { createTaskStructuralCheckpoint } from "../domain/task-structural-checkpoint";
 import { createTaskProseCheckpoint } from "../domain/task-prose-checkpoint";
 import { taskProseConsentKey, taskProseKey, taskProseUsageKey } from "./task-prose-checkpoint";
@@ -52,10 +53,20 @@ export async function saveSettings(
   settings: AppSettings, isCurrent?: () => boolean,
 ): Promise<void> {
   const db = await getDb();
+  // The settings and the «cloud profile has local changes» marker commit together.
+  const tx = db.transaction(["settings", "meta"], "readwrite");
+  void tx.done.catch(() => undefined);
+  const store = tx.objectStore("settings");
+  const previous = await store.get("global") as AppSettings | undefined;
   // Recheck after opening IndexedDB; no await between fence and put.
-  if (isCurrent && !isCurrent())
+  if (isCurrent && !isCurrent()) {
+    tx.abort();
     throw new Error("Impostazioni cambiate durante il salvataggio: nessuna scrittura eseguita.");
-  await db.put("settings", settings, "global");
+  }
+  const written = store.put(settings, "global");
+  await markCloudProfileDirty(tx.objectStore("meta"), previous, settings);
+  await written;
+  await tx.done;
 }
 
 export async function listBooks(): Promise<BookProject[]> {

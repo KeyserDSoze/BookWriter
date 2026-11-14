@@ -16,13 +16,14 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-
+  // OAuth redirect pages are one-shot and must never become the offline shell.
+  if (url.pathname.startsWith("/oauth/")) return;
   if (request.mode === "navigate") {
     // Network first so a deploy is picked up at once; cached shell only when offline.
     event.respondWith((async () => {
       try {
         const fresh = await fetch(request);
-        if (fresh.ok) (await caches.open(CACHE)).put("/", fresh.clone());
+        if (fresh.ok && url.pathname === "/") (await caches.open(CACHE)).put("/", fresh.clone());
         return fresh;
       } catch {
         return (await caches.match("/")) ?? Response.error();

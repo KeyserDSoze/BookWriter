@@ -3,7 +3,7 @@ import { currentTaskAi, loadAiTrace, subscribeLiveAi, type AiLocalTrace } from "
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import { AiStreamText } from "./AiStreamText";
 
-/** Mounted only after an explicit, identity-fenced inspection with current consent. */
+/** Mounted only after an explicit, identity-fenced read of one stored conversation. */
 export function AiRequestTrace({ trace }: {trace:AiLocalTrace}) {
   const live=useSyncExternalStore(subscribeLiveAi,()=>currentTaskAi(trace.bookId,trace.activityId));
   const [settled,setSettled]=useState<AiLocalTrace|null>(null);
@@ -18,13 +18,17 @@ export function AiRequestTrace({ trace }: {trace:AiLocalTrace}) {
     return ()=>{reads.current.invalidate();};
   },[live?.endedAt,trace.bookId,trace.activityId]);
   const saved=settled??trace;
-  const visible=live?.inspect?live:null;
+  const visible=live??null;
   const response=visible?.textPreview||saved.response;
   const reasoning=visible?.reasoningPreview||saved.reasoning;
-  const truncated=saved.truncated||!!visible&&(visible.textCharacters>visible.textPreview.length||
-    visible.reasoningCharacters>visible.reasoningPreview.length);
+  const truncated=saved.truncated||!!visible&&visible.previewClearedAt===undefined&&(
+    visible.textCharacters>visible.textPreview.length||visible.reasoningCharacters>visible.reasoningPreview.length);
+  const temporary=saved.kept===false;
   return <div className="min-w-0 space-y-3" role="region" aria-label="Richiesta e risposta private del task">
-    <p className="muted text-xs">Registro privato del browser, non nei backup o su GitHub.
+    <p className="muted text-xs">
+      {temporary?"Conservata in modo temporaneo: si cancella da sola secondo le impostazioni. "
+        :"Conservata senza scadenza finché non la cancelli. "}
+      Registro privato del browser: non è nei backup ZIP e va su GitHub solo se lo hai attivato nelle Impostazioni.
       {truncated?" Contenuti troncati ai limiti locali (prompt/risposta 120.000 caratteri, reasoning 20.000).":" Nessun troncamento applicato."}</p>
     <details><summary className="min-h-11 cursor-pointer font-semibold">Messaggio system inviato</summary>
       <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs [overflow-wrap:anywhere]">{trace.systemPrompt}</pre></details>

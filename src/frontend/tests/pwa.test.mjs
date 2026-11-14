@@ -34,3 +34,9 @@ test("PWA: il service worker non intercetta POST né richieste cross-origin", ()
   assert.match(sw, /request\.method !== "GET"\) return/);
   assert.match(sw, /url\.origin !== self\.location\.origin\) return/);
 });
+
+test("PWA: le pagine di ritorno OAuth non diventano la shell offline", () => {
+  const sw = read("public/sw.js");
+  assert.match(sw, /url\.pathname\.startsWith\("\/oauth\/"\)\) return/);
+  assert.match(sw, /fresh\.ok && url\.pathname === "\/"/);
+});
