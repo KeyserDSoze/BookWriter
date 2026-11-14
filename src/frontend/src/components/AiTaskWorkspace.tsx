@@ -30,6 +30,7 @@ import {
   loadAiTrace, type AiLocalTrace, type LiveAiTrace,
 } from "../infrastructure/ai-observability";
 import { LiveTaskStream } from "./LiveTaskStream";
+import { AiRequestTrace } from "./AiRequestTrace";
 
 interface Props {
   book?: RewindPreflightBook & Pick<BookProject, "updatedAt">;
@@ -44,12 +45,13 @@ interface Props {
   /** Task focused through the URL, and the callback that mirrors the focus back into it. */
   focusId?: string;
   onFocusChange?: (id: string) => void;
+  onOpenInspection?:()=>void;
 }
 
 /** Task-first, read-only inspector. Provisional tokens are NEVER canonical. */
 export function AiTaskWorkspace({
   book, bookId, activities, live, inspectionEnabled, onPrepareRevision, compact=false,
-  onOpenFull, onForkCreated, focusId, onFocusChange,
+  onOpenFull, onForkCreated, focusId, onFocusChange, onOpenInspection,
 }: Props) {
   const [chosen,setChosen]=useState("");
   const [trace,setTrace]=useState<AiLocalTrace|null>(null);
@@ -323,7 +325,14 @@ export function AiTaskWorkspace({
       con consumo o tariffa non determinabili. Non è una fattura né un saldo;
       anche gli errori possono generare addebiti.
     </p>}
-    {active && <LiveTaskStream active={active} inspectionEnabled={inspectionEnabled}/>}
+    {active&&(!focused||focused.id===active.activityId)&&<LiveTaskStream active={active}
+      inspectionEnabled={inspectionEnabled} onOpenInspection={onOpenInspection}/>}
+    {!compact&&!inspectionEnabled&&onOpenInspection&&!active&&<div className="mt-3 space-y-2 text-sm">
+      <p className="muted">Prompt, risposte in arrivo e reasoning possono contenere dati riservati.
+        Attiva l'ispezione locale prima delle prossime richieste per consultarli qui; non è retroattiva.</p>
+      <button type="button" className="min-h-11 rounded-lg border border-slate-400 px-3"
+        onClick={onOpenInspection}>Apri impostazioni d'ispezione</button>
+    </div>}
     {!compact&&<section aria-label="Consenso copie testuali per il rewind"
       className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3 text-sm">
       <p className="font-semibold">Copie locali della prosa canonica per task (opt-in)</p>
@@ -662,17 +671,8 @@ export function AiTaskWorkspace({
               </div>
               {chosen===item.id&&<div className="space-y-2 rounded border border-slate-400/30 p-2">
                 {message&&<p role="status" className="muted text-xs">{message}</p>}
-                {inspectionEnabled&&trace?.bookId===bookId&&trace.activityId===item.id&&<div className="space-y-3">
-                  <p className="muted text-xs">Registro privato del browser, non nei backup o su GitHub. {trace.truncated?"Contenuti troncati ai limiti locali.":"Nessun troncamento applicato."}</p>
-                  <details><summary className="cursor-pointer font-semibold">Messaggio system inviato</summary>
-                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs">{trace.systemPrompt}</pre></details>
-                  <details><summary className="cursor-pointer font-semibold">Messaggio user inviato</summary>
-                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs">{trace.userPrompt}</pre></details>
-                  {trace.reasoning&&<details><summary className="cursor-pointer font-semibold">Reasoning reso disponibile dal provider</summary>
-                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs">{trace.reasoning}</pre></details>}
-                  {trace.response&&<details><summary className="cursor-pointer font-semibold">Risposta modello restituita</summary>
-                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs">{trace.response}</pre></details>}
-                </div>}
+                {inspectionEnabled&&trace?.bookId===bookId&&trace.activityId===item.id&&
+                  <AiRequestTrace key={bookId+":"+item.id} trace={trace}/>}
               </div>}
               <p className="muted text-xs">La revisione usa il sistema di correzioni supervisionate del libro attuale: non ripristina automaticamente il checkpoint storico. Il vero rewind controllato è tracciato nella issue #158.</p>
             </div>

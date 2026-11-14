@@ -20,7 +20,7 @@ import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
 import { AutopilotFocusPanel } from "./components/AutopilotFocusPanel";
 import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSubmitMode } from "./components/AuthorInterventionPanel";
 import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
-import { clearAiTraces, currentLiveAi, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
+import { clearAiTraces, currentLiveAi, disableLiveAiInspection, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
 import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type Scene, type TaskKind, type TaskReasoning } from "./domain/types";
 import { recommendedReasoningPreset } from "./domain/reasoning-presets";
@@ -777,6 +777,7 @@ export default function App() {
         <AiTaskWorkspace key={current.id} book={current} bookId={current.id} activities={activities} live={liveAi}
           focusId={focusTaskId} onFocusChange={setFocusTaskId}
           inspectionEnabled={settings.inspectAiRequests===true}
+          onOpenInspection={()=>setPage("settings")}
           onPrepareRevision={prepareActivityRevision}
           onForkCreated={async(forkBookId)=>{
             await refresh();
@@ -925,6 +926,7 @@ export default function App() {
             <input type="checkbox" className="mt-1" checked={settings.inspectAiRequests === true}
               onChange={e => {
                 const inspectAiRequests = e.target.checked;
+                if(!inspectAiRequests)disableLiveAiInspection();
                 // Controlled checkbox: update at once; persist only this preference, never other unsaved edits.
                 setSettings(old => ({ ...old, inspectAiRequests }));
                 void (async () => {
@@ -954,7 +956,8 @@ export default function App() {
       <footer className="muted mt-10 flex flex-wrap items-center gap-2 text-xs"><BrainCircuit size={14} /> Autopilot nel browser aperto: nessuna attività garantita in background. <FileText size={14} /> Versione iniziale.</footer>
     </main>
     <BackgroundActivityToast books={books} live={liveAi} currentBookId={selectedId}
-      currentActivities={activities} onOpen={openWork} />
+      currentActivities={activities} onOpen={openWork}
+      inspectionEnabled={settings.inspectAiRequests===true} onOpenInspection={()=>setPage("settings")} />
 
 
   </div>;

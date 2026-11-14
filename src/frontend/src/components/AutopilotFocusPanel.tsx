@@ -112,7 +112,7 @@ export function AutopilotFocusPanel({
           {(runningActivity.appliedInterventionIds?.length ?? 0) > 0 &&
             <p className="font-semibold text-emerald-700 dark:text-emerald-300">Questo task sta usando le tue indicazioni.</p>}
         </div> : <p className="muted mt-2 text-xs">Preparazione del prossimo task…</p>}
-        {active && <LiveTaskStream active={active} inspectionEnabled={inspectionEnabled}/>}
+        {active && <LiveTaskStream active={active} inspectionEnabled={inspectionEnabled} onOpenInspection={onOpenSettings}/>}
       </> : <>
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
           {book.status === "error" || step.blocked ? <AlertTriangle size={15} aria-hidden="true"/> : <PauseCircle size={15} aria-hidden="true"/>}
@@ -140,7 +140,7 @@ export function AutopilotFocusPanel({
           new Date(lastFinished.endedAt ?? lastFinished.createdAt).toLocaleString("it-IT")}</p>}
         {active && <details className="mt-2">
           <summary className="cursor-pointer text-xs font-semibold">Ultima richiesta al modello</summary>
-          <LiveTaskStream active={active} inspectionEnabled={inspectionEnabled}/>
+          <LiveTaskStream active={active} inspectionEnabled={inspectionEnabled} onOpenInspection={onOpenSettings}/>
         </details>}
       </>}
       {modelWarning && !running && book.status !== "completed" && <p role="note"

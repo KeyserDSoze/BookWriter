@@ -3,7 +3,8 @@ import { callModel, type ModelAnswer } from "../infrastructure/ai";
 import { endpointStreamMode } from "../infrastructure/ai-stream";
 import type { AiStreamDelta } from "../infrastructure/ai-stream";
 import type { AiTransportStats, LmStudioPhase } from "../infrastructure/lmstudio-native";
-import { addAiDelta, markAiHeader, markAiTransport, markNativePhase, saveAiTrace, startLiveAi,
+import { addAiDelta, aiInspectionGeneration, currentTaskAi, finishLiveAi, markAiHeader, markAiTransport, markNativePhase,
+  receiveAiResponse, saveAiTrace, startLiveAi,
 } from "../infrastructure/ai-observability";
 import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
 import { listActivities, saveActivity } from "../infrastructure/db";
@@ -29,6 +30,8 @@ export interface LaunchInput {
  * path and the parallel reviewers. The returned promise is NOT awaited here. */
 export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promise<ModelAnswer> }> {
   const { book, settings, started, guard, signal, assignment } = i;
+  const inspectionGeneration=aiInspectionGeneration();
+  const inspectionCurrent=()=>settings.inspectAiRequests===true&&aiInspectionGeneration()===inspectionGeneration;
   await guard.assertActive(); // Do not charge credits without verified ownership.
   const preflight = preflightBookAiBudget(
     book, settings, await listActivities(book.id), i.kind, i.systemPrompt, i.userPrompt, i.runId,
@@ -44,22 +47,22 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   if (quote) started.priceRateSnapshot = quote;
   // Persist the request attempt BEFORE network fetch: an interrupted browser
   // must not misrepresent a possibly billed call as a free operation.
-  if (settings.inspectAiRequests) {
+  if (inspectionCurrent()) {
     // Explicitly local, sensitive opt-in. Never stored in Activity
     // or exported to ZIP, GitHub or sync.
     await saveAiTrace({
       activityId: started.id, bookId: book.id, createdAt: started.createdAt,
       endpointId: assignment.endpointId, modelId: assignment.modelId,
       systemPrompt: i.systemPrompt, userPrompt: i.userPrompt, truncated: false,
-    });
+    },inspectionCurrent);
   }
   started.aiRequested = true;
   await saveActivity(started);
-  if (i.live) startLiveFor(i);
+  startLiveFor({...i,settings:{...settings,inspectAiRequests:inspectionCurrent()}},i.live);
   const inspectStream = settings.inspectAiRequests === true ||
     (i.configuredEndpoint !== undefined && endpointStreamMode(i.configuredEndpoint) === "sse") ||
     i.configuredEndpoint?.apiProtocol === "lmstudio_native";
-  const promise = callModel(i.kind, i.systemPrompt, i.userPrompt, settings, book, signal,
+  const provider = callModel(i.kind, i.systemPrompt, i.userPrompt, settings, book, signal,
     preflight || inspectStream ? {
       ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
       ...(inspectStream ? {
@@ -69,18 +72,40 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
         onPhase: (phase: LmStudioPhase) => markNativePhase(started.id, phase),
       } : {}),
     } : undefined);
+  const retainReply=async(response?:string)=>{
+    if(!inspectionCurrent())return;
+    const request=currentTaskAi(book.id,started.id);
+    if(!request?.inspect)return; // Consent was disabled or traces cleared during the call.
+    // A failed/cancelled request can still have a useful partial reply. Keep it
+    // private, never in Activity.output, and never mask the provider error/usage.
+    await saveAiTrace({activityId:started.id,bookId:book.id,createdAt:started.createdAt,
+      endpointId:assignment.endpointId,modelId:assignment.modelId,
+      systemPrompt:i.systemPrompt,userPrompt:i.userPrompt,
+      response:response??request?.textPreview,reasoning:request?.reasoningPreview,
+      truncated:!!request&&(request.textCharacters>request.textPreview.length ||
+        request.reasoningCharacters>request.reasoningPreview.length),
+    },()=>inspectionCurrent()&&currentTaskAi(book.id,started.id)?.inspect===true).catch(()=>undefined);
+  };
+  const promise=provider.then(async answer=>{
+    receiveAiResponse(started.id,answer.text);
+    await retainReply(answer.text);
+    return answer;
+  },async(error:unknown)=>{
+    await retainReply();
+    throw error;
+  });
   return { promise };
 }
 
 export function startLiveFor(i: Pick<LaunchInput, "settings" | "started" | "title" | "assignment" |
-  "requestedEffort" | "configuredEndpoint" | "book">): void {
+  "requestedEffort" | "configuredEndpoint" | "book">,foreground=true): void {
   startLiveAi({
     activityId: i.started.id, bookId: i.book.id, title: i.title,
     endpointId: i.assignment.endpointId, modelId: i.assignment.modelId,
     inspect: i.settings.inspectAiRequests === true,
     ...(i.requestedEffort === undefined ? {} : { requestedReasoning: i.requestedEffort }),
     streamDeadlineSeconds: i.configuredEndpoint?.streamTimeoutSeconds ?? 600,
-  });
+  },foreground);
 }
 
 export interface PooledCall {
@@ -132,6 +157,7 @@ export class ReviewCallPool {
       started.status = "cancelled";
       started.error = "Revisione in parallelo non applicata: la sessione si è fermata o il testo è cambiato prima di usarla.";
       started.endedAt = new Date().toISOString();
+      finishLiveAi(started.id,"interrotta");
       await saveActivity(started);
     }
   }

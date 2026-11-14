@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LiveAiTrace } from "../infrastructure/ai-observability";
+import { AiStreamText } from "./AiStreamText";
 
 /** Plain-language state of the in-flight provider request. */
 export function liveStageText(active: LiveAiTrace): string {
@@ -33,22 +34,31 @@ export function formatElapsed(seconds: number): string {
 }
 
 /** Provisional, never canonical: previews only exist with the inspection opt-in. */
-export function LiveTaskStream({ active, inspectionEnabled }: { active: LiveAiTrace; inspectionEnabled: boolean }) {
+export function LiveTaskStream({ active, inspectionEnabled, onOpenInspection }: {
+  active: LiveAiTrace; inspectionEnabled: boolean; onOpenInspection?:()=>void;
+}) {
   const elapsed = useElapsedSeconds(active.startedAt, active.endedAt);
+  const visible=inspectionEnabled&&active.inspect;
   return <div role="region" aria-label="Streaming task corrente"
     className="mt-3 space-y-2 rounded-lg border border-emerald-600/40 p-3">
     <p className="font-semibold">{active.title}</p>
     <p className="text-sm" aria-live="polite">{liveStageText(active)}</p>
     {active.error && <p role="alert" className="text-sm text-red-500 dark:text-red-300">{active.error}</p>}
-    {inspectionEnabled && active.reasoningPreview && <details className="rounded-lg border border-slate-400/30 p-2" open>
+    {visible && active.reasoningPreview && <details className="min-w-0 rounded-lg border border-slate-400/30 p-2" open>
       <summary className="cursor-pointer text-sm font-semibold">Reasoning trasmesso dal provider (provvisorio)</summary>
-      <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-words text-xs">{active.reasoningPreview}</pre>
+      <AiStreamText key={active.activityId+":reasoning"} text={active.reasoningPreview} label="Reasoning in arrivo"/>
     </details>}
-    {inspectionEnabled && active.textPreview && <div>
+    {visible && active.textPreview && <div>
       <p className="text-sm font-semibold">Risposta in streaming — non ancora approvata</p>
-      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-3 text-xs text-slate-100">{active.textPreview}</pre>
+      <AiStreamText key={active.activityId+":text"} text={active.textPreview} label="Risposta in arrivo"/>
     </div>}
-    {!inspectionEnabled && <p className="muted text-xs">Per vedere il testo mentre viene scritto e i prompt completi abilita «Ispezione locale richieste AI» nelle Impostazioni. Contiene dati potenzialmente riservati.</p>}
+    {visible&&(active.textCharacters>active.textPreview.length||active.reasoningCharacters>active.reasoningPreview.length)&&
+      <p className="muted text-xs">Anteprima abbreviata ai limiti locali: risposta 120.000 caratteri, reasoning 20.000.</p>}
+    {!visible && <div className="space-y-1 text-xs">
+      <p className="muted">Per vedere il testo mentre viene scritto e i prompt completi abilita «Ispezione locale richieste AI» nelle Impostazioni prima della prossima richiesta. Contiene dati potenzialmente riservati; non è retroattiva.</p>
+      {onOpenInspection&&<button type="button" className="min-h-11 rounded-lg border border-slate-400 px-3"
+        onClick={onOpenInspection}>Apri impostazioni d'ispezione</button>}
+    </div>}
     <details className="text-xs">
       <summary className="muted cursor-pointer">Dettagli tecnici della richiesta</summary>
       <div className="mt-2 space-y-1">

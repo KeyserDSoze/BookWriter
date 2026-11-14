@@ -2,6 +2,8 @@
 
 ## Progresso versionato
 
+- [x] v0.13.2: ispezione locale live della singola richiesta dopo clic esplicito, risposta/reasoning separati, autoscroll sospendibile e coda di cinque righe sfumate nel riquadro fisso con contatori; stream paralleli isolati, trascrizioni finali/parziali opt-in non canoniche, revoca immediata dei testi volatili (ADR 0152).
+
 - [x] v0.11.69 (issue #106): fonti storiche del revisore rivalidate su dossier live prima di nuovo reviewer, giudice, freeze e repair ripreso; stop senza chiamate AI su revisione ritirata, estratto cambiato o fonti dipendenti (ADR 0101).
 - [x] v0.11.68 (issue #105): recupero supervisionato dei checkpoint editoriale stale/incompleti via conferma esplicita, snapshot audit/ZIP integrale, Web Locks e transazione locale, autosync sospeso e riavvio dal primo revisore senza perdere il canone (ADR 0100).
 - [x] v0.11.67 (issue #104): gate strutturale sui 12 rapporti × segmenti prima del prossimo reviewer, del giudice e del freeze, con impronta del testo letto inclusi report pass e fail closed per checkpoint legacy/stale/incompleti (ADR 0099).

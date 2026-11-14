@@ -1,5 +1,11 @@
 # BookWriter — istruzioni per agenti e sviluppatori
 
+## Ispezione live e coda compatta — ADR 0152 / v0.13.2
+
+- `inspectAiRequests` resta opt-in e non retroattivo. `AiRequestTrace` si monta solo dopo lettura esplicita fenced; live e traccia devono appartenere allo stesso bookId/activityId. Conservare stream separati per le chiamate parallele; passare al revisore successivo non azzera i delta ricevuti.
+- Risposta e reasoning emesso dal provider restano distinti, provvisori e non autorizzano canone/freeze. Trascrizioni in `meta` ai limiti 120k/20k con avviso; conservare anche risposte rifiutate e parziali disponibili al termine, mai in `Activity.output`, ZIP/GitHub/outbox. Nessuna scrittura per delta. Disattivazione/cancellazione svuotano RAM e impediscono nuovi salvataggi delle richieste già in corso.
+- Anteprima compatta max cinque righe visuali/100px da code max4k per canale, con sfumatura solo in overflow e contatori reali. Vista completa segue il testo senza strappare lo scroll quando l'autore risale; «Segui il testo in arrivo» riattiva l'autoscroll. Nessuna nuova AI, retry o divulgazione ai lettori ciechi. Test Vitest e Playwright desktop/mobile.
+
 ## Dashboard orientata al task, interventi registrati e avvio da sinossi — ADR 0149
 
 - La Dashboard deve dire **in italiano semplice** cosa sta facendo l'autopilot: `describeNextAutopilotStep(book)` (dominio, puro, mai eccezioni, nessuna AI) rispecchia la selezione di `nextWork`/runner. Se cambi fasi, stadi della redazione o ordine dei task, **aggiorna anche questa funzione e i suoi test**. La riga di stato globale `«{stato} · {fase}»` deve restare **unica** nella pagina (gli E2E la cercano per testo): nel pannello usa separatori diversi.

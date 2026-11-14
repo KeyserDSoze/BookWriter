@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## 0.13.2 — 2026-11-14 — Ispezione live e ultime righe del task (ADR 0152)
+
+- **Attività:** l'ispezione della singola richiesta mostra prompt e risposta che si compone, con reasoning del provider separato; autoscroll sospendibile risalendo nel testo e pulsante «Segui il testo in arrivo».
+- **Riquadro in basso a destra:** titolo del task, stato reale, contatori e ultime cinque righe con sfumatura superiore, anche durante il solo reasoning; collegamento diretto al task e pulsante per ridurre l'anteprima senza fermare il lavoro.
+- **Storico locale:** risposta conservata anche prima dei controlli canonici e frammenti disponibili di richieste fallite/interrotte; stream paralleli isolati, senza reset al cambio di revisore.
+- **Privacy e limiti:** consenso esplicito ancora disattivato per default e non retroattivo, collegamento alle impostazioni; revoca/cancellazione svuotano anche la RAM e impediscono di salvare nuovi delta delle richieste in corso. Restano i limiti 120k/20k con avviso; nessuna traccia in ZIP/GitHub/outbox, nessuna AI aggiuntiva. Non ancora pubblicato su Pages.
+
 ## 0.13.1 — 2026-11-13 (main) — Modifica in blocco del router più chiara
 
 - **Modifica in blocco a passi:** con più attività selezionate la barra chiede prima l'endpoint, poi il modello (solo quelli del nuovo endpoint), poi il thinking, e applica tutto con «Applica a N attività». Nulla cambia finché non applichi; «Deseleziona» è stato rimosso (si deseleziona dalle caselle).

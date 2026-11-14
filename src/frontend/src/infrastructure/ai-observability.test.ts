@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  addAiDelta, aiTraceKey, clearAiTraces, currentLiveAi, finishLiveAi, loadAiTrace,
-  markAiHeader, saveAiTrace, startLiveAi, subscribeLiveAi,
+  addAiDelta, aiTraceKey, clearAiTraces, currentLiveAi, currentTaskAi, disableLiveAiInspection,
+  finishLiveAi, loadAiTrace, markAiHeader, receiveAiResponse, saveAiTrace, startLiveAi, subscribeLiveAi,
 } from "./ai-observability";
 
 const memory=new Map<string,unknown>();
@@ -58,5 +58,61 @@ describe("Tracce locali sensibili opt-in e progresso volatile",()=>{
     expect(currentLiveAi()?.stage).toBe("streaming");
     finishLiveAi("new","completata");
     expect(currentLiveAi()?.stage).toBe("completata");
+  });
+  it("isola richieste parallele e non azzera lo stream quando passa al revisore successivo",()=>{
+    const base={bookId:"parallel-book",title:"Revisione",endpointId:"x",modelId:"y",inspect:true};
+    startLiveAi({...base,activityId:"parallel-first"});
+    startLiveAi({...base,activityId:"parallel-second"},false);
+    addAiDelta("parallel-first",{kind:"text",text:"Prima risposta"});
+    addAiDelta("parallel-second",{kind:"reasoning",text:"Secondo reasoning"});
+    addAiDelta("parallel-second",{kind:"text",text:"Seconda risposta"});
+    const previous=currentTaskAi(base.bookId,"parallel-second");
+    expect(currentTaskAi("other-book","parallel-second")).toBeNull();
+    expect(currentLiveAi()?.activityId).toBe("parallel-first");
+    startLiveAi({...base,activityId:"parallel-second"});
+    expect(currentLiveAi()).toBe(previous);
+    expect(currentTaskAi(base.bookId,"parallel-first")?.textPreview).toBe("Prima risposta");
+    finishLiveAi("parallel-first","completata");
+    expect(currentLiveAi()?.activityId).toBe("parallel-second");
+  });
+  it("mantiene la coda più recente anche oltre i limiti delle trascrizioni",()=>{
+    startLiveAi({activityId:"long",bookId:"b",title:"Lunga",endpointId:"x",modelId:"y",inspect:true});
+    addAiDelta("long",{kind:"text",text:"A".repeat(120001)});
+    addAiDelta("long",{kind:"text",text:"ULTIMA_RIGA"});
+    addAiDelta("long",{kind:"reasoning",text:"R".repeat(20001)+"ULTIMO_REASONING"});
+    expect(currentLiveAi()?.textPreview).toHaveLength(120000);
+    expect(currentLiveAi()?.textTail).toHaveLength(4000);
+    expect(currentLiveAi()?.textTail).toMatch(/ULTIMA_RIGA$/);
+    expect(currentLiveAi()?.reasoningTail).toMatch(/ULTIMO_REASONING$/);
+  });
+  it("revoca e cancellazione azzerano i testi in RAM senza riattivarli con altri delta",async()=>{
+    startLiveAi({activityId:"revoke",bookId:"b",title:"Revoca",endpointId:"x",modelId:"y",inspect:true});
+    addAiDelta("revoke",{kind:"text",text:"privato"});
+    disableLiveAiInspection();
+    addAiDelta("revoke",{kind:"text",text:"ancora"});
+    receiveAiResponse("revoke","risposta finale privata");
+    expect(currentLiveAi()).toMatchObject({inspect:false,textPreview:"",reasoningPreview:"",textTail:""});
+    await clearAiTraces();
+    expect(currentTaskAi("b","revoke")?.textPreview).toBe("");
+  });
+  it("limita a otto gli ultimi task terminati in memoria",()=>{
+    for(let index=0;index<12;index++){
+      startLiveAi({activityId:"cache-"+index,bookId:"cache",title:"Cache",endpointId:"x",modelId:"y",inspect:true});
+      finishLiveAi("cache-"+index,"completata");
+    }
+    startLiveAi({activityId:"cache-active",bookId:"cache",title:"Attivo",endpointId:"x",modelId:"y",inspect:true});
+    expect(currentTaskAi("cache","cache-0")).toBeNull();
+    expect(currentTaskAi("cache","cache-11")?.stage).toBe("completata");
+  });
+  it("ricontrolla il consenso dopo l'attesa per il database prima di scrivere",async()=>{
+    await saveAiTrace({activityId:"stale-write",bookId:"b",createdAt:"2026-11-14",
+      endpointId:"x",modelId:"y",systemPrompt:"Privato",userPrompt:"Privato",truncated:false},()=>false);
+    expect(await loadAiTrace("b","stale-write")).toBeNull();
+  });
+  it("il completamento non altera i caratteri realmente osservati nello streaming",()=>{
+    startLiveAi({activityId:"raw",bookId:"b",title:"Raw",endpointId:"x",modelId:"y",inspect:true});
+    addAiDelta("raw",{kind:"text",text:"  risposta  "});
+    receiveAiResponse("raw","risposta");
+    expect(currentLiveAi()).toMatchObject({textCharacters:12,textPreview:"  risposta  "});
   });
 });

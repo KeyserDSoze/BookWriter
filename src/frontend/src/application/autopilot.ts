@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import type { ModelAnswer } from "../infrastructure/ai";
 import { launchModelCall, ReviewCallPool, startLiveFor, type LaunchInput } from "./model-call";
-import { currentLiveAi, finishLiveAi, saveAiTrace } from "../infrastructure/ai-observability";
+import { finishLiveAi } from "../infrastructure/ai-observability";
 import { taskReasoningChoice } from "../domain/task-reasoning";
 import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
 import { keepObservedUsageOnRejectedReply, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
@@ -919,16 +919,6 @@ export class AutopilotRunner {
           started.summary = shortSummary(result.text); started.output = result.text;
           // Atomic with the canon commit below: a failed task leaves notes pending.
           markAuthorNotesApplied(latest, notes.map(note => note.id), started.id, work.title, started.endedAt);
-          if(settings.inspectAiRequests) {
-            await saveAiTrace({
-              activityId:started.id,bookId,createdAt:started.createdAt,
-              endpointId:assignment.endpointId,modelId:assignment.modelId,
-              systemPrompt,userPrompt,response:result.text,
-              reasoning:currentLiveAi()?.activityId===started.id
-                ? currentLiveAi()?.reasoningPreview : undefined,
-              truncated:false,
-            });
-          }
           // One more fencing check before canonizing output in IndexedDB.
           await guard.assertActive();
           // The revision checked after the provider call must still be
