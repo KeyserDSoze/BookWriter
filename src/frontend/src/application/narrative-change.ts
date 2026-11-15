@@ -1,7 +1,9 @@
 import type { Activity, BookProject } from "../domain/types";
 import { emptyKnowledge, findEntity, parseKnowledge, type KnowledgeEntity } from "../domain/knowledge";
-import { changeById, pruneChangeOperations, targetLabel, type ChangeTarget, type NarrativeChangeOperation } from "../domain/narrative-change";
-import { applyChangePlan, revertChange } from "../domain/narrative-change-flow";
+import { changeById, CHANGE_TARGET_KINDS, detectFactDrift, knownNames, pruneChangeOperations, targetLabel, type ChangeTarget, type NarrativeChangeOperation } from "../domain/narrative-change";
+import { applyChangePlan, followChangeEdits, revertChange } from "../domain/narrative-change-flow";
+import { memoryValue, pendingElements } from "../domain/book-edits";
+import { readableSnapshot } from "../domain/edit-readable";
 import { BookRevisionConflict, getBook, saveBookWithAuthorActivity } from "../infrastructure/db";
 
 export const MAX_CHANGE_INSTRUCTION = 4000;
@@ -44,6 +46,25 @@ function assertChangeAllowed(book: BookProject): void {
   if (!book.chapters.length) throw new Error("Non c'è ancora un piano del libro.");
 }
 
+function assertTargetUsable(book: BookProject, target: ChangeTarget): void {
+  if (target.kind === "scene") {
+    const scene = book.chapters.flatMap(c => c.scenes).find(s => s.id === target.id);
+    if (!scene?.text.trim() || scene.status === "planned") throw new Error("Si possono modificare solo scene già scritte.");
+  } else if (target.kind === "chapter") {
+    const chapter = book.chapters.find(c => c.id === target.id);
+    if (!chapter) throw new Error("Il capitolo da modificare non esiste più.");
+    if (!chapter.scenes.some(s => s.status !== "planned" && s.text.trim())) throw new Error("Il capitolo non ha ancora scene scritte: modifica il piano o lascialo scrivere.");
+  } else if (target.kind === "memory") {
+    if (memoryValue(book, target.id) === undefined) throw new Error("La voce della memoria non esiste più.");
+  } else {
+    if (!book.knowledge || book.knowledge.pending) throw new Error("Le schede del libro non sono ancora state generate.");
+    const kb = book.knowledge;
+    const exists = target.kind === "entity" ? kb.entities.some(e => e.id === target.id) : target.kind === "event" ? kb.events.some(e => e.id === target.id)
+      : kb.timelines.some(t => t.id === target.id);
+    if (!exists) throw new Error("L'elemento da modificare non esiste più.");
+  }
+}
+
 /** Records the request and moves the book into a tracked revision. In automatic
  * mode the caller starts the autopilot right away: the author's prompt IS the consent. */
 export async function requestNarrativeChange(bookId: string, target: ChangeTarget, instruction: string, expectedUpdatedAt: string): Promise<NarrativeChangeOperation> {
@@ -56,20 +77,7 @@ export async function requestNarrativeChange(bookId: string, target: ChangeTarge
     nextStep: "Analisi dell'impatto, riscrittura mirata e nuova revisione dei capitoli toccati.", summary: text.slice(0, 340),
   }, (book, now) => {
     assertChangeAllowed(book);
-    if (target.kind === "scene") {
-      const scene = book.chapters.flatMap(c => c.scenes).find(s => s.id === target.id);
-      if (!scene?.text.trim() || scene.status === "planned") throw new Error("Si possono modificare solo scene già scritte.");
-    } else if (target.kind === "chapter") {
-      const chapter = book.chapters.find(c => c.id === target.id);
-      if (!chapter) throw new Error("Il capitolo da modificare non esiste più.");
-      if (!chapter.scenes.some(s => s.status !== "planned" && s.text.trim())) throw new Error("Il capitolo non ha ancora scene scritte: modifica il piano o lascialo scrivere.");
-    } else {
-      if (!book.knowledge || book.knowledge.pending) throw new Error("Le schede del libro non sono ancora state generate.");
-      const kb = book.knowledge;
-      const exists = target.kind === "entity" ? kb.entities.some(e => e.id === target.id) : target.kind === "event" ? kb.events.some(e => e.id === target.id)
-        : kb.timelines.some(t => t.id === target.id);
-      if (!exists) throw new Error("L'elemento da modificare non esiste più.");
-    }
+    assertTargetUsable(book, target);
     const label = targetLabel(book, target);
     created = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, target, targetLabel: label.slice(0, 200), instruction: text,
       mode: book.changeMode ?? "auto", state: "pending", before: { scenes: [] }, report: [] };
@@ -80,6 +88,62 @@ export async function requestNarrativeChange(bookId: string, target: ChangeTarge
     book.phase = "revision";
     book.status = "paused";
     book.previousError = undefined;
+  });
+  return created!;
+}
+
+const clip = (text: string, max: number) => text.length > max ? text.slice(0, max) + "…" : text;
+/** The author already saved edits by hand on one element: align the rest of the book with them.
+ * The analysis reads what it was and what it is now, and proposes which scenes to rewrite. */
+export async function requestChangeFromEdits(bookId: string, target: ChangeTarget, expectedUpdatedAt: string): Promise<NarrativeChangeOperation> {
+  if (!CHANGE_TARGET_KINDS.includes(target.kind)) throw new Error("Questo elemento non può far partire una revisione del libro.");
+  let created: NarrativeChangeOperation | undefined;
+  await mutate(bookId, expectedUpdatedAt, {
+    title: "Revisione avviata da una modifica", reason: "L'autore ha chiesto di allineare il libro a una modifica salvata a mano.",
+    nextStep: "Confronto fra prima e dopo, riscrittura mirata delle scene coinvolte e nuova revisione dei capitoli.",
+  }, (book, now) => {
+    assertChangeAllowed(book);
+    assertTargetUsable(book, target);
+    const pending = pendingElements(book).find(p => p.target.kind === target.kind && p.target.id === target.id);
+    const edits = (pending?.edits ?? []).filter(e => e.origin === "manual" || e.origin === "ai");
+    if (!edits.length) throw new Error("Non ci sono modifiche da propagare: salva prima una modifica.");
+    if (edits.some(e => e.pruned || (e.before === null && e.after === null)))
+      throw new Error("Le copie di queste modifiche sono state eliminate per spazio: usa invece una richiesta scritta.");
+    const label = targetLabel(book, target);
+    const last = edits.at(-1)!;
+    const ids = edits.slice(-100).map(e => e.id);
+    let instruction: string;
+    let before: NarrativeChangeOperation["before"] = { scenes: [] };
+    const report: NarrativeChangeOperation["report"] = [];
+    let state: NarrativeChangeOperation["state"] = "pending";
+    if (target.kind === "scene") {
+      const scene = book.chapters.flatMap(c => c.scenes).find(s => s.id === target.id)!;
+      const textEdit = edits.find(e => e.field.includes("testo") && e.before !== null);
+      if (!textEdit) throw new Error("Il testo della scena non è cambiato: non c'è nulla da propagare.");
+      const previous = JSON.parse(textEdit.before!) as { text?: unknown; summary?: unknown };
+      const previousText = typeof previous.text === "string" ? previous.text : "";
+      before = { scenes: [{ sceneId: scene.id, chapterId: book.chapters.find(c => c.scenes.includes(scene))!.id, text: previousText,
+        status: "canon", ...(typeof previous.summary === "string" && previous.summary ? { summary: previous.summary.slice(0, 6000) } : {}) }],
+        memoryJson: JSON.stringify(book.memory) };
+      report.push({ sceneId: scene.id, at: now, drift: detectFactDrift(previousText, scene.text, knownNames(book)) });
+      instruction = "L'autore ha modificato a mano il testo della scena: confronta la versione precedente con quella attuale.";
+      state = "analyzing";
+    } else {
+      const first = edits.find(e => e.before !== null) ?? edits[0]!;
+      const was = readableSnapshot(first, "before"), now_ = readableSnapshot(last, "after");
+      if (was === now_ && first.before !== null) throw new Error("Il contenuto è tornato com'era: non c'è nulla da propagare.");
+      instruction = clip(`L'autore ha modificato a mano «${label}».\nPRIMA:\n${was || "(non esisteva)"}\nDOPO:\n${now_ || "(eliminato)"}`, 7800);
+      before = { scenes: [], memoryJson: JSON.stringify(book.memory) };
+    }
+    created = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, target: { kind: target.kind, id: target.id }, targetLabel: label.slice(0, 200),
+      instruction, mode: book.changeMode ?? "auto", state, before, report, fromEdits: ids };
+    book.changeOperations = pruneChangeOperations([...(book.changeOperations ?? []), created]);
+    book.revision = { id: crypto.randomUUID(), instruction: "Allineare il libro alla modifica manuale di «" + label + "».", beforePhase: book.phase,
+      affectedSceneIds: [], cursor: 0, changeOperationId: created.id };
+    book.phase = "revision";
+    book.status = "paused";
+    book.previousError = undefined;
+    followChangeEdits(book, created, "started");
   });
   return created!;
 }
@@ -102,9 +166,10 @@ export async function confirmNarrativeChange(bookId: string, operationId: string
     // A scene already rewritten (comparison pending/awaiting) goes back to its exact previous text.
     for (const snap of op.before.scenes) {
       const scene = book.chapters.flatMap(c => c.scenes).find(s => s.id === snap.sceneId);
-      if (scene && op.target.kind === "scene" && snap.sceneId === op.target.id && op.draftText === undefined) { scene.text = snap.text; scene.summary = snap.summary; }
+      if (scene && op.target.kind === "scene" && snap.sceneId === op.target.id && op.draftText === undefined && !op.fromEdits?.length) { scene.text = snap.text; scene.summary = snap.summary; }
     }
     delete op.draftText;
+    followChangeEdits(book, op, "open");
     op.state = "cancelled"; op.updatedAt = now;
     const before = book.revision!.beforePhase;
     book.revision = undefined;

@@ -16,13 +16,18 @@ Ogni scheda ha un identificativo stabile: le relazioni e gli eventi puntano all'
 
 Gli eventi distinguono ciò che accade da ciò che i personaggi sanno: per ogni personaggio coinvolto si può indicare **Sa**, **Non sa**, **Crede il falso** o **Sa e nasconde**, e segnare un evento come **Segreto**. Scrittura, specialisti e direttore ricevono queste prospettive, così un inganno voluto non viene «corretto» come errore. I cinque lettori ciechi e la rilettura dello scrittore non le vedono.
 
-## La pagina Mondo
+## La pagina Mondo (indirizzo `/worldbuilding`)
 
-- **Panoramica**: quanti capitoli, personaggi, luoghi, oggetti, fazioni, eventi, modifiche e agenti. Ogni riquadro apre la sezione.
-- **Schede**: cerca per nome, alias o contenuto, filtra per importanza, apri una scheda per vedere attributi, relazioni (cliccabili), presenza nel libro capitolo per capitolo, eventi, stato nella memoria e versioni precedenti. Su telefono la scheda sostituisce l'elenco: **Torna all'elenco** riporta indietro.
-- **Timeline**: **Ordine della storia** (quando accadono gli eventi) e **Ordine del racconto** (come li incontra il lettore, utile per flashback e antefatti); scegli la timeline globale (una sola per libro) o un arco. Una timeline può **seguire** schede precise («Segue: …»): i loro eventi vi compaiono anche se non vi sono stati aggiunti uno per uno. Ogni evento mostra modalità, stato, coinvolti, cause ed eventi che ne dipendono.
-- **Modifiche**: storico delle richieste, piano, controlli e ripristino.
-- **Memoria**: la memoria narrativa completa, compresi i segreti dell'autore.
+Una sola colonna di **sezioni chiuse** (accordion): le apri tu e il programma ricorda quali tenevi aperte, su questo dispositivo. In cima, **Cerca nel mondo** cerca in schede, eventi, memoria e modifiche: mostra e apre solo le sezioni con risultati.
+
+- **Personaggi, Luoghi, Oggetti, Fazioni**: elenco e dettaglio su due colonne; filtra per importanza, apri una scheda per vedere attributi, relazioni (cliccabili), presenza nel libro capitolo per capitolo, eventi, stato nella memoria e versioni precedenti, oppure modificala a mano o con l'AI. Su telefono la scheda sostituisce l'elenco: **Torna all'elenco** riporta indietro.
+- **Timeline ed eventi**: **Ordine della storia** (quando accadono gli eventi) e **Ordine del racconto** (come li incontra il lettore, utile per flashback e antefatti); scegli la timeline globale (una sola per libro) o un arco. Una timeline può **seguire** schede precise («Segue: …»): i loro eventi vi compaiono anche se non vi sono stati aggiunti uno per uno. Ogni evento mostra modalità, stato, coinvolti, cause ed eventi che ne dipendono, e si modifica.
+- **Stato corrente**, **Cronologia della memoria** e **Memoria · Personaggi / Luoghi / Fazioni / Oggetti / Segreti**: la memoria narrativa con cui l'autopilot scrive le scene. Ogni parte e ogni voce si modifica a mano (anche i segreti, solo per te), si aggiunge ed elimina, con cronologia e ripristino. Cambiare la memoria non riscrive il testo.
+- **Modifiche** e **Ricerche**: storico delle richieste con piano, controlli e ripristino; registro delle ricerche web.
+
+### Dopo aver salvato una modifica
+
+Sotto ogni editor (anche scene e capitoli nel Libro) compare, finché la modifica non è rivista, **Modifica salvata: non ancora rivista** con due scelte: **Rivedi e aggiorna il libro da questa modifica** (l'analisi riceve com'era prima e com'è ora, sceglie le scene da riscrivere, le riscrive e le fa rivedere, in modalità automatica o con la tua conferma; se annulli il tuo testo resta) e **Scegli una review** (apre Revisioni con l'elemento già selezionato; non per la memoria, che non ha una review propria). Nulla parte da solo.
 
 ## Cambiare il libro con un prompt
 

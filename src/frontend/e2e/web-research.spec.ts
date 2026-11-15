@@ -68,7 +68,7 @@ test("ricerca web: consenso esplicito, Wikipedia senza chiave, prova e registro 
   await expect(panel.getByRole("link", { name: /Tram di Vienna/ })).toHaveAttribute("href", "https://it.wikipedia.org/wiki/Tram_di_Vienna");
   expect(queries).toEqual(["tram di Vienna nel 1923"]);
   await nav(page).getByRole("button", { name: "Mondo", exact: true }).click();
-  await page.getByRole("tab", { name: /Ricerche/ }).click();
+  await page.getByRole("button", { name: /^Ricerche/ }).click();
   const log = page.getByRole("list", { name: "Registro delle ricerche" });
   await expect(log.getByText("«tram di Vienna nel 1923»")).toBeVisible();
   await expect(log.getByText(/Prova della ricerca · Wikipedia/)).toBeVisible();

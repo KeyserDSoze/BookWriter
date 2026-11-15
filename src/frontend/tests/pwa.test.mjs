@@ -40,3 +40,11 @@ test("PWA: le pagine di ritorno OAuth non diventano la shell offline", () => {
   assert.match(sw, /url\.pathname\.startsWith\("\/oauth\/"\)\) return/);
   assert.match(sw, /fresh\.ok && url\.pathname === "\/"/);
 });
+
+test("Percorsi veri: la shell è pubblicata anche come 404.html per i link diretti su GitHub Pages", () => {
+  const config = read("vite.config.ts");
+  assert.match(config, /copyFileSync\(join\(outDir, "index\.html"\), join\(outDir, "404\.html"\)\)/);
+  const html = read("index.html");
+  assert.doesNotMatch(html, /href="(?!\/|https?:)[^"#]/); // asset path assoluti: validi a qualunque profondità
+  assert.doesNotMatch(html, /src="(?!\/|https?:)[^"#]/);
+});

@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bot, Check, GitCompareArrows, History, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Bot, Check, GitCompareArrows, History, ListChecks, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import type { BookProject } from "../../domain/types";
 import { diffSceneText } from "../../domain/scene-diff";
-import { CHANGE_KIND_LABELS, elementReviewState, REVIEW_STATE_LABELS, REVIEW_STATE_TONES, type BookEdit, type EditTarget } from "../../domain/book-edits";
+import { CHANGE_KIND_LABELS, elementReviewState, pendingElements, REVIEW_STATE_LABELS, REVIEW_STATE_TONES, type BookEdit, type EditTarget } from "../../domain/book-edits";
 import { MAX_AI_EDIT_INSTRUCTION, type AiEditProposal, type AiEditRequest } from "../../domain/ai-edit";
-import { describeProfiles, type EditorialProfiles } from "../../domain/editorial-profiles";
-import { SCENE_META_FIELD, SCENE_META_LABELS, SCENE_META_LISTS, type SceneMetaList } from "../../domain/book-editing";
+import { SCENE_META_FIELD } from "../../domain/book-editing";
+import { readableSnapshot } from "../../domain/edit-readable";
 import type { ChangeTarget } from "../../domain/narrative-change";
 import { acceptAiEditChange, proposeAiEdit } from "../../application/ai-edit";
 import { editBase, restoreEdit } from "../../application/book-editing";
+import { requestChangeFromEdits } from "../../application/narrative-change";
 import { Button } from "../ui/button";
 import { Badge, Segmented } from "../ui/primitives";
 import { ChangePromptBox } from "../world/ChangePromptBox";
@@ -64,25 +65,7 @@ export function ChipPicker({ label, options, value, onChange, disabled, empty = 
   </fieldset>;
 }
 
-/** Human-readable version of a stored snapshot, for the comparison. */
-export function readableSnapshot(edit: BookEdit, side: "before" | "after"): string {
-  const raw = edit[side];
-  if (raw === null) return edit.target.kind === "profiles" ? describeProfiles(null) : "";
-  try {
-    const value = JSON.parse(raw) as Record<string, unknown>;
-    if (edit.target.kind === "scene" && edit.field.startsWith(SCENE_META_FIELD)) {
-      const meta = value as { viewpoint?: string; date?: string } & Partial<Record<SceneMetaList, string[]>>;
-      return [`Punto di vista: ${meta.viewpoint || "—"}`, `Data: ${meta.date || "—"}`,
-        ...SCENE_META_LISTS.map(key => `${SCENE_META_LABELS[key][0]!.toUpperCase() + SCENE_META_LABELS[key].slice(1)}: ${(meta[key] ?? []).join(", ") || "—"}`)].join("\n");
-    }
-    if (edit.target.kind === "scene" && typeof value.text === "string") return `${String(value.title ?? "")}\n\n${value.text}` + (value.summary ? `\n\nRiassunto: ${String(value.summary)}` : "");
-    if (edit.target.kind === "structure") return Array.isArray(value) ? value.map((row, i) => `Capitolo ${i + 1}: ${(row as string[]).length - 1} scene`).join("\n") : "";
-    if (edit.target.kind === "profiles") return describeProfiles(value as unknown as EditorialProfiles);
-    const inner = (value.entity ?? value.event ?? value.chapter ?? value.scene ?? value) as Record<string, unknown>;
-    return Object.entries(inner).filter(([key]) => !["history", "version", "updatedAt", "origin"].includes(key))
-      .map(([key, field]) => `${key}: ${typeof field === "string" ? field : JSON.stringify(field)}`).join("\n");
-  } catch { return raw; }
-}
+export { readableSnapshot };
 
 /** The change history of one element, newest first, with comparison and restore. */
 export function EditHistory({ book, target, label, onRefresh, onRestore }: { book: BookProject; target: EditTarget; label: string; onRefresh: () => Promise<void>;
@@ -205,6 +188,56 @@ export function AiEditPanel({ book, request, label, examples, scopeControl, onRe
     {proposal && proposal.notes.length > 0 && proposal.changes.length > 0 && <ul className="muted list-disc pl-5 text-xs">{proposal.notes.map(note => <li key={note}>{note}</li>)}</ul>}
     {message && <p role="status" className="text-sm [overflow-wrap:anywhere]">{message}</p>}
   </div>;
+}
+
+/** Opens the Reviews page with these elements preselected (provided by the App). */
+export const ReviewLauncher = createContext<((targets?: EditTarget[]) => void) | undefined>(undefined);
+const PROPAGATE_KINDS = new Set<string>(["scene", "chapter", "entity", "event", "timeline", "memory"]);
+
+/** Under every editor: once a change is saved and not yet reviewed, the author decides what happens next.
+ * Nothing starts by itself; the change that starts here knows exactly what was before and what is now. */
+export function PendingEditActions({ book, target, label, onRefresh, onStart }: {
+  book: BookProject; target: EditTarget; label: string; onRefresh: () => Promise<void>; onStart: (bookId: string) => void;
+}) {
+  const openReviews = useContext(ReviewLauncher);
+  const pending = pendingElements(book).find(p => p.target.kind === target.kind && p.target.id === target.id);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { setMessage(""); }, [target.id]);
+  if (!pending) return message ? <p role="status" className="text-sm [overflow-wrap:anywhere]">{message}</p> : null;
+  const inProgress = pending.state === "review_in_progress";
+  const copies = pending.edits.some(e => !e.pruned && (e.before !== null || e.after !== null));
+  const blocked = book.status === "running" ? "L'autopilot è in esecuzione: mettilo in pausa per avviare una revisione."
+    : book.revision ? "C'è già una revisione o una modifica in corso." : "";
+  const canPropagate = PROPAGATE_KINDS.has(target.kind) && !inProgress && copies && !(target.kind === "scene" && !pending.edits.some(e => e.field.includes("testo")));
+  async function start() {
+    const auto = book.changeMode !== "confirm";
+    if (!window.confirm(`Avviare la revisione del libro a partire dalla modifica di «${label}»? L'AI confronta com'era prima e com'è ora, poi ${auto ? "riscrive" : "ti propone di riscrivere"} le scene che non sono più coerenti. Usa chiamate AI.`)) return;
+    setBusy(true); setMessage("");
+    try {
+      await requestChangeFromEdits(book.id, { kind: target.kind as ChangeTarget["kind"], id: target.id }, book.updatedAt);
+      await onRefresh();
+      if (!mounted.current) return;
+      setMessage(auto ? "Revisione avviata: l'autopilot confronta prima e dopo, riscrive solo le scene necessarie e le fa rivedere."
+        : "Revisione registrata: l'autopilot prepara il piano e ti chiede conferma prima di riscrivere.");
+      onStart(book.id);
+    } catch (error) {
+      await onRefresh().catch(() => undefined);
+      if (mounted.current) setMessage(errorText(error, "Revisione non avviata."));
+    } finally { if (mounted.current) setBusy(false); }
+  }
+  return <section aria-label={"Dopo la modifica di " + label} className="space-y-2 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3">
+    <p className="text-sm font-semibold">Modifica salvata: {inProgress ? "revisione in corso" : "non ancora rivista"}</p>
+    <p className="muted text-xs">Nulla parte da solo. Puoi far aggiornare il libro in base a ciò che hai cambiato, oppure scegliere tu quali controlli fare.</p>
+    {blocked && !inProgress && <p className="text-xs text-amber-800 dark:text-amber-300">{blocked}</p>}
+    <div className="flex flex-wrap items-center gap-2">
+      {canPropagate && <Button type="button" disabled={busy || !!blocked} onClick={() => void start()}><Sparkles size={16}/> Rivedi e aggiorna il libro da questa modifica</Button>}
+      {openReviews && target.kind !== "memory" && <Button type="button" variant="outline" disabled={busy} onClick={() => openReviews([target])}><ListChecks size={16}/> Scegli una review</Button>}
+    </div>
+    {message && <p role="status" className="text-sm [overflow-wrap:anywhere]">{message}</p>}
+  </section>;
 }
 
 /** The two AI ways to change an element, side by side and explained. */

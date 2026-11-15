@@ -4,6 +4,7 @@
 
 - **Libreria** da sola; poi tre gruppi: **Scrittura** (Dashboard, Libro, Mondo, Revisioni), **Controllo** (Attività, Costi, Archivio), **Configurazione** (Modelli e redazione: solo questo libro; Impostazioni: tutti i libri). Revisioni mostra quante modifiche attendono; un punto verde indica l'autopilot al lavoro.
 - Una sola intestazione per pagina: gruppo, titolo, a cosa serve la pagina, libro attivo e tema. La barra dell'autopilot compare nelle pagine del libro, non in Libreria e Impostazioni.
+- Gli indirizzi sono veri percorsi (`/worldbuilding`, `/revisioni`, `/costi`…, con `?book=`); i vecchi `#/` si riscrivono. Su desktop il menu laterale si **comprime alle icone** (pulsante in alto): sul passaggio del mouse compare solo il nome, riaprendolo si vede tutto; la scelta si ricorda su questo dispositivo, la barra del telefono non cambia.
 - Le due pagine di configurazione sono divise in schede, ricordate nell'indirizzo (`?tab=`): Impostazioni → Modelli AI, Account e cloud, Conversazioni AI; Modelli e redazione → Modelli, Redazione, Ricerca web.
 
 ## Pagine

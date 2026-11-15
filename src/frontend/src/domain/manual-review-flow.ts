@@ -62,10 +62,11 @@ export function createManualReview(book: BookProject, request: ManualReviewReque
   for (const target of request.targets) if (!targets.some(t => sameTarget(t, target))) targets.push({ kind: target.kind, id: target.id });
   // A full review reads the whole book: every pending change is settled by it, not only the selected ones.
   if (request.scope === "full") for (const { target } of pendingElements(book))
-    if (target.kind !== "profiles" && !targets.some(t => sameTarget(t, target)) && targets.length < 200) targets.push({ kind: target.kind, id: target.id });
+    if (target.kind !== "profiles" && target.kind !== "memory" && !targets.some(t => sameTarget(t, target)) && targets.length < 200) targets.push({ kind: target.kind, id: target.id });
   if (targets.length > 200) throw new Error("Massimo 200 elementi per review.");
   if (request.scope !== "full" && !targets.length) throw new Error("Scegli almeno un elemento modificato da controllare.");
   if (targets.some(t => t.kind === "profiles")) throw new Error("Le impostazioni degli agenti non si rivedono con una review narrativa.");
+  if (targets.some(t => t.kind === "memory")) throw new Error("La memoria narrativa non ha un testo da controllare: usa «Rivedi e aggiorna il libro» dalla modifica, oppure salta la review.");
   const units = request.scope === "impact" ? [] : engine === "board" ? boardReviewUnits(book) : buildReviewUnits(book, request.scope, targets);
   if (request.scope !== "impact" && !units.length) throw new Error("Niente da controllare: gli elementi scelti non hanno testo scritto o non esistono più.");
   const pending = pendingElements(book);

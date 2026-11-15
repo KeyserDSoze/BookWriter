@@ -54,17 +54,22 @@ async function stored(page: Page) {
   });
 }
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+/** Worldbuilding sections are accordions, closed by default: open one by its title. */
+async function openSection(page: Page, name: RegExp) {
+  const header = page.getByRole("button", { name, expanded: false });
+  if (await header.count()) await header.first().click();
+  await expect(page.getByRole("button", { name, expanded: true }).first()).toBeVisible();
+}
 
-test("Mondo: panoramica, schede con relazioni e presenze, timeline nei due ordini e memoria, senza AI", async ({ page }) => {
+test("Mondo: sezioni, schede con relazioni e presenze, timeline nei due ordini e memoria, senza AI", async ({ page }) => {
   let calls = 0;
   await page.route("**/chat/completions", async route => { calls++; await route.abort(); });
   await seed(page);
   await nav(page).getByRole("button", { name: "Mondo", exact: true }).click();
-  await expect(page).toHaveURL(/#\/mondo/);
-  const overview = page.getByRole("group", { name: "Panoramica del mondo" }).or(page.getByLabel("Panoramica del mondo"));
-  await expect(overview.getByRole("button", { name: /Personaggi\s*2/ })).toBeVisible();
-  await expect(overview.getByRole("button", { name: /Eventi e timeline\s*4/ })).toBeVisible();
-  await page.getByRole("tab", { name: /Personaggi/ }).click();
+  await expect(page).toHaveURL(/\/worldbuilding/);
+  await expect(page.getByRole("button", { name: "Personaggi (2)", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Timeline ed eventi (4)", exact: true })).toBeVisible();
+  await openSection(page, /^Personaggi/);
   await page.getByRole("list", { name: "Personaggi" }).getByRole("button", { name: /Elena/ }).click();
   const sheet = page.getByRole("article", { name: "Scheda di Elena" });
   await expect(sheet.getByText("Frasi brevi, domande dirette")).toBeVisible();
@@ -75,9 +80,10 @@ test("Mondo: panoramica, schede con relazioni e presenze, timeline nei due ordin
   await expect(page.getByRole("article", { name: "Scheda di Markus" })).toBeVisible();
   // On phones the list is replaced by the sheet: the author goes back explicitly.
   if (test.info().project.name === "mobile-chromium") await page.getByRole("button", { name: "Torna all'elenco" }).click();
-  await page.getByPlaceholder("Cerca personaggi").fill("voss");
+  await page.getByRole("searchbox", { name: "Cerca nel mondo" }).fill("voss");
   await expect(page.getByRole("list", { name: "Personaggi" }).getByRole("button")).toHaveCount(1);
-  await page.getByRole("tab", { name: /Timeline/ }).click();
+  await page.getByRole("button", { name: "Cancella la ricerca" }).click();
+  await openSection(page, /^Timeline ed eventi/);
   const story = page.getByRole("list", { name: "Timeline nell'ordine della storia" });
   await expect(story.getByRole("listitem").first()).toContainText("Scomparsa del fratello");
   await expect(story.getByText("Markus: sa e nasconde · Elena: non sa")).toBeVisible();
@@ -85,8 +91,8 @@ test("Mondo: panoramica, schede con relazioni e presenze, timeline nei due ordin
   await expect(page.getByRole("list", { name: "Timeline nell'ordine del racconto" })).toBeVisible();
   await page.getByLabel("Timeline", { exact: true }).selectOption({ label: "Indagine sulle sparizioni" });
   await expect(page.getByRole("list", { name: "Timeline nell'ordine del racconto" }).getByRole("listitem")).toHaveCount(2);
-  await page.getByRole("tab", { name: "Memoria" }).click();
-  await expect(page.getByText("Segreti (solo autore)")).toBeVisible();
+  await openSection(page, /^Memoria · Segreti/);
+  await expect(page.getByRole("button", { name: /^Memoria · Segreti \(solo autore\)/ })).toBeVisible();
   expect(calls).toBe(0);
   expect(await noOverflow(page)).toBe(true);
 });
@@ -108,7 +114,7 @@ test("modifica automatica di una scheda: analisi, riscrittura mirata, nuova reda
   }, seen);
   await seed(page);
   await nav(page).getByRole("button", { name: "Mondo", exact: true }).click();
-  await page.getByRole("tab", { name: /Personaggi/ }).click();
+  await openSection(page, /^Personaggi/);
   await page.getByRole("list", { name: "Personaggi" }).getByRole("button", { name: /Elena/ }).click();
   await page.getByRole("radio", { name: "Modifica e aggiorna il libro" }).click();
   const box = page.getByLabel("Descrivi la modifica a «Elena»");
@@ -124,7 +130,7 @@ test("modifica automatica di una scheda: analisi, riscrittura mirata, nuova reda
   expect(book.knowledge.entities.find((e: { id: string }) => e.id === "character:elena").version).toBe(2);
   expect(book.chapters.every((c: { frozenAt?: string }) => !!c.frozenAt)).toBe(true);
   expect(seen.filter(p => p.includes("Riscrivi SOLO la scena"))).toHaveLength(1);
-  await page.getByRole("tab", { name: /Modifiche/ }).click();
+  await openSection(page, /^Modifiche/);
   const history = page.getByRole("list", { name: "Storico delle modifiche" });
   await expect(history.getByText("Completata")).toBeVisible();
   page.once("dialog", dialog => dialog.accept());
@@ -152,7 +158,7 @@ test("con conferma: il piano mostra scene dirette e indirette e attende la decis
   await nav(page).getByRole("button", { name: "Mondo", exact: true }).click();
   await page.getByRole("radio", { name: "Dopo la mia conferma" }).click();
   await expect.poll(async () => (await stored(page)).changeMode).toBe("confirm");
-  await page.getByRole("tab", { name: /Timeline/ }).click();
+  await openSection(page, /^Timeline ed eventi/);
   const event = page.getByRole("listitem").filter({ hasText: "Primo indizio" }).first();
   await event.getByText("Modifica questo evento con un prompt").click();
   await event.getByRole("radio", { name: "Modifica e aggiorna il libro" }).click();
@@ -221,7 +227,7 @@ test("libro senza schede: generazione esplicita dalla pagina Mondo", async ({ pa
   await expect(page.getByText("Nessuna scheda strutturata per questo libro")).toBeVisible();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Genera le schede del libro" }).click();
-  await expect(page.getByRole("tab", { name: /Personaggi/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: /^Personaggi/ })).toBeVisible({ timeout: 30_000 });
   const book = await stored(page);
   expect(book.knowledge.entities.map((e: { name: string }) => e.name)).toEqual(expect.arrayContaining(["Elena", "Markus", "Archivio municipale"]));
   expect(book.knowledge.pending).toBeUndefined();

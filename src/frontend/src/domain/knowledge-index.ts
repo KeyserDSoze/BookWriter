@@ -1,4 +1,5 @@
 import type { BookProject, Chapter, Scene } from "./types";
+import { parseMemoryId } from "./book-edits";
 import { MEMORY_FOLDER, type KnowledgeBase, type KnowledgeEntity, type KnowledgeEvent } from "./knowledge";
 
 /** Derived index, rebuilt from the book on demand (never stored, never stale).
@@ -79,7 +80,7 @@ export interface ImpactAnalysis {
   reasons: string[];
 }
 /** Deterministic candidates; the AI analysis may add or drop scenes with reasons. */
-export function analyzeImpact(book: BookProject, kb: KnowledgeBase, target: { kind: "entity" | "event" | "chapter" | "timeline"; id: string }): ImpactAnalysis {
+export function analyzeImpact(book: BookProject, kb: KnowledgeBase, target: { kind: "entity" | "event" | "chapter" | "timeline" | "memory"; id: string }): ImpactAnalysis {
   const order = new Map(flatScenes(book).map(x => [x.scene.id, x.position]));
   const writtenIds = new Set(flatScenes(book).filter(x => written(x.scene)).map(x => x.scene.id));
   const direct = new Set<string>(), indirect = new Set<string>(), reasons: string[] = [];
@@ -102,6 +103,14 @@ export function analyzeImpact(book: BookProject, kb: KnowledgeBase, target: { ki
     events = timelineEvents(kb, timeline.id);
     for (const event of events) for (const id of event.sceneIds) if (writtenIds.has(id)) direct.add(id);
     if (direct.size) reasons.push("Gli eventi della timeline sono raccontati in " + direct.size + " scene.");
+  } else if (target.kind === "memory") {
+    const parsed = parseMemoryId(target.id);
+    if (!parsed) throw new Error("Parte della memoria non trovata.");
+    if (parsed.part === "entry") {
+      const pattern = wholeWord(parsed.name);
+      for (const { scene } of flatScenes(book)) if (written(scene) && pattern.test(fold(scene.text))) direct.add(scene.id);
+      if (direct.size) reasons.push(direct.size + " scene scritte nominano «" + parsed.name + "».");
+    } else reasons.push("La memoria guida tutta la scrittura successiva: l'analisi indica quali scene già scritte vanno riallineate.");
   } else {
     const event = kb.events.find(e => e.id === target.id);
     if (!event) throw new Error("Evento non trovato.");

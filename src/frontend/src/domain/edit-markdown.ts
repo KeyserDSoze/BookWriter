@@ -7,7 +7,7 @@ import { REVIEW_MODE_LABELS, REVIEW_SCOPE_LABELS, type ManualReview } from "./ma
  * book (Markdown format 3). It is documentation for people and other tools: it is NOT
  * re-imported as live data; `.bookwriter/project.json` stays the lossless source. */
 const TARGET_LABELS: Record<EditTargetKind, string> = {
-  scene: "Scena", chapter: "Capitolo", entity: "Scheda", event: "Evento", timeline: "Timeline", structure: "Struttura", profiles: "Agenti",
+  scene: "Scena", chapter: "Capitolo", entity: "Scheda", event: "Evento", timeline: "Timeline", structure: "Struttura", profiles: "Agenti", memory: "Memoria",
 };
 const REVIEW_STATUS: Record<ManualReview["status"], string> = { pending: "in coda", in_progress: "in corso", completed: "completata", cancelled: "annullata" };
 const OUTCOME: Record<NonNullable<ManualReview["outcome"]>, string> = { passed: "superata", failed: "problemi trovati", analysis: "analisi d'impatto" };

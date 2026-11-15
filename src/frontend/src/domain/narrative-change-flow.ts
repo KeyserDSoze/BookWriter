@@ -3,6 +3,7 @@ import { archiveEditorialRound, type EditorialRound } from "./editorial-board";
 import { markDownstreamContinuity } from "./cross-chapter-continuity";
 import { synopsisBeforeChapter } from "./editorial-summary";
 import { parseKnowledge } from "./knowledge";
+import { setReviewState, type EditTarget } from "./book-edits";
 import { chapterTextStamp, pruneChangeOperations, replaceEntitySheet, replaceEventSheet, replaceTimelineSheet, sceneSnapshots,
   type ChangePlan, type NarrativeChangeOperation } from "./narrative-change";
 
@@ -134,6 +135,22 @@ export function settleAfterRewrite(book: BookProject, op: NarrativeChangeOperati
   captureAfter(book, op);
   settleChangeOperations(book, now);
 }
+/** Edits the author saved by hand and then propagated follow the change: in review while it runs,
+ * validated when it ends, open again if it is cancelled. Only the element's newest edit moves, and only
+ * when it is one of the propagated ones: content the change never saw is never validated by it. */
+export function followChangeEdits(book: BookProject, op: NarrativeChangeOperation, outcome: "started" | "passed" | "open"): void {
+  if (!op.fromEdits?.length) return;
+  const target: EditTarget = { kind: op.target.kind, id: op.target.id };
+  const edits = (book.edits ?? []).filter(e => e.target.kind === target.kind && e.target.id === target.id);
+  const latest = edits.at(-1);
+  if (!latest || !op.fromEdits.includes(latest.id)) return;
+  if (outcome === "started") setReviewState(book, [target], "review_in_progress", op.id);
+  else if (outcome === "passed") setReviewState(book, [target], "review_passed", op.id);
+  else if (latest.reviewState === "review_in_progress" && latest.reviewId === op.id) {
+    for (const edit of edits) if (edit.reviewState === "review_in_progress" && edit.reviewId === op.id) { edit.reviewState = "modified_unreviewed"; delete edit.reviewId; }
+  }
+}
+
 /** Operations in review become completed once their chapters are frozen again. */
 export function settleChangeOperations(book: BookProject, now: string): void {
   for (const op of book.changeOperations ?? []) {
@@ -142,6 +159,7 @@ export function settleChangeOperations(book: BookProject, now: string): void {
     if (touched.some(ch => !ch.frozenAt)) continue;
     op.state = "completed"; op.completedAt = now; op.updatedAt = now;
     captureAfter(book, op);
+    followChangeEdits(book, op, "passed");
   }
   if (book.changeOperations) book.changeOperations = pruneChangeOperations(book.changeOperations);
 }

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { knowledgeBook } from "./__fixtures__/knowledge";
 import { createEditorialCycle } from "./editorial-board";
 import { currentStamp, elementReviewState, MAX_EDIT_SNAPSHOT_CHARS, pendingElements, pruneEdits, setReviewState } from "./book-edits";
-import { addEntity, addEvent, assertEditable, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editScene,
+import { addEntity, addEvent, assertEditable, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editMemory, editScene,
   editSceneMetadata, editStructure, editTimeline, moveEvent, restoreBefore, type EditContext } from "./book-editing";
+import { followChangeEdits } from "./narrative-change-flow";
+import { memoryLabel, memoryValue, parseMemoryId } from "./book-edits";
 
 const ctx = (at = "2026-11-14T10:00:00.000Z"): EditContext => ({ now: at, origin: "manual" });
 const scene = (book: ReturnType<typeof knowledgeBook>, id: string) => book.chapters.flatMap(c => c.scenes).find(s => s.id === id)!;
@@ -227,5 +229,59 @@ describe("Stato di review e storico", () => {
     book.edits = pruned;
     expect(() => restoreBefore(book, pruned[0]!.id, ctx())).toThrow(/non è più conservata/);
     expect(currentStamp(book, { kind: "scene", id: "nessuna" })).toBe("deleted");
+  });
+});
+
+describe("Memoria narrativa modificabile a mano", () => {
+  it("stato corrente, cronologia e voci: aggiunta, modifica, eliminazione e ripristino, senza toccare la prosa", () => {
+    const book = knowledgeBook();
+    const prose = JSON.stringify(book.chapters);
+    const state = editMemory(book, "state", "Elena sa che Markus lavora per il Consiglio.", ctx());
+    expect(state).toMatchObject({ target: { kind: "memory", id: "state" }, label: "Stato corrente", reviewState: "modified_unreviewed" });
+    expect(book.memory.currentState).toBe("Elena sa che Markus lavora per il Consiglio.");
+    expect(() => editMemory(book, "state", "Elena sa che Markus lavora per il Consiglio.", ctx())).toThrow(/Nessuna modifica/);
+    editMemory(book, "timeline", "Prima riga\n\n  Seconda riga ", ctx());
+    expect(book.memory.timeline).toEqual(["Prima riga", "Seconda riga"]);
+    const created = editMemory(book, "locations:Porto di Trieste", "Un molo battuto dal vento.", ctx());
+    expect(created.field).toBe("creata");
+    expect(memoryValue(book, "locations:Porto di Trieste")).toBe("Un molo battuto dal vento.");
+    expect(memoryLabel("locations:Porto di Trieste")).toBe("Luoghi · Porto di Trieste");
+    const removed = editMemory(book, "locations:Porto di Trieste", null, ctx());
+    expect(removed.field).toBe("eliminata");
+    expect(memoryValue(book, "locations:Porto di Trieste")).toBeUndefined();
+    // Restoring a deleted entry brings it back; restoring an edit brings back the previous text.
+    restoreBefore(book, removed.id, ctx());
+    expect(memoryValue(book, "locations:Porto di Trieste")).toBe("Un molo battuto dal vento.");
+    restoreBefore(book, state.id, ctx());
+    expect(book.memory.currentState).not.toContain("Consiglio.");
+    expect(JSON.stringify(book.chapters)).toBe(prose);
+  });
+  it("rifiuta parti inesistenti, nomi pericolosi, eliminazioni non ammesse", () => {
+    const book = knowledgeBook();
+    expect(parseMemoryId("nessuna:x")).toBeUndefined();
+    expect(parseMemoryId("characters:Ana:Maria")).toEqual({ part: "entry", folder: "characters", name: "Ana:Maria" });
+    expect(() => editMemory(book, "nessuna:x", "x", ctx())).toThrow(/non valida/);
+    expect(() => editMemory(book, "characters:__proto__", "x", ctx())).toThrow(/Nome non valido/);
+    expect(() => editMemory(book, "characters:Inesistente", null, ctx())).toThrow(/non trovata/);
+    expect(() => editMemory(book, "state", null, ctx())).toThrow(/non si elimina/);
+    expect(() => editMemory(book, "timeline", Array.from({ length: 401 }, (_, i) => "riga " + i).join("\n"), ctx())).toThrow(/massimo 400/);
+  });
+  it("una modifica propagata segue il suo percorso: in revisione, superata, oppure di nuovo da rivedere se annullata", () => {
+    const book = knowledgeBook();
+    const edit = editMemory(book, "state", "Elena sa che Markus mente.", ctx());
+    const target = { kind: "memory" as const, id: "state" };
+    const op = { id: crypto.randomUUID(), fromEdits: [edit.id], target } as Parameters<typeof followChangeEdits>[1];
+    followChangeEdits(book, op, "started");
+    expect(elementReviewState(book, target)).toBe("review_in_progress");
+    followChangeEdits(book, op, "open");
+    expect(elementReviewState(book, target)).toBe("modified_unreviewed");
+    followChangeEdits(book, op, "started");
+    followChangeEdits(book, op, "passed");
+    expect(elementReviewState(book, target)).toBe("review_passed");
+    // A newer edit the change never saw is not validated by it.
+    const later = editMemory(book, "state", "Elena non sa più nulla.", ctx("2026-11-14T12:00:00.000Z"));
+    followChangeEdits(book, op, "passed");
+    expect(later.reviewState).toBe("modified_unreviewed");
+    expect(elementReviewState(book, target)).toBe("modified_unreviewed");
   });
 });

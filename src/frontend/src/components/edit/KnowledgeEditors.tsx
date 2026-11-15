@@ -8,7 +8,7 @@ import { createEntity, createEvent, editBase, ElementChangedError, removeEntity,
   saveEventEdit, saveTimelineEdit } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/primitives";
-import { AiEditPanel, ChipPicker, EditHistory, PromptEditChoices, ReviewStateBadge } from "./EditKit";
+import { AiEditPanel, ChipPicker, EditHistory, PendingEditActions, PromptEditChoices, ReviewStateBadge } from "./EditKit";
 
 const IMPORTANCE: Record<KnowledgeEntity["importance"], string> = { main: "Principale", secondary: "Secondario", minor: "Minore" };
 const errorText = (error: unknown, fallback: string) => error instanceof ElementChangedError
@@ -310,6 +310,7 @@ export function TimelineManager({ book, onRefresh, onStart, selected }: { book: 
             </div>
           </details>)}
         {current && <EditHistory book={book} target={{ kind: "timeline", id: current.id }} label={current.title} onRefresh={onRefresh}/>}
+        {current && onStart && <PendingEditActions book={book} target={{ kind: "timeline", id: current.id }} label={current.title} onRefresh={onRefresh} onStart={onStart}/>}
       </div>
       {message && <p role="status" className="text-sm lg:col-span-2">{message}</p>}
     </div>

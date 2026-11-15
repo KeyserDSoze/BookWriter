@@ -19,7 +19,8 @@ test("indirizzi: F5 riapre pagina, libro, capitolo e task; Indietro torna alla p
 
   // Page + book survive a refresh.
   await nav.getByRole("button", { name: "Costi", exact: true }).click();
-  await expect(page).toHaveURL(/#\/costi\?book=/);
+  await expect(page).toHaveURL(/\/costi\?book=/);
+  expect(new URL(page.url()).hash).toBe("");
   await page.reload();
   await expect(page.getByRole("region", { name: "Budget AI" })).toBeVisible();
   await expect(page.locator("#book-select option:checked")).toHaveText("Secondo indirizzo");
@@ -30,15 +31,23 @@ test("indirizzi: F5 riapre pagina, libro, capitolo e task; Indietro torna alla p
   await page.reload();
   await expect(page.locator("#book-select option:checked")).toHaveText("Primo indirizzo");
   const url = page.url();
+  const bookParam = new URL(url).searchParams.get("book")!;
+  // A deep link opens the page directly; an old #/ link is rewritten as a real path.
   await page.goto("/");
-  await page.goto(url.replace(/#.*/, "") + "#/costi?book=" + new URL(url).hash.match(/book=([\w.:-]+)/)![1]);
+  await page.goto("/costi?book=" + bookParam);
   await expect(page.locator("#book-select option:checked")).toHaveText("Primo indirizzo");
+  await page.goto("/#/costi?book=" + bookParam);
+  await expect(page.locator("#book-select option:checked")).toHaveText("Primo indirizzo");
+  await expect(page).toHaveURL(new RegExp("/costi\\?book=" + bookParam + "$"));
+  await page.goto("/mondo?book=" + bookParam);
+  await expect(page).toHaveURL(/\/worldbuilding\?book=/);
 
   // Back returns to the previous page.
+  await nav.getByRole("button", { name: "Costi", exact: true }).click();
   await nav.getByRole("button", { name: "Attività" }).click();
-  await expect(page).toHaveURL(/#\/attivita/);
+  await expect(page).toHaveURL(/\/attivita/);
   await page.goBack();
-  await expect(page).toHaveURL(/#\/costi/);
+  await expect(page).toHaveURL(/\/costi/);
   await expect(page.getByRole("region", { name: "Budget AI" })).toBeVisible();
 });
 
@@ -110,5 +119,5 @@ test("lavoro in background: il riquadro in basso a destra segnala il libro in es
   await expect(toast).toContainText("Autopilot al lavoro");
   await toast.getByRole("button", { name: /Autopilot al lavoro/ }).click();
   await toast.getByRole("button", { name: /Apri il lavoro in corso su Libro al lavoro/ }).click();
-  await expect(page).toHaveURL(/#\/attivita\?book=/);
+  await expect(page).toHaveURL(/\/attivita\?book=/);
 });

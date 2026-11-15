@@ -1,5 +1,14 @@
 # Changelog — BookWriter
 
+## 0.23.0 — 2026-11-15 — Indirizzi puliti, worldbuilding ad accordion, menu comprimibile, memoria modificabile e revisione da una modifica
+
+- **Indirizzi senza `#`.** Le pagine hanno indirizzi veri: `/worldbuilding`, `/revisioni`, `/costi`, `/attivita`… (la pagina Mondo è `/worldbuilding`). I vecchi link con `#/` funzionano ancora e vengono riscritti. Dopo un F5 su un indirizzo interno l'app si riapre anche su GitHub Pages grazie a una pagina `404.html` che porta all'app.
+- **Worldbuilding su una colonna.** Ogni parte è un accordion chiuso che ricorda se era aperto (Personaggi, Luoghi, Oggetti, Fazioni, Timeline ed eventi, Stato corrente, Cronologia della memoria, memoria di personaggi, luoghi, fazioni, oggetti e segreti, Modifiche, Ricerche). La **ricerca** «Cerca nel mondo» apre e mostra solo ciò che corrisponde. Le schede restano su due colonne (elenco e dettaglio).
+- **Memoria narrativa modificabile.** Stato corrente, cronologia e ogni voce (anche segreti) si modificano, si aggiungono e si eliminano a mano, con cronologia e ripristino; la prosa non cambia e non parte nessuna review.
+- **Revisione da una modifica.** Sotto ogni editor (scena, capitolo, scheda, evento, timeline, memoria), finché la modifica non è rivista, «Rivedi e aggiorna il libro da questa modifica» avvia un'analisi che conosce com'era prima e com'è ora, sceglie le scene da riscrivere e passa dalla stessa revisione tracciata delle modifiche con un prompt (modalità automatica o con conferma, ripristino). «Scegli una review» apre Revisioni con l'elemento già selezionato. Se annulli, il testo che avevi scritto resta.
+- **Menu laterale comprimibile (desktop).** Si riduce alle icone; passando sopra compare il nome, riaprendolo si vede tutto. La scelta si ricorda; sul telefono la barra non cambia.
+- Limiti: la memoria non ha una review propria (si usa la revisione da modifica o «salta la review»); la ricerca del mondo è testuale, non semantica; il menu compresso mostra il tooltip solo al passaggio del mouse o con la tastiera; test con fornitori simulati.
+
 ## 0.22.0 — 2026-11-15 — Navigazione a gruppi, configurazione in schede, review complete, mondo sempre aggiornato e formato dei dati versionato (ADR 0163)
 
 - **Navigazione.** La barra laterale raggruppa le pagine: Libreria; **Scrittura** (Dashboard, Libro, Mondo, Revisioni); **Controllo** (Attività, Costi, Archivio); **Configurazione** (Modelli e redazione, solo questo libro; Impostazioni, tutti i libri). Revisioni mostra quante modifiche sono da rivedere; un punto verde indica l'autopilot al lavoro. Sul telefono la barra in alto contiene tutte le pagine con il nome intero, scorre di lato e tiene in vista quella aperta.

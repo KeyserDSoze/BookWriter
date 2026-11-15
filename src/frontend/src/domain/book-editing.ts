@@ -4,7 +4,7 @@ import { ENTITY_TYPES, findEntity, LIMITS, MEMORY_FOLDER, NARRATION_MODES, parse
 import { entityReferences, relevantKnowledge, timelineEvents } from "./knowledge-index";
 import { detectFactDrift, knownNames } from "./narrative-change";
 import { archiveJudgedRounds } from "./narrative-change-flow";
-import { contentStamp, currentContent, entityContent, eventContent, findScene, newEdit, pruneEdits, structureContent,
+import { contentStamp, currentContent, entityContent, eventContent, findScene, memoryLabel, memoryValue, newEdit, parseMemoryId, pruneEdits, structureContent,
   type BookEdit, type EditChangeKind, type EditTarget } from "./book-edits";
 
 /** Pure, AI-free editing of every element. Each operation validates, applies, records
@@ -566,6 +566,50 @@ export function deleteTimeline(book: BookProject, timelineId: string, ctx: EditC
     before: JSON.stringify(timeline), after: null, changeKind: "structural", related: events, stampAfter: "deleted" }));
 }
 
+/* ---------------------------- narrative memory ---------------------------- */
+
+const MAX_MEMORY_TEXT = 20_000, MAX_MEMORY_ENTRIES = 300, MAX_MEMORY_TIMELINE = 400;
+/** Change one part of the narrative memory: its text (null removes an entry, a new name adds one).
+ * The memory feeds the next scenes, so this never rewrites prose; the author may ask for it afterwards. */
+export function editMemory(book: BookProject, id: string, value: string | null, ctx: EditContext): BookEdit {
+  const parsed = parseMemoryId(id);
+  if (!parsed) throw new Error("Parte della memoria non valida.");
+  const before = memoryValue(book, id);
+  const beforeJson = before === undefined ? null : JSON.stringify({ value: before });
+  let field = "memoria";
+  if (parsed.part === "state") {
+    if (value === null) throw new Error("Lo stato corrente non si elimina: svuotalo se serve.");
+    book.memory.currentState = requireText(value, "Stato corrente", 0, MAX_MEMORY_TEXT);
+  } else if (parsed.part === "timeline") {
+    if (value === null) throw new Error("La cronologia non si elimina: svuotala se serve.");
+    const lines = clean(value).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (lines.length > MAX_MEMORY_TIMELINE || lines.some(line => line.length > 2000)) throw new Error(`Cronologia: massimo ${MAX_MEMORY_TIMELINE} voci di 2.000 caratteri.`);
+    book.memory.timeline = lines;
+  } else {
+    const entries = book.memory[parsed.folder];
+    if (parsed.name.length > 120 || ["__proto__", "constructor", "prototype"].includes(parsed.name)) throw new Error("Nome non valido.");
+    if (value === null) {
+      if (before === undefined) throw new Error("Voce della memoria non trovata.");
+      delete entries[parsed.name]; field = "eliminata";
+    } else {
+      if (before === undefined) {
+        if (Object.keys(entries).length >= MAX_MEMORY_ENTRIES) throw new Error(`Massimo ${MAX_MEMORY_ENTRIES} voci per sezione.`);
+        field = "creata";
+      }
+      entries[parsed.name] = requireText(value, parsed.name, 0, MAX_MEMORY_TEXT);
+    }
+  }
+  const after = memoryValue(book, id);
+  if (before === after) throw new Error("Nessuna modifica da salvare.");
+  const afterJson = after === undefined ? null : JSON.stringify({ value: after });
+  const kb = book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
+  const sheet = parsed.part === "entry" && parsed.folder !== "secrets" && kb ? kb.entities.find(e => e.name === parsed.name)?.id : undefined;
+  const changeKind: EditChangeKind = parsed.part === "entry" && parsed.folder !== "secrets" ? "descriptive" : "event";
+  return record(book, newEdit({ at: ctx.now, target: { kind: "memory", id }, label: memoryLabel(id), field, origin: ctx.origin,
+    ...(ctx.prompt ? { prompt: ctx.prompt.slice(0, 4000) } : {}), ...(ctx.aiActivityId ? { aiActivityId: ctx.aiActivityId } : {}),
+    before: beforeJson, after: afterJson, changeKind, related: sheet ? [sheet] : [], stampAfter: afterJson === null ? "deleted" : contentStamp(afterJson) }));
+}
+
 /* --------------------------------- restore --------------------------------- */
 
 /** Bring an element back to how it was before one edit. Recorded as a new edit:
@@ -676,6 +720,12 @@ export function restoreBefore(book: BookProject, editId: string, ctx: EditContex
         return record(book, restored);
       }
       throw new Error("Per annullare un riordino usa le frecce di spostamento: la cronologia resta registrata.");
+    }
+    case "memory": {
+      // A created entry is removed; a removed or changed one gets its previous text back.
+      if (edit.field === "creata") return editMemory(book, target.id, null, restoreCtx);
+      const before = (JSON.parse(edit.before!) as { value: string }).value;
+      return editMemory(book, target.id, before, restoreCtx);
     }
     default: throw new Error("Questo elemento non si ripristina da qui.");
   }

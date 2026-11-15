@@ -24,8 +24,8 @@ describe("La Dashboard racconta i nuovi passi", () => {
     expect(describeNextAutopilotStep(changed).headline).toBe("Analisi della modifica di «Elena».");
   });
   it("la pagina Mondo ha il suo indirizzo e i vecchi link «memoria» funzionano ancora", () => {
-    expect(formatRoute({ page: "atlas", book: "b1" })).toBe("#/mondo?book=b1");
+    expect(formatRoute({ page: "atlas", book: "b1" })).toBe("/worldbuilding?book=b1");
     expect(parseRoute("#/memoria?book=b1")).toEqual({ page: "atlas", book: "b1" });
-    expect(parseRoute("#/mondo")).toEqual({ page: "atlas" });
+    expect(parseRoute("/mondo")).toEqual({ page: "atlas" });
   });
 });

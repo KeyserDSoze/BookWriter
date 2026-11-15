@@ -1,6 +1,6 @@
 import type { BookProject } from "../domain/types";
 import { contentStamp, currentStamp, findScene, setReviewState, type BookEdit, type EditTarget, CHANGE_KIND_LABELS } from "../domain/book-edits";
-import { addEntity, addEvent, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editScene, editSceneMetadata, editStructure,
+import { addEntity, addEvent, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editMemory, editScene, editSceneMetadata, editStructure,
   editTimeline, moveEvent, restoreBefore, sceneMetaContent, type ChapterPatch, type EditContext, type EntityPatch, type EventPatch, type SceneMetaPatch, type ScenePatch,
   type StructureOperation, type TimelinePatch } from "../domain/book-editing";
 import type { EntityType, KnowledgeEntity } from "../domain/knowledge";
@@ -72,6 +72,9 @@ export const saveTimelineEdit = (bookId: string, timelineId: string | undefined,
   applyEdit(bookId, base, (book, ctx) => editTimeline(book, timelineId, patch, ctx));
 export const removeTimeline = (bookId: string, timelineId: string, base: EditBase) =>
   applyEdit(bookId, base, (book, ctx) => deleteTimeline(book, timelineId, ctx));
+/** One part of the narrative memory (`state`, `timeline`, `<folder>:<name>`); `value` null removes an entry. */
+export const saveMemoryEdit = (bookId: string, id: string, base: EditBase | undefined, value: string | null) =>
+  applyEdit(bookId, base, (book, ctx) => editMemory(book, id, value, ctx));
 /** Bring back the version before one edit; recorded as a new manual edit. */
 export const restoreEdit = (bookId: string, editId: string, base?: EditBase) =>
   applyEdit(bookId, base, (book, ctx) => restoreBefore(book, editId, ctx));

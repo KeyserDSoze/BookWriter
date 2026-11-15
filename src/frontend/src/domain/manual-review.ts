@@ -64,7 +64,7 @@ export const manualReviewSchema = z.object({
   id: z.string().uuid(), createdAt: iso, scope: z.enum(REVIEW_SCOPES), mode: z.enum(REVIEW_MODES),
   /** Absent: the verifier (reviews created before 0.22). */
   engine: z.enum(REVIEW_ENGINES).optional(),
-  targets: z.array(z.object({ kind: z.enum(["scene", "chapter", "entity", "event", "timeline", "structure", "profiles"]), id,
+  targets: z.array(z.object({ kind: z.enum(["scene", "chapter", "entity", "event", "timeline", "structure", "profiles", "memory"]), id,
     /** Content stamp when the author asked: what the review is about. */
     stamp: z.string().max(40) }).strict()).max(200),
   editIds: z.array(z.string().uuid()).max(400),

@@ -38,7 +38,7 @@ import { activeChange, changeAnalysisSchema, changeById, detectFactDrift, knownN
 import { applyChangePlan, captureFreezeState, reopenForRewrite, settleAfterRewrite, settleChangeOperations } from "../domain/narrative-change-flow";
 import { timelineText } from "../domain/ai-edit";
 import { applySceneSummaries, sceneSummariesPrompt, scenesNeedingSummary, summaryBatch } from "../domain/scene-summaries";
-import { settleChapterEdits } from "../domain/book-edits";
+import { memoryValue, settleChapterEdits } from "../domain/book-edits";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -989,7 +989,8 @@ function changeAnalysisWork(book: BookProject, change: NonNullable<ReturnType<ty
   const kind = change.target.kind;
   if (kind === "scene") throw new Error("Una modifica di scena non passa da questa analisi.");
   const kb = book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
-  if (!kb && kind !== "chapter") throw new Error("Knowledge base non disponibile per la modifica.");
+  if (!kb && kind !== "chapter" && kind !== "memory") throw new Error("Knowledge base non disponibile per la modifica.");
+  const fromEdits = !!change.fromEdits?.length;
   const knowledge = kb ?? emptyKnowledge();
   const impact = analyzeImpact(book, knowledge, { kind, id: change.target.id });
   const written = allScenes(book).filter(s => s.status !== "planned" && s.text.trim()).map(s => s.id);
@@ -997,32 +998,37 @@ function changeAnalysisWork(book: BookProject, change: NonNullable<ReturnType<ty
   const event = kind === "event" ? knowledge.events.find(e => e.id === change.target.id) : undefined;
   const timeline = kind === "timeline" ? knowledge.timelines.find(t => t.id === change.target.id) : undefined;
   const chapter = kind === "chapter" ? book.chapters.find(c => c.id === change.target.id) : undefined;
-  const what = { entity: "la scheda", event: "l'evento", timeline: "la timeline", chapter: "il capitolo" }[kind];
-  const proposalRule = {
+  const what = { entity: "la scheda", event: "l'evento", timeline: "la timeline", chapter: "il capitolo", memory: "la voce di memoria" }[kind];
+  const proposalRule = fromEdits ? "La nuova versione è GIÀ in vigore: NON proporre una nuova versione dell'elemento (niente entity, event, timeline o chapter nella risposta)." : {
     entity: "Prepara la NUOVA versione completa della scheda (entity), concisa, conservando ciò che la richiesta non cambia.",
     event: "Prepara la NUOVA versione completa dell'evento (event), concisa, conservando ciò che la richiesta non cambia.",
     timeline: "Se la richiesta cambia titolo, tipo, descrizione o schede seguite della timeline, proponili in timeline (altrimenti omettilo); gli eventi della timeline cambiano solo attraverso le scene riscritte.",
     chapter: "Se la richiesta cambia titolo o scopo del capitolo, proponili in chapter (altrimenti omettilo).",
+    memory: "La memoria si aggiorna da sola dopo le riscritture: non proporre una nuova versione.",
   }[kind];
-  const shape = {
+  const shape = fromEdits ? "" : {
     entity: '"entity":{"name":"...","aliases":[],"importance":"main|secondary|minor","summary":"...","attributes":{"role":"...","personality":"...","speech":"..."},"relationships":[{"target":"nome scheda","type":"...","note":"..."}]}',
     event: '"event":{"title":"...","summary":"...","storyOrder":10,"when":"...","narration":"scene|flashback|foreshadowing|offscreen|backstory","involves":["nomi"],"causes":["titoli eventi"],"secret":false,"perspectives":[{"who":"nome","stance":"knows|unaware|believes_false|conceals","note":"..."}]}',
     timeline: '"timeline":{"title":"...","kind":"global|arc|event","summary":"...","subjects":["nomi delle schede seguite"]}',
     chapter: '"chapter":{"title":"...","purpose":"..."}',
+    memory: "",
   }[kind];
+  const memoryText = kind === "memory" ? memoryValue(book, change.target.id) : undefined;
   const current = entity ? "SCHEDA ATTUALE:\n" + describeEntities([entity], knowledge, 5000)
     : event ? "EVENTO ATTUALE:\n" + describeEvents([event], knowledge, 4000)
       : timeline ? "TIMELINE ATTUALE:\n" + timelineText(timeline, knowledge) + "\nEVENTI: " + timelineEvents(knowledge, timeline.id).map(e => e.title).slice(0, 80).join("; ")
-        : chapter ? `CAPITOLO ATTUALE: ${chapter.number} «${chapter.title}»\nScopo: ${chapter.purpose}${chapter.summary ? "\nRiassunto: " + chapter.summary : ""}` : "";
+        : chapter ? `CAPITOLO ATTUALE: ${chapter.number} «${chapter.title}»\nScopo: ${chapter.purpose}${chapter.summary ? "\nRiassunto: " + chapter.summary : ""}`
+          : memoryText !== undefined ? `VOCE DI MEMORIA ATTUALE (${change.targetLabel}):\n${memoryText.slice(0, 5000)}` : "";
   return {
     phase: "revision", kind: "revision", noAuthorNotes: true,
     title: "Analisi della modifica: " + change.targetLabel,
     reason: "Interpretare la richiesta, aggiornare l'elemento e trovare le scene da riscrivere senza toccare il resto del libro.",
     nextStep: change.mode === "confirm" ? "Piano da confermare dall'autore" : "Riscrittura mirata delle scene coinvolte",
     prompt: [
-      `L'autore chiede di modificare ${what} «${change.targetLabel}» con questa richiesta PRIORITARIA: "${change.instruction}".`,
+      fromEdits ? `L'autore ha GIÀ modificato a mano ${what} «${change.targetLabel}». Ecco com'era prima e com'è ora:\n${change.instruction}\nAllinea il resto del libro alla nuova versione.`
+        : `L'autore chiede di modificare ${what} «${change.targetLabel}» con questa richiesta PRIORITARIA: "${change.instruction}".`,
       "1) Interpreta la richiesta. 2) " + proposalRule + " 3) Valuta l'impatto: scene DIRETTE (citano o usano l'elemento), INDIRETTE (dipendono da eventi, relazioni o conseguenze cambiate), GLOBALE (struttura dell'intero libro). 4) Scegli in rewriteSceneIds SOLO le scene già scritte che vanno davvero riscritte: non riscrivere tutto il libro. Una modifica di carattere o voce richiede le scene dove il personaggio agisce o parla; un cambio di ruolo può richiedere molto di più. 5) OGNI scena DIRETTA va classificata: o in rewriteSceneIds, o in unchangedDirect con il motivo per cui resta com'è.",
-      `Rispondi ESCLUSIVAMENTE JSON: {"interpretation":"...","rationale":"perché queste scene","global":false,"changedFacts":["..."],"rewriteSceneIds":["scene:001:001"],"unchangedDirect":[{"sceneId":"scene:001:002","reason":"perché resta invariata"}],${shape}}`,
+      `Rispondi ESCLUSIVAMENTE JSON: {"interpretation":"...","rationale":"perché queste scene","global":false,"changedFacts":["..."],"rewriteSceneIds":["scene:001:001"],"unchangedDirect":[{"sceneId":"scene:001:002","reason":"perché resta invariata"}]${shape ? "," + shape : ""}}`,
       current,
       "ANALISI LOCALE DELLE DIPENDENZE (indizi lessicali e strutturali, non prove):\n" + (impact.reasons.join("\n") || "nessuna"),
       "SCENE DIRETTE:\n" + scenesCatalog(book, impact.direct),
@@ -1033,10 +1039,10 @@ function changeAnalysisWork(book: BookProject, change: NonNullable<ReturnType<ty
     ].filter(Boolean).join("\n\n"),
     apply: (b, text) => {
       const op = b.revision?.changeOperationId ? changeById(b, b.revision.changeOperationId) : undefined;
-      if (!op || op.id !== change.id || op.state !== "pending" || (!b.knowledge && kind !== "chapter")) throw new Error("La modifica è cambiata durante l'analisi.");
+      if (!op || op.id !== change.id || op.state !== "pending" || (!b.knowledge && kind !== "chapter" && kind !== "memory")) throw new Error("La modifica è cambiata durante l'analisi.");
       const parsed = changeAnalysisSchema.parse(parseJson(text));
-      if (kind === "entity" && !parsed.entity) throw new Error("L'analisi deve proporre la nuova scheda completa (entity).");
-      if (kind === "event" && !parsed.event) throw new Error("L'analisi deve proporre il nuovo evento completo (event).");
+      if (!fromEdits && kind === "entity" && !parsed.entity) throw new Error("L'analisi deve proporre la nuova scheda completa (entity).");
+      if (!fromEdits && kind === "event" && !parsed.event) throw new Error("L'analisi deve proporre il nuovo evento completo (event).");
       const now = new Date().toISOString();
       const liveKb = b.knowledge && !b.knowledge.pending ? b.knowledge : emptyKnowledge();
       const live = analyzeImpact(b, liveKb, { kind, id: op.target.id });
@@ -1044,7 +1050,7 @@ function changeAnalysisWork(book: BookProject, change: NonNullable<ReturnType<ty
       const kept = (parsed.unchangedDirect ?? []).filter(k => live.direct.includes(k.sceneId) && !rewriteSceneIds.includes(k.sceneId));
       const missing = live.direct.filter(id => !rewriteSceneIds.includes(id) && !kept.some(k => k.sceneId === id));
       if (missing.length) throw new Error(`Il piano non dice cosa fare di ${missing.length} scene dirette (${missing.slice(0, 5).join(", ")}): mettile in rewriteSceneIds o in unchangedDirect con il motivo.`);
-      const proposal = { ...(kind === "entity" && parsed.entity ? { entity: parsed.entity } : {}), ...(kind === "event" && parsed.event ? { event: parsed.event } : {}),
+      const proposal = fromEdits ? {} : { ...(kind === "entity" && parsed.entity ? { entity: parsed.entity } : {}), ...(kind === "event" && parsed.event ? { event: parsed.event } : {}),
         ...(kind === "timeline" && parsed.timeline ? { timeline: parsed.timeline } : {}), ...(kind === "chapter" && parsed.chapter ? { chapter: parsed.chapter } : {}) };
       op.plan = { interpretation: parsed.interpretation, changeKind: "narrative", rationale: parsed.rationale,
         direct: live.direct, indirect: live.indirect, global: parsed.global ?? live.global, rewriteSceneIds,
@@ -1057,9 +1063,9 @@ function changeAnalysisWork(book: BookProject, change: NonNullable<ReturnType<ty
         ...(targetChapter ? { chapter: { title: targetChapter.title, purpose: targetChapter.purpose } } : {}),
         scenes: sceneSnapshots(b, rewriteSceneIds), memoryJson: JSON.stringify(b.memory) };
       // Validate the proposed version now: a bad proposal must not be stored for later confirmation.
-      if (parsed.entity && kind === "entity") replaceEntitySheet(liveKb, op.target.id, parsed.entity, now, "verifica");
-      if (parsed.event && kind === "event") replaceEventSheet(liveKb, op.target.id, parsed.event, now, "verifica");
-      if (parsed.timeline && kind === "timeline") replaceTimelineSheet(liveKb, op.target.id, parsed.timeline);
+      if (!fromEdits && parsed.entity && kind === "entity") replaceEntitySheet(liveKb, op.target.id, parsed.entity, now, "verifica");
+      if (!fromEdits && parsed.event && kind === "event") replaceEventSheet(liveKb, op.target.id, parsed.event, now, "verifica");
+      if (!fromEdits && parsed.timeline && kind === "timeline") replaceTimelineSheet(liveKb, op.target.id, parsed.timeline);
       if (op.mode === "confirm") {
         op.state = "awaiting_confirmation"; op.updatedAt = now;
         b.status = "paused";

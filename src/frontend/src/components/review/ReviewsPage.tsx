@@ -27,6 +27,7 @@ export function targetKindLabel(book: BookProject, target: EditTarget): string {
     case "event": return "Evento";
     case "timeline": return "Timeline";
     case "structure": return "Struttura";
+    case "memory": return "Memoria";
     default: return "Impostazioni";
   }
 }
@@ -234,7 +235,7 @@ export function ReviewsPage({ book, runningHere, onStart, onRefresh, onOpen, pre
   const staleChapters = book.chapters.filter(c => c.reviewStale);
   const reviews = [...(book.manualReviews ?? [])].reverse().filter(r => r !== active);
   const shown = pending.filter(p => filter === "all" || (filter === "text" ? p.target.kind === "scene" || p.target.kind === "chapter"
-    : filter === "structure" ? p.target.kind === "structure" : ["entity", "event", "timeline"].includes(p.target.kind)));
+    : filter === "structure" ? p.target.kind === "structure" : ["entity", "event", "timeline", "memory"].includes(p.target.kind)));
   const isSelected = (t: EditTarget) => selected.some(s => keyOf(s) === keyOf(t));
   const toggle = (t: EditTarget) => setSelected(list => isSelected(t) ? list.filter(s => keyOf(s) !== keyOf(t)) : [...list, t]);
   const extra = selected.filter(t => !pending.some(p => keyOf(p.target) === keyOf(t)));
@@ -248,6 +249,7 @@ export function ReviewsPage({ book, runningHere, onStart, onRefresh, onOpen, pre
       board && book.editorialCycle ? "Una redazione di capitolo è già in corso: attendi che finisca." :
         board && !boardReviewChapters(book).length ? "Nessun capitolo revisionato da rileggere." :
           scope !== "full" && !selected.length ? "Seleziona almeno un elemento da controllare." :
+            scope !== "full" && selected.some(t => t.kind === "memory") ? "La memoria narrativa non ha una review propria: dal Mondo usa «Rivedi e aggiorna il libro», oppure segna la modifica come rivista." :
             !board && calls > 400 ? "Troppi elementi: scegli una review più mirata." : "";
   async function start() {
     const heavy = scope === "full" || effectiveMode === "auto" || calls > 10;

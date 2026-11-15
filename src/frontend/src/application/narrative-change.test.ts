@@ -8,7 +8,9 @@ const { modelCall, writerGuard } = vi.hoisted(() => ({ modelCall: vi.fn(), write
 vi.mock("../infrastructure/ai", () => ({ callModel: modelCall }));
 vi.mock("./writer-guard", () => ({ withWriterGuard: writerGuard }));
 import { AutopilotRunner } from "./autopilot";
-import { confirmNarrativeChange, requestKnowledgeGeneration, requestNarrativeChange, revertNarrativeChange, saveEntitySheet, updateChangeMode } from "./narrative-change";
+import { confirmNarrativeChange, requestChangeFromEdits, requestKnowledgeGeneration, requestNarrativeChange, revertNarrativeChange, saveEntitySheet, updateChangeMode } from "./narrative-change";
+import { editBase, saveEntityEdit, saveMemoryEdit, saveSceneEdit } from "./book-editing";
+import { elementReviewState } from "../domain/book-edits";
 
 const answer = (text: string) => ({ text, endpointId: "openai", modelId: "synthetic", inputTokens: 100, outputTokens: 40 });
 const pass = JSON.stringify({ verdict: "pass", summary: "Nessun problema concreto nel segmento letto.", memoryNote: "", findings: [] });
@@ -316,5 +318,116 @@ describe("Regole dei casi d'uso dell'autore", () => {
     const activities = await listActivities(book.id);
     expect(activities.every(a => a.aiRequested === false)).toBe(true);
     expect(modelCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("Revisione avviata da una modifica già salvata a mano", () => {
+  it("una scheda: l'analisi riceve prima e dopo, non propone una nuova scheda e non ne cambia la versione", async () => {
+    const book = knowledgeBook(); await saveBook(book, false);
+    const target = { kind: "entity" as const, id: "character:elena" };
+    await saveEntityEdit(book.id, target.id, editBase(book, target, "Elena"), { summary: "Investigatrice impulsiva ed emotiva." });
+    const edited = await stored(book.id);
+    expect(elementReviewState(edited, target)).toBe("modified_unreviewed");
+    const op = await requestChangeFromEdits(book.id, target, edited.updatedAt);
+    expect(op.fromEdits).toHaveLength(1);
+    expect(op.instruction).toContain("PRIMA:");
+    expect(op.instruction).toContain("DOPO:");
+    expect(op.instruction).toContain("impulsiva ed emotiva");
+    const requested = await stored(book.id);
+    expect(elementReviewState(requested, target)).toBe("review_in_progress");
+    expect(requested.revision?.changeOperationId).toBe(op.id);
+    await expect(requestChangeFromEdits(book.id, target, requested.updatedAt)).rejects.toThrow(/già una revisione/);
+    const runner = new AutopilotRunner();
+    script(runner, (kind, prompt) => {
+      if (prompt.includes("L'autore ha GIÀ modificato a mano la scheda «Elena»")) {
+        expect(prompt).toContain("NON proporre una nuova versione");
+        expect(prompt).not.toContain('"entity":{"name"');
+        return JSON.stringify({ interpretation: "Elena è già impulsiva.", rationale: "Solo la scena dell'archivio la mostra in azione.",
+          rewriteSceneIds: ["scene:001:002"], changedFacts: ["Elena è impulsiva"],
+          unchangedDirect: [{ sceneId: "scene:001:001", reason: "Ricordo d'infanzia: il carattere adulto non conta." },
+            { sceneId: "scene:002:002", reason: "Elena tace e riflette: nessuna reazione da cambiare." }],
+          entity: { name: "Elena", summary: "Questa proposta va ignorata." } });
+      }
+      if (prompt.includes("Riscrivi SOLO la scena scene:001:002")) return "Nell'archivio municipale Elena strappa il registro dallo scaffale e trova una firma cancellata.";
+      if (prompt.includes("rifletta la NUOVA versione")) return JSON.stringify({ mode: "delta", characters: { Elena: "Investigatrice impulsiva." },
+        sceneSummaries: { "scene:001:002": "Elena strappa il registro e trova la firma." }, knowledge: {} });
+      return editorial(kind, prompt);
+    }, prompt => prompt.includes("rifletta la NUOVA versione"));
+    await runner.run(book.id, async () => undefined);
+    const saved = await stored(book.id);
+    expect(saved.changeOperations![0]!.plan?.proposal).toEqual({});
+    expect(saved.knowledge!.entities.find(e => e.id === "character:elena")).toMatchObject({ version: 2, summary: "Investigatrice impulsiva ed emotiva." });
+    expect(saved.chapters[0]!.scenes[1]!.text).toContain("strappa il registro");
+  });
+  it("una scena: il testo dell'autore resta, si confronta con la versione precedente e non c'è nessuna riscrittura del testo", async () => {
+    const book = knowledgeBook(); await saveBook(book, false);
+    const target = { kind: "scene" as const, id: "scene:001:002" };
+    const text = "Nell'archivio municipale Elena sfoglia lentamente il registro e trova una firma cancellata.";
+    await saveSceneEdit(book.id, target.id, editBase(book, target, "Il registro"), { text });
+    const edited = await stored(book.id);
+    const op = await requestChangeFromEdits(book.id, target, edited.updatedAt);
+    expect(op.state).toBe("analyzing");
+    expect(op.before.scenes[0]!.text).toBe(book.chapters[0]!.scenes[1]!.text);
+    const runner = new AutopilotRunner();
+    script(runner, (kind, prompt) => {
+      if (prompt.includes("Confronta la versione PRECEDENTE")) {
+        expect(prompt).toContain("sfoglia lentamente");
+        return JSON.stringify({ changeKind: "style", changedFacts: [], dependentSceneIds: [], summary: "Elena trova lentamente una firma cancellata nel registro.", rationale: "Cambia solo il ritmo." });
+      }
+      return editorial(kind, prompt);
+    });
+    await runner.run(book.id, async () => undefined);
+    const saved = await stored(book.id);
+    expect(calls.some(c => c.prompt.includes("secondo questa richiesta"))).toBe(false);
+    expect(saved.chapters[0]!.scenes[1]!.text).toBe(text);
+    expect(saved.changeOperations![0]!.state).toBe("completed");
+    expect(elementReviewState(saved, target)).toBe("review_passed");
+  });
+  it("annullando il piano il testo scritto dall'autore non torna indietro e la modifica torna da rivedere", async () => {
+    const book = knowledgeBook(); book.changeMode = "confirm"; await saveBook(book, false);
+    const target = { kind: "scene" as const, id: "scene:001:002" };
+    const text = "In biblioteca Elena sfoglia il registro e trova una firma cancellata.";
+    await saveSceneEdit(book.id, target.id, editBase(book, target, "Il registro"), { text });
+    const edited = await stored(book.id);
+    await requestChangeFromEdits(book.id, target, edited.updatedAt);
+    const runner = new AutopilotRunner();
+    script(runner, (_kind, prompt) => prompt.includes("Confronta la versione PRECEDENTE")
+      ? JSON.stringify({ changeKind: "narrative", changedFacts: ["Ora è in biblioteca"], dependentSceneIds: ["scene:002:002"], summary: "Elena trova una firma in biblioteca.", rationale: "Cambia il luogo." }) : undefined);
+    await runner.run(book.id, async () => undefined);
+    let saved = await stored(book.id);
+    expect(saved.changeOperations![0]!.state).toBe("awaiting_confirmation");
+    await confirmNarrativeChange(book.id, saved.changeOperations![0]!.id, false, saved.updatedAt);
+    saved = await stored(book.id);
+    expect(saved.changeOperations![0]!.state).toBe("cancelled");
+    expect(saved.chapters[0]!.scenes[1]!.text).toBe(text);
+    expect(elementReviewState(saved, target)).toBe("modified_unreviewed");
+  });
+  it("una voce di memoria: si modifica a mano, si salva senza AI e si propaga con prima e dopo", async () => {
+    const book = knowledgeBook(); await saveBook(book, false);
+    const id = "state";
+    await saveMemoryEdit(book.id, id, editBase(book, { kind: "memory", id }, "Stato corrente"), "Elena sa che Markus lavora per il Consiglio.");
+    const edited = await stored(book.id);
+    expect(edited.memory.currentState).toBe("Elena sa che Markus lavora per il Consiglio.");
+    expect(modelCall).not.toHaveBeenCalled();
+    const op = await requestChangeFromEdits(book.id, { kind: "memory", id }, edited.updatedAt);
+    expect(op.targetLabel).toBe("Stato corrente");
+    expect(op.instruction).toContain("Elena sa che Markus lavora per il Consiglio.");
+    const runner = new AutopilotRunner();
+    script(runner, (kind, prompt) => {
+      if (prompt.includes("L'autore ha GIÀ modificato a mano la voce di memoria «Stato corrente»")) {
+        expect(prompt).toContain("VOCE DI MEMORIA ATTUALE");
+        return JSON.stringify({ interpretation: "Elena ora sa.", rationale: "Nessuna scena scritta contraddice questo stato.", rewriteSceneIds: [], changedFacts: [] });
+      }
+      return editorial(kind, prompt);
+    });
+    await runner.run(book.id, async () => undefined);
+    const saved = await stored(book.id);
+    expect(saved.changeOperations![0]!.state).toBe("completed");
+    expect(saved.chapters.map(c => c.scenes.map(s => s.text))).toEqual(book.chapters.map(c => c.scenes.map(s => s.text)));
+    expect(elementReviewState(saved, { kind: "memory", id })).toBe("review_passed");
+  });
+  it("rifiuta se non c'è nulla da propagare", async () => {
+    const book = knowledgeBook(); await saveBook(book, false);
+    await expect(requestChangeFromEdits(book.id, { kind: "entity", id: "character:elena" }, book.updatedAt)).rejects.toThrow(/Non ci sono modifiche/);
   });
 });

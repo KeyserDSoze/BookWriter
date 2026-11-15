@@ -39,6 +39,12 @@ async function stored(page: Page) {
   });
 }
 const noOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+/** Worldbuilding sections are accordions, closed by default: open one by its title. */
+async function openSection(page: Page, name: RegExp) {
+  const header = page.getByRole("button", { name, expanded: false });
+  if (await header.count()) await header.first().click();
+  await expect(page.getByRole("button", { name, expanded: true }).first()).toBeVisible();
+}
 const pass = JSON.stringify({ verdict: "pass", summary: "Coerente con schede e scene vicine.", findings: [] });
 
 test("modifica manuale di una scena: salvata senza review, capitolo segnalato, confronto e ripristino", async ({ page }) => {
@@ -94,7 +100,7 @@ test("review mirata di solo controllo: la esegue l'autopilot, poi il libro torna
   });
   await page.reload();
   await page.getByRole("button", { name: "Revisioni: 1 da rivedere" }).click();
-  await expect(page).toHaveURL(/#\/revisioni/);
+  await expect(page).toHaveURL(/\/revisioni/);
   const list = page.getByRole("list", { name: "Elenco delle modifiche da rivedere" });
   await list.getByRole("checkbox", { name: "Seleziona scena «Cap. 2 · 1. Il molo»" }).check();
   await list.getByText("Cosa è cambiato").click();
@@ -168,7 +174,7 @@ test("modifica solo questo con l'AI su una scheda, poi review con proposta di co
   });
   await seed(page);
   await nav(page).getByRole("button", { name: "Mondo", exact: true }).click();
-  await page.getByRole("tab", { name: /Personaggi/ }).click();
+  await openSection(page, /^Personaggi/);
   await page.getByRole("list", { name: "Personaggi" }).getByRole("button", { name: /Markus/ }).click();
   const sheet = page.getByRole("article", { name: "Scheda di Markus" });
   await expect(sheet.getByRole("radio", { name: "Modifica solo questo" })).toHaveAttribute("aria-checked", "true");
@@ -240,8 +246,8 @@ test("riscrivi la selezione con l'AI: confronto, solo il passaggio scelto cambia
   expect(book.manualReviews).toBeUndefined();
   expect(await noOverflow(page)).toBe(true);
   // From the editor straight to the reviews, with this scene already chosen: no review starts by itself.
-  await editor.getByRole("button", { name: "Scegli se e come rivederla" }).click();
-  await expect(page).toHaveURL(/#\/revisioni/);
+  await editor.getByRole("button", { name: "Scegli una review" }).click();
+  await expect(page).toHaveURL(/\/revisioni/);
   await expect(page.getByRole("checkbox", { name: "Seleziona scena «Cap. 2 · 1. Il molo»" })).toBeChecked();
   await expect(page.getByText("Selezionati 1 elemento: scegli il tipo di review qui sotto.")).toBeVisible();
   expect((await stored(page)).manualReviews).toBeUndefined();
@@ -266,14 +272,14 @@ test("struttura e mondo a mano: nuova scena, nuova scheda ed evento con coinvolt
   expect(book.chapters[1].scenes[1]).toMatchObject({ status: "planned", number: 2 });
   expect(book.chapters[1].reviewStale.editIds).toHaveLength(2);
   await nav(page).getByRole("button", { name: "Mondo", exact: true }).click();
-  await page.getByRole("tab", { name: /Oggetti/ }).click();
+  await openSection(page, /^Oggetti/);
   await page.getByRole("button", { name: "Nuova scheda" }).click();
   const form = page.getByRole("form", { name: "Nuova scheda: oggetto" });
   await form.getByLabel("Nome").fill("La lettera");
   await form.getByLabel("Descrizione breve").fill("Una lettera mai spedita.");
   await form.getByRole("button", { name: "Crea la scheda" }).click();
   await expect(page.getByRole("article", { name: "Scheda di La lettera" })).toBeVisible();
-  await page.getByRole("tab", { name: /Timeline/ }).click();
+  await openSection(page, /^Timeline ed eventi/);
   const event = page.getByRole("listitem").filter({ hasText: "Primo indizio" }).first();
   await event.getByRole("button", { name: "Modifica l'evento Primo indizio" }).click();
   const editor = page.getByRole("form", { name: "Modifica l'evento Primo indizio" });

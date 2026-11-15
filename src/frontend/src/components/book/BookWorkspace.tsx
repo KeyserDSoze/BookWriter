@@ -7,7 +7,7 @@ import { ENTITY_LABELS } from "../../domain/knowledge";
 import { CHANGE_STATE_LABELS } from "../../domain/narrative-change";
 import { Button } from "../ui/button";
 import { Badge, Segmented, Tabs } from "../ui/primitives";
-import { EditHistory, PromptEditChoices, ReviewStateBadge } from "../edit/EditKit";
+import { EditHistory, PendingEditActions, PromptEditChoices, ReviewStateBadge } from "../edit/EditKit";
 import { SceneEditor } from "../edit/SceneEditor";
 import { SceneDetailsEditor } from "../edit/SceneDetailsEditor";
 import { ChapterEditor } from "../edit/ChapterEditor";
@@ -45,7 +45,7 @@ function StaleChapterNote({ book, chapter, onOpenReviews }: { book: BookProject;
   </div>;
 }
 
-function SceneText({ book, chapter, scene, busy, onApprove, onRefresh, onOpenReviews }: Shared & { chapter: Chapter; scene: Scene; busy: boolean; onApprove: (id: string) => void }) {
+function SceneText({ book, chapter, scene, busy, onApprove, onRefresh, onStart }: Shared & { chapter: Chapter; scene: Scene; busy: boolean; onApprove: (id: string) => void }) {
   const [editing, setEditing] = useState(false);
   return <section id={`book-scene-${scene.id}`} className="mb-6 scroll-mt-24">
     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -54,7 +54,7 @@ function SceneText({ book, chapter, scene, busy, onApprove, onRefresh, onOpenRev
       {!editing && <Button size="sm" variant="ghost" className="ml-auto" aria-label={`Modifica la scena ${scene.number}. ${scene.title}`} onClick={() => setEditing(true)}>
         <Pencil size={14}/><span className="text-xs">Modifica</span></Button>}
     </div>
-    {editing ? <SceneEditor book={book} chapter={chapter} scene={scene} onRefresh={onRefresh} onClose={() => setEditing(false)} onOpenReviews={onOpenReviews}/>
+    {editing ? <SceneEditor book={book} chapter={chapter} scene={scene} onRefresh={onRefresh} onClose={() => setEditing(false)} onStart={onStart}/>
       : scene.text ? <p className="whitespace-pre-wrap break-words font-serif text-[1.05rem] leading-8">{scene.text}</p>
         : <p className="muted text-sm">Scena non ancora scritta. Obiettivo: {scene.objective}</p>}
     {book.editorialReviewSceneIds?.includes(scene.id) && <div className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3">
@@ -64,7 +64,7 @@ function SceneText({ book, chapter, scene, busy, onApprove, onRefresh, onOpenRev
   </section>;
 }
 
-function SceneCard({ book, chapter, scene, onRefresh, onStart, onOpenReviews }: Shared & { chapter: Chapter; scene: Scene }) {
+function SceneCard({ book, chapter, scene, onRefresh, onStart }: Shared & { chapter: Chapter; scene: Scene }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const kb = book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
@@ -90,7 +90,7 @@ function SceneCard({ book, chapter, scene, onRefresh, onStart, onOpenReviews }: 
       <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen(v => !v)}><ChevronDown size={15} className={open ? "rotate-180" : ""}/> {open ? "Chiudi" : "Leggi e modifica"}</Button>
     </div>
     {open && <div className="space-y-3 border-t border-slate-300 p-3 dark:border-slate-700">
-      {editing ? <SceneEditor book={book} chapter={chapter} scene={scene} onRefresh={onRefresh} onClose={() => setEditing(false)} onOpenReviews={onOpenReviews}/> : <>
+      {editing ? <SceneEditor book={book} chapter={chapter} scene={scene} onRefresh={onRefresh} onClose={() => setEditing(false)} onStart={onStart}/> : <>
         {written ? <p className="max-h-96 overflow-y-auto whitespace-pre-wrap font-serif leading-7">{scene.text}</p>
           : <p className="muted text-sm">Scena da scrivere: puoi scriverla tu oppure lasciarla all'autopilot.</p>}
         <Button variant="outline" onClick={() => setEditing(true)}><Pencil size={16}/> {written ? "Modifica a mano" : "Scrivila tu"}</Button>
@@ -98,6 +98,7 @@ function SceneCard({ book, chapter, scene, onRefresh, onStart, onOpenReviews }: 
       {written && !editing && <PromptEditChoices book={book} request={{ kind: "scene", id: scene.id }} label={scene.title} examples={SCENE_EXAMPLES}
         propagate={{ kind: "scene", id: scene.id }} onRefresh={onRefresh} onStart={onStart}/>}
       <SceneDetailsEditor book={book} chapter={chapter} scene={scene} onRefresh={onRefresh}/>
+      {!editing && <PendingEditActions book={book} target={target} label={scene.title} onRefresh={onRefresh} onStart={onStart}/>}
       <EditHistory book={book} target={target} label={scene.title} onRefresh={onRefresh}/>
     </div>}
   </li>;
@@ -108,6 +109,7 @@ function ChapterEditTab({ book, chapter, onRefresh, onStart, onSelectChapter }: 
   const written = chapter.scenes.filter(s => s.text.trim()).length;
   return <div className="space-y-4">
     <ChapterEditor key={chapter.id} book={book} chapter={chapter} onRefresh={onRefresh} onSelectChapter={onSelectChapter}/>
+    <PendingEditActions book={book} target={{ kind: "chapter", id: chapter.id }} label={`Capitolo ${chapter.number}`} onRefresh={onRefresh} onStart={onStart}/>
     <PromptEditChoices book={book} request={{ kind: "chapter", id: chapter.id, scope }} label={`Capitolo ${chapter.number}`} onRefresh={onRefresh} onStart={onStart}
       propagate={written ? { kind: "chapter", id: chapter.id } : undefined}
       examples={scope === "details" ? ["Dai al capitolo un titolo più evocativo e uno scopo più preciso.", "Riscrivi il riassunto in tre frasi asciutte."]

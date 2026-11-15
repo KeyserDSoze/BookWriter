@@ -42,6 +42,31 @@ input, select, textarea { outline-offset: 2px; }
 @keyframes nav-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .nav-dot { animation: none; } }
 .book-select { width: 100%; }
+/* Desktop menu reduced to its icons: the name shows only as a tooltip, and only while collapsed. */
+.nav-toggle { display: flex; width: 2.25rem; height: 2.25rem; flex: none; align-items: center; justify-content: center; border-radius: .5rem; color: #475569; position: relative; }
+.dark .nav-toggle { color: #c3cdd9; }
+.nav-toggle:hover { background: rgb(148 163 184 / .18); }
+.nav-toggle:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
+.nav-item { position: relative; }
+[data-tip]::after { content: attr(data-tip); position: absolute; left: calc(100% + .6rem); top: 50%; transform: translateY(-50%); z-index: 70; white-space: nowrap;
+  border-radius: .4rem; background: #0f172a; color: #f8fafc; padding: .3rem .6rem; font-size: .8rem; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .12s; box-shadow: 0 4px 12px rgb(0 0 0 / .25); }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { [data-tip]::after { transition: none; } }
+@media (min-width: 841px) {
+  .site-nav[data-nav="collapsed"] { grid-template-columns: 4rem minmax(0, 1fr); }
+  .site-nav[data-nav="collapsed"] .sidebar { padding: 1.25rem .5rem 1rem; overflow: visible; align-items: center; }
+  .site-nav[data-nav="collapsed"] .sidebar nav { width: 100%; }
+  .site-nav[data-nav="collapsed"] .nav-label, .site-nav[data-nav="collapsed"] .nav-hint { display: none; }
+  .site-nav[data-nav="collapsed"] .nav-brand { flex-direction: column; gap: .75rem; }
+  .site-nav[data-nav="collapsed"] .nav-brand > p { padding: 0; }
+  .site-nav[data-nav="collapsed"] .nav-item { justify-content: center; padding: .3rem; }
+  .site-nav[data-nav="collapsed"] .nav-item .nav-count, .site-nav[data-nav="collapsed"] .nav-item .nav-dot { position: absolute; top: .2rem; right: .2rem; margin: 0; }
+  .site-nav[data-nav="collapsed"] .nav-item .nav-count { min-width: 1rem; font-size: .6rem; line-height: 1rem; padding: 0 .2rem; }
+  .site-nav[data-nav="collapsed"] .nav-group { margin: .5rem .4rem; height: 1px; background: #cbd5e1; }
+  .site-nav[data-nav="collapsed"] .nav-group .nav-label { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .dark .site-nav[data-nav="collapsed"] .nav-group { background: #303b4a; }
+}
+@media (max-width: 840px) { .nav-toggle { display: none; } }
 @media (min-width: 640px) { .book-select { width: 16rem; } }
 /* While the background-work card is shown, the page can scroll its last controls above it. */
 .app-main { padding-bottom: calc(2rem + var(--background-toast-space, 0px)); }

@@ -6,7 +6,7 @@ import type { KnowledgeEntity, KnowledgeEvent } from "./knowledge";
  * Saving is not validating: every edit starts unreviewed and only an explicit
  * review (or the author's explicit "skip") changes that. Newer content than the
  * reviewed stamp is unreviewed again, whatever the old record says. */
-export const EDIT_TARGET_KINDS = ["scene", "chapter", "entity", "event", "timeline", "structure", "profiles"] as const;
+export const EDIT_TARGET_KINDS = ["scene", "chapter", "entity", "event", "timeline", "structure", "profiles", "memory"] as const;
 export type EditTargetKind = typeof EDIT_TARGET_KINDS[number];
 export const REVIEW_STATES = ["clean", "modified_unreviewed", "impact_pending", "review_pending", "review_in_progress",
   "review_passed", "review_failed", "review_skipped"] as const;
@@ -66,6 +66,32 @@ export function eventContent(event: KnowledgeEvent): string {
 export function structureContent(book: BookProject): string {
   return JSON.stringify([...book.chapters].sort((a, b) => a.number - b.number).map(ch => [ch.id, ...ch.scenes.map(s => s.id)]));
 }
+/** The narrative memory is edited by part: `state`, `timeline`, or `<folder>:<name>` for one entry. */
+export const MEMORY_FOLDERS = ["characters", "locations", "factions", "items", "secrets"] as const;
+export type MemoryFolder = typeof MEMORY_FOLDERS[number];
+export function parseMemoryId(id: string): { part: "state" } | { part: "timeline" } | { part: "entry"; folder: MemoryFolder; name: string } | undefined {
+  if (id === "state") return { part: "state" };
+  if (id === "timeline") return { part: "timeline" };
+  const cut = id.indexOf(":");
+  const folder = id.slice(0, cut) as MemoryFolder, name = id.slice(cut + 1);
+  return cut > 0 && MEMORY_FOLDERS.includes(folder) && name ? { part: "entry", folder, name } : undefined;
+}
+/** Text of one part of the memory; undefined when that entry does not exist. */
+export const MEMORY_PART_LABELS = { state: "Stato corrente", timeline: "Cronologia della memoria",
+  characters: "Personaggi", locations: "Luoghi", factions: "Fazioni", items: "Oggetti", secrets: "Segreti" } as const;
+export function memoryLabel(id: string): string {
+  const parsed = parseMemoryId(id);
+  if (!parsed) return id;
+  return parsed.part === "entry" ? `${MEMORY_PART_LABELS[parsed.folder]} · ${parsed.name}` : MEMORY_PART_LABELS[parsed.part];
+}
+export function memoryValue(book: BookProject, id: string): string | undefined {
+  const parsed = parseMemoryId(id);
+  if (!parsed) return undefined;
+  if (parsed.part === "state") return book.memory.currentState;
+  if (parsed.part === "timeline") return book.memory.timeline.join("\n");
+  const entries = book.memory[parsed.folder];
+  return Object.hasOwn(entries, parsed.name) ? entries[parsed.name] : undefined;
+}
 export function findScene(book: BookProject, sceneId: string): { chapter: Chapter; scene: Scene } | undefined {
   for (const chapter of book.chapters) {
     const scene = chapter.scenes.find(s => s.id === sceneId);
@@ -83,6 +109,7 @@ export function currentContent(book: BookProject, target: EditTarget): string | 
     case "timeline": { const timeline = book.knowledge?.timelines.find(t => t.id === target.id); return timeline ? JSON.stringify(timeline) : undefined; }
     case "structure": return structureContent(book);
     case "profiles": return JSON.stringify(book.editorialProfiles ?? null);
+    case "memory": { const value = memoryValue(book, target.id); return value === undefined ? undefined : JSON.stringify({ value }); }
   }
 }
 export function currentStamp(book: BookProject, target: EditTarget): string {

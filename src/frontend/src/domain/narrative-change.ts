@@ -2,11 +2,11 @@ import { z } from "zod";
 import type { BookProject, Chapter, Scene } from "./types";
 import { ENTITY_ID, findEntity, type KnowledgeBase, type KnowledgeEntity, type KnowledgeEvent, knowledgeEntitySchema,
   knowledgeEventSchema, knowledgeReplySchema, knowledgeTimelineSchema, mergeKnowledgeReply, parseKnowledge, STANCES, NARRATION_MODES } from "./knowledge";
-import { contentStamp } from "./book-edits";
+import { contentStamp, memoryLabel } from "./book-edits";
 
 /** A prompt-driven change to a sheet, an event, a timeline, a chapter or one scene,
  * tracked from the request to the re-frozen chapters. Snapshots allow a guarded restore. */
-export const CHANGE_TARGET_KINDS = ["entity", "event", "scene", "chapter", "timeline"] as const;
+export const CHANGE_TARGET_KINDS = ["entity", "event", "scene", "chapter", "timeline", "memory"] as const;
 export type ChangeTarget = { kind: typeof CHANGE_TARGET_KINDS[number]; id: string };
 export const CHANGE_STATES = ["pending", "analyzing", "awaiting_confirmation", "rewriting", "reviewing", "completed", "failed", "cancelled", "reverted"] as const;
 export type ChangeState = typeof CHANGE_STATES[number];
@@ -76,6 +76,8 @@ export const changeOperationSchema = z.object({
   target: z.object({ kind: z.enum(CHANGE_TARGET_KINDS), id: z.string().min(1).max(200) }).strict(),
   targetLabel: z.string().max(200), instruction: z.string().min(1).max(8000), mode: z.enum(["auto", "confirm"]),
   state: z.enum(CHANGE_STATES), plan: planSchema.optional(),
+  /** Edits the author already saved by hand: the change aligns the book with them (no new version is proposed). */
+  fromEdits: z.array(z.string().uuid()).max(100).optional(),
   before: z.object({
     entity: knowledgeEntitySchema.optional(), event: knowledgeEventSchema.optional(), timeline: knowledgeTimelineSchema.optional(),
     chapter: z.object({ title: z.string().max(300), purpose: z.string().max(20_000) }).strict().optional(),
@@ -257,6 +259,7 @@ export function targetLabel(book: BookProject, target: ChangeTarget): string {
   if (target.kind === "entity") return book.knowledge?.entities.find(e => e.id === target.id)?.name ?? target.id;
   if (target.kind === "event") return book.knowledge?.events.find(e => e.id === target.id)?.title ?? target.id;
   if (target.kind === "timeline") return book.knowledge?.timelines.find(t => t.id === target.id)?.title ?? target.id;
+  if (target.kind === "memory") return memoryLabel(target.id);
   if (target.kind === "chapter") {
     const chapter = book.chapters.find(c => c.id === target.id);
     return chapter ? `Capitolo ${chapter.number} «${chapter.title}»` : target.id;

@@ -3,7 +3,7 @@ import {
   BookOpen, BrainCircuit, Globe2,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
   Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet, Library, ClipboardCheck,
-  SlidersHorizontal,
+  SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { Tabs } from "./components/ui/primitives";
 import { ReviewsPage } from "./components/review/ReviewsPage";
@@ -11,7 +11,8 @@ import { findScene, pendingElements, type EditTarget } from "./domain/book-edits
 import { activeManualReview } from "./domain/manual-review";
 import { LibraryPage } from "./components/LibraryPage";
 import { readLastBookId, rememberLastBookId } from "./application/last-book";
-import { formatRoute, parseRoute, type Page } from "./application/route";
+import { currentRoute, formatRoute, type Page } from "./application/route";
+import { readPref, writePref } from "./application/ui-prefs";
 import { BackgroundActivityToast } from "./components/BackgroundActivityToast";
 import { Button } from "./components/ui/button";
 import { SaveBar } from "./components/settings/SaveBar";
@@ -20,7 +21,8 @@ import { ModelRouterTable } from "./components/settings/ModelRouterTable";
 import { BookOverrideTable } from "./components/settings/BookOverrideTable";
 import { EditorialProfilesPanel } from "./components/settings/EditorialProfilesPanel";
 import { WebResearchPanel } from "./components/settings/WebResearchPanel";
-import { WorldPage } from "./components/world/WorldPage";
+import { WorldPage, type WorldFocus } from "./components/world/WorldPage";
+import { ReviewLauncher } from "./components/edit/EditKit";
 import { BookWorkspace } from "./components/book/BookWorkspace";
 import { usePwaInstall } from "./application/pwa";
 import { AutopilotRunner } from "./application/autopilot";
@@ -130,7 +132,10 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const [initialRoute] = useState(() => parseRoute(window.location.hash));
+  const [initialRoute] = useState(() => currentRoute(window.location).route);
+  // Desktop only: the menu shrinks to its icons (names appear as tooltips); the phone bar is unaffected.
+  const [navCollapsed, setNavCollapsed] = useState(() => readPref<boolean>("navCollapsed", false) === true);
+  const toggleNav = () => { const next = !navCollapsed; setNavCollapsed(next); writePref("navCollapsed", next); };
   const [page, setPage] = useState<Page>(initialRoute.page);
   // The tab belongs to the page it was chosen on: another page never inherits it.
   const [tabState, setTabState] = useState({ page: initialRoute.page, tab: initialRoute.tab ?? "" });
@@ -235,7 +240,7 @@ export default function App() {
     setSelectedIdRaw(prev => {
       if (prev && all.some(book => book.id === prev)) return prev;
       if (!prev && creatingNewBook.current) return "";
-      const fromUrl = parseRoute(window.location.hash).book;
+      const fromUrl = currentRoute(window.location).route.book;
       const last = readLastBookId();
       return all.find(book => book.id === fromUrl)?.id ?? all.find(book => book.id === last)?.id ?? all[0]?.id ?? "";
     });
@@ -312,18 +317,19 @@ export default function App() {
       chapter: page === "reader" ? chapterId || undefined : undefined,
       tab: page === "settings" || page === "bookSettings" ? activeTab || undefined : undefined,
     });
-    const here = parseRoute(window.location.hash);
+    const here = currentRoute(window.location);
     const initialized = routeWritten.current;
     routeWritten.current = true;
-    if (formatRoute(here) === next && window.location.hash !== "") return;
+    // An old #/ link is rewritten as a path even when it names the same page.
+    if (formatRoute(here.route) === next && !here.legacy && window.location.pathname + window.location.search === next) return;
     // A new page is a history entry (Back works); refinements and the first sync replace it.
-    if (initialized && here.page !== page) window.history.pushState(null, "", next);
+    if (initialized && here.route.page !== page) window.history.pushState(null, "", next);
     else window.history.replaceState(null, "", next);
   }, [ready, page, selectedId, focusTaskId, chapterId, activeTab]);
   useEffect(() => {
-    // URL -> state, for Back/Forward and hand-edited addresses.
+    // URL -> state, for Back/Forward and hand-edited addresses (old #/ links included).
     const apply = () => {
-      const route = parseRoute(window.location.hash);
+      const route = currentRoute(window.location).route;
       setPage(route.page);
       setTabState({ page: route.page, tab: route.tab ?? "" });
       setFocusTaskId(route.task ?? "");
@@ -376,7 +382,7 @@ export default function App() {
   const pendingFused = current?.editorialReviewSceneIds?.length ?? 0;
   const pendingReview = useMemo(() => current ? pendingElements(current).filter(p => p.state === "modified_unreviewed" || p.state === "review_failed").length : 0, [current]);
   const reviewRunning = !!current && !!activeManualReview(current);
-  const [worldFocus, setWorldFocus] = useState<{ kind: "entity" | "event" | "timeline"; id: string }>();
+  const [worldFocus, setWorldFocus] = useState<WorldFocus>();
   const [reviewPreselect, setReviewPreselect] = useState<EditTarget[]>();
   function openReviews(targets?: EditTarget[]) { setReviewPreselect(targets?.length ? targets : undefined); setPage("reviews"); }
   useEffect(() => { if (page !== "atlas") setWorldFocus(undefined); }, [page]);
@@ -393,7 +399,7 @@ export default function App() {
       const chapter = target.kind === "scene" ? findScene(current, target.id)?.chapter : current.chapters.find(c => c.id === target.id);
       setChapterId(chapter?.id ?? ""); setPage("reader"); return;
     }
-    if (target.kind === "entity" || target.kind === "event" || target.kind === "timeline") { setWorldFocus({ kind: target.kind, id: target.id }); setPage("atlas"); }
+    if (target.kind === "entity" || target.kind === "event" || target.kind === "timeline" || target.kind === "memory") { setWorldFocus({ kind: target.kind, id: target.id }); setPage("atlas"); }
   }
   const modelWarning = useMemo(() => {
     if (!current) return undefined;
@@ -787,24 +793,31 @@ export default function App() {
     id === "reviews" && reviewRunning || id === "dashboard" && current?.status === "running" ? <span aria-hidden className="nav-dot"/>
     : id === "reviews" && pendingReview > 0 ? <span aria-hidden className="nav-count">{pendingReview}</span> : null;
   const sideItem = (item: typeof navigation[number]) => <button key={item.id} type="button" aria-label={item.label}
+    data-tip={navCollapsed ? item.label : undefined}
     aria-current={page === item.id ? "page" : undefined} className="nav-item" onClick={() => openPage(item.id)}>
     <item.icon size={18} aria-hidden className="shrink-0"/>
-    <span className="min-w-0 flex-1"><span className="block truncate">{item.label}</span>{item.hint && <span className="nav-hint">{item.hint}</span>}</span>
+    <span className="nav-label min-w-0 flex-1"><span className="block truncate">{item.label}</span>{item.hint && <span className="nav-hint">{item.hint}</span>}</span>
     {navBadge(item.id)}
   </button>;
 
-  return <div className="site-nav">
+  return <div className="site-nav" data-nav={navCollapsed ? "collapsed" : "expanded"}>
     <aside className="sidebar">
-      <p className="mb-1 flex items-center gap-2 px-3 text-xl font-bold"><BookOpen className="text-emerald-500" aria-hidden/> BookWriter</p>
-      <p className="muted mb-5 px-3 text-xs">Autore autonomo e supervisionabile</p>
+      <div className="nav-brand mb-1 flex items-center justify-between gap-1">
+        <p className="flex min-w-0 items-center gap-2 px-3 text-xl font-bold"><BookOpen className="shrink-0 text-emerald-500" aria-hidden/> <span className="nav-label">BookWriter</span></p>
+        <button type="button" className="nav-toggle" aria-expanded={!navCollapsed} data-tip={navCollapsed ? "Espandi il menu" : undefined}
+          aria-label={navCollapsed ? "Espandi il menu laterale" : "Comprimi il menu laterale"} onClick={toggleNav}>
+          {navCollapsed ? <PanelLeftOpen size={18} aria-hidden/> : <PanelLeftClose size={18} aria-hidden/>}
+        </button>
+      </div>
+      <p className="nav-label muted mb-5 px-3 text-xs">Autore autonomo e supervisionabile</p>
       <nav aria-label="Navigazione principale">
         {sideItem(navigation[0]!)}
         {NAV_GROUPS.map(group => <div key={group.id} role="group" aria-labelledby={"nav-group-" + group.id}>
-          <p id={"nav-group-" + group.id} className="nav-group">{group.label}</p>
+          <p id={"nav-group-" + group.id} className="nav-group"><span className="nav-label">{group.label}</span></p>
           <div className="space-y-0.5">{navigation.filter(item => item.group === group.id).map(sideItem)}</div>
         </div>)}
       </nav>
-      <p className="muted mt-auto px-3 pt-6 text-xs">v{packageInfo.version} · local-first</p>
+      <p className="nav-label muted mt-auto px-3 pt-6 text-xs">v{packageInfo.version} · local-first</p>
     </aside>
 
     <nav ref={mobileNavRef} className="mobile-tabs" aria-label="Navigazione mobile">
@@ -817,6 +830,7 @@ export default function App() {
       ])}
     </nav>
 
+    <ReviewLauncher.Provider value={openReviews}>
     <main className="app-main min-w-0 px-3 pt-3 sm:px-6 sm:pt-5">
       <header className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 flex-1 basis-72">
@@ -1137,6 +1151,7 @@ export default function App() {
 
       <footer className="muted mt-10 flex flex-wrap items-center gap-2 text-xs"><BrainCircuit size={14} /> Autopilot nel browser aperto: nessuna attività garantita in background. <FileText size={14} /> Versione iniziale.</footer>
     </main>
+    </ReviewLauncher.Provider>
     <BackgroundActivityToast books={books} live={liveAi} currentBookId={selectedId}
       currentActivities={activities} onOpen={openWork} />
 
