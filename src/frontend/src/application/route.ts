@@ -1,11 +1,11 @@
-export type Page = "library" | "dashboard" | "activities" | "costs" | "reader" | "atlas" | "settings" | "export" | "bookSettings";
+export type Page = "library" | "dashboard" | "activities" | "costs" | "reader" | "atlas" | "reviews" | "settings" | "export" | "bookSettings";
 
 export interface Route { page: Page; book?: string; task?: string; chapter?: string }
 
 // Hash routing: the app is static (GitHub Pages), so a refresh can only restore state from the fragment.
 const SEGMENT: Record<Page, string> = {
   library: "libreria", dashboard: "dashboard", activities: "attivita", costs: "costi",
-  reader: "libro", atlas: "mondo", settings: "impostazioni", export: "archivio", bookSettings: "modelli",
+  reader: "libro", atlas: "mondo", reviews: "revisioni", settings: "impostazioni", export: "archivio", bookSettings: "modelli",
 };
 const PAGE_OF = new Map([...Object.entries(SEGMENT).map(([page, segment]) => [segment, page as Page] as const),
   ["memoria", "atlas" as Page] as const]); // old links keep working

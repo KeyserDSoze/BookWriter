@@ -44,7 +44,7 @@ test("thinking: i livelli arrivano da LM Studio, i menu li rispettano e il prese
   await expect(page.getByText(/plain-model non dichiara un controllo del thinking/).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Applica thinking consigliato" }).click();
-  await expect(page.getByText(/Thinking consigliato applicato a 14 attività; 1 usano modelli senza thinking/)).toBeVisible();
+  await expect(page.getByText(/Thinking consigliato applicato a 15 attività; 1 usano modelli senza thinking/)).toBeVisible();
   await expect(brainstorm).toHaveValue("medium");
   await expect(page.getByRole("combobox", { name: "Reasoning di Direttore editoriale" })).toHaveValue("high");
   await expect(page.getByRole("combobox", { name: "Reasoning di Cinque lettori" })).toHaveValue("low");

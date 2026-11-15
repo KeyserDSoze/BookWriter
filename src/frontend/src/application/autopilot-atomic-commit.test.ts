@@ -98,7 +98,7 @@ describe("Commit CAS delle risposte AI nel runner", () => {
       status: "cancelled", aiRequested: true,
       inputTokens: 80, outputTokens: 34,
     });
-    expect(attempts[0]!.error).toMatch(/libro è cambiato durante il salvataggio AI/);
+    expect(attempts[0]!.error).toMatch(/modificato mentre il modello lavorava/);
     expect(attempts[0]!.error).not.toContain(hooks.competitorText);
     expect(attempts[0]!.output).toBeUndefined();
     expect(attempts[0]!.summary).toBeUndefined();

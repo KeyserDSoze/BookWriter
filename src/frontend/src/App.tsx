@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import {
   BookOpen, BrainCircuit, Globe2,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
-  Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet, Library,
+  Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet, Library, ClipboardCheck,
 } from "lucide-react";
+import { ReviewsPage } from "./components/review/ReviewsPage";
+import { findScene, pendingElements, type EditTarget } from "./domain/book-edits";
+import { activeManualReview } from "./domain/manual-review";
 import { LibraryPage } from "./components/LibraryPage";
 import { readLastBookId, rememberLastBookId } from "./application/last-book";
 import { formatRoute, parseRoute, type Page } from "./application/route";
@@ -14,6 +17,7 @@ import { EndpointCard } from "./components/settings/EndpointCard";
 import { ModelRouterTable } from "./components/settings/ModelRouterTable";
 import { BookOverrideTable } from "./components/settings/BookOverrideTable";
 import { EditorialProfilesPanel } from "./components/settings/EditorialProfilesPanel";
+import { WebResearchPanel } from "./components/settings/WebResearchPanel";
 import { WorldPage } from "./components/world/WorldPage";
 import { BookWorkspace } from "./components/book/BookWorkspace";
 import { usePwaInstall } from "./application/pwa";
@@ -63,13 +67,15 @@ import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./ap
 import packageInfo from "../package.json";
 import { useWakeLock } from "./application/use-wake-lock";
 
-const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen }> = [
+const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen; mobile?: false }> = [
   { id: "library", label: "Libreria", icon: Library },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "activities", label: "Attività", icon: ListChecks },
   { id: "costs", label: "Costi", icon: Wallet },
   { id: "reader", label: "Libro", icon: BookOpen },
   { id: "atlas", label: "Mondo", icon: Globe2 },
+  // Reached from the status bar on phones: the bottom bar keeps its eight tabs.
+  { id: "reviews", label: "Revisioni", icon: ClipboardCheck, mobile: false },
   { id: "settings", label: "Impostazioni", icon: Settings2 },
   { id: "export", label: "Archivio", icon: FileArchive },
 ];
@@ -78,6 +84,7 @@ const LABELS: Record<TaskKind, string> = {
   adversarial: "Adversarial review", outline: "Piano capitoli", prose: "Scrittura",
   continuity: "Review continuità", consolidate: "Consolidamento", summarize: "Riassunti", revision: "Revisioni", merge: "Fusione di scene",
   chapterAudit: "Specialisti capitolo", chapterReaders: "Cinque lettori", chapterJudge: "Direttore editoriale", chapterRepair: "Remediation mirata",
+  research: "Ricerca web (modello che cerca)",
 };
 const statusText: Record<BookProject["status"], string> = {
   idle: "Da avviare", running: "In esecuzione", paused: "In pausa",
@@ -341,6 +348,19 @@ export default function App() {
   const nextStep = useMemo(() => current ? describeNextAutopilotStep(current) : undefined, [current]);
   const progressInfo = useMemo(() => current ? bookProgress(current) : undefined, [current]);
   const pendingFused = current?.editorialReviewSceneIds?.length ?? 0;
+  const pendingReview = useMemo(() => current ? pendingElements(current).filter(p => p.state === "modified_unreviewed" || p.state === "review_failed").length : 0, [current]);
+  const reviewRunning = !!current && !!activeManualReview(current);
+  const [worldFocus, setWorldFocus] = useState<{ kind: "entity" | "event" | "timeline"; id: string }>();
+  useEffect(() => { if (page !== "atlas") setWorldFocus(undefined); }, [page]);
+  /** From the reviews page to the element: the book for text, the world for sheets. */
+  function openElement(target: EditTarget) {
+    if (!current) return;
+    if (target.kind === "scene" || target.kind === "chapter" || target.kind === "structure") {
+      const chapter = target.kind === "scene" ? findScene(current, target.id)?.chapter : current.chapters.find(c => c.id === target.id);
+      setChapterId(chapter?.id ?? ""); setPage("reader"); return;
+    }
+    if (target.kind === "entity" || target.kind === "event" || target.kind === "timeline") { setWorldFocus({ kind: target.kind, id: target.id }); setPage("atlas"); }
+  }
   const modelWarning = useMemo(() => {
     if (!current) return undefined;
     const missing = missingModelRoutes(settings, current);
@@ -738,7 +758,7 @@ export default function App() {
     </aside>
 
     <nav className="mobile-tabs" aria-label="Navigazione mobile">
-      {navigation.map(({id,label,icon:Icon}) => <button key={id} aria-label={label} aria-current={page===id ? "page" : undefined}
+      {navigation.filter(item => item.mobile !== false).map(({id,label,icon:Icon}) => <button key={id} aria-label={label} aria-current={page===id ? "page" : undefined}
         className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-[10px] ${page===id ? "text-emerald-500 font-bold" : "muted"}`}
         onClick={() => setPage(id)}><Icon size={19}/><span className="block max-w-full truncate">{label}</span></button>)}
     </nav>
@@ -793,6 +813,9 @@ export default function App() {
             </> : <span className="muted self-center text-xs">In esecuzione in un'altra scheda</span>
             : current.status !== "completed" || current.revision ? <Button disabled={pendingFused > 0} onClick={execute}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
           <Button variant="outline" onClick={openIntervention}><MessageSquareText size={17}/> Intervieni</Button>
+          {(pendingReview > 0 || reviewRunning || page === "reviews") && <Button variant={reviewRunning ? "secondary" : "outline"} onClick={() => setPage("reviews")}
+            aria-label={reviewRunning ? "Revisioni: review in corso" : `Revisioni: ${pendingReview} da rivedere`}>
+            <ClipboardCheck size={17}/> Revisioni{reviewRunning ? " · in corso" : <span className="rounded-full bg-amber-500/20 px-1.5 text-amber-800 dark:text-amber-300"><span className="text-xs">{pendingReview}</span></span>}</Button>}
           <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setPage("activities")}><ListChecks size={17} /> Log</Button>
           {pendingFused > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({pendingFused})</Button>}
         </div>
@@ -815,6 +838,8 @@ export default function App() {
           onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
           onEditorialMode={mode => void updateBookEditorial(mode)}
           onConcurrency={value => void updateBookConcurrency(value)} />
+          <WebResearchPanel key={"research-" + current.id} book={current} settings={settings} onRefresh={refresh}
+            onRoute={(endpointId, modelId) => void updateBookRoute("research", endpointId, modelId)}/>
           <EditorialProfilesPanel key={current.id} book={current} onRefresh={refresh}/></div>
         : <Empty>Scegli un libro dalla Libreria per configurarne modelli e redazione.</Empty>)}
 
@@ -931,14 +956,18 @@ export default function App() {
         <Section title="Il libro" description="Ogni capitolo si legge per intero, scena per scena o in riassunto. Le scene canoniche sono il testo approvato; bozze e scene pianificate sono ancora in lavorazione. Esporta EPUB, DOCX e PDF dall'Archivio.">
         {!current?.chapters.length ? <Empty>Non c'è ancora un piano capitoli. Avvia l'autopilot.</Empty>
           : <BookWorkspace book={current} chapterId={chapterId} onChapter={setChapterId} busy={busy}
-            onApprove={sceneId => void approveEditorialScene(sceneId)} onRefresh={refresh} onStart={startRunner}/>}
+            onApprove={sceneId => void approveEditorialScene(sceneId)} onRefresh={refresh} onStart={startRunner} onOpenReviews={() => setPage("reviews")}/>}
         </Section>
       </div>}
 
       {page === "atlas" && (current
-        ? <WorldPage key={current.id} book={current} onRefresh={refresh} onStart={startRunner} runningHere={runningHere}
-          onOpenAgents={() => setPage("bookSettings")} onOpenBook={() => setPage("reader")}/>
+        ? <WorldPage key={current.id + (worldFocus ? ":" + worldFocus.id : "")} book={current} onRefresh={refresh} onStart={startRunner} runningHere={runningHere}
+          onOpenAgents={() => setPage("bookSettings")} onOpenBook={() => setPage("reader")} focus={worldFocus}/>
         : <Section title="Mondo del libro"><Empty>Seleziona un libro per consultarne personaggi, luoghi, eventi e timeline.</Empty></Section>)}
+
+      {page === "reviews" && (current
+        ? <ReviewsPage key={current.id} book={current} runningHere={runningHere} onStart={startRunner} onRefresh={refresh} onOpen={openElement}/>
+        : <Section title="Revisioni"><Empty>Seleziona un libro per vedere le modifiche da rivedere.</Empty></Section>)}
 
       {page === "export" && <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <div className="lg:col-span-2">

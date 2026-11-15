@@ -32,11 +32,15 @@ const MEMORY = JSON.stringify({
 });
 const SUMMARY = JSON.stringify({ chapterSummary: "Mara arriva sull'isola e trova la lettera.", bookSummary: "Una donna cerca la verità sul padre." });
 const IMPACT = JSON.stringify({ rationale: "L'istruzione cambia l'ora in cui Mara trova la lettera.", affectedSceneIds: ["scene:001:002", "scene:002:001"] });
+const RESEARCH = JSON.stringify({ web_search: { queries: ["porti dell'Adriatico nel 1890", "fari a petrolio"], reason: "Dettagli d'epoca per la scena del molo." } });
+const SEARCH = JSON.stringify({ research_summary: "Nel 1890 i fari usavano lampade a petrolio con lenti di Fresnel.", sources: [
+  { title: "Storia dei fari", url: "https://example.org/fari", excerpt: "lampade a petrolio" }, { title: "Porti adriatici", url: "https://example.org/porti", excerpt: "Trieste e Fiume" }] });
 const SAMPLES: Array<[string, string, string]> = [
   ["report", TITLE, REPORT], ["judgment", "Direttore editoriale: accettazione o rifiuto motivato dei rilievi", JUDGMENT],
   ["plan", "Piano dei capitoli", PLAN], ["scenes", "Scene del capitolo 1/3: L'arrivo", SCENES],
   ["memory", "Consolidamento del canon", MEMORY], ["summary", "Sinossi del capitolo e del libro 1/2", SUMMARY],
   ["impact", "Analisi d'impatto della correzione", IMPACT],
+  ["research", "Scrittura scena 2", RESEARCH], ["search", "Ricerca web: «porti dell'Adriatico nel 1890»", SEARCH],
 ];
 const at = (text: string, marker: string, extra = 0) => text.slice(0, text.indexOf(marker) + marker.length + extra);
 const progress = (title: string, text: string, resolve?: (id: string) => string | undefined): LiveProgress =>
@@ -59,6 +63,23 @@ describe("cosa sta facendo il modello, letto mentre scrive", () => {
     expect(done.shape).toBe(shape);
     expect(done.forming).toBeUndefined();
     expect(done.actions.length).toBeGreaterThan(1);
+  });
+
+  describe("ricerca web", () => {
+    it("una richiesta di ricerca mostra le domande e il motivo, non un rapporto", () => {
+      const done = progress("Scrittura scena 2", RESEARCH);
+      expect(done.actions.map(a => a.title)).toEqual(["Vuole cercare: «porti dell'Adriatico nel 1890»", "Vuole cercare: «fari a petrolio»", "Perché le serve"]);
+      expect(done.counters).toEqual([{ label: "ricerche", value: 2 }]);
+      expect(progress("Scrittura scena 2", '{"web_search":{"queries":["porti').forming?.label).toBe("Sta preparando una ricerca web…");
+    });
+    it("la risposta del modello di ricerca diventa sintesi e fonti, riconosciuta dal titolo", () => {
+      const title = "Ricerca web: «porti dell'Adriatico nel 1890»";
+      expect(progress(title, '{"summary":"Nel 18').shape).toBe("search");
+      const done = progress(title, SEARCH);
+      expect(done.actions.map(a => a.id)).toEqual(["summary", "source-0", "source-1"]);
+      expect(done.actions[1]).toMatchObject({ title: "Fonte: Storia dei fari", meta: ["https://example.org/fari"] });
+      expect(done.counters).toEqual([{ label: "fonti", value: 2 }]);
+    });
   });
 
   describe("rapporto di un revisore", () => {

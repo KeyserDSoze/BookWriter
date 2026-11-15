@@ -25,7 +25,11 @@ import { AiBudgetStop } from "../domain/ai-budget";
 import { markAuthorNotesApplied, pendingAuthorNotes, taskAcceptsAuthorNotes, withAuthorNotes } from "../domain/author-interventions";
 import { formatAuthorSynopsis } from "../domain/book-start";
 import { recordAuthorIntervention } from "./author-intervention";
-import { parseEditorialProfiles, profileStamp, writerInstructions } from "../domain/editorial-profiles";
+import { isReaderRole, parseEditorialProfiles, profileStamp, writerInstructions } from "../domain/editorial-profiles";
+import { formatResearchResults, parseResearchRequest, researchAgentForKind, researchEnabledFor, researchRule,
+  type ResearchAgent, type ResearchEntry, type ResearchRequest } from "../domain/web-research";
+import { persistResearchLog, runResearchQueries } from "./web-research";
+import { ManualReviewChanged, nextManualReviewStep, type ManualReviewAiStep } from "../domain/manual-review-flow";
 import { describeEntities, describeEvents, emptyKnowledge, KNOWLEDGE_REPLY_SHAPE, mergeKnowledgeReply, syncKnowledgeWithMemory,
   MEMORY_FOLDER, findEntity, type KnowledgeBase } from "../domain/knowledge";
 import { analyzeImpact, dependentEvents, relevantKnowledge } from "../domain/knowledge-index";
@@ -72,6 +76,8 @@ type Work = {
   system?: string;
   /** Task-internal housekeeping: pending author notes must stay pending. */
   noAuthorNotes?: boolean;
+  /** Web research group of this task; null = never, absent = derived from the kind. */
+  researchAgent?: ResearchAgent | null;
   phase: Phase;
   kind: TaskKind;
   title: string;
@@ -84,6 +90,57 @@ type Work = {
 };
 
 const reviewKey = (chapterId: string, round: number, index: number) => `${chapterId}:${round}:${index}`;
+/** Blind readers and the writer's own review never research; specialists may. */
+const reviewerResearchAgent = (role: string): ResearchAgent | null =>
+  role === "writerReview" || isReaderRole(role) ? null : "specialists";
+function workResearchAgent(work: Pick<Work, "researchAgent" | "kind">): ResearchAgent | undefined {
+  return work.researchAgent === null ? undefined : work.researchAgent ?? researchAgentForKind(work.kind);
+}
+/** The system prompt a task gets when its agent may research (also for look-ahead reviewers). */
+function withResearchRule(system: string, book: BookProject, agent: ResearchAgent | undefined, round: number): string {
+  const config = book.webResearch;
+  if (!config || !researchEnabledFor(book, agent)) return system;
+  return system + "\n\n" + researchRule(config, round >= config.maxRounds);
+}
+/** Everything a task's validity depends on. Author metadata (research settings and log,
+ * edit log, reviews, routing, budget, status) can change during a call without
+ * invalidating the reply; any narrative change makes the runner redo the step. */
+const VOLATILE_BOOK_KEYS = new Set(["updatedAt", "status", "previousError", "remote", "webResearch", "webResearchLog",
+  "changeMode", "aiBudget", "modelRoutes", "taskReasoningEfforts", "authorInterventions", "edits", "manualReviews"]);
+export function narrativeStateJson(book: BookProject): string {
+  // Only top-level keys are volatile: a nested `status` (scene, cycle) is narrative state.
+  return JSON.stringify(book, function (this: unknown, key: string, value: unknown) {
+    return this === book && VOLATILE_BOOK_KEYS.has(key) ? undefined : value;
+  });
+}
+class AuthorEditDuringTask extends Error {
+  constructor(message = "Il libro è stato modificato mentre il modello lavorava: risposta scartata, il passo viene rifatto sulla versione aggiornata.") { super(message); this.name = "AuthorEditDuringTask"; }
+}
+/** A review the author asked for, run as an ordinary audited task. */
+function manualReviewWork(book: BookProject, step: ManualReviewAiStep): Work {
+  return { phase: book.phase, kind: step.kind, title: step.title, reason: step.reason, nextStep: step.nextStep,
+    system: step.system, prompt: step.prompt, noAuthorNotes: true, researchAgent: "review",
+    apply: (b, text) => step.apply(b, text, new Date().toISOString()) };
+}
+/** Runner bookkeeping (status, phase, new cycle) never overwrites a newer author edit. */
+async function saveRunnerState(book: BookProject, expectedUpdatedAt: string, queue = false): Promise<boolean> {
+  try { await saveBook(book, queue, expectedUpdatedAt); return true; }
+  catch (error) { if (error instanceof BookRevisionConflict) return false; throw error; }
+}
+/** Re-read, change and CAS-save (with an optional activity), retrying on concurrent edits. */
+async function markRunnerBook(bookId: string, mutate: (book: BookProject) => void, activity?: Activity): Promise<boolean> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const book = await getBook(bookId);
+    if (!book) return false;
+    const token = book.updatedAt;
+    mutate(book);
+    try {
+      if (activity) await saveBookAndActivity(book, activity, token); else await saveBook(book, false, token);
+      return true;
+    } catch (error) { if (!(error instanceof BookRevisionConflict)) throw error; }
+  }
+  return false;
+}
 
 type LaunchBase = Omit<LaunchInput, "persisted" | "live">;
 /** Start the reviewers that follow the current one, so up to `reviewConcurrency` run together.
@@ -104,6 +161,7 @@ async function launchReviewsAhead(
       const next = reviewSlotAt(book, cycle, index);
       if (!next) return;
       const prompt = reviewerPrompt(book, cycle, next.role, next.segment, next.segmentCount);
+      const system = withResearchRule(prompt.system, book, reviewerResearchAgent(next.role) ?? undefined, 0);
       const kind = reviewerTask(next.role);
       const assignment = routeFor(kind, settings, book);
       const endpoint = settings.endpoints.find(e => e.id === assignment.endpointId);
@@ -120,11 +178,11 @@ async function launchReviewsAhead(
         ...(requestedEffort === undefined ? {} : { requestedReasoningEffort: requestedEffort }),
       };
       const launched = await launchModelCall({
-        ...base, kind, title, systemPrompt: prompt.system, userPrompt: prompt.prompt, started, assignment,
+        ...base, kind, title, systemPrompt: system, userPrompt: prompt.prompt, started, assignment,
         configuredEndpoint: endpoint, signal: child.signal, persisted: false, live: false,
         ...(requestedEffort === undefined ? {} : { requestedEffort }),
       });
-      pool.add({ key, system: prompt.system, user: prompt.prompt, started, promise: launched.promise, abort: child });
+      pool.add({ key, system, user: prompt.prompt, started, promise: launched.promise, abort: child });
     } catch { return; }
   }
 }
@@ -566,6 +624,7 @@ function nextWork(book: BookProject): Work | null {
         return {
           reviewSlot: { key: reviewKey(cycle.chapterId, cycle.round, cycle.reports.length),
             index: cycle.reports.length, expected: next.segmentCount * cycleRoles(book, cycle).length },
+          researchAgent: reviewerResearchAgent(next.role),
           phase: "chapterReview", kind: reviewerTask(next.role), title,
           system: prompt.system,
           reason: "Una chat autonoma controlla solo la sua competenza, senza pareri degli altri agenti.",
@@ -1049,13 +1108,18 @@ export class AutopilotRunner {
     let sessionStarted = false;
     try {
       await withWriterGuard(bookId, runId, controller, async guard => {
-      const initial = await getBook(bookId);
-      if (!initial) throw new Error("Libro non trovato.");
-      if (initial.editorialReviewSceneIds?.length)
-        throw new Error("Rileggi e conferma le scene fuse nel Lettore prima di avviare l'autopilot.");
-      initial.status = "running"; initial.previousError = undefined;
-      await guard.assertActive();
-      await saveBook(initial, false); // A run start is not a narrative checkpoint.
+      // The author may edit while the run starts: never overwrite a newer revision.
+      for (let attempt = 0; ; attempt++) {
+        const initial = await getBook(bookId);
+        if (!initial) throw new Error("Libro non trovato.");
+        if (initial.editorialReviewSceneIds?.length)
+          throw new Error("Rileggi e conferma le scene fuse nel Lettore prima di avviare l'autopilot.");
+        const token = initial.updatedAt;
+        initial.status = "running"; initial.previousError = undefined;
+        await guard.assertActive();
+        try { await saveBook(initial, false, token); break; } // A run start is not a narrative checkpoint.
+        catch (error) { if (!(error instanceof BookRevisionConflict) || attempt >= 4) throw error; }
+      }
       sessionStarted = true;
       await onUpdate();
       // Local, unauthenticated endpoints cost nothing per call: a failed task may
@@ -1063,6 +1127,10 @@ export class AutopilotRunner {
       let retries = 0;
       let retryScope = "";
       let rejectedReplyReason = "";
+      /** Consecutive replies discarded because the author edited the book meanwhile. */
+      let authorConflicts = 0;
+      /** Web research already done for the current task, keyed like the retries. */
+      const research = new Map<string, { round: number; entries: ResearchEntry[] }>();
       const pool = new ReviewCallPool();
 
       try {
@@ -1070,13 +1138,31 @@ export class AutopilotRunner {
         await guard.assertActive();
         const book = await getBook(bookId);
         if (!book || book.status !== "running") break;
+        // Every state change below is CAS-checked: an author edit in between wins and the loop re-reads.
+        const token = book.updatedAt;
+        const commit = (b: BookProject, queue = false) => saveRunnerState(b, token, queue);
         if (this.stopAfter) {
           book.status = "paused";
           book.previousError = undefined;
-          await saveBook(book, false);
+          if (!await commit(book)) continue;
           await onUpdate();
           break;
         }
+        // A review the author asked for runs before anything else; then the book goes
+        // back to where the author left it (paused, completed) or the run continues.
+        const manual = nextManualReviewStep(book);
+        if (manual?.type === "local") {
+          const now = new Date().toISOString();
+          const summary = manual.run(book, now);
+          try {
+            await saveBookAndActivity(book, { id: crypto.randomUUID(), bookId, runId, phase: book.phase, title: manual.title,
+              reason: manual.reason, nextStep: manual.nextStep, status: "succeeded", aiRequested: false, createdAt: now, endedAt: now,
+              summary: shortSummary(summary) }, token);
+          } catch (error) { if (error instanceof BookRevisionConflict) continue; throw error; }
+          await onUpdate();
+          continue;
+        }
+        if (!manual) {
         // A previously canonical chapter is not final until the independent board freezes it.
         if (book.phase === "prose" && !book.editorialCycle) {
           const ready = [...book.chapters]
@@ -1088,7 +1174,7 @@ export class AutopilotRunner {
           if (ready) {
             book.editorialCycle = createEditorialCycle(ready.id, book);
             book.phase = "chapterReview";
-            await saveBook(book, false);
+            if (!await commit(book)) continue;
             await onUpdate();
             continue;
           }
@@ -1096,14 +1182,14 @@ export class AutopilotRunner {
         if (book.editorialReviewSceneIds?.length) {
           book.status = "paused";
           book.previousError = "Alcune scene fuse attendono conferma editoriale nel Lettore.";
-          await saveBook(book, false);
+          if (!await commit(book)) continue;
           await onUpdate();
           break;
         }
         if (activeChange(book)?.state === "awaiting_confirmation") {
           book.status = "paused";
           book.previousError = "Piano della modifica pronto: confermalo o annullalo nella pagina Mondo.";
-          await saveBook(book, false);
+          if (!await commit(book)) continue;
           await onUpdate();
           break;
         }
@@ -1113,20 +1199,24 @@ export class AutopilotRunner {
           const change = activeChange(book);
           closeRevision(book, book.revision);
           const now = new Date().toISOString();
-          await saveBookAndActivity(book, {
-            id: crypto.randomUUID(), bookId, runId, phase: "revision",
-            title: change ? "Modifica applicata: " + change.targetLabel : "Revisione chiusa senza riscritture",
-            reason: change ? (change.plan?.changeKind === "style" ? "Modifica di forma: nessun fatto cambiato, il capitolo viene rivisto di nuovo." :
-              "Scheda aggiornata; nessuna scena già scritta da riscrivere.") : "L'analisi d'impatto non ha individuato scene già scritte da cambiare.",
-            nextStep: change ? "Nuova redazione dei capitoli toccati, poi la modifica risulterà completata." : "L'istruzione resta un vincolo permanente per i prossimi task.",
-            status: "succeeded", aiRequested: false, createdAt: now, endedAt: now,
-            summary: shortSummary((change ? "Modifica senza altre riscritture: " : "Nessuna scena riscritta per: ") + instruction),
-          }, expected);
+          try {
+            await saveBookAndActivity(book, {
+              id: crypto.randomUUID(), bookId, runId, phase: "revision",
+              title: change ? "Modifica applicata: " + change.targetLabel : "Revisione chiusa senza riscritture",
+              reason: change ? (change.plan?.changeKind === "style" ? "Modifica di forma: nessun fatto cambiato, il capitolo viene rivisto di nuovo." :
+                "Scheda aggiornata; nessuna scena già scritta da riscrivere.") : "L'analisi d'impatto non ha individuato scene già scritte da cambiare.",
+              nextStep: change ? "Nuova redazione dei capitoli toccati, poi la modifica risulterà completata." : "L'istruzione resta un vincolo permanente per i prossimi task.",
+              status: "succeeded", aiRequested: false, createdAt: now, endedAt: now,
+              summary: shortSummary((change ? "Modifica senza altre riscritture: " : "Nessuna scena riscritta per: ") + instruction),
+            }, expected);
+          } catch (error) { if (error instanceof BookRevisionConflict) continue; throw error; }
           await onUpdate();
           continue;
         }
+        }
         let work: Work | null;
-        try {
+        if (manual) work = manualReviewWork(book, manual);
+        else try {
           work = book.phase === "prose" && !book.editorialCycle && !book.revision &&
             memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book);
         } catch (error) {
@@ -1138,14 +1228,16 @@ export class AutopilotRunner {
         }
         if (!work) {
           if (book.phase === "audience" && book.audienceReviews.length >= 5) {
-            book.phase = "adversarial"; await saveBook(book, false); continue;
+            book.phase = "adversarial"; await commit(book); continue;
           }
           book.phase = "completed"; book.status = "completed";
-          await saveBook(book); await onUpdate(); break;
+          if (!await commit(book, true)) continue;
+          await onUpdate(); break;
         }
         const settings = await loadSettings();
         const retryKey = work.phase + ":" + work.title;
         if (retryScope !== retryKey) { retryScope = retryKey; retries = 0; rejectedReplyReason = ""; }
+        for (const key of [...research.keys()]) if (key !== retryKey) research.delete(key);
         if (retries > 0 && rejectedReplyReason) work.prompt += correctiveRetryNote(rejectedReplyReason);
         const assignment = routeFor(work.kind, settings, book);
         const configuredEndpoint=settings.endpoints.find(e=>e.id===assignment.endpointId);
@@ -1153,8 +1245,15 @@ export class AutopilotRunner {
           ? taskReasoningChoice(work.kind,settings,book,configuredEndpoint,assignment.modelId):undefined;
         // Author next-step notes go only to tasks that already see the private canon.
         const notes = !work.noAuthorNotes && taskAcceptsAuthorNotes(work.kind) ? pendingAuthorNotes(book) : [];
-        const userPrompt = withAuthorNotes(work.prompt, notes);
-        const systemPrompt = work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.";
+        const researchAgent = workResearchAgent(work);
+        const researchConfig = researchEnabledFor(book, researchAgent) ? book.webResearch : undefined;
+        const researchDone = research.get(retryKey);
+        const userPrompt = withAuthorNotes(work.prompt, notes) + (researchDone && book.webResearch
+          ? "\n\n" + formatResearchResults(researchDone.entries, researchDone.round, book.webResearch.maxRounds) : "");
+        const systemPrompt = withResearchRule(work.system ?? "Sei un editor e romanziere esperto. Segui rigorosamente le istruzioni dell'autore. Evita banalità, contraddizioni, spoiler prematuri e affermazioni fattuali non verificate. Rispondi solo nel formato richiesto.",
+          book, researchAgent, researchDone?.round ?? 0);
+        // Everything the reply's validity depends on, to tell author metadata edits from narrative ones.
+        const narrativeBefore = narrativeStateJson(book);
         // A reviewer call already made ahead of time, valid only for exactly these prompts.
         const pooled = work.reviewSlot ? pool.take(work.reviewSlot.key, systemPrompt, userPrompt) : undefined;
         const started: Activity = pooled?.started ?? {
@@ -1193,15 +1292,51 @@ export class AutopilotRunner {
           started.outputTokens = result.outputTokens;
           started.cachedInputTokens = result.cachedInputTokens;
           await guard.assertActive(); // Discard result if the lease was lost during the AI call.
+          if (researchConfig) {
+            let request: ResearchRequest | undefined;
+            try { request = parseResearchRequest(result.text, researchConfig); }
+            catch (error) { throw new ReplyRejectedError(error); }
+            if (request) {
+              if ((researchDone?.round ?? 0) >= researchConfig.maxRounds)
+                throw new ReplyRejectedError(new Error("Hai già usato le ricerche disponibili per questo compito: rispondi nel formato richiesto senza cercare."));
+              // The request was the model's whole answer: an audited call, no canon change.
+              started.status = "succeeded"; started.endedAt = new Date().toISOString();
+              started.nextStep = "Ricerca web, poi lo stesso compito con i risultati.";
+              started.summary = shortSummary("Ha chiesto una ricerca web: " + request.queries.join(" · "));
+              started.output = result.text;
+              await saveActivity(started);
+              finishLiveAi(started.id, "completata");
+              let entries: ResearchEntry[];
+              try {
+                entries = await runResearchQueries({ book, settings, runId, guard, signal, phase: work.phase,
+                  taskTitle: work.title, reason: request.reason, queries: request.queries });
+                await persistResearchLog(bookId, entries);
+              } catch (error) {
+                await markRunnerBook(bookId, b => { b.status = "paused"; b.previousError = error instanceof AiBudgetStop ? error.message
+                  : signal.aborted ? undefined : "Ricerca web interrotta: " + (error instanceof Error ? error.message : "errore") + " Riprendi per continuare."; });
+                await onUpdate();
+                break;
+              }
+              research.set(retryKey, { round: (researchDone?.round ?? 0) + 1, entries: [...(researchDone?.entries ?? []), ...entries] });
+              await onUpdate();
+              continue;
+            }
+          }
           const latest = await getBook(bookId);
-          if (!latest || latest.status !== "running" || latest.phase !== work.phase ||
-              latest.updatedAt !== book.updatedAt)
+          if (!latest || latest.status !== "running")
             throw new DOMException("Il libro è cambiato durante la chiamata AI: risultato non applicato.", "AbortError");
+          // The author may edit while the model works: their version wins and this step is redone.
+          if (latest.phase !== work.phase || narrativeStateJson(latest) !== narrativeBefore) throw new AuthorEditDuringTask();
           if (["prose", "review", "revision"].includes(work.phase) &&
               writerInstructions(latest.editorialProfiles) !== writerInstructions(book.editorialProfiles))
             throw new DOMException("Il profilo dello scrittore è cambiato durante la chiamata AI: risultato non applicato.", "AbortError");
+          const commitToken = latest.updatedAt;
           try { work.apply(latest, result.text); }
-          catch (error) { throw new ReplyRejectedError(error); }
+          catch (error) {
+            // The review was cancelled or changed by the author meanwhile: not a model error.
+            if (error instanceof ManualReviewChanged) throw new AuthorEditDuringTask(error.message);
+            throw new ReplyRejectedError(error);
+          }
           started.status = "succeeded"; started.endedAt = new Date().toISOString();
           started.summary = shortSummary(result.text); started.output = result.text;
           // Atomic with the canon commit below: a failed task leaves notes pending.
@@ -1211,33 +1346,43 @@ export class AutopilotRunner {
           // The revision checked after the provider call must still be
           // current inside the SAME IndexedDB transaction as canon + audit.
           // A non-cooperating writer can update after getBook above.
-          await saveBookAndActivity(latest, started, book.updatedAt);
+          await saveBookAndActivity(latest, started, commitToken);
           finishLiveAi(started.id,"completata");
           retries = 0;
           rejectedReplyReason = "";
+          authorConflicts = 0;
+          research.delete(retryKey);
           await onUpdate();
         } catch (error) {
           const message=error instanceof ProviderResponseReadError || error instanceof TruncatedProviderContentError ||
             error instanceof PromptExceedsContextError?error.message:
             error instanceof Error && error.name==="ProviderHeaderTimeoutError"?error.message:
+            error instanceof AuthorEditDuringTask ? error.message : error instanceof BookRevisionConflict ? new AuthorEditDuringTask().message :
             "La richiesta non ha prodotto un risultato applicabile. Apri il task per vedere l'errore.";
           finishLiveAi(started.id,signal.aborted?"interrotta":"rifiutata",message);
           // HTTP 200 + valid JSON can report usage with empty or malformed
           // content. Keep the observed counters on failure, without approving
           // a report, chapter or remediation.
           keepObservedUsageOnRejectedReply(started, error);
-          if (error instanceof BookRevisionConflict) {
-            // A competing writer committed after the post-model read. The
-            // attempted request may still have cost tokens, but we must not
-            // overwrite the competing book (even just to mark it paused).
+          if (error instanceof AuthorEditDuringTask || error instanceof BookRevisionConflict) {
+            // Another writer (the author, normally) committed during the call. The
+            // attempted request may still have cost tokens, but the newer book wins:
+            // never overwrite it, record the discarded reply and redo the step.
             started.status = "cancelled";
             // These fields were prepared for the successful canon commit but
             // must not leak into the standalone attempted-request audit.
             delete started.summary;
             delete started.output;
-            started.error = "Il libro è cambiato durante il salvataggio AI: risultato non applicato. Ricarica prima di riprendere.";
+            started.error = error instanceof AuthorEditDuringTask ? error.message : new AuthorEditDuringTask().message;
             started.endedAt = new Date().toISOString();
             await saveActivity(started);
+            await onUpdate();
+            const current = await getBook(bookId);
+            if (current?.status === "running" && ++authorConflicts <= 5) continue;
+            if (current?.status === "running") await markRunnerBook(bookId, b => {
+              b.status = "paused";
+              b.previousError = "Il libro è cambiato più volte mentre il modello lavorava: autopilot in pausa. Riprendi quando hai finito di modificare.";
+            });
             await onUpdate();
             break;
           }
@@ -1257,16 +1402,15 @@ export class AutopilotRunner {
             retries++;
             if (error instanceof ReplyRejectedError) rejectedReplyReason = error.message;
           }
-          const latest = await getBook(bookId);
-          if (latest) {
-            latest.status = willRetry ? "running" : aborted || budgetStop ? "paused" : "error";
-            latest.previousError = willRetry
-              ? `Tentativo ${retries}/${retryPolicy.max} fallito su «${work.title}»: ${started.error} Riprovo automaticamente.`
-              : started.error;
-            await saveBookAndActivity(latest, started);
-          } else await saveActivity(started);
+          const status = willRetry ? "running" : aborted || budgetStop ? "paused" : "error";
+          const previousError = willRetry
+            ? `Tentativo ${retries}/${retryPolicy.max} fallito su «${work.title}»: ${started.error} Riprovo automaticamente.`
+            : started.error;
+          // CAS read-modify-write: an author edit made meanwhile is kept.
+          const marked = await markRunnerBook(bookId, b => { b.status = status; b.previousError = previousError; }, started);
+          if (!marked) await saveActivity(started);
           await onUpdate();
-          if (willRetry && latest) {
+          if (willRetry && marked) {
             // A paid/remote provider may be rate limiting or overloaded: give it time.
             if (configuredEndpoint?.authMode !== "none") await retryDelay(AUTO_RETRY_BACKOFF.baseMs * retries, signal);
             continue;
@@ -1284,9 +1428,11 @@ export class AutopilotRunner {
         .replace(/sk-[A-Za-z0-9_-]+/g, "[chiave redatta]");
       const current = await getBook(bookId);
       if (sessionStarted && current?.status === "running") {
-        current.status = signal.aborted && !(error instanceof RemoteWriterLost) ? "paused" : "error";
-        current.previousError = message;
-        await saveBook(current, false);
+        await markRunnerBook(bookId, b => {
+          if (b.status !== "running") return;
+          b.status = signal.aborted && !(error instanceof RemoteWriterLost) ? "paused" : "error";
+          b.previousError = message;
+        });
       }
       if (current) {
         const now = new Date().toISOString();

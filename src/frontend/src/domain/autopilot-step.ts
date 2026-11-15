@@ -1,6 +1,8 @@
 import type { BookProject, Chapter, Scene } from "./types";
 import { reviewerLabel, acceptedRepairs, chapterSegments, createEditorialCycle, cycleRoles } from "./editorial-board";
 import { parseEditorialProfiles } from "./editorial-profiles";
+import { activeManualReview } from "./manual-review";
+import { describeManualReview } from "./manual-review-flow";
 
 export type PipelineStage = "ideation" | "planning" | "writing" | "editing" | "done";
 export const PIPELINE_STAGES: ReadonlyArray<{ id: PipelineStage; label: string; description: string }> = [
@@ -90,6 +92,12 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
   const stage = pipelineStage(book);
   const view = (headline: string, extra: Partial<AutopilotStepView> = {}): AutopilotStepView =>
     ({ stage, headline, acceptsAuthorNotes: false, revision: book.phase === "revision", ...extra });
+  // The runner executes a review the author asked for before anything else.
+  const review = activeManualReview(book);
+  if (review) {
+    const described = describeManualReview(book, review);
+    return view(described.headline, { detail: described.detail });
+  }
   if (book.knowledge?.pending && book.chapters.length && book.status !== "completed" && book.phase !== "revision" &&
       !["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase))
     return view("Schede narrative, eventi e timeline del libro.", {

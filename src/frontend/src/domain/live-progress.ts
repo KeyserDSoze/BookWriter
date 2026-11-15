@@ -12,7 +12,7 @@ export type LiveTone = "critical" | "major" | "minor" | "ok" | "accept" | "rejec
 export interface LiveAction { id: string; tone: LiveTone; title: string; badge?: string; detail?: string; meta?: string[] }
 export interface LiveForming { label: string; badge?: string; tone?: LiveTone; excerpt?: string }
 export interface LiveCounter { label: string; value: number }
-export type LiveShape = "report" | "judgment" | "plan" | "scenes" | "memory" | "summary" | "impact" | "text" | "structured" | "none";
+export type LiveShape = "report" | "judgment" | "plan" | "scenes" | "memory" | "summary" | "impact" | "research" | "search" | "text" | "structured" | "none";
 export interface LiveProgress {
   shape: LiveShape;
   /** What the model is doing, in plain words. */
@@ -33,6 +33,8 @@ const SEVERITY: Record<string, { tone: LiveTone; label: string }> = {
 function hintShape(title: string): LiveShape | undefined {
   if (/^Redazione: \w+ \d+\/\d+$/.test(title)) return "report";
   if (/^Direttore editoriale:/.test(title)) return "judgment";
+  // A search model that answers {"summary":...} instead of {"research_summary":...}: the title tells.
+  if (/^Ricerca web: /.test(title)) return "search";
   return undefined;
 }
 
@@ -93,6 +95,8 @@ function sniff(root: PartialNode): LiveShape {
   const keys = new Set(root.entries.map(entry => entry.key));
   if (root.pendingKey) keys.add(root.pendingKey);
   const has = (...names: string[]) => names.some(name => keys.has(name));
+  if (has("web_search")) return "research";
+  if (has("research_summary")) return "search";
   if (has("findings", "verdict", "memoryNote")) return "report";
   if (has("decisions", "reasoning")) return "judgment";
   if (has("chapters")) return "plan";
@@ -266,6 +270,49 @@ function describeImpact(root: PartialNode & { type: "object" }, resolve?: SceneR
   return out;
 }
 
+/** A task asking for web research instead of answering. */
+function describeResearch(root: PartialNode & { type: "object" }): Collector {
+  const out: Collector = { actions: [], counters: [] };
+  const request = entryOf(root, "web_search");
+  if (request?.type !== "object") return out;
+  let queries = 0;
+  for (const { key, value } of request.entries) {
+    if (key === "queries" && value.type === "array") {
+      value.items.forEach((item, index) => {
+        const query = item.done ? finalText(item) : undefined;
+        if (!query) return;
+        queries++;
+        out.actions.push({ id: `query-${index}`, tone: "info", title: `Vuole cercare: «${clip(query, 70)}»` });
+      });
+    } else if (key === "reason") {
+      const text = str(value, 190);
+      if (text) out.actions.push({ id: "reason", tone: "info", title: "Perché le serve", detail: text });
+    }
+  }
+  if (queries) out.counters.push({ label: queries === 1 ? "ricerca" : "ricerche", value: queries });
+  return out;
+}
+/** The search model's answer: a summary and the sources it consulted. */
+function describeSearch(root: PartialNode & { type: "object" }): Collector {
+  const out: Collector = { actions: [], counters: [] };
+  let sources = 0;
+  for (const { key, value } of root.entries) {
+    if (key === "summary" || key === "research_summary") {
+      const text = str(value, 200);
+      if (text) out.actions.push({ id: "summary", tone: "info", title: "Sintesi trovata", detail: text });
+    } else if (key === "sources" && value.type === "array") {
+      value.items.forEach((item, index) => {
+        if (item.type !== "object" || !item.done) return;
+        sources++;
+        out.actions.push({ id: `source-${index}`, tone: "ok", title: `Fonte: ${str(entryOf(item, "title"), 70) ?? "senza titolo"}`,
+          detail: str(entryOf(item, "excerpt"), 160), meta: str(entryOf(item, "url"), 80) ? [str(entryOf(item, "url"), 80)!] : undefined });
+      });
+    }
+  }
+  if (sources) out.counters.push({ label: sources === 1 ? "fonte" : "fonti", value: sources });
+  return out;
+}
+
 /** The item being written: where the open value is, and the last words received. */
 function describeForming(shape: LiveShape, root: PartialNode): LiveForming | undefined {
   const leaf = openLeaf(root);
@@ -324,6 +371,8 @@ function describeForming(shape: LiveShape, root: PartialNode): LiveForming | und
   }
   if (shape === "summary") return typed(top === "bookSummary" ? "Sta scrivendo la sinossi del libro" : "Sta scrivendo la sinossi del capitolo");
   if (shape === "impact") return typed(top === "affectedSceneIds" ? "Sta cercando le scene coinvolte…" : "Sta scrivendo la motivazione");
+  if (shape === "research") return typed(path[1] === "reason" ? "Sta spiegando perché le serve una ricerca" : "Sta preparando una ricerca web…");
+  if (shape === "search") return typed(top === "sources" ? "Sta elencando le fonti consultate…" : "Sta scrivendo la sintesi della ricerca");
   return typed("Sta scrivendo la risposta…");
 }
 
@@ -370,6 +419,8 @@ export function describeLiveProgress(input: LiveProgressInput, resolve?: SceneRe
     : shape === "memory" ? describeMemory(root)
     : shape === "summary" ? describeSummary(root)
     : shape === "impact" ? describeImpact(root, resolve)
+    : shape === "research" ? describeResearch(root)
+    : shape === "search" ? describeSearch(root)
     : { actions: [], counters: [] }; // unknown structure: no card could be trusted not to change later
   return { shape, headline, ...found, forming: root.done ? undefined : describeForming(shape, root) };
 }

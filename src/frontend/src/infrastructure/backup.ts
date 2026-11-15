@@ -6,6 +6,10 @@ import { MAX_EDITORIAL_REPORTS, narrativeConflictSchema, priorSceneConflictSchem
 import { editorialProfilesSchema, profileSnapshotFields, refineProfileSnapshot } from "../domain/editorial-profiles";
 import { knowledgeBaseSchema } from "../domain/knowledge";
 import { changeOperationSchema, MAX_CHANGE_OPERATIONS } from "../domain/narrative-change";
+import { researchLogSchema, webResearchSettingsSchema } from "../domain/web-research";
+import { bookEditSchema, MAX_EDITS, reviewStaleSchema } from "../domain/book-edits";
+import { manualReviewSchema, MAX_REVIEWS } from "../domain/manual-review";
+import { interruptImportedReviews } from "../domain/manual-review-flow";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "./ai";
@@ -34,6 +38,7 @@ const sceneSchema = z.object({
   id: zId, number: z.number().int().nonnegative(), title: z.string().max(300),
   objective: z.string().max(20_000), text: z.string().max(2_000_000),
   summary: z.string().optional(), status: z.enum(["planned", "draft", "canon"]),
+  summaryStale: z.boolean().optional(),
 }).passthrough();
 // Untrusted ZIPs must not inject arbitrary instructions or unbounded state into
 // cross-chapter continuity prompts. Existing archives without these fields work.
@@ -141,6 +146,7 @@ const chapterSchema = z.object({
   editorialMode: z.literal("light").optional(),
   editorialRounds: z.array(archivedRoundSchema).max(3).optional(),
   lastContinuityReview: continuityAuditSchema.optional(),
+  reviewStale: reviewStaleSchema.optional(), summaryStale: z.boolean().optional(),
 }).passthrough();
 const memorySchema = z.object({
   characters: z.record(z.string(), z.string()),
@@ -300,6 +306,10 @@ const bookSchema = z.object({
   knowledge: knowledgeBaseSchema.optional(),
   changeOperations: z.array(changeOperationSchema).max(MAX_CHANGE_OPERATIONS).optional(),
   changeMode: z.enum(["auto", "confirm"]).optional(),
+  webResearch: webResearchSettingsSchema.optional(),
+  webResearchLog: researchLogSchema.optional(),
+  edits: z.array(bookEditSchema).max(MAX_EDITS).optional(),
+  manualReviews: z.array(manualReviewSchema).max(MAX_REVIEWS).optional(),
   authorInterventions: z.array(authorInterventionSchema).max(MAX_AUTHOR_INTERVENTIONS).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),
@@ -697,6 +707,8 @@ async function importBackupInternal(
     narrativeKnowledgeShareDecisions: importedSharingAudit(book),
     narrativeTransferShareDecisions: importedTransferShareAudit(book),
     editorialVerificationChoices: importedVerificationAudit(book),
+    // Consent to send queries outside the device is never inherited from an archive.
+    ...(book.webResearch ? { webResearch: { ...book.webResearch, enabled: false } } : {}),
     remote: undefined, // Imported copies must not inherit GitHub write permissions/remote SHA.
     status: forkSource?"paused":book.status==="running"?"paused":book.status,
     previousError: forkSource
@@ -704,6 +716,8 @@ async function importBackupInternal(
       :"Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
     updatedAt: new Date().toISOString(),
   })) as BookProject[];
+  // An archive never resumes a review by itself.
+  for (const book of safeBooks) interruptImportedReviews(book, new Date().toISOString());
   const safeActivities: Activity[] = data.activities
     .filter(activity => idMap.has(activity.bookId))
     .map(activity => ({

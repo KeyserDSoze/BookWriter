@@ -2,6 +2,8 @@
 
 **Preparazione locale 0.20.0, non pubblicata.** Questa guida descrive le pagine **Mondo** e **Libro** e il modo in cui l'autopilot mantiene coerente il libro quando chiedi una modifica. Gli agenti (scrittore, lettori, direttore) sono in [Lettori e scrittore](editorial-profiles.md).
 
+**Dalla 0.21.0** ogni elemento si modifica anche a mano o con «Modifica solo questo» (confronto prima/dopo, nessuna propagazione), le modifiche restano «da rivedere» finché non scegli una review nella pagina **Revisioni**, e l'AI può cercare informazioni sul web se lo consenti: vedi [Modifiche, review e ricerca web](editing-and-reviews.md). Quella descritta qui sotto è la scelta «Modifica e aggiorna il libro».
+
 ## Le schede si creano da sole
 
 Dopo il piano dei capitoli l'autopilot fa un passo in più: **Schede narrative, eventi e timeline**. Crea personaggi principali e secondari, luoghi, oggetti rilevanti, fazioni, eventi fondamentali e una o più timeline. Le schede sono concise: contengono solo ciò che serve alla storia (funzione narrativa, personalità e motivazione, modo di parlare, background, relazioni). Durante la scrittura, dopo ogni scena, l'autopilot può aggiungere schede o eventi nuovi e aggiornare quelli esistenti; ogni cambiamento crea una nuova versione e conserva la precedente.

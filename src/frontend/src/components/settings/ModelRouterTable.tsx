@@ -12,6 +12,7 @@ const GROUPS: Array<{ id: string; label: string; kinds: readonly TaskKind[] }> =
   { id: "ideation", label: "Ideazione", kinds: ["brainstorm", "validate", "audience", "adversarial", "outline"] },
   { id: "writing", label: "Scrittura", kinds: ["prose", "continuity", "consolidate", "summarize", "revision", "merge"] },
   { id: "editorial", label: "Redazione", kinds: ["chapterAudit", "chapterReaders", "chapterJudge", "chapterRepair"] },
+  { id: "research", label: "Ricerca web", kinds: ["research"] },
 ];
 const DEFAULT_CHOICE = "__default__";
 const INHERIT_CHOICE = "__inherit__";

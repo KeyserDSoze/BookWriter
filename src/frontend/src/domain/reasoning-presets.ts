@@ -7,7 +7,7 @@ export const RECOMMENDED_REASONING: Record<TaskKind, ReasoningLevel> = {
   brainstorm: "medium", validate: "medium", audience: "low", adversarial: "medium",
   outline: "medium", prose: "low", continuity: "low", consolidate: "low",
   summarize: "low", revision: "medium", merge: "low",
-  chapterAudit: "low", chapterReaders: "low", chapterJudge: "high", chapterRepair: "low",
+  chapterAudit: "low", chapterReaders: "low", chapterJudge: "high", chapterRepair: "low", research: "low",
 };
 
 export interface ReasoningPresetResult {

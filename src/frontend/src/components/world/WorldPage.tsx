@@ -1,16 +1,19 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Bot, BookOpen, CalendarClock, Flag, Globe2, History, MapPin, Package, Pencil, Play, Search, Users } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Bot, BookOpen, CalendarClock, Flag, Globe2, History, MapPin, Package, Pencil, Play, Plus, Search, Users } from "lucide-react";
 import type { BookProject } from "../../domain/types";
 import { ATTRIBUTE_FIELDS, ENTITY_LABELS, MEMORY_FOLDER, NARRATION_LABELS, STANCE_LABELS, type EntityType, type KnowledgeEntity, type KnowledgeEvent } from "../../domain/knowledge";
 import { dependentEvents, entityReferences, entityState, eventState, STATE_LABELS, timelineOrders, type NarrativeState, type SceneRef } from "../../domain/knowledge-index";
 import { attributeLabel } from "../../domain/knowledge-markdown";
-import { requestKnowledgeGeneration, saveEntitySheet, updateChangeMode } from "../../application/narrative-change";
+import { requestKnowledgeGeneration, updateChangeMode } from "../../application/narrative-change";
+import { shiftEvent } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge, EmptyState, Segmented, StatTile, Tabs } from "../ui/primitives";
-import { ChangePromptBox } from "./ChangePromptBox";
+import { EditHistory, PromptEditChoices, ReviewStateBadge } from "../edit/EditKit";
+import { EntityEditor, EventEditor, NewEntityForm, TimelineManager } from "../edit/KnowledgeEditors";
 import { ActiveChangeBanner, ChangeHistory } from "./ChangeOperations";
+import { ResearchLog } from "./ResearchLog";
 
-type View = "overview" | EntityType | "timeline" | "changes" | "memory";
+type View = "overview" | EntityType | "timeline" | "changes" | "research" | "memory";
 const ICONS: Record<EntityType, typeof Users> = { character: Users, location: MapPin, item: Package, faction: Flag };
 const STATE_TONE: Record<NarrativeState, "neutral" | "sky" | "emerald"> = { planned: "neutral", narrated: "sky", consolidated: "emerald" };
 const IMPORTANCE: Record<KnowledgeEntity["importance"], string> = { main: "Principale", secondary: "Secondario", minor: "Minore" };
@@ -26,22 +29,15 @@ function where(book: BookProject, ref: SceneRef): string {
 }
 
 function EntityDetail({ book, entity, onSelect, onRefresh, onStart }: {
-  book: BookProject; entity: KnowledgeEntity; onSelect: (id: string) => void; onRefresh: () => Promise<void>; onStart: (bookId: string) => void;
+  book: BookProject; entity: KnowledgeEntity; onSelect: (id?: string) => void; onRefresh: () => Promise<void>; onStart: (bookId: string) => void;
 }) {
   const kb = book.knowledge!;
   const refs = useMemo(() => entityReferences(book, kb, entity), [book, kb, entity]);
   const events = kb.events.filter(e => e.involves.includes(entity.id) || e.perspectives.some(p => p.entityId === entity.id));
   const memory = book.memory[MEMORY_FOLDER[entity.type]][entity.name];
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ summary: entity.summary, attributes: { ...entity.attributes } });
-  const [message, setMessage] = useState("");
   const fields = [...ATTRIBUTE_FIELDS[entity.type].map(f => f.key), ...Object.keys(entity.attributes).filter(k => !ATTRIBUTE_FIELDS[entity.type].some(f => f.key === k))];
   const Icon = ICONS[entity.type];
-  async function saveSheet() {
-    setMessage("");
-    try { await saveEntitySheet(book.id, entity.id, draft, book.updatedAt); await onRefresh(); setEditing(false); setMessage("Scheda salvata: nuova versione."); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Scheda non salvata."); await onRefresh().catch(() => undefined); }
-  }
   return <article aria-label={"Scheda di " + entity.name} className="space-y-4">
     <header className="space-y-2">
       <div className="flex items-start gap-3">
@@ -56,6 +52,7 @@ function EntityDetail({ book, entity, onSelect, onRefresh, onStart }: {
         <Badge tone={STATE_TONE[entityState(book, refs)]}>{STATE_LABELS[entityState(book, refs)]}</Badge>
         <Badge tone={entity.status === "validated" ? "emerald" : "amber"}>{entity.status === "validated" ? "Validata" : "Bozza"}</Badge>
         <Badge>v{entity.version}</Badge>
+        <ReviewStateBadge book={book} target={{ kind: "entity", id: entity.id }} quiet/>
       </div>
     </header>
     {entity.summary && <p className="text-[15px] leading-7">{entity.summary}</p>}
@@ -84,19 +81,15 @@ function EntityDetail({ book, entity, onSelect, onRefresh, onStart }: {
       })}</ul></section>}
     {memory && <section className="rounded-lg bg-slate-100 p-3 dark:bg-slate-900"><h4 className="text-sm font-semibold">Stato attuale nella memoria narrativa</h4>
       <p className="muted mt-1 whitespace-pre-wrap text-sm">{memory}</p></section>}
-    <ChangePromptBox book={book} target={{ kind: "entity", id: entity.id }} label={entity.name} examples={EXAMPLES[entity.type]} onRefresh={onRefresh} onStart={onStart}/>
+    <PromptEditChoices book={book} request={{ kind: "entity", id: entity.id }} propagate={{ kind: "entity", id: entity.id }} label={entity.name}
+      examples={EXAMPLES[entity.type]} onRefresh={onRefresh} onStart={onStart}/>
     <details open={editing} onToggle={e => setEditing((e.target as HTMLDetailsElement).open)} className="rounded-xl border border-slate-300 dark:border-slate-700">
-      <summary className="flex cursor-pointer items-center gap-2 p-3 text-sm font-semibold"><Pencil size={15}/> Modifica la scheda a mano (senza riscrivere le scene)</summary>
-      <div className="space-y-2 border-t border-slate-300 p-3 dark:border-slate-700">
-        <label className="block text-sm">Descrizione breve<textarea className="field mt-1" rows={2} maxLength={600} value={draft.summary}
-          onChange={e => setDraft(d => ({ ...d, summary: e.target.value }))}/></label>
-        {ATTRIBUTE_FIELDS[entity.type].map(field => <label key={field.key} className="block text-sm">{field.label}
-          <input className="field mt-1" maxLength={900} value={draft.attributes[field.key] ?? ""}
-            onChange={e => setDraft(d => ({ ...d, attributes: { ...d.attributes, [field.key]: e.target.value } }))}/></label>)}
-        <Button disabled={book.status === "running"} onClick={() => void saveSheet()}>Salva la scheda</Button>
+      <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-semibold"><Pencil size={15}/> Modifica la scheda a mano (senza riscrivere le scene)</summary>
+      <div className="border-t border-slate-300 p-3 dark:border-slate-700">
+        {editing && <EntityEditor book={book} entity={entity} onRefresh={onRefresh} onDeleted={() => onSelect(undefined)}/>}
       </div>
     </details>
-    {message && <p role="status" className="text-sm">{message}</p>}
+    <EditHistory book={book} target={{ kind: "entity", id: entity.id }} label={entity.name} onRefresh={onRefresh}/>
     {(entity.history?.length ?? 0) > 0 && <details className="text-sm"><summary className="cursor-pointer font-semibold"><History size={14} className="mr-1 inline"/>Versioni precedenti ({entity.history!.length})</summary>
       <ol className="mt-2 space-y-2">{[...entity.history!].reverse().map(h => <li key={h.version} className="rounded-lg border border-slate-300 p-2 dark:border-slate-700">
         <p className="text-xs font-semibold">v{h.version} · {new Date(h.at).toLocaleString("it-IT")}</p><p className="muted text-xs">{h.reason}</p>
@@ -118,8 +111,11 @@ function EntityBrowser({ book, type, onRefresh, onStart, selected, onSelect }: {
   const rank = { main: 0, secondary: 1, minor: 2 } as const;
   const entity = kb.entities.find(e => e.id === selected && e.type === type);
   const Icon = ICONS[type];
+  const [creating, setCreating] = useState(false);
   return <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
     <div className={"min-w-0 space-y-3 " + (entity ? "max-lg:hidden" : "")}>
+      <Button variant={creating ? "outline" : "default"} size="sm" aria-expanded={creating} onClick={() => setCreating(v => !v)}><Plus size={15}/> {creating ? "Chiudi" : "Nuova scheda"}</Button>
+      {creating && <NewEntityForm book={book} type={type} onRefresh={onRefresh} onCreated={id => { setCreating(false); onSelect(id); }}/>}
       <div className="space-y-2">
         <label className="relative block"><span className="sr-only">Cerca nelle schede</span>
           <Search size={16} className="muted pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"/>
@@ -148,14 +144,23 @@ function EntityBrowser({ book, type, onRefresh, onStart, selected, onSelect }: {
     <div className="min-w-0">
       {entity ? <div className="panel p-3 sm:p-4">
         <Button variant="ghost" size="sm" className="mb-2 lg:hidden" onClick={() => onSelect(undefined)}><ArrowLeft size={15}/> Torna all'elenco</Button>
-        <EntityDetail key={entity.id} book={book} entity={entity} onRefresh={onRefresh} onStart={onStart} onSelect={id => onSelect(id)}/>
+        <EntityDetail key={entity.id} book={book} entity={entity} onRefresh={onRefresh} onStart={onStart} onSelect={onSelect}/>
       </div> : all.length > 0 && <p className="muted hidden rounded-xl border border-dashed border-slate-400 p-6 text-center text-sm lg:block dark:border-slate-600">Scegli una scheda per vedere dettagli, relazioni, presenza e modifiche.</p>}
     </div>
   </div>;
 }
 
-function EventCard({ book, event, index, onRefresh, onStart }: { book: BookProject; event: KnowledgeEvent; index: number; onRefresh: () => Promise<void>; onStart: (bookId: string) => void }) {
+function EventCard({ book, event, index, onRefresh, onStart, move }: { book: BookProject; event: KnowledgeEvent; index: number; onRefresh: () => Promise<void>; onStart: (bookId: string) => void;
+  /** Story order only: move one step earlier/later. */
+  move?: { first: boolean; last: boolean; timelineId?: string } }) {
   const kb = book.knowledge!;
+  const [editing, setEditing] = useState(false);
+  const [message, setMessage] = useState("");
+  async function shift(direction: -1 | 1) {
+    setMessage("");
+    try { await shiftEvent(book.id, event.id, direction, move?.timelineId); await onRefresh(); }
+    catch (error) { await onRefresh().catch(() => undefined); setMessage(error instanceof Error ? error.message : "Evento non spostato."); }
+  }
   const name = (id: string) => kb.entities.find(e => e.id === id)?.name ?? id;
   const state = eventState(book, event);
   const dependents = dependentEvents(kb, event.id);
@@ -165,7 +170,15 @@ function EventCard({ book, event, index, onRefresh, onStart }: { book: BookProje
     <div className="rounded-xl border border-slate-300 p-3 dark:border-slate-700">
       <div className="flex flex-wrap items-center gap-1.5"><b className="[overflow-wrap:anywhere]">{event.title}</b>
         <Badge>{NARRATION_LABELS[event.narration]}</Badge><Badge tone={STATE_TONE[state]}>{STATE_LABELS[state]}</Badge>
-        {event.secret && <Badge tone="rose">Segreto</Badge>}</div>
+        {event.secret && <Badge tone="rose">Segreto</Badge>}
+        <ReviewStateBadge book={book} target={{ kind: "event", id: event.id }} quiet/>
+        <span className="ml-auto flex items-center gap-1">
+          {move && <><Button size="icon" variant="ghost" aria-label={`Sposta prima nella storia: ${event.title}`} disabled={move.first} onClick={() => void shift(-1)}><ArrowUp size={16}/></Button>
+            <Button size="icon" variant="ghost" aria-label={`Sposta dopo nella storia: ${event.title}`} disabled={move.last} onClick={() => void shift(1)}><ArrowDown size={16}/></Button></>}
+          <Button size="sm" variant={editing ? "outline" : "ghost"} aria-expanded={editing} aria-label={`Modifica l'evento ${event.title}`} onClick={() => setEditing(v => !v)}><Pencil size={14}/><span className="text-xs">{editing ? "Chiudi" : "Modifica"}</span></Button>
+        </span></div>
+      {message && <p role="status" className="text-xs text-rose-700 dark:text-rose-300">{message}</p>}
+      {editing && <div className="my-2 rounded-lg border border-emerald-600/50 bg-emerald-500/5 p-3"><EventEditor book={book} event={event} onRefresh={onRefresh} onDone={() => setEditing(false)}/></div>}
       <p className="muted mt-0.5 text-xs">{event.when ? event.when + " · " : ""}{scenes.length ? scenes.map(x => `Cap. ${x!.c.number}, scena ${x!.s.number}`).join("; ") : event.plannedChapter ? "Previsto nel capitolo " + event.plannedChapter : "Non ancora collocato"}</p>
       {event.summary && <p className="mt-1.5 text-sm">{event.summary}</p>}
       <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
@@ -175,8 +188,10 @@ function EventCard({ book, event, index, onRefresh, onStart }: { book: BookProje
       </div>
       {event.perspectives.length > 0 && <p className="muted mt-1.5 text-xs">{event.perspectives.map(p => name(p.entityId) + ": " + STANCE_LABELS[p.stance].toLowerCase()).join(" · ")}</p>}
       <details className="mt-2"><summary className="cursor-pointer text-xs font-semibold">Modifica questo evento con un prompt</summary>
-        <div className="mt-2"><ChangePromptBox book={book} target={{ kind: "event", id: event.id }} label={event.title} onRefresh={onRefresh} onStart={onStart}
+        <div className="mt-2"><PromptEditChoices book={book} request={{ kind: "event", id: event.id }} propagate={{ kind: "event", id: event.id }} label={event.title}
+          onRefresh={onRefresh} onStart={onStart}
           examples={["Questo evento deve accadere prima, durante l'infanzia della protagonista.", "Rendi l'evento un incidente invece di un tradimento."]}/></div></details>
+      <div className="mt-2"><EditHistory book={book} target={{ kind: "event", id: event.id }} label={event.title} onRefresh={onRefresh}/></div>
     </div>
   </li>;
 }
@@ -187,8 +202,10 @@ function TimelineView({ book, onRefresh, onStart }: { book: BookProject; onRefre
   const [timeline, setTimeline] = useState("");
   const orders = useMemo(() => timelineOrders(book, kb, timeline || undefined), [book, kb, timeline]);
   const events = orders[order];
-  if (!kb.events.length) return <EmptyState title="Nessun evento" icon={<CalendarClock size={26}/>}>Gli eventi nascono dal piano e dalle scene scritte.</EmptyState>;
+  const manager = <TimelineManager book={book} onRefresh={onRefresh} selected={timeline || undefined}/>;
+  if (!kb.events.length) return <div className="space-y-3"><EmptyState title="Nessun evento" icon={<CalendarClock size={26}/>}>Gli eventi nascono dal piano e dalle scene scritte, oppure li crei tu.</EmptyState>{manager}</div>;
   return <div className="space-y-3">
+    {manager}
     <div className="flex flex-wrap items-center gap-2">
       <Segmented label="Ordine" value={order} onChange={setOrder} options={[{ value: "story", label: "Ordine della storia", hint: "Cronologia degli eventi" },
         { value: "narration", label: "Ordine del racconto", hint: "Come i capitoli li raccontano" }]}/>
@@ -201,7 +218,8 @@ function TimelineView({ book, onRefresh, onStart }: { book: BookProject; onRefre
     <p className="muted text-xs">{order === "story" ? "Gli eventi nell'ordine in cui accadono nella storia, anche se raccontati in flashback." : "Gli eventi nell'ordine in cui il lettore li incontra nei capitoli."}</p>
     <ol aria-label={order === "story" ? "Timeline nell'ordine della storia" : "Timeline nell'ordine del racconto"}
       className="relative space-y-3 before:absolute before:bottom-2 before:left-3.5 before:top-2 before:w-px before:bg-slate-300 dark:before:bg-slate-700">
-      {events.map((event, index) => <EventCard key={event.id} book={book} event={event} index={index} onRefresh={onRefresh} onStart={onStart}/>)}
+      {events.map((event, index) => <EventCard key={event.id} book={book} event={event} index={index} onRefresh={onRefresh} onStart={onStart}
+        move={order === "story" ? { first: index === 0, last: index === events.length - 1, ...(timeline ? { timelineId: timeline } : {}) } : undefined}/>)}
     </ol>
   </div>;
 }
@@ -220,12 +238,15 @@ function MemoryView({ book }: { book: BookProject }) {
 }
 
 /** The book's world: sheets, events, timelines and tracked changes, all editable by prompt. */
-export function WorldPage({ book, onRefresh, onStart, runningHere, onOpenAgents, onOpenBook }: {
+export function WorldPage({ book, onRefresh, onStart, runningHere, onOpenAgents, onOpenBook, focus }: {
   book: BookProject; onRefresh: () => Promise<void>; onStart: (bookId: string) => void; runningHere: boolean;
   onOpenAgents: () => void; onOpenBook: () => void;
+  /** Open directly on one sheet or event (from the pending reviews list). */
+  focus?: { kind: "entity" | "event" | "timeline"; id: string };
 }) {
-  const [view, setView] = useState<View>("overview");
-  const [selected, setSelected] = useState<string | undefined>();
+  const focused = focus?.kind === "entity" ? book.knowledge?.entities.find(e => e.id === focus.id) : undefined;
+  const [view, setView] = useState<View>(focused ? focused.type : focus ? "timeline" : "overview");
+  const [selected, setSelected] = useState<string | undefined>(focused?.id);
   const [message, setMessage] = useState("");
   const kb = book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
   const count = (type: EntityType) => kb?.entities.filter(e => e.type === type).length ?? 0;
@@ -281,6 +302,7 @@ export function WorldPage({ book, onRefresh, onStart, runningHere, onOpenAgents,
         { id: "overview", label: "Panoramica" },
         ...(["character", "location", "item", "faction"] as const).map(type => ({ id: type, label: ENTITY_LABELS[type].many, count: count(type) })),
         { id: "timeline", label: "Timeline", count: kb.events.length }, { id: "changes", label: "Modifiche", count: book.changeOperations?.length ?? 0 },
+        { id: "research", label: "Ricerche", count: book.webResearchLog?.length ?? 0 },
         { id: "memory", label: "Memoria" },
       ]}/>
       <div role="tabpanel" id={"panel-" + view} aria-labelledby={"tab-" + view} className="min-w-0">
@@ -302,10 +324,12 @@ export function WorldPage({ book, onRefresh, onStart, runningHere, onOpenAgents,
           <EntityBrowser book={book} type={view} onRefresh={onRefresh} onStart={onStart} selected={selected} onSelect={setSelected}/>}
         {view === "timeline" && <TimelineView book={book} onRefresh={onRefresh} onStart={onStart}/>}
         {view === "changes" && <ChangeHistory book={book} onRefresh={onRefresh}/>}
+        {view === "research" && <ResearchLog book={book} onRefresh={onRefresh} onOpenSettings={onOpenAgents}/>}
         {view === "memory" && <MemoryView book={book}/>}
       </div>
     </>}
     {!kb && <section className="panel p-3 sm:p-4"><h3 className="mb-2 font-semibold">Memoria narrativa</h3><MemoryView book={book}/>
-      {(book.changeOperations?.length ?? 0) > 0 && <div className="mt-4"><h3 className="mb-2 font-semibold">Modifiche</h3><ChangeHistory book={book} onRefresh={onRefresh}/></div>}</section>}
+      {(book.changeOperations?.length ?? 0) > 0 && <div className="mt-4"><h3 className="mb-2 font-semibold">Modifiche</h3><ChangeHistory book={book} onRefresh={onRefresh}/></div>}
+      {(book.webResearchLog?.length ?? 0) > 0 && <div className="mt-4"><h3 className="mb-2 font-semibold">Ricerche</h3><ResearchLog book={book} onRefresh={onRefresh} onOpenSettings={onOpenAgents}/></div>}</section>}
   </div>;
 }

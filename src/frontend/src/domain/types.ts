@@ -1,7 +1,7 @@
 export const TASK_KINDS = [
   "brainstorm", "validate", "audience", "adversarial", "outline",
   "prose", "continuity", "consolidate", "summarize", "revision", "merge",
-  "chapterAudit", "chapterReaders", "chapterJudge", "chapterRepair",
+  "chapterAudit", "chapterReaders", "chapterJudge", "chapterRepair", "research",
 ] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 /** "automatic" explicitly omits reasoning_effort even if endpoint has a default. */
@@ -30,6 +30,9 @@ import type { EditorialVerificationChoice } from "./editorial-verification-choic
 import type { EditorialProfiles } from "./editorial-profiles";
 import type { KnowledgeBase } from "./knowledge";
 import type { NarrativeChangeOperation } from "./narrative-change";
+import type { ResearchEntry, WebResearchSettings } from "./web-research";
+import type { BookEdit } from "./book-edits";
+import type { ManualReview } from "./manual-review";
 
 export interface EncryptedSecret { iv: string; data: string; }
 /** Author-declared roles; /models does not attest capabilities. */
@@ -134,6 +137,8 @@ export interface Scene {
   factions?: string[];
   secret_refs?: string[];
   status: "planned" | "draft" | "canon";
+  /** The text changed after this summary was written: it may be outdated. */
+  summaryStale?: boolean;
 }
 export interface Chapter {
   id: string;
@@ -153,6 +158,11 @@ export interface Chapter {
   continuityRecheck?: ContinuityRecheck;
   /** Evidence sample and source of the last finished downstream recheck, not a semantic certificate. */
   lastContinuityReview?: ContinuityRecheckAudit;
+  /** The author changed this frozen chapter: its earlier validation no longer covers the text.
+   * The chapter stays frozen for progression; only an author-requested review re-checks it. */
+  reviewStale?: { since: string; editIds: string[] };
+  /** The scenes changed after this chapter summary was written. */
+  summaryStale?: boolean;
 }
 export interface NarrativeMemory {
   characters: Record<string, string>;
@@ -267,6 +277,14 @@ export interface BookProject {
   changeOperations?: NarrativeChangeOperation[];
   /** "auto" (default) rewrites dependent scenes at once; "confirm" pauses on the plan. */
   changeMode?: "auto" | "confirm";
+  /** Opt-in web research the autopilot may request (absent = never). */
+  webResearch?: WebResearchSettings;
+  /** Queries already run, their sources and the task that asked (bounded). */
+  webResearchLog?: ResearchEntry[];
+  /** Every manual or AI edit of an element, with its review state (bounded). */
+  edits?: BookEdit[];
+  /** Reviews the author requested after editing (impact, targeted, extended, full). */
+  manualReviews?: ManualReview[];
   /** Every author prompt given to the autopilot, never rewritten. */
   authorInterventions?: AuthorIntervention[];
   memory: NarrativeMemory;

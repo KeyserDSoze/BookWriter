@@ -54,9 +54,9 @@ describe("Thinking dichiarato dal modello", () => {
     expect(recommendedReasoningPreset(settingsWith({ muse: { options: ["low", "medium"] } })).efforts.chapterJudge).toBe("medium");
     expect(result.efforts.chapterJudge).toBe("xhigh"); // unknown model: untouched
     expect(result.unverified).toBe(1);
-    expect(result.applied).toBe(14);
+    expect(result.applied).toBe(15);
     const none = recommendedReasoningPreset(settingsWith({ muse: null }));
-    expect(none.withoutReasoning).toBe(15);
+    expect(none.withoutReasoning).toBe(16);
     expect(none.efforts).toEqual({});
   });
 

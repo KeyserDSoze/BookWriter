@@ -106,6 +106,7 @@ test("modifica automatica di una scheda: analisi, riscrittura mirata, nuova reda
   await nav(page).getByRole("button", { name: "Mondo", exact: true }).click();
   await page.getByRole("tab", { name: /Personaggi/ }).click();
   await page.getByRole("list", { name: "Personaggi" }).getByRole("button", { name: /Elena/ }).click();
+  await page.getByRole("radio", { name: "Modifica e aggiorna il libro" }).click();
   const box = page.getByLabel("Descrivi la modifica a «Elena»");
   await box.fill("Elena non deve più essere fredda e razionale: impulsiva ed emotiva, ma con lo stesso obiettivo.");
   await page.getByRole("button", { name: "Applica la modifica" }).click();
@@ -150,6 +151,7 @@ test("con conferma: il piano mostra scene dirette e indirette e attende la decis
   await page.getByRole("tab", { name: /Timeline/ }).click();
   const event = page.getByRole("listitem").filter({ hasText: "Primo indizio" }).first();
   await event.getByText("Modifica questo evento con un prompt").click();
+  await event.getByRole("radio", { name: "Modifica e aggiorna il libro" }).click();
   await event.getByLabel("Descrivi la modifica a «Primo indizio»").fill("L'indizio non è una firma ma una fotografia nascosta.");
   await event.getByRole("button", { name: "Analizza la modifica" }).click();
   const banner = page.getByRole("region", { name: "Modifica in corso" });
@@ -187,6 +189,7 @@ test("Libro: capitolo in testo, scene e riassunto; una modifica di stile rivede 
   const scene = page.getByRole("list", { name: "Scene del capitolo 1" }).getByRole("listitem").filter({ hasText: "Il registro" });
   await expect(scene.getByText("Luogo: Archivio municipale")).toBeVisible();
   await scene.getByRole("button", { name: "Leggi e modifica" }).click();
+  await scene.getByRole("radio", { name: "Modifica e aggiorna il libro" }).click();
   await scene.getByLabel("Descrivi la modifica a «Il registro»").fill("Rendi il passaggio più teso, senza cambiare cosa accade.");
   await scene.getByRole("button", { name: "Applica la modifica" }).click();
   await expect.poll(async () => (await stored(page)).status, { timeout: 60_000 }).toBe("completed");

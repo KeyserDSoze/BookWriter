@@ -152,24 +152,32 @@ describe("Accounting del provider separato dalla validità narrativa", () => {
     expect((await getBook(book.id))!.editorialCycle?.reports).toHaveLength(0);
   });
 
-  it("registra usage se il manoscritto cambia dopo la risposta del provider", async () => {
+  it("registra usage se il manoscritto cambia dopo la risposta del provider, poi rifà il passo sul testo nuovo", async () => {
     const {book,settings}=await specimen();
+    const runner=new AutopilotRunner();
+    let calls=0;
     callMock.mockImplementation(async () => {
-      const changed=(await getBook(book.id))!;
-      changed.chapters[0]!.scenes[0]!.text="Il portone è stato modificato da una seconda operazione.";
-      await saveBook(changed,false);
+      calls++;
+      if(calls===1){
+        const changed=(await getBook(book.id))!;
+        changed.chapters[0]!.scenes[0]!.text="Il portone è stato modificato da una seconda operazione.";
+        await saveBook(changed,false);
+      } else runner.stopAfterCurrent();
       return {text:JSON.stringify({
         verdict:"pass",summary:"Esame del segmento completato senza anomalie.",
         findings:[],memoryNote:"Nessuna osservazione.",
       }),endpointId:"openai",modelId:"review-model",inputTokens:350,outputTokens:41};
     });
-    await new AutopilotRunner().run(book.id,async()=>{});
+    await runner.run(book.id,async()=>{});
     const saved=(await getBook(book.id))!;
-    expect(saved.editorialCycle?.reports).toHaveLength(0);
+    // The stale reply is discarded; the same step is redone on the author's text.
+    expect(calls).toBe(2);
+    expect(saved.editorialCycle?.reports).toHaveLength(1);
     const history=await listActivities(book.id);
-    expect(history[0]).toMatchObject({
-      status:"cancelled",aiRequested:true,inputTokens:350,outputTokens:41,
-    });
+    const discarded=history.filter(a=>a.status==="cancelled");
+    expect(discarded).toHaveLength(1);
+    expect(discarded[0]).toMatchObject({aiRequested:true,inputTokens:350,outputTokens:41});
+    expect(discarded[0]!.error).toMatch(/rifatto sulla versione aggiornata/);
     expect(accountBookAiBudget(history,settings,book.aiBudget!).incompleteCount).toBe(0);
     expect(saved.chapters[0]!.scenes[0]!.text).toContain("seconda operazione");
   });

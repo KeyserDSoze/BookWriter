@@ -6,6 +6,10 @@ import { assertMarkdownSnapshot, markdownIdentity, MarkdownSnapshotConflict, rea
 import { editorialProfilesSchema, profileSnapshotSchema } from "../domain/editorial-profiles";
 import { knowledgeBaseSchema } from "../domain/knowledge";
 import { changeOperationSchema, MAX_CHANGE_OPERATIONS } from "../domain/narrative-change";
+import { researchLogSchema, webResearchSettingsSchema } from "../domain/web-research";
+import { bookEditSchema, MAX_EDITS, reviewStaleSchema } from "../domain/book-edits";
+import { manualReviewSchema, MAX_REVIEWS } from "../domain/manual-review";
+import { interruptImportedReviews } from "../domain/manual-review-flow";
 import { sanitizeAuthorInterventions } from "../domain/author-interventions";
 import { sanitizeBookStart } from "../domain/book-start";
 import { aiTracePolicy } from "../domain/ai-trace-policy";
@@ -227,12 +231,18 @@ function parseRemoteBook(raw: string): BookProject {
     knowledge: knowledgeBaseSchema.optional(),
     changeOperations: z.array(changeOperationSchema).max(MAX_CHANGE_OPERATIONS).optional(),
     changeMode: z.enum(["auto", "confirm"]).optional(),
+    webResearch: webResearchSettingsSchema.optional(),
+    webResearchLog: researchLogSchema.optional(),
+    edits: z.array(bookEditSchema).max(MAX_EDITS).optional(),
+    manualReviews: z.array(manualReviewSchema).max(MAX_REVIEWS).optional(),
     chapters: z.array(z.object({
       id: z.string(), number: z.number().int(), title: z.string(), purpose: z.string(),
+      reviewStale: reviewStaleSchema.optional(), summaryStale: z.boolean().optional(),
       scenes: z.array(z.object({
         id: z.string(), number: z.number().int(),
         title: z.string(), objective: z.string(), text: z.string(),
         status: z.enum(["planned", "draft", "canon"]),
+        summaryStale: z.boolean().optional(),
       }).passthrough()),
     }).passthrough()),
     memory: z.object({
@@ -425,6 +435,10 @@ export async function importGitHubBook(remote: GitHubRemote, isCurrent: () => bo
     source.book.status = "paused";
     source.book.previousError = "Importato da GitHub mentre era in esecuzione su un altro dispositivo: riprendi quando vuoi.";
   }
+  // Consent to send queries outside this device is never inherited from a repository.
+  if (source.book.webResearch?.enabled) source.book.webResearch = { ...source.book.webResearch, enabled: false };
+  // A review requested on another device is not resumed silently here.
+  interruptImportedReviews(source.book, new Date().toISOString());
   source.book.remote = {
     ...validateRemote(remote),
     lastSyncedCommit: source.head,

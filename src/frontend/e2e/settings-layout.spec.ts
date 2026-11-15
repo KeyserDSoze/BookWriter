@@ -31,7 +31,7 @@ test("impostazioni compatte: stato di salvataggio sempre visibile, router a tabe
 
   // Filter to the editorial tasks, select them all and change the model in one go.
   await page.getByRole("button", { name: "Redazione", exact: true }).click();
-  await expect(page.getByText("4 di 15 attività")).toBeVisible();
+  await expect(page.getByText("4 di 16 attività")).toBeVisible();
   await page.getByRole("checkbox", { name: "Seleziona tutte le attività visibili" }).check();
   await expect(page.getByText("4 selezionate")).toBeVisible();
   await page.getByRole("combobox", { name: "Cambia modello alle attività selezionate" }).selectOption("modello-veloce");
@@ -51,7 +51,7 @@ test("impostazioni compatte: stato di salvataggio sempre visibile, router a tabe
   await page.getByRole("button", { name: "Tutte", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Modello per Scrittura" })).toHaveValue("");
   await page.getByRole("checkbox", { name: "Solo personalizzate" }).check();
-  await expect(page.getByText("4 di 15 attività")).toBeVisible();
+  await expect(page.getByText("4 di 16 attività")).toBeVisible();
   await page.getByRole("checkbox", { name: "Solo personalizzate" }).uncheck();
 
   await page.getByRole("button", { name: "Salva impostazioni" }).click();
@@ -94,7 +94,7 @@ test("router: cambio endpoint in blocco propone i modelli del nuovo endpoint e c
   await endpointBar.selectOption({ label: "Secondo" });
   await page.getByRole("combobox", { name: "Cambia modello alle attività selezionate" }).selectOption("altro-2");
   await page.getByRole("combobox", { name: "Cambia thinking alle attività selezionate" }).selectOption("high");
-  await page.getByRole("button", { name: /Applica a 15 attività/ }).click();
+  await page.getByRole("button", { name: /Applica a 16 attività/ }).click();
   await expect(page.getByRole("combobox", { name: "Endpoint per Scrittura" }).locator("option:checked")).toHaveText("Secondo");
   await expect(page.getByRole("combobox", { name: "Modello per Scrittura" })).toHaveValue("altro-2");
   await expect(page.getByRole("combobox", { name: "Reasoning di Scrittura" })).toHaveValue("high");

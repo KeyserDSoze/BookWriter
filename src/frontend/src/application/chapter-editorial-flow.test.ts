@@ -153,82 +153,94 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(tasks.filter(x=>x==="chapterRepair")).toHaveLength(1);
     expect(tasks.filter(x=>x==="consolidate")).toHaveLength(1);
   });
-  it("scarta il report dello storico quando un restore cambia l'estratto senza cambiare updatedAt",async()=>{
+  it("scarta il report dello storico quando un restore cambia l'estratto senza cambiare updatedAt, poi lo rifà sulla fonte nuova",async()=>{
     const source=book();
     source.phase="chapterReview";
     source.editorialCycle=createEditorialCycle("ch-1");
     source.chapters[0]!.historicalDossier=historicalDossier();
     await saveBook(source,false);
+    const runner=new AutopilotRunner();
+    let historicalCalls=0;
     modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
       if(prompt.includes("FONTI STORICHE ESPLICITAMENTE RICERCATE DALL'AUTORE")){
         expect(kind).toBe("chapterAudit");
-        expect(prompt).toContain("cronaca originale");
-        const changed=(await getBook(source.id))!;
-        const timestamp=changed.updatedAt;
-        changed.chapters[0]!.historicalDossier!.sources[0]!.excerpt=
-          "NUOVO ESTRATTO RISERVATO: la fonte ora descrive un'altra epoca.";
-        await (await getDb()).put("books",changed,changed.id);
-        expect((await getBook(source.id))!.updatedAt).toBe(timestamp);
+        historicalCalls++;
+        if(historicalCalls===1){
+          expect(prompt).toContain("cronaca originale");
+          const changed=(await getBook(source.id))!;
+          const timestamp=changed.updatedAt;
+          changed.chapters[0]!.historicalDossier!.sources[0]!.excerpt=
+            "NUOVO ESTRATTO RISERVATO: la fonte ora descrive un'altra epoca.";
+          await (await getDb()).put("books",changed,changed.id);
+          expect((await getBook(source.id))!.updatedAt).toBe(timestamp);
+        } else {
+          // The step is redone with the current source, never the stale one.
+          expect(prompt).toContain("NUOVO ESTRATTO RISERVATO");
+          runner.stopAfterCurrent();
+        }
       }
       return {text:report(false),endpointId:"test",modelId:"Storico",
         inputTokens:72,outputTokens:25};
     });
-    await new AutopilotRunner().run(source.id,async()=>undefined);
+    await runner.run(source.id,async()=>undefined);
     const saved=(await getBook(source.id))!;
-    expect(modelCall).toHaveBeenCalledTimes(4);
-    expect(saved.status).toBe("error");
-    expect(saved.previousError).toMatch(/Fonti storiche cambiate/);
-    expect(saved.previousError).not.toContain("NUOVO ESTRATTO RISERVATO");
+    expect(modelCall).toHaveBeenCalledTimes(5);
+    expect(saved.status).toBe("paused");
     expect(saved.chapters[0]!.historicalDossier!.sources[0]!.excerpt)
       .toContain("NUOVO ESTRATTO RISERVATO");
     expect(saved.editorialCycle).toMatchObject({stage:"review"});
-    expect(saved.editorialCycle!.reports).toHaveLength(3);
+    expect(saved.editorialCycle!.reports).toHaveLength(4);
     expect(saved.chapters[0]!.frozenAt).toBeUndefined();
     const attempts=(await listActivities(source.id)).filter(a=>a.aiRequested);
-    expect(attempts).toHaveLength(4);
-    expect(attempts.find(a=>a.title.includes("Redazione: historical"))).toMatchObject({
-      status:"failed",inputTokens:72,outputTokens:25,
-    });
+    expect(attempts).toHaveLength(5);
+    const discarded=attempts.filter(a=>a.status==="cancelled");
+    expect(discarded).toHaveLength(1);
+    expect(discarded[0]).toMatchObject({inputTokens:72,outputTokens:25});
+    expect(discarded[0]!.title).toContain("Redazione: historical");
+    expect(discarded[0]!.error).not.toContain("NUOVO ESTRATTO RISERVATO");
   });
 
-  it("scarta il giudizio se cambia il dossier dopo le 12 review senza bump updatedAt",async()=>{
+  it("scarta il giudizio se cambia il dossier dopo le 12 review senza bump updatedAt e decide di nuovo",async()=>{
     const source=book();
     source.phase="chapterReview";
     source.editorialCycle=createEditorialCycle("ch-1");
     source.chapters[0]!.historicalDossier=historicalDossier();
     await saveBook(source,false);
+    const runner=new AutopilotRunner();
+    let judgeCalls=0;
     modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
       if(kind==="chapterJudge"){
         expect(prompt).toContain("Capitolo: Il castello");
-        const changed=(await getBook(source.id))!;
-        const timestamp=changed.updatedAt;
-        changed.chapters[0]!.historicalDossier!.activeSourceIds=[];
-        await (await getDb()).put("books",changed,changed.id);
-        expect((await getBook(source.id))!.updatedAt).toBe(timestamp);
+        judgeCalls++;
+        if(judgeCalls===1){
+          const changed=(await getBook(source.id))!;
+          const timestamp=changed.updatedAt;
+          changed.chapters[0]!.historicalDossier!.activeSourceIds=[];
+          await (await getDb()).put("books",changed,changed.id);
+          expect((await getBook(source.id))!.updatedAt).toBe(timestamp);
+        } else runner.stopAfterCurrent();
         return {text:judgment(false),endpointId:"test",modelId:"Giudice",
           inputTokens:144,outputTokens:45};
       }
       return {text:report(false),endpointId:"test",modelId:"Revisore",
         inputTokens:62,outputTokens:18};
     });
-    await new AutopilotRunner().run(source.id,async()=>undefined);
+    await runner.run(source.id,async()=>undefined);
     const saved=(await getBook(source.id))!;
-    expect(modelCall).toHaveBeenCalledTimes(13);
-    expect(saved.status).toBe("error");
-    expect(saved.previousError).toMatch(/Fonti storiche cambiate/);
+    expect(modelCall).toHaveBeenCalledTimes(14);
+    expect(saved.status).toBe("paused");
     expect(saved.chapters[0]!.historicalDossier!.activeSourceIds).toEqual([]);
-    expect(saved.editorialCycle).toMatchObject({stage:"adjudicate"});
     expect(saved.editorialCycle!.reports).toHaveLength(12);
-    expect(saved.editorialCycle!.judgment).toBeUndefined();
+    expect(saved.editorialCycle!.judgment?.verdict).toBe("freeze");
     expect(saved.chapters[0]!.frozenAt).toBeUndefined();
     const attempts=(await listActivities(source.id)).filter(a=>a.aiRequested);
-    expect(attempts).toHaveLength(13);
-    expect(attempts.find(a=>a.title.includes("Direttore editoriale"))).toMatchObject({
-      status:"failed",inputTokens:144,outputTokens:45,
+    expect(attempts).toHaveLength(14);
+    expect(attempts.find(a=>a.status==="cancelled")).toMatchObject({
+      inputTokens:144,outputTokens:45,
     });
   });
 
-  it("non sovrascrive il canone se la memoria cambia durante reconcile senza bump updatedAt",async()=>{
+  it("non sovrascrive il canone se la memoria cambia durante reconcile senza bump updatedAt: riconcilia sulla memoria nuova",async()=>{
     const source=book();
     source.phase="chapterReview";
     source.chapters[0]!.scenes[0]!.status="draft";
@@ -236,36 +248,37 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     source.editorialCycle.stage="reconcile";
     source.editorialCycle.reconcileCursor=0;
     await saveBook(source,false);
-    modelCall.mockImplementation(async(kind:string)=>{
+    const runner=new AutopilotRunner();
+    modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
       expect(kind).toBe("consolidate");
-      // Simulate a legacy restore that changes the source without incrementing
-      // updatedAt. The generic DB revision fence alone cannot detect this.
       const changed=(await getBook(source.id))!;
-      const unchangedStamp=changed.updatedAt;
-      changed.memory.secrets.chiave="NUOVO SEGRETO PRIVATO DELL'AUTORE";
-      changed.memory.currentState="L'autore ha corretto la memoria narrativa.";
-      expect(changed.updatedAt).toBe(unchangedStamp);
-      // The books store uses an explicit out-of-line key, just like saveBook.
-      await (await getDb()).put("books",changed,changed.id);
-      return {text:JSON.stringify(source.memory),endpointId:"test",modelId:"Memory",
+      if(modelCall.mock.calls.length===1){
+        // Simulate a legacy restore that changes the source without incrementing
+        // updatedAt. The generic DB revision fence alone cannot detect this.
+        const unchangedStamp=changed.updatedAt;
+        changed.memory.secrets.chiave="NUOVO SEGRETO PRIVATO DELL'AUTORE";
+        changed.memory.currentState="L'autore ha corretto la memoria narrativa.";
+        expect(changed.updatedAt).toBe(unchangedStamp);
+        // The books store uses an explicit out-of-line key, just like saveBook.
+        await (await getDb()).put("books",changed,changed.id);
+        return {text:JSON.stringify(source.memory),endpointId:"test",modelId:"Memory",
+          inputTokens:45,outputTokens:27};
+      }
+      expect(prompt).toContain("L'autore ha corretto la memoria narrativa.");
+      runner.stopAfterCurrent();
+      return {text:JSON.stringify(changed.memory),endpointId:"test",modelId:"Memory",
         inputTokens:45,outputTokens:27};
     });
-    await new AutopilotRunner().run(source.id,async()=>undefined);
+    await runner.run(source.id,async()=>undefined);
     const actual=(await getBook(source.id))!;
-    expect(modelCall).toHaveBeenCalledTimes(1);
-    expect(actual.status).toBe("error");
-    expect(actual.previousError).toMatch(/Riconciliazione obsoleta/);
-    expect(actual.previousError).not.toContain("NUOVO SEGRETO PRIVATO");
+    expect(modelCall).toHaveBeenCalledTimes(2);
     expect(actual.memory.secrets.chiave).toBe("NUOVO SEGRETO PRIVATO DELL'AUTORE");
     expect(actual.memory.currentState).toBe("L'autore ha corretto la memoria narrativa.");
-    expect(actual.editorialCycle).toMatchObject({stage:"reconcile",reconcileCursor:0});
-    expect(actual.chapters[0]!.scenes[0]!.status).toBe("draft");
     expect(actual.chapters[0]!.frozenAt).toBeUndefined();
     const attempted=(await listActivities(source.id)).filter(a=>a.aiRequested);
-    expect(attempted).toHaveLength(1);
-    expect(attempted[0]).toMatchObject({
-      status:"failed",inputTokens:45,outputTokens:27,
-    });
+    expect(attempted).toHaveLength(2);
+    expect(attempted.find(a=>a.status==="cancelled")).toMatchObject({inputTokens:45,outputTokens:27});
+    expect(attempted.find(a=>a.status==="cancelled")!.error).not.toContain("NUOVO SEGRETO PRIVATO");
   });
 
   it("non applica il report AI se l'autore modifica il libro durante la chiamata",async()=>{
