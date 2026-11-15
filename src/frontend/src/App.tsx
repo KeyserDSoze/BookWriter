@@ -28,6 +28,7 @@ import { usePwaInstall } from "./application/pwa";
 import { AutopilotRunner } from "./application/autopilot";
 import { recordAuthorIntervention } from "./application/author-intervention";
 import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
+import { DebugReportPanel } from "./components/DebugReportPanel";
 import { AutopilotFocusPanel } from "./components/AutopilotFocusPanel";
 import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSubmitMode } from "./components/AuthorInterventionPanel";
 import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
@@ -1004,6 +1005,8 @@ export default function App() {
       </div>}
 
       {page === "activities" && (current ?
+        <div className="min-w-0 space-y-4">
+        <DebugReportPanel key={current.id} book={current} activities={activities} version={packageInfo.version}/>
         <AiTaskWorkspace key={current.id} book={current} bookId={current.id} activities={activities} live={liveAi}
           focusId={focusTaskId} onFocusChange={setFocusTaskId}
           retentionText={describeAiTraceRetention(aiTracePolicy(settings))+(aiTracePolicy(settings).keepForever?", più quelle conservate senza scadenza":"")}
@@ -1014,6 +1017,7 @@ export default function App() {
             setSelectedId(forkBookId);
             setNotice("Fork locale separato creato dallo ZIP verificato: selezionato il nuovo libro in pausa. L'originale è invariato; controlla capitoli, freeze, dipendenze e modelli prima di riprendere.");
           }}/>
+        </div>
         : <Section title="Registro delle attività"><Empty>Seleziona un libro per ispezionare le attività.</Empty></Section>)}
 
       {page === "costs" && (current ?

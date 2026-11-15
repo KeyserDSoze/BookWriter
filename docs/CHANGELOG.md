@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## 0.24.0 — 2026-11-15 — Debug: prompt con gli ultimi errori
+
+- **Attività → «Debug: prompt con gli ultimi errori».** Genera sul dispositivo un prompt pronto da incollare con stato del libro, passo in corso, ultimo errore (con la spiegazione dell'app), modifiche o review non riuscite, gli ultimi task falliti o interrotti (fase, modello, durata, token, messaggio) e cosa è successo subito prima. «Copia il prompt» lo mette negli appunti.
+- Non contiene testo del libro, memoria, segreti, prompt o risposte del modello; chiavi, token e parametri segreti degli indirizzi sono redatti. Non è inviato da nessuna parte. Limite: gli errori mostrati solo a schermo e non salvati (per esempio un salvataggio rifiutato) non compaiono.
+
 ## 0.23.0 — 2026-11-15 — Indirizzi puliti, worldbuilding ad accordion, menu comprimibile, memoria modificabile e revisione da una modifica
 
 - **Indirizzi senza `#`.** Le pagine hanno indirizzi veri: `/worldbuilding`, `/revisioni`, `/costi`, `/attivita`… (la pagina Mondo è `/worldbuilding`). I vecchi link con `#/` funzionano ancora e vengono riscritti. Dopo un F5 su un indirizzo interno l'app si riapre anche su GitHub Pages grazie a una pagina `404.html` che porta all'app.
