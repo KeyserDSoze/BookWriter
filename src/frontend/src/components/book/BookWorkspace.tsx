@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, BookOpenText, CheckCircle2, ChevronDown, ListOrdered, Pencil, ScrollText } from "lucide-react";
 import type { BookProject, Chapter, Scene } from "../../domain/types";
+import type { EditTarget } from "../../domain/book-edits";
 import { relevantKnowledge } from "../../domain/knowledge-index";
 import { ENTITY_LABELS } from "../../domain/knowledge";
 import { CHANGE_STATE_LABELS } from "../../domain/narrative-change";
@@ -8,6 +9,7 @@ import { Button } from "../ui/button";
 import { Badge, Segmented, Tabs } from "../ui/primitives";
 import { EditHistory, PromptEditChoices, ReviewStateBadge } from "../edit/EditKit";
 import { SceneEditor } from "../edit/SceneEditor";
+import { SceneDetailsEditor } from "../edit/SceneDetailsEditor";
 import { ChapterEditor } from "../edit/ChapterEditor";
 
 const STATUS_TEXT: Record<Scene["status"], string> = { planned: "pianificata", draft: "bozza", canon: "canonica" };
@@ -26,14 +28,20 @@ export function chapterStatus(book: BookProject, chapter: Chapter): { label: str
 function provisionalSummary(chapter: Chapter): string {
   return chapter.scenes.filter(s => s.summary?.trim()).map(s => s.summary!.trim()).join(" ");
 }
-interface Shared { book: BookProject; onRefresh: () => Promise<void>; onStart: (bookId: string) => void; onOpenReviews?: () => void }
+interface Shared { book: BookProject; onRefresh: () => Promise<void>; onStart: (bookId: string) => void; onOpenReviews?: (targets?: EditTarget[]) => void }
 
-function StaleChapterNote({ chapter, onOpenReviews }: { chapter: Chapter; onOpenReviews?: () => void }) {
+function StaleChapterNote({ book, chapter, onOpenReviews }: { book: BookProject; chapter: Chapter; onOpenReviews?: (targets?: EditTarget[]) => void }) {
   if (!chapter.reviewStale) return null;
+  const count = chapter.reviewStale.editIds.length;
+  const kinds = chapter.reviewStale.editIds.map(id => book.edits?.find(e => e.id === id)?.target.kind);
+  const targets = chapter.reviewStale.editIds.map(id => book.edits?.find(e => e.id === id)?.target).filter((t): t is EditTarget => !!t);
+  const world = kinds.some(k => k === "entity" || k === "event"), own = kinds.some(k => k !== "entity" && k !== "event");
+  const what = own ? "Hai modificato questo capitolo dopo la revisione" + (world ? ", e sono cambiate schede o eventi che usa" : "")
+    : "Dopo la revisione sono cambiate schede o eventi usati in questo capitolo";
   return <div role="note" className="flex flex-wrap items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-sm">
     <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-300"/>
-    <span className="min-w-0 flex-1">Hai modificato questo capitolo dopo la revisione ({chapter.reviewStale.editIds.length} {chapter.reviewStale.editIds.length === 1 ? "modifica" : "modifiche"}): il controllo precedente non copre più il testo. Resta congelato finché non scegli tu una review.</span>
-    {onOpenReviews && <Button size="sm" variant="outline" onClick={onOpenReviews}><span className="text-xs">Scegli una review</span></Button>}
+    <span className="min-w-0 flex-1">{what} ({count} {count === 1 ? "modifica" : "modifiche"}): il controllo precedente non copre più il testo. Resta congelato finché non scegli tu una review.</span>
+    {onOpenReviews && <Button size="sm" variant="outline" onClick={() => onOpenReviews(targets)}><span className="text-xs">Scegli una review</span></Button>}
   </div>;
 }
 
@@ -89,6 +97,7 @@ function SceneCard({ book, chapter, scene, onRefresh, onStart, onOpenReviews }: 
       </>}
       {written && !editing && <PromptEditChoices book={book} request={{ kind: "scene", id: scene.id }} label={scene.title} examples={SCENE_EXAMPLES}
         propagate={{ kind: "scene", id: scene.id }} onRefresh={onRefresh} onStart={onStart}/>}
+      <SceneDetailsEditor book={book} chapter={chapter} scene={scene} onRefresh={onRefresh}/>
       <EditHistory book={book} target={target} label={scene.title} onRefresh={onRefresh}/>
     </div>}
   </li>;
@@ -100,6 +109,7 @@ function ChapterEditTab({ book, chapter, onRefresh, onStart, onSelectChapter }: 
   return <div className="space-y-4">
     <ChapterEditor key={chapter.id} book={book} chapter={chapter} onRefresh={onRefresh} onSelectChapter={onSelectChapter}/>
     <PromptEditChoices book={book} request={{ kind: "chapter", id: chapter.id, scope }} label={`Capitolo ${chapter.number}`} onRefresh={onRefresh} onStart={onStart}
+      propagate={written ? { kind: "chapter", id: chapter.id } : undefined}
       examples={scope === "details" ? ["Dai al capitolo un titolo più evocativo e uno scopo più preciso.", "Riscrivi il riassunto in tre frasi asciutte."]
         : ["Uniforma il tono del capitolo: più cupo e asciutto, senza cambiare gli eventi.", "Sostituisci «telefono» con «telegrafo» in tutto il capitolo."]}
       scopeControl={<div className="space-y-1"><p className="text-xs font-semibold">Cosa modificare</p>
@@ -128,7 +138,7 @@ function ChapterView({ book, chapter, busy, onApprove, onRefresh, onStart, onOpe
       <div className="flex flex-wrap gap-1.5"><Badge>{chapter.scenes.length} scene</Badge><Badge tone={status.tone}>{status.label}</Badge>
         <ReviewStateBadge book={book} target={{ kind: "chapter", id: chapter.id }} quiet/></div>
       <p className="muted text-sm">{chapter.purpose}</p>
-      <StaleChapterNote chapter={chapter} onOpenReviews={onOpenReviews}/>
+      <StaleChapterNote book={book} chapter={chapter} onOpenReviews={onOpenReviews}/>
       <Tabs label={"Viste del capitolo " + chapter.number} value={tab} onChange={setTab} tabs={[
         { id: "text", label: "Testo completo", icon: <BookOpenText size={15}/> },
         { id: "scenes", label: "Scene", icon: <ListOrdered size={15}/>, count: chapter.scenes.length },
@@ -164,7 +174,7 @@ function ChapterView({ book, chapter, busy, onApprove, onRefresh, onStart, onOpe
 /** The book, chapter by chapter, with full text, scenes, summaries and editing. */
 export function BookWorkspace({ book, chapterId, onChapter, busy, onApprove, onRefresh, onStart, onOpenReviews }: {
   book: BookProject; chapterId: string; onChapter: (id: string) => void; busy: boolean;
-  onApprove: (sceneId: string) => void; onRefresh: () => Promise<void>; onStart: (bookId: string) => void; onOpenReviews?: () => void;
+  onApprove: (sceneId: string) => void; onRefresh: () => Promise<void>; onStart: (bookId: string) => void; onOpenReviews?: (targets?: EditTarget[]) => void;
 }) {
   const selected = book.chapters.find(ch => ch.id === chapterId);
   const shared = { book, onRefresh, onStart, onOpenReviews };
@@ -191,7 +201,7 @@ export function BookWorkspace({ book, chapterId, onChapter, busy, onApprove, onR
           {ch.frozenAt && <span className="rounded-full border border-emerald-600/50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">congelato</span>}
         </h3>
         <p className="muted mb-4 text-sm">{ch.purpose}</p>
-        <div className="mb-3"><StaleChapterNote chapter={ch} onOpenReviews={onOpenReviews}/></div>
+        <div className="mb-3"><StaleChapterNote book={book} chapter={ch} onOpenReviews={onOpenReviews}/></div>
         {ch.scenes.map(scene => <SceneText key={scene.id} {...shared} chapter={ch} scene={scene} busy={busy} onApprove={onApprove}/>)}
       </article>)}
   </div>;

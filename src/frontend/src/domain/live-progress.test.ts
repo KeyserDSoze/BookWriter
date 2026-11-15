@@ -31,6 +31,8 @@ const MEMORY = JSON.stringify({
   remove: { characters: ["Guardiano"] }, timelineAdd: ["Alba: Mara trova la lettera."], currentState: "Mara ha la lettera, Elio sospetta.",
 });
 const SUMMARY = JSON.stringify({ chapterSummary: "Mara arriva sull'isola e trova la lettera.", bookSummary: "Una donna cerca la verità sul padre." });
+const SCENE_SUMMARIES = JSON.stringify({ sceneSummaries: { "scene:001:001": "Mara arriva al porto e trova una lettera sul molo.",
+  "scene:001:002": "Mara legge la lettera e la nasconde a Elio." } });
 const IMPACT = JSON.stringify({ rationale: "L'istruzione cambia l'ora in cui Mara trova la lettera.", affectedSceneIds: ["scene:001:002", "scene:002:001"] });
 const RESEARCH = JSON.stringify({ web_search: { queries: ["porti dell'Adriatico nel 1890", "fari a petrolio"], reason: "Dettagli d'epoca per la scena del molo." } });
 const SEARCH = JSON.stringify({ research_summary: "Nel 1890 i fari usavano lampade a petrolio con lenti di Fresnel.", sources: [
@@ -39,6 +41,7 @@ const SAMPLES: Array<[string, string, string]> = [
   ["report", TITLE, REPORT], ["judgment", "Direttore editoriale: accettazione o rifiuto motivato dei rilievi", JUDGMENT],
   ["plan", "Piano dei capitoli", PLAN], ["scenes", "Scene del capitolo 1/3: L'arrivo", SCENES],
   ["memory", "Consolidamento del canon", MEMORY], ["summary", "Sinossi del capitolo e del libro 1/2", SUMMARY],
+  ["summary", "Riassunti delle scene: capitolo 1 (2 di 2)", SCENE_SUMMARIES],
   ["impact", "Analisi d'impatto della correzione", IMPACT],
   ["research", "Scrittura scena 2", RESEARCH], ["search", "Ricerca web: «porti dell'Adriatico nel 1890»", SEARCH],
 ];

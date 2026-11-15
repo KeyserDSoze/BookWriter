@@ -10,6 +10,8 @@ export interface NewBookDraft {
   writingStyle: string;
   audience: string;
   options: NewBookOptions;
+  /** Start with a writer whose checklist is verified in every chapter review. */
+  writerChecklist: boolean;
 }
 
 /** Two ways to start: a minimal idea, or a binding chapter-by-chapter synopsis. */
@@ -22,6 +24,7 @@ export function NewBookPanel({ onCreate }: { onCreate: (draft: NewBookDraft) => 
   const [writingStyle, setWritingStyle] = useState("Narrativa immersiva, concreta, coerente; niente cliché.");
   const [audience, setAudience] = useState("Lettori adulti");
   const [pauseAfterOutline, setPauseAfterOutline] = useState(false);
+  const [writerChecklist, setWriterChecklist] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const parsed = useMemo(() => mode === "synopsis" ? parseChapterSynopses(synopsis) : null, [mode, synopsis]);
@@ -46,7 +49,7 @@ export function NewBookPanel({ onCreate }: { onCreate: (draft: NewBookDraft) => 
     }
     setBusy(true);
     try {
-      const created = await onCreate({ title, brief: fullBrief, writingStyle, audience, options });
+      const created = await onCreate({ title, brief: fullBrief, writingStyle, audience, options, writerChecklist });
       if (created) { setTitle(""); setBrief(""); setSynopsis(""); setChapters(""); }
     } finally { setBusy(false); }
   }
@@ -104,6 +107,12 @@ export function NewBookPanel({ onCreate }: { onCreate: (draft: NewBookDraft) => 
       <label className="flex items-start gap-3 text-sm">
         <input type="checkbox" className="mt-1 size-4 shrink-0" checked={pauseAfterOutline} onChange={e => setPauseAfterOutline(e.target.checked)}/>
         <span>Fermati dopo il piano dei capitoli: lo rileggo e lo approvo (o lo faccio rifare) prima che inizi la scrittura.</span>
+      </label>
+      <label className="flex items-start gap-3 text-sm">
+        <input type="checkbox" className="mt-1 size-4 shrink-0" checked={writerChecklist} onChange={e => setWriterChecklist(e.target.checked)}/>
+        <span>Checklist dello scrittore in ogni revisione (consigliata)
+          <span className="muted block text-xs">«Mostra, non spiegare», voce dei personaggi, niente ridondanze e continuità, verificate da una
+            rilettura indipendente: una chiamata AI in più per segmento. Regole consultive: puoi cambiarle o renderle obbligatorie in Modelli e redazione.</span></span>
       </label>
       {error && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
       <Button disabled={busy} onClick={() => void create()}><Plus size={18}/> Crea libro</Button>

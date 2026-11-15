@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import { HistoricalReviewPlanPanel } from "./HistoricalReviewPlanPanel";
+import { Button } from "./ui/button";
 import {
   TASK_BOOK_PAIR_LIMIT_BYTES, TASK_BOOK_TOTAL_LIMIT_BYTES,
   type TaskBookCheckpointSummary,
@@ -139,37 +140,36 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
     <p className="text-xs">Stato consenso integrale: {consent===null
       ?"in caricamento o non verificabile":consent?"attivo":"disattivato"}.</p>
     {consent!==true?
-      <button type="button" disabled={busy||consent===null}
-        className="rounded-lg border border-amber-600 px-3 py-2 text-xs disabled:opacity-40"
+      <Button type="button" size="sm" variant="outline" className="h-auto border-amber-600 py-1.5 dark:border-amber-600" disabled={busy||consent===null}
         onClick={()=>void change(true)}>
-        Attiva checkpoint narrativi integrali per questo libro
-      </button>:
+        <span className="text-xs">Attiva checkpoint narrativi integrali per questo libro</span>
+      </Button>:
       <>
-        <button type="button" disabled={busy}
-          className="rounded-lg border border-amber-600 px-3 py-2 text-xs disabled:opacity-40"
+        <Button type="button" size="sm" variant="outline" className="h-auto border-amber-600 py-1.5 dark:border-amber-600" disabled={busy}
           onClick={()=>setRevokePending(true)}>
-          Richiedi revoca checkpoint narrativi integrali
-        </button>
+          <span className="text-xs">Richiedi revoca checkpoint narrativi integrali</span>
+        </Button>
         {revokePending&&<div className="space-y-2 rounded-lg border border-red-600/40 p-2"
           aria-label="Conferma revoca checkpoint narrativi">
           <p className="text-xs">Revocando elimini definitivamente solo
             le coppie integrali di questo libro. Il canone, la cronologia
             attività, i checkpoint strutturali e le copie di prosa separate
             rimarranno invariati. Confermi?</p>
-          <button type="button" disabled={busy}
-            className="rounded-lg border border-red-600 px-3 py-2 text-xs disabled:opacity-40"
-            onClick={()=>void change(false)}>
-            Conferma revoca ed elimina checkpoint integrali
-          </button>
-          <button type="button" disabled={busy}
-            className="ml-2 rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
-            onClick={()=>setRevokePending(false)}>Annulla revoca integrale</button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="destructive" className="h-auto py-1.5" disabled={busy}
+              onClick={()=>void change(false)}>
+              <span className="text-xs">Conferma revoca ed elimina checkpoint integrali</span>
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={busy}
+              onClick={()=>setRevokePending(false)}><span className="text-xs">Annulla revoca integrale</span></Button>
+          </div>
         </div>}
-        <button type="button" disabled={busy}
-          className="block rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
-          onClick={()=>void refresh()}>
-          Aggiorna spazio checkpoint narrativi
-        </button>
+        <div>
+          <Button type="button" size="sm" variant="outline" disabled={busy}
+            onClick={()=>void refresh()}>
+            <span className="text-xs">Aggiorna spazio checkpoint narrativi</span>
+          </Button>
+        </div>
         {inventory&&inventory.bookId===bookId&&<p className="text-xs"
           aria-label="Inventario checkpoint narrativi">
           Coppie conservate: {inventory.records};
@@ -180,11 +180,10 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
         {focusedTaskId&&<div className="space-y-2 border-t border-slate-400/30 pt-2">
           <p className="muted text-xs">Carica soltanto metadati del task selezionato.
             Nessuna prosa o memoria viene mostrata in questa schermata.</p>
-          <button type="button" disabled={busy}
-            className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
+          <Button type="button" size="sm" variant="outline" className="h-auto py-1.5" disabled={busy}
             onClick={()=>void inspect()}>
-            Verifica checkpoint narrativo integrale del task
-          </button>
+            <span className="text-xs">Verifica checkpoint narrativo integrale del task</span>
+          </Button>
           {checkpoint&&checkpoint.bookId===bookId&&
             checkpoint.activityId===focusedTaskId&&<div className="text-xs space-y-1"
               role="region" aria-label="Metadati checkpoint narrativo integrale">
@@ -204,11 +203,10 @@ export function TaskBookHistoryPanel({bookId,focusedTaskId}:Props){
               e ricava solo <b>conteggi</b> di capitoli, scene e memoria modificati.
               La lista dei capitoli correnti da riesaminare è prudenziale:
               <b> non dimostra legami causali</b>, non sblocca freeze e non modifica nulla.</p>
-            <button type="button" disabled={busy}
-              className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
+            <Button type="button" size="sm" variant="outline" className="h-auto py-1.5" disabled={busy}
               onClick={()=>void inspectImpact()}>
-              Analizza differenze narrative storiche
-            </button>
+              <span className="text-xs">Analizza differenze narrative storiche</span>
+            </Button>
             {impact&&impact.bookId===bookId&&impact.activityId===focusedTaskId&&
               <div role="region" aria-label="Anteprima impatto narrativo storico"
                 className="space-y-1 rounded-lg border border-slate-400/30 p-2 text-xs">

@@ -79,7 +79,7 @@ export interface ImpactAnalysis {
   reasons: string[];
 }
 /** Deterministic candidates; the AI analysis may add or drop scenes with reasons. */
-export function analyzeImpact(book: BookProject, kb: KnowledgeBase, target: { kind: "entity" | "event"; id: string }): ImpactAnalysis {
+export function analyzeImpact(book: BookProject, kb: KnowledgeBase, target: { kind: "entity" | "event" | "chapter" | "timeline"; id: string }): ImpactAnalysis {
   const order = new Map(flatScenes(book).map(x => [x.scene.id, x.position]));
   const writtenIds = new Set(flatScenes(book).filter(x => written(x.scene)).map(x => x.scene.id));
   const direct = new Set<string>(), indirect = new Set<string>(), reasons: string[] = [];
@@ -90,6 +90,18 @@ export function analyzeImpact(book: BookProject, kb: KnowledgeBase, target: { ki
     for (const ref of entityReferences(book, kb, entity)) if (writtenIds.has(ref.sceneId) && ref.via !== "event") direct.add(ref.sceneId);
     events = kb.events.filter(e => e.involves.includes(entity.id) || e.perspectives.some(p => p.entityId === entity.id));
     if (direct.size) reasons.push(direct.size + " scene scritte nominano «" + entity.name + "».");
+  } else if (target.kind === "chapter") {
+    const chapter = book.chapters.find(c => c.id === target.id);
+    if (!chapter) throw new Error("Capitolo non trovato.");
+    for (const scene of chapter.scenes) if (writtenIds.has(scene.id)) direct.add(scene.id);
+    events = kb.events.filter(e => e.sceneIds.some(id => chapter.scenes.some(s => s.id === id)));
+    if (direct.size) reasons.push("Il capitolo ha " + direct.size + " scene scritte.");
+  } else if (target.kind === "timeline") {
+    const timeline = kb.timelines.find(t => t.id === target.id);
+    if (!timeline) throw new Error("Timeline non trovata.");
+    events = timelineEvents(kb, timeline.id);
+    for (const event of events) for (const id of event.sceneIds) if (writtenIds.has(id)) direct.add(id);
+    if (direct.size) reasons.push("Gli eventi della timeline sono raccontati in " + direct.size + " scene.");
   } else {
     const event = kb.events.find(e => e.id === target.id);
     if (!event) throw new Error("Evento non trovato.");
@@ -109,9 +121,15 @@ export function analyzeImpact(book: BookProject, kb: KnowledgeBase, target: { ki
   return { direct: sorted(direct), indirect: sorted(indirect), global, reasons };
 }
 
+/** Events of one timeline: tagged with it, or involving a sheet the timeline follows. */
+export function timelineEvents(kb: KnowledgeBase, timelineId?: string): KnowledgeEvent[] {
+  if (!timelineId) return kb.events;
+  const subjects = new Set(kb.timelines.find(t => t.id === timelineId)?.subjectIds ?? []);
+  return kb.events.filter(e => e.timelineIds.includes(timelineId) || e.involves.some(id => subjects.has(id)));
+}
 /** Story chronology and narration order can differ (flashbacks, backstory). */
 export function timelineOrders(book: BookProject, kb: KnowledgeBase, timelineId?: string): { story: KnowledgeEvent[]; narration: KnowledgeEvent[] } {
-  const events = kb.events.filter(e => !timelineId || e.timelineIds.includes(timelineId));
+  const events = timelineEvents(kb, timelineId);
   const position = new Map(flatScenes(book).map(x => [x.scene.id, x.position]));
   const firstPosition = (event: KnowledgeEvent) => Math.min(...event.sceneIds.map(id => position.get(id) ?? Infinity),
     event.plannedChapter !== undefined ? 1e6 + event.plannedChapter : Infinity);

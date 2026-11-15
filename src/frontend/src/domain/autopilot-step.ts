@@ -3,6 +3,7 @@ import { reviewerLabel, acceptedRepairs, chapterSegments, createEditorialCycle, 
 import { parseEditorialProfiles } from "./editorial-profiles";
 import { activeManualReview } from "./manual-review";
 import { describeManualReview } from "./manual-review-flow";
+import { scenesNeedingSummary } from "./scene-summaries";
 
 export type PipelineStage = "ideation" | "planning" | "writing" | "editing" | "done";
 export const PIPELINE_STAGES: ReadonlyArray<{ id: PipelineStage; label: string; description: string }> = [
@@ -92,9 +93,10 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
   const stage = pipelineStage(book);
   const view = (headline: string, extra: Partial<AutopilotStepView> = {}): AutopilotStepView =>
     ({ stage, headline, acceptsAuthorNotes: false, revision: book.phase === "revision", ...extra });
-  // The runner executes a review the author asked for before anything else.
+  // The runner executes a review the author asked for before anything else; a review by the
+  // whole board instead runs as normal board steps, described below with their chapter.
   const review = activeManualReview(book);
-  if (review) {
+  if (review && (review.engine !== "board" || review.status === "pending" || !book.editorialCycle)) {
     const described = describeManualReview(book, review);
     return view(described.headline, { detail: described.detail });
   }
@@ -171,6 +173,9 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
       const where = `capitolo ${chapter.number} «${chapter.title}»`;
       switch (cycle.stage) {
         case "review": {
+          if (!cycle.reports.length && scenesNeedingSummary(chapter).length)
+            return view(`Riassunti delle scene del ${where}.`, { chapterNumber: chapter.number,
+              detail: `${scenesNeedingSummary(chapter).length} scene nuove o cambiate ricevono un riassunto vero prima dei revisori.` });
           try {
             const segments = chapterSegments(chapter).length;
             const done = cycle.reports.length;
@@ -212,7 +217,7 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
       if (change?.target.kind === "scene" && change.state === "analyzing")
         return view(`Confronto della modifica: «${change.targetLabel}».`, { detail: "Distingue un cambio di stile da un cambio dei fatti, per rivedere solo ciò che serve." });
       if (change && rev.impactAnalysis === undefined)
-        return view(`Analisi della modifica di «${change.targetLabel}».`, { detail: "Nuova scheda, scene dirette e indirette, impatto globale: «" + change.instruction.slice(0, 140) + "»" });
+        return view(`Analisi della modifica di «${change.targetLabel}».`, { detail: "Nuova versione dell'elemento, scene dirette e indirette, impatto globale: «" + change.instruction.slice(0, 140) + "»" });
       if (rev.impactAnalysis === undefined)
         return view("Analisi d'impatto della tua revisione.", { acceptsAuthorNotes: true,
           detail: "Individua le scene coinvolte: «" + rev.instruction.slice(0, 160) + (rev.instruction.length > 160 ? "…" : "") + "»" });

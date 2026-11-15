@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { AppSettings, AuxiliaryModelCapability, ModelCapability, ModelRoute } from "../domain/types";
+import { Button } from "./ui/button";
 import {
   AUXILIARY_MODEL_CAPABILITIES, MODEL_CAPABILITIES, MODEL_CAPABILITY_LABELS,
   declaredModelCapabilities, sameModelRoute, withModelCapability,
@@ -100,18 +101,18 @@ export function ModelCapabilitiesPanel({ settings, updateSettings }: Props) {
               {sameModelRoute(settings.defaultRoute, item.route)
                 ? <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Predefinito per Chat / scrittura</span>
                 : tagged(item, "chat") &&
-                  <button className="rounded border border-slate-400 px-3 py-1.5 text-xs dark:border-slate-600"
+                  <Button size="sm" variant="outline"
                     type="button" onClick={() => updateSettings(current => ({
                       ...current, defaultRoute: item.route,
-                    }))}>Usa come predefinito Chat</button>}
+                    }))}><span className="text-xs">Usa come predefinito Chat</span></Button>}
             </div>
           </fieldset>)}
         {visible.length === 0 && <p className="muted text-sm">Nessun modello corrisponde alla ricerca.</p>}
         {visible.length > visibleCount &&
-          <button className="rounded border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
+          <Button variant="outline"
             type="button" onClick={() => setVisibleCount(n => n + PAGE_SIZE)}>
             Mostra altri modelli ({visible.length - visibleCount} rimanenti)
-          </button>}
+          </Button>}
       </div>
     </>}
     <div className="mt-5 border-t border-slate-300 pt-4 dark:border-slate-700">

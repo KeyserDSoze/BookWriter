@@ -12,6 +12,7 @@ import { manualReviewSchema, MAX_REVIEWS } from "../domain/manual-review";
 import { interruptImportedReviews } from "../domain/manual-review-flow";
 import { sanitizeAuthorInterventions } from "../domain/author-interventions";
 import { sanitizeBookStart } from "../domain/book-start";
+import { bookFormatVersion, migrateBook } from "../domain/book-format";
 import { aiTracePolicy } from "../domain/ai-trace-policy";
 import {
   CONVERSATIONS_BUDGET_BYTES, CONVERSATIONS_MAX_FILES, isConversationPath, projectConversations,
@@ -28,7 +29,7 @@ const manifestSchema = z.object({
   schemaVersion: z.literal(1),
   bookId: z.string().uuid(),
   paths: z.array(z.string()).max(20_000),
-  markdownFormat: z.union([z.literal(1), z.literal(2)]).optional(),
+  markdownFormat: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
 });
 
 export class RemoteConflict extends Error {
@@ -217,6 +218,8 @@ function parseJson<T>(text: string, label: string): T {
 }
 function parseRemoteBook(raw: string): BookProject {
   const data = parseJson<unknown>(raw, "Progetto remoto");
+  // A newer app's snapshot gets a clear explanation, before any schema error.
+  bookFormatVersion((data && typeof data === "object" ? data : {}) as { formatVersion?: unknown });
   const parsed = z.object({
     id: z.string().uuid(),
     title: z.string().min(1),
@@ -273,7 +276,7 @@ function parseRemoteBook(raw: string): BookProject {
   const { startMode: _mode, authorChapterSynopses: _synopses, targetChapterCount: _target,
     pauseAfterOutline: _pause, authorInterventions: _interventions, ...rest } = project;
   const interventions = sanitizeAuthorInterventions(project.authorInterventions);
-  return {
+  return migrateBook({
     ...rest,
     ...sanitizeBookStart(parsed.data as Record<string, unknown>),
     ...(interventions ? { authorInterventions: interventions } : {}),
@@ -281,7 +284,7 @@ function parseRemoteBook(raw: string): BookProject {
     audienceReviews: project.audienceReviews ?? [],
     status: project.status === "running" ? "paused" : project.status,
     remote: undefined, // Do not trust remote-supplied local sync settings.
-  };
+  });
 }
 
 export interface RemoteBookSnapshot {

@@ -6,6 +6,8 @@ import { ATTRIBUTE_FIELDS, ENTITY_TYPES, knowledgeBaseSchema, knowledgeEntitySch
   type KnowledgeEntity, type KnowledgeEvent } from "./knowledge";
 import { CHANGE_STATE_LABELS, changeOperationSchema } from "./narrative-change";
 import { editorialProfilesSchema } from "./editorial-profiles";
+import { bookEditSchema } from "./book-edits";
+import { manualReviewSchema } from "./manual-review";
 
 /** Readable sheets for humans and other LLMs, with the structured fields in a
  * flat frontmatter (simple strings and string lists, as the portable contract requires). */
@@ -53,7 +55,7 @@ export function changeReportDocuments(book: BookProject): Record<string, string>
 }
 
 /** Versioned JSON Schemas generated from the same validators the app uses. */
-export function schemaDocuments(): Record<string, string> {
+export function schemaDocuments(format: 2 | 3 = 3): Record<string, string> {
   const doc = (title: string, schema: z.ZodType) => JSON.stringify({ title, $id: "https://ghostwriting.ws/schemas/" + slug(title) + ".schema.json",
     "x-bookwriter-schema-version": 1, ...z.toJSONSchema(schema, { unrepresentable: "any" }) }, null, 2) + "\n";
   return {
@@ -63,6 +65,10 @@ export function schemaDocuments(): Record<string, string> {
     "schemas/timeline.schema.json": doc("timeline", knowledgeTimelineSchema),
     "schemas/editorial-profiles.schema.json": doc("editorial-profiles", editorialProfilesSchema),
     "schemas/change-operation.schema.json": doc("change-operation", changeOperationSchema),
+    ...(format >= 3 ? {
+      "schemas/book-edit.schema.json": doc("book-edit", bookEditSchema),
+      "schemas/manual-review.schema.json": doc("manual-review", manualReviewSchema),
+    } : {}),
   };
 }
 
@@ -93,7 +99,8 @@ export function readKnowledgeDocuments(docs: ReadonlyArray<{ path: string; metad
       status: d.metadata.status === "validated" ? "validated" : "draft", origin: "imported", updatedAt: now,
     })),
     timelines: timelineDocs.map(d => ({ id: String(d.metadata.id), title: String(d.metadata.title ?? d.metadata.id),
-      kind: (["global", "arc", "event"].includes(String(d.metadata.kind)) ? d.metadata.kind : "arc") as "global" | "arc" | "event", summary: d.body.slice(0, 600) })),
+      kind: (["global", "arc", "event"].includes(String(d.metadata.kind)) ? d.metadata.kind : "arc") as "global" | "arc" | "event", summary: d.body.slice(0, 600),
+      ...(list(d.metadata.subjects).length ? { subjectIds: list(d.metadata.subjects) } : {}) })),
     events: eventDocs.map(d => {
       const scenes = list(d.metadata.scenes);
       if (scenes.some(id => !sceneIds.has(id))) throw new Error("Evento «" + String(d.metadata.title) + "» collegato a una scena inesistente.");

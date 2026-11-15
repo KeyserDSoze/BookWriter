@@ -22,6 +22,7 @@ test("un summary solo-spazi non congela un capitolo approvato (desktop/mobile)",
     .fill("Mara incontra il guardiano");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Un romanzo con un guardiano e una porta segreta.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const opened=indexedDB.open("bookwriter");

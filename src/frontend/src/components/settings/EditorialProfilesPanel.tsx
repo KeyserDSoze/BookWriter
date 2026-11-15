@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpenCheck, ChevronRight, Gavel, ListChecks, PenLine, Plus, RotateCcw, Trash2, Users } from "lucide-react";
 import type { BookProject } from "../../domain/types";
-import { DEFAULT_DIRECTOR_INSTRUCTIONS, defaultEditorialProfiles, EXTRA_READER_ROLES, MAX_READER_PROFILES, MAX_WRITER_PROFILES,
-  MAX_WRITER_RULES, newWriterProfile, readEditorialProfileDocuments, selectedWriter,
+import { DEFAULT_DIRECTOR_INSTRUCTIONS, defaultEditorialProfiles, EXTRA_READER_ROLES, isStandardReader, MAX_READER_PROFILES, MAX_WRITER_PROFILES,
+  MAX_WRITER_RULES, newWriterProfile, readEditorialProfileDocuments, selectedWriter, withStandardReaders,
   type EditorialProfiles, type ReaderProfile, type WriterProfile, type WriterRule } from "../../domain/editorial-profiles";
 import { saveEditorialProfiles } from "../../application/editorial-profiles";
+import { EditHistory } from "../edit/EditKit";
 import { Button } from "../ui/button";
 import { Badge, Segmented, Switch, Tabs } from "../ui/primitives";
 
@@ -77,14 +78,15 @@ function RuleEditor({ rules, disabled, reviewEnabled, onChange }: {
 
 export function EditorialProfilesPanel({ book, onRefresh }: { book: BookProject; onRefresh: () => Promise<void> }) {
   const saved = useMemo(() => book.editorialProfiles ?? defaultEditorialProfiles(), [book.editorialProfiles]);
-  const [draft, setDraft] = useState<EditorialProfiles>(() => structuredClone(saved));
+  const [draft, setDraft] = useState<EditorialProfiles>(() => structuredClone(withStandardReaders(saved)));
+  const restoredStandard = saved.readers.length !== withStandardReaders(saved).readers.length;
   const [tab, setTab] = useState<Tab>("writer");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const generation = useRef(0), mounted = useRef(true);
   const current = useRef(book.id); current.current = book.id;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
-  useEffect(() => { generation.current++; setDraft(structuredClone(book.editorialProfiles ?? defaultEditorialProfiles())); setMessage(""); setBusy(false); }, [book.id]);
+  useEffect(() => { generation.current++; setDraft(structuredClone(withStandardReaders(book.editorialProfiles ?? defaultEditorialProfiles()))); setMessage(""); setBusy(false); }, [book.id]);
   const disabled = busy || book.status === "running";
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const writer = selectedWriter(draft);
@@ -101,30 +103,33 @@ export function EditorialProfilesPanel({ book, onRefresh }: { book: BookProject;
       return next;
     }) }));
   }
-  async function save(standard = false) {
-    if (!window.confirm("Salvare questi profili per il libro? Le istruzioni saranno inviate ai modelli dei rispettivi ruoli; quelle dello scrittore anche a scrittura, giudice e correzioni. Più lettori e la rilettura dello scrittore richiedono più chiamate AI e possono costare di più. I cicli già iniziati non cambiano. Autosync sarà disattivato e la coda svuotata; nessuna AI partirà ora.")) return;
+  async function save(standard = false, restored?: { editId: string; value: EditorialProfiles | undefined }) {
+    if (!restored && !window.confirm("Salvare questi profili per il libro? Le istruzioni saranno inviate ai modelli dei rispettivi ruoli; quelle dello scrittore anche a scrittura, giudice e correzioni. Più lettori e la rilettura dello scrittore richiedono più chiamate AI e possono costare di più. I cicli già iniziati non cambiano. Autosync sarà disattivato e la coda svuotata; nessuna AI partirà ora.")) return;
     const ticket = ++generation.current, bookId = book.id;
     const isCurrent = () => mounted.current && generation.current === ticket && current.current === bookId;
     setBusy(true); setMessage("");
     try {
-      await saveEditorialProfiles(bookId, book.updatedAt, standard ? undefined : structuredClone(draft), true, isCurrent);
+      await saveEditorialProfiles(bookId, book.updatedAt, restored ? restored.value : standard ? undefined : structuredClone(draft), true, isCurrent,
+        restored ? { restoredEditId: restored.editId } : {});
       if (!isCurrent()) return;
       syncAfterSave.current = true;
       await onRefresh();
       if (mounted.current && current.current === bookId) {
-        if (standard) setDraft(defaultEditorialProfiles());
-        setMessage("Profili salvati. Nessuna AI avviata; i cicli esistenti restano invariati. Autosync disattivato.");
+        if (standard || restored) setDraft(structuredClone(withStandardReaders(restored?.value ?? defaultEditorialProfiles())));
+        setMessage(restored ? "Profili ripristinati come erano prima di quella modifica. Nessuna AI avviata; autosync disattivato."
+          : "Profili salvati. Nessuna AI avviata; i cicli esistenti restano invariati. Autosync disattivato.");
       }
     } catch (error) {
       if (isCurrent()) {
         await onRefresh().catch(() => undefined);
         if (isCurrent()) setMessage(error instanceof Error ? error.message : "Salvataggio dei profili non riuscito.");
       }
+      if (restored) throw error;
     } finally { if (mounted.current && current.current === bookId) setBusy(false); }
   }
   // After a successful save the stored copy (with version numbers) becomes the new draft.
   const syncAfterSave = useRef(false);
-  useEffect(() => { if (syncAfterSave.current) { syncAfterSave.current = false; setDraft(structuredClone(saved)); } }, [saved]);
+  useEffect(() => { if (syncAfterSave.current) { syncAfterSave.current = false; setDraft(structuredClone(withStandardReaders(saved))); } }, [saved]);
 
   const activeReaders = draft.readers.filter(p => p.enabled).length;
   return <section className="panel min-w-0 overflow-hidden" aria-label="Profili dei lettori e dello scrittore">
@@ -192,12 +197,14 @@ export function EditorialProfilesPanel({ book, onRefresh }: { book: BookProject;
       </>}
 
       {tab === "readers" && <>
-        <p className="muted text-sm">Ogni lettore è indipendente e cieco a segreti e piani futuri. Massimo dieci; quelli attivi valutano anche le idee iniziali e i nuovi capitoli, pure con redazione leggera.</p>
+        <p className="muted text-sm">Ogni lettore è indipendente e cieco a segreti e piani futuri. I cinque lettori standard restano sempre: puoi modificarli o disattivarli. Puoi aggiungere fino a cinque lettori tuoi; quelli attivi valutano anche le idee iniziali e i nuovi capitoli, pure con redazione leggera.</p>
+        {restoredStandard && <p role="status" className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm">Mancavano alcuni lettori standard: sono tornati disattivati. Salva per conservarli.</p>}
         <ul className="grid gap-3 lg:grid-cols-2">
           {draft.readers.map((profile, index) => <li key={profile.id} className="min-w-0">
             <details className="min-w-0 rounded-xl border border-slate-300 dark:border-slate-700" open={index === 0}>
               <summary className="flex cursor-pointer flex-wrap items-center gap-2 p-3 font-semibold [overflow-wrap:anywhere]">
                 <span>{profile.name || "Lettore senza nome"}</span>{!profile.enabled && " — disattivato"}
+                {isStandardReader(profile.role) ? <Badge tone="sky">Standard</Badge> : <Badge tone="violet">Personalizzato</Badge>}
                 {profile.version && <Badge>v{profile.version}</Badge>}
               </summary>
               <div className="space-y-2 border-t border-slate-300 p-3 dark:border-slate-700">
@@ -206,13 +213,18 @@ export function EditorialProfilesPanel({ book, onRefresh }: { book: BookProject;
                   onChange={e => reader(profile.id, { name: e.target.value })}/></label>
                 <label className="block text-sm">Template lettore {index + 1}<textarea aria-label={"Template lettore " + (index + 1)} className="field mt-1" rows={5} disabled={disabled} maxLength={6000} value={profile.instructions}
                   onChange={e => reader(profile.id, { instructions: e.target.value })}/></label>
-                <Button variant="outline" disabled={disabled || draft.readers.length === 1} onClick={() => setDraft(old => ({ ...old, readers: old.readers.filter(p => p.id !== profile.id) }))}><Trash2 size={15}/> Rimuovi questo lettore</Button>
+                {isStandardReader(profile.role)
+                  ? <Button variant="outline" disabled={disabled} onClick={() => {
+                      const standard = defaultEditorialProfiles().readers.find(p => p.role === profile.role)!;
+                      reader(profile.id, { name: standard.name, instructions: standard.instructions });
+                    }}><RotateCcw size={15}/> Ripristina il testo standard</Button>
+                  : <Button variant="outline" disabled={disabled} onClick={() => setDraft(old => ({ ...old, readers: old.readers.filter(p => p.id !== profile.id) }))}><Trash2 size={15}/> Rimuovi questo lettore</Button>}
               </div>
             </details>
           </li>)}
         </ul>
         <Button variant="outline" disabled={disabled || draft.readers.length >= MAX_READER_PROFILES} onClick={() => {
-          const role = [...EXTRA_READER_ROLES, ...defaultEditorialProfiles().readers.map(p => p.role)].find(role => !draft.readers.some(p => p.role === role));
+          const role = EXTRA_READER_ROLES.find(role => !draft.readers.some(p => p.role === role));
           if (role) setDraft(old => ({ ...old, readers: [...old.readers, { id: crypto.randomUUID(), role, name: "Nuovo lettore", enabled: true,
             instructions: "Leggi in modo indipendente e concreto. Valuta coinvolgimento, chiarezza e motivi di disinteresse senza inventare problemi." }] }));
         }}><Plus size={16}/> Aggiungi lettore</Button>
@@ -250,12 +262,16 @@ export function EditorialProfilesPanel({ book, onRefresh }: { book: BookProject;
       }}><RotateCcw size={15}/> Ricarica profili salvati</Button>
       <Button variant="ghost" disabled={disabled || !book.markdownSource} onClick={() => {
         try {
-          setDraft(readEditorialProfileDocuments(book.markdownSource ?? {}));
+          setDraft(withStandardReaders(readEditorialProfileDocuments(book.markdownSource ?? {})));
           setMessage("Template Markdown caricati soltanto come bozza. Controllali e premi Salva profili del libro per usarli nelle future chiamate AI.");
         } catch (error) { setMessage(error instanceof Error ? error.message : "Template Markdown non leggibili."); }
       }}>Carica template Markdown del libro</Button>
       <Button variant="ghost" disabled={disabled || !book.editorialProfiles} onClick={() => void save(true)}>Usa workflow standard</Button>
     </div>
     {message && <p role="status" className="px-3 pb-3 text-sm [overflow-wrap:anywhere] sm:px-4">{message}</p>}
+    <div className="px-3 pb-3 sm:px-4">
+      <EditHistory book={book} target={{ kind: "profiles", id: "book" }} label="Agenti della redazione" onRefresh={onRefresh}
+        onRestore={edit => save(false, { editId: edit.id, value: edit.before === null ? undefined : JSON.parse(edit.before) as EditorialProfiles })}/>
+    </div>
   </section>;
 }

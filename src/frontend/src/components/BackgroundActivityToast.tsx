@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2, Minimize2, Maximize2 } from "lucide-react";
 import type { Activity, BookProject } from "../domain/types";
 import { bookProgress, describeNextAutopilotStep } from "../domain/autopilot-step";
@@ -16,6 +16,16 @@ export function BackgroundActivityToast({ books, live, currentBookId, currentAct
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewHidden,setPreviewHidden]=useState(false);
+  const observer = useRef<ResizeObserver | null>(null);
+  /** Publishes the card's height: the page reserves that space so its last controls can scroll above the card. */
+  const reserveSpace = useCallback((node: HTMLElement | null) => {
+    observer.current?.disconnect();
+    const root = document.documentElement;
+    if (!node) { root.style.removeProperty("--background-toast-space"); return; }
+    const update = () => root.style.setProperty("--background-toast-space", node.offsetHeight + "px");
+    update();
+    if (typeof ResizeObserver !== "undefined") { observer.current = new ResizeObserver(update); observer.current.observe(node); }
+  }, []);
   const running = books.filter(book => book.status === "running");
   if (running.length === 0) return null;
 
@@ -35,7 +45,7 @@ export function BackgroundActivityToast({ books, live, currentBookId, currentAct
   const text=active?(active.textTail||active.textPreview):"";
   const reasoning=active?(active.reasoningTail||active.reasoningPreview):"";
 
-  return <aside role="complementary" aria-label="Lavoro in background"
+  return <aside ref={reserveSpace} role="complementary" aria-label="Lavoro in background"
     className="fixed bottom-3 right-3 z-50 max-h-[calc(100dvh-6rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border border-emerald-600/60 bg-white shadow-xl dark:bg-slate-900">
     <div className="flex items-center">
     <button type="button" className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm"

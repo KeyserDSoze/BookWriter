@@ -202,7 +202,7 @@ function TimelineView({ book, onRefresh, onStart }: { book: BookProject; onRefre
   const [timeline, setTimeline] = useState("");
   const orders = useMemo(() => timelineOrders(book, kb, timeline || undefined), [book, kb, timeline]);
   const events = orders[order];
-  const manager = <TimelineManager book={book} onRefresh={onRefresh} selected={timeline || undefined}/>;
+  const manager = <TimelineManager book={book} onRefresh={onRefresh} onStart={onStart} selected={timeline || undefined}/>;
   if (!kb.events.length) return <div className="space-y-3"><EmptyState title="Nessun evento" icon={<CalendarClock size={26}/>}>Gli eventi nascono dal piano e dalle scene scritte, oppure li crei tu.</EmptyState>{manager}</div>;
   return <div className="space-y-3">
     {manager}
@@ -216,6 +216,12 @@ function TimelineView({ book, onRefresh, onStart }: { book: BookProject; onRefre
         </select></label>}
     </div>
     <p className="muted text-xs">{order === "story" ? "Gli eventi nell'ordine in cui accadono nella storia, anche se raccontati in flashback." : "Gli eventi nell'ordine in cui il lettore li incontra nei capitoli."}</p>
+    {(() => {
+      const chosen = kb.timelines.find(t => t.id === timeline);
+      if (!chosen || (!chosen.summary && !chosen.subjectIds?.length)) return null;
+      const follows = (chosen.subjectIds ?? []).map(id => kb.entities.find(e => e.id === id)?.name ?? id);
+      return <p className="text-sm [overflow-wrap:anywhere]">{chosen.summary}{follows.length ? <span className="muted"> {chosen.summary ? "· " : ""}Segue: {follows.join(", ")} (anche i loro eventi)</span> : null}</p>;
+    })()}
     <ol aria-label={order === "story" ? "Timeline nell'ordine della storia" : "Timeline nell'ordine del racconto"}
       className="relative space-y-3 before:absolute before:bottom-2 before:left-3.5 before:top-2 before:w-px before:bg-slate-300 dark:before:bg-slate-700">
       {events.map((event, index) => <EventCard key={event.id} book={book} event={event} index={index} onRefresh={onRefresh} onStart={onStart}

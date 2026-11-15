@@ -30,6 +30,12 @@ async function secondDevice(browser: Browser, firstPage: Page): Promise<{ contex
 const nav = (page: Page) => page.getByRole("navigation", {
   name: test.info().project.name === "mobile-chromium" ? "Navigazione mobile" : "Navigazione principale" });
 
+/** The cloud account lives in its own tab of the general settings. */
+async function openCloud(page: Page) {
+  await nav(page).getByRole("button", { name: "Impostazioni" }).click();
+  await page.getByRole("tab", { name: "Account e cloud" }).click();
+}
+
 async function seedDevice(page: Page, title: string): Promise<string> {
   return page.evaluate(async ({ title, pat, key, sha }) => {
     const dbPath = "/src/infrastructure/db.ts", cryptoPath = "/src/infrastructure/crypto.ts", typesPath = "/src/domain/types.ts";
@@ -57,7 +63,7 @@ async function seedDevice(page: Page, title: string): Promise<string> {
 }
 
 async function saveClientIds(page: Page, values: { google?: string; microsoft?: string }) {
-  await nav(page).getByRole("button", { name: "Impostazioni" }).click();
+  await openCloud(page);
   const panel = page.getByRole("region", { name: "Account cloud" });
   await panel.getByText("Impostazioni avanzate: Client ID e nome del dispositivo").click();
   if (values.google) await panel.getByLabel("Client ID Google").fill(values.google);
@@ -215,14 +221,14 @@ test("Google: PC1 carica profilo cifrato e libreria, PC2 li ritrova, scarica e a
   github.books.set(SHA_B, advanced); github.head = SHA_B; github.history = [SHA_B, SHA_A];
   await page.reload();
   panel = page.getByRole("region", { name: "Account cloud" });
-  await nav(page).getByRole("button", { name: "Impostazioni" }).click();
+  await openCloud(page);
   await expect(panel.getByText("Non connesso: la sessione è scaduta")).toBeVisible();
   await panel.getByRole("button", { name: "Riconnetti" }).click();
   await expect(panel.getByText("Connesso come autore@example.com.")).toBeVisible();
   await expect.poll(() => drive.files.find(file => file.name === "bookwriter-library.json")!.text).toContain("capitolo 2");
 
   // ---- PC 2 sees the update and takes it without touching anything else ----
-  await nav(pc2).getByRole("button", { name: "Impostazioni" }).click();
+  await openCloud(pc2);
   await pc2.getByRole("region", { name: "Account cloud" }).getByRole("button", { name: "Aggiorna elenco libri cloud" }).click();
   await nav(pc2).getByRole("button", { name: "Libreria" }).click();
   await expect(pc2.getByText(/aggiornamento disponibile da un altro dispositivo/)).toBeVisible();
@@ -314,7 +320,7 @@ test("Microsoft: accesso con finestra e PKCE, profilo «solo account», ripresa 
 
   const authorizationsBefore = graph.authorizations.length;
   await page.reload();
-  await nav(page).getByRole("button", { name: "Impostazioni" }).click();
+  await openCloud(page);
   await expect(panel.getByText(/^Connesso · valida fino alle/)).toBeVisible();
   expect(graph.authorizations.length).toBe(authorizationsBefore); // no new window
   expect(graph.tokens.at(-1)!.get("grant_type")).toBe("refresh_token");
@@ -325,7 +331,7 @@ test("Microsoft: accesso con finestra e PKCE, profilo «solo account», ripresa 
 
 test("senza Client ID gli accessi sono disattivati e la pagina indica la guida", async ({ page }) => {
   await page.goto("/");
-  await nav(page).getByRole("button", { name: "Impostazioni" }).click();
+  await openCloud(page);
   const panel = page.getByRole("region", { name: "Account cloud" });
   await expect(panel.getByRole("button", { name: "Accedi con Google" })).toBeDisabled();
   await expect(panel.getByRole("button", { name: "Accedi con Microsoft" })).toBeDisabled();

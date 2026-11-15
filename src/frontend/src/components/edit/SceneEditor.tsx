@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ListChecks, Save, Wand2 } from "lucide-react";
 import type { BookProject, Chapter, Scene } from "../../domain/types";
+import type { EditTarget } from "../../domain/book-edits";
 import { editBase, ElementChangedError, saveSceneEdit, type EditBase } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/primitives";
@@ -12,7 +13,7 @@ const draftOf = (scene: Scene): Draft => ({ title: scene.title, objective: scene
 
 /** Manual scene editor. Saving never starts a review; a selection can be rewritten by the AI. */
 export function SceneEditor({ book, chapter, scene, onRefresh, onClose, onOpenReviews }: {
-  book: BookProject; chapter: Chapter; scene: Scene; onRefresh: () => Promise<void>; onClose: () => void; onOpenReviews?: () => void;
+  book: BookProject; chapter: Chapter; scene: Scene; onRefresh: () => Promise<void>; onClose: () => void; onOpenReviews?: (targets?: EditTarget[]) => void;
 }) {
   const label = `Cap. ${chapter.number} · ${scene.number}. ${scene.title}`;
   const target = { kind: "scene" as const, id: scene.id };
@@ -100,14 +101,14 @@ export function SceneEditor({ book, chapter, scene, onRefresh, onClose, onOpenRe
       {scene.text.trim() && <Button type="button" variant="ghost" disabled={busy || !selected || !selectionMatchesSaved} aria-expanded={aiOpen}
         title={!selectionMatchesSaved ? "Salva prima le modifiche, poi seleziona il passaggio" : undefined}
         onClick={() => setAiOpen(v => !v)}><Wand2 size={16}/> Riscrivi la selezione con l'AI</Button>}
-      {saved && onOpenReviews && <Button type="button" variant="ghost" onClick={onOpenReviews}><ListChecks size={16}/> Scegli se e come rivederla</Button>}
+      {saved && onOpenReviews && <Button type="button" variant="ghost" onClick={() => onOpenReviews([{ kind: "scene", id: scene.id }])}><ListChecks size={16}/> Scegli se e come rivederla</Button>}
     </div>
     {!conflict && message && <p role="status" className="text-sm [overflow-wrap:anywhere]">{message}</p>}
     {aiOpen && selected && selectionMatchesSaved && <div className="rounded-xl border border-violet-500/40 bg-violet-500/5 p-3">
       <p className="mb-2 text-sm"><span className="font-semibold">Passaggio selezionato:</span> <span className="muted font-serif">«{selected.length > 220 ? selected.slice(0, 220) + "…" : selected}»</span></p>
       <AiEditPanel book={book} request={{ kind: "scene", id: scene.id, selection: selection! }} label="la selezione"
         examples={["Rendi questo passaggio più teso, senza cambiare cosa accade.", "Mostra l'emozione con i gesti invece di dirla.", "Accorcia mantenendo le informazioni."]}
-        onRefresh={onRefresh} onApplied={() => { setAiOpen(false); setSelection(undefined);
+        onRefresh={onRefresh} onApplied={() => { setAiOpen(false); setSelection(undefined); setSaved(true);
           setMessage("Passaggio riscritto con l'AI e salvato come modifica AI, senza review."); }}/>
     </div>}
   </form>;

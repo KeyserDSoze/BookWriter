@@ -4,6 +4,8 @@ import type { BookProject } from "../../domain/types";
 import { diffSceneText } from "../../domain/scene-diff";
 import { CHANGE_KIND_LABELS, elementReviewState, REVIEW_STATE_LABELS, REVIEW_STATE_TONES, type BookEdit, type EditTarget } from "../../domain/book-edits";
 import { MAX_AI_EDIT_INSTRUCTION, type AiEditProposal, type AiEditRequest } from "../../domain/ai-edit";
+import { describeProfiles, type EditorialProfiles } from "../../domain/editorial-profiles";
+import { SCENE_META_FIELD, SCENE_META_LABELS, SCENE_META_LISTS, type SceneMetaList } from "../../domain/book-editing";
 import type { ChangeTarget } from "../../domain/narrative-change";
 import { acceptAiEditChange, proposeAiEdit } from "../../application/ai-edit";
 import { editBase, restoreEdit } from "../../application/book-editing";
@@ -65,11 +67,17 @@ export function ChipPicker({ label, options, value, onChange, disabled, empty = 
 /** Human-readable version of a stored snapshot, for the comparison. */
 export function readableSnapshot(edit: BookEdit, side: "before" | "after"): string {
   const raw = edit[side];
-  if (raw === null) return "";
+  if (raw === null) return edit.target.kind === "profiles" ? describeProfiles(null) : "";
   try {
     const value = JSON.parse(raw) as Record<string, unknown>;
+    if (edit.target.kind === "scene" && edit.field.startsWith(SCENE_META_FIELD)) {
+      const meta = value as { viewpoint?: string; date?: string } & Partial<Record<SceneMetaList, string[]>>;
+      return [`Punto di vista: ${meta.viewpoint || "—"}`, `Data: ${meta.date || "—"}`,
+        ...SCENE_META_LISTS.map(key => `${SCENE_META_LABELS[key][0]!.toUpperCase() + SCENE_META_LABELS[key].slice(1)}: ${(meta[key] ?? []).join(", ") || "—"}`)].join("\n");
+    }
     if (edit.target.kind === "scene" && typeof value.text === "string") return `${String(value.title ?? "")}\n\n${value.text}` + (value.summary ? `\n\nRiassunto: ${String(value.summary)}` : "");
     if (edit.target.kind === "structure") return Array.isArray(value) ? value.map((row, i) => `Capitolo ${i + 1}: ${(row as string[]).length - 1} scene`).join("\n") : "";
+    if (edit.target.kind === "profiles") return describeProfiles(value as unknown as EditorialProfiles);
     const inner = (value.entity ?? value.event ?? value.chapter ?? value.scene ?? value) as Record<string, unknown>;
     return Object.entries(inner).filter(([key]) => !["history", "version", "updatedAt", "origin"].includes(key))
       .map(([key, field]) => `${key}: ${typeof field === "string" ? field : JSON.stringify(field)}`).join("\n");
@@ -77,7 +85,9 @@ export function readableSnapshot(edit: BookEdit, side: "before" | "after"): stri
 }
 
 /** The change history of one element, newest first, with comparison and restore. */
-export function EditHistory({ book, target, label, onRefresh }: { book: BookProject; target: EditTarget; label: string; onRefresh: () => Promise<void> }) {
+export function EditHistory({ book, target, label, onRefresh, onRestore }: { book: BookProject; target: EditTarget; label: string; onRefresh: () => Promise<void>;
+  /** Replaces the generic restore (agent profiles go through their own save rules). */
+  onRestore?: (edit: BookEdit) => Promise<void> }) {
   const edits = (book.edits ?? []).filter(e => e.target.kind === target.kind && e.target.id === target.id).reverse();
   const [open, setOpen] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -88,7 +98,10 @@ export function EditHistory({ book, target, label, onRefresh }: { book: BookProj
   async function restore(edit: BookEdit) {
     if (!window.confirm(`Ripristinare «${label}» com'era prima di questa modifica? La versione attuale resta nella cronologia e potrai tornarci.`)) return;
     setBusy(true); setMessage("");
-    try { await restoreEdit(book.id, edit.id, target.kind === "structure" ? undefined : editBase(book, target, label)); await onRefresh(); if (mounted.current) setMessage("Versione precedente ripristinata (registrata come nuova modifica, senza review)."); }
+    try {
+      if (onRestore) await onRestore(edit); else await restoreEdit(book.id, edit.id, target.kind === "structure" ? undefined : editBase(book, target, label));
+      await onRefresh(); if (mounted.current) setMessage("Versione precedente ripristinata (registrata come nuova modifica, senza review).");
+    }
     catch (error) { await onRefresh().catch(() => undefined); if (mounted.current) setMessage(errorText(error, "Ripristino non riuscito.")); }
     finally { if (mounted.current) setBusy(false); }
   }
@@ -99,7 +112,7 @@ export function EditHistory({ book, target, label, onRefresh }: { book: BookProj
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={edit.origin === "ai" ? "violet" : "sky"}>{edit.origin === "ai" ? "AI" : "Manuale"}</Badge>
           <Badge>{CHANGE_KIND_LABELS[edit.changeKind]}</Badge>
-          <Badge tone={REVIEW_STATE_TONES[edit.reviewState]}>{REVIEW_STATE_LABELS[edit.reviewState]}</Badge>
+          {edit.target.kind !== "profiles" && <Badge tone={REVIEW_STATE_TONES[edit.reviewState]}>{REVIEW_STATE_LABELS[edit.reviewState]}</Badge>}
           <span className="muted text-xs">{new Date(edit.at).toLocaleString("it-IT")} · {edit.field.replace(/\+/g, ", ")}</span>
         </div>
         {edit.prompt && <p className="muted mt-1 text-xs [overflow-wrap:anywhere]">«{edit.prompt.slice(0, 300)}»</p>}
@@ -109,7 +122,7 @@ export function EditHistory({ book, target, label, onRefresh }: { book: BookProj
           {!edit.pruned && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void restore(edit)}><RotateCcw size={14}/><span className="text-xs">Ripristina com'era prima</span></Button>}
           {edit.pruned && <span className="muted text-xs">Copie non più conservate (storico lungo).</span>}
         </div>
-        {open === edit.id && <div className="mt-2"><DiffView before={readableSnapshot(edit, "before")} after={readableSnapshot(edit, "after")} serif={edit.target.kind === "scene"}/></div>}
+        {open === edit.id && <div className="mt-2"><DiffView before={readableSnapshot(edit, "before")} after={readableSnapshot(edit, "after")} serif={edit.target.kind === "scene" && !edit.field.startsWith(SCENE_META_FIELD)}/></div>}
       </li>)}
     </ol>
     {message && <p role="status" className="px-3 pb-3 text-sm">{message}</p>}

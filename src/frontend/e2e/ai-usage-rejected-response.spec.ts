@@ -29,6 +29,7 @@ test("usage noto e " + caseName + ": ledger conservato senza canone (desktop/mob
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Il ledger del romanzo");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara incontra un guardiano davanti al portone del castello.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(async()=>new Promise<void>((resolve,reject)=>{
     const opened=indexedDB.open("bookwriter");

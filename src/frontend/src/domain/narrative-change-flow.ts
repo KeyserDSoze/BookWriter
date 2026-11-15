@@ -2,7 +2,8 @@ import type { BookProject, Chapter, Scene } from "./types";
 import { archiveEditorialRound, type EditorialRound } from "./editorial-board";
 import { markDownstreamContinuity } from "./cross-chapter-continuity";
 import { synopsisBeforeChapter } from "./editorial-summary";
-import { pruneChangeOperations, replaceEntitySheet, replaceEventSheet, sceneSnapshots,
+import { parseKnowledge } from "./knowledge";
+import { chapterTextStamp, pruneChangeOperations, replaceEntitySheet, replaceEventSheet, replaceTimelineSheet, sceneSnapshots,
   type ChangePlan, type NarrativeChangeOperation } from "./narrative-change";
 
 /** Judged rounds of a discarded active review stay in the chapter history. */
@@ -47,6 +48,21 @@ export function reopenForRewrite(book: BookProject, sceneIds: readonly string[],
   }
 }
 
+/** Remember how the chapters about to be reopened were validated (first capture wins):
+ * a revert that brings back exactly the same text can restore that validation. */
+export function captureFreezeState(book: BookProject, op: NarrativeChangeOperation, sceneIds: readonly string[]): void {
+  const captured = new Set((op.before.chapters ?? []).map(c => c.chapterId));
+  const chapters = [...new Set(sceneIds.map(id => chapterOf(book, id)).filter((c): c is Chapter => !!c))];
+  const next = [...(op.before.chapters ?? [])];
+  for (const chapter of chapters) {
+    if (captured.has(chapter.id) || next.length >= 60) continue;
+    next.push({ chapterId: chapter.id, textStamp: chapterTextStamp(chapter), hadRecheck: !!chapter.continuityRecheck,
+      ...(chapter.frozenAt ? { frozenAt: chapter.frozenAt } : {}), ...(chapter.summary !== undefined ? { summary: chapter.summary.slice(0, 6000) } : {}),
+      ...(chapter.bookSummaryAtFreeze !== undefined ? { bookSummaryAtFreeze: chapter.bookSummaryAtFreeze.slice(0, 9000) } : {}) });
+  }
+  op.before = { ...op.before, chapters: next };
+}
+
 /** Effects of an accepted plan: new sheet version, scenes to rewrite, reopened board. */
 export function applyChangePlan(book: BookProject, op: NarrativeChangeOperation, now: string): void {
   const plan = op.plan;
@@ -56,11 +72,30 @@ export function applyChangePlan(book: BookProject, op: NarrativeChangeOperation,
       book.knowledge = replaceEntitySheet(book.knowledge, op.target.id, plan.proposal.entity, now, "Modifica dell'autore: " + op.instruction);
     if (op.target.kind === "event" && plan.proposal.event)
       book.knowledge = replaceEventSheet(book.knowledge, op.target.id, plan.proposal.event, now, "Modifica dell'autore: " + op.instruction);
+    if (op.target.kind === "timeline" && plan.proposal.timeline)
+      book.knowledge = replaceTimelineSheet(book.knowledge, op.target.id, plan.proposal.timeline);
+  }
+  if (op.target.kind === "chapter" && plan.proposal?.chapter) {
+    const chapter = book.chapters.find(c => c.id === op.target.id);
+    if (!chapter) throw new Error("Il capitolo da modificare non esiste più.");
+    if (plan.proposal.chapter.title) chapter.title = plan.proposal.chapter.title.trim();
+    if (plan.proposal.chapter.purpose !== undefined) chapter.purpose = plan.proposal.chapter.purpose;
+  }
+  const reopened = [...(op.target.kind === "scene" ? [op.target.id] : []), ...plan.rewriteSceneIds];
+  captureFreezeState(book, op, reopened);
+  // Confirm mode on a scene: the rewritten text was kept aside until now.
+  if (op.target.kind === "scene" && op.draftText !== undefined) {
+    const scene = book.chapters.flatMap(c => c.scenes).find(s => s.id === op.target.id);
+    const previous = op.before.scenes.find(s => s.sceneId === op.target.id);
+    if (!scene || !previous || scene.text !== previous.text) throw new Error("La scena è cambiata dopo la proposta: annulla la modifica e richiedila di nuovo.");
+    scene.text = op.draftText;
+    if (plan.proposal?.sceneSummary) { scene.summary = plan.proposal.sceneSummary; delete scene.summaryStale; }
+    else if (scene.summary !== undefined) scene.summaryStale = true;
+    delete op.draftText;
   }
   book.revision.affectedSceneIds = [...plan.rewriteSceneIds];
   book.revision.cursor = 0;
   book.revision.impactAnalysis = plan.rationale.trim() || "Piano della modifica senza motivazione.";
-  const reopened = [...(op.target.kind === "scene" ? [op.target.id] : []), ...plan.rewriteSceneIds];
   reopenForRewrite(book, reopened, plan.changeKind === "style" ? "single" : "downstream");
   op.state = plan.rewriteSceneIds.length ? "rewriting" : "reviewing";
   op.updatedAt = now;
@@ -70,13 +105,26 @@ function chaptersTouched(book: BookProject, op: NarrativeChangeOperation): Chapt
   const ids = new Set([...(op.plan?.rewriteSceneIds ?? []), ...(op.target.kind === "scene" ? [op.target.id] : [])]);
   return book.chapters.filter(ch => ch.scenes.some(s => ids.has(s.id)));
 }
+function sheetJsonOf(book: BookProject, op: NarrativeChangeOperation): string | undefined {
+  if (op.target.kind === "chapter") {
+    const chapter = book.chapters.find(c => c.id === op.target.id);
+    return chapter ? JSON.stringify({ title: chapter.title, purpose: chapter.purpose }) : undefined;
+  }
+  if (op.target.kind === "timeline") {
+    const timeline = book.knowledge?.timelines.find(t => t.id === op.target.id);
+    return timeline ? JSON.stringify(timeline) : undefined;
+  }
+  return undefined;
+}
 function captureAfter(book: BookProject, op: NarrativeChangeOperation): void {
   const ids = op.before.scenes.map(s => s.sceneId);
+  const sheetJson = sheetJsonOf(book, op);
   op.after = {
     scenes: sceneSnapshots(book, ids).map(s => ({ sceneId: s.sceneId, text: s.text })),
     memoryJson: JSON.stringify(book.memory),
     ...(op.target.kind === "entity" ? { entityVersion: book.knowledge?.entities.find(e => e.id === op.target.id)?.version } : {}),
     ...(op.target.kind === "event" ? { eventVersion: book.knowledge?.events.find(e => e.id === op.target.id)?.version } : {}),
+    ...(sheetJson !== undefined ? { sheetJson: sheetJson.slice(0, 40_000) } : {}),
   };
 }
 /** Called when the revision phase ends (after book.revision is cleared): rewrites done, reviews may still run. */
@@ -113,7 +161,36 @@ export function revertProblem(book: BookProject, op: NarrativeChangeOperation): 
   if (op.target.kind === "event" && op.after.eventVersion !== undefined &&
       book.knowledge?.events.find(e => e.id === op.target.id)?.version !== op.after.eventVersion)
     return "L'evento è stato modificato di nuovo dopo questa operazione.";
+  if ((op.target.kind === "chapter" || op.target.kind === "timeline") && op.after.sheetJson !== undefined && sheetJsonOf(book, op) !== op.after.sheetJson)
+    return op.target.kind === "chapter" ? "Titolo o scopo del capitolo sono cambiati dopo questa operazione." : "La timeline è stata modificata di nuovo dopo questa operazione.";
   return undefined;
+}
+/** Chapters whose text is back to exactly what was validated get that validation back.
+ * Downstream changes qualify only when every later written chapter is restored too. */
+function restoreFreezes(book: BookProject, op: NarrativeChangeOperation, rewritten: readonly string[]): boolean {
+  const snapshots = op.before.chapters ?? [];
+  const touched = [...new Set(rewritten.map(id => chapterOf(book, id)).filter((c): c is Chapter => !!c))].sort((a, b) => a.number - b.number);
+  if (!touched.length || !snapshots.length) return false;
+  const byId = new Map(snapshots.map(s => [s.chapterId, s] as const));
+  const exact = (chapter: Chapter) => { const snap = byId.get(chapter.id); return !!snap?.frozenAt && snap.textStamp === chapterTextStamp(chapter); };
+  const earliest = touched[0]!;
+  const scope = op.plan?.changeKind === "style" ? touched : book.chapters.filter(c => c.number >= earliest.number && c.scenes.some(s => s.text.trim()));
+  if (!scope.every(exact)) return false;
+  const cycle = book.editorialCycle && book.chapters.find(c => c.id === book.editorialCycle!.chapterId);
+  if (cycle && cycle.number >= earliest.number) {
+    archiveJudgedRounds(book);
+    book.editorialCycle = undefined;
+    if (book.phase === "chapterReview") book.phase = "prose";
+  }
+  for (const chapter of scope) {
+    const snap = byId.get(chapter.id)!;
+    chapter.frozenAt = snap.frozenAt; chapter.summary = snap.summary; chapter.bookSummaryAtFreeze = snap.bookSummaryAtFreeze;
+    delete chapter.summaryStale; delete chapter.reviewStale;
+    if (!snap.hadRecheck && chapter.continuityRecheck?.trigger === "retroactive_revision") delete chapter.continuityRecheck;
+  }
+  const lastFrozen = [...book.chapters].filter(c => c.frozenAt).sort((a, b) => b.number - a.number)[0];
+  if (lastFrozen && scope.includes(lastFrozen) && lastFrozen.bookSummaryAtFreeze !== undefined) book.bookSummary = lastFrozen.bookSummaryAtFreeze;
+  return true;
 }
 /** Restore scenes, sheet and (when untouched since) memory; the board re-checks the result. */
 export function revertChange(book: BookProject, op: NarrativeChangeOperation, now: string): void {
@@ -140,8 +217,18 @@ export function revertChange(book: BookProject, op: NarrativeChangeOperation, no
     const current = book.knowledge.events[index];
     if (current) book.knowledge.events[index] = { ...op.before.event, version: current.version + 1, updatedAt: now, history: current.history };
   }
+  if (book.knowledge && op.target.kind === "timeline" && op.before.timeline) {
+    const known = new Set(book.knowledge.entities.map(e => e.id));
+    const restored = { ...op.before.timeline, subjectIds: (op.before.timeline.subjectIds ?? []).filter(id => known.has(id)) };
+    if (!restored.subjectIds.length) delete (restored as { subjectIds?: string[] }).subjectIds;
+    book.knowledge = parseKnowledge({ ...book.knowledge, timelines: book.knowledge.timelines.map(t => t.id === op.target.id ? restored : t) });
+  }
+  if (op.target.kind === "chapter" && op.before.chapter) {
+    const chapter = book.chapters.find(c => c.id === op.target.id);
+    if (chapter) { chapter.title = op.before.chapter.title; chapter.purpose = op.before.chapter.purpose; }
+  }
   const rewritten = op.before.scenes.map(s => s.sceneId);
-  reopenForRewrite(book, rewritten, op.plan?.changeKind === "style" ? "single" : "downstream");
+  if (!restoreFreezes(book, op, rewritten)) reopenForRewrite(book, rewritten, op.plan?.changeKind === "style" ? "single" : "downstream");
   op.state = "reverted"; op.revertedAt = now; op.updatedAt = now;
 }
 

@@ -2,7 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { z } from "zod";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import type { SceneMergeDraft } from "../domain/scene-merge";
-import { MAX_EDITORIAL_REPORTS, narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema, knowledgeReviewSchema, informationTransferReviewSchema, authorTransferCritiqueSchema, recommendationReconciliationSchema } from "../domain/editorial-board";
+import { MAX_EDITORIAL_REPORTS, narrativeConflictSchema, priorSceneConflictSchema, narrativeReviewSchema, knowledgeReviewSchema, informationTransferReviewSchema, authorTransferCritiqueSchema, recommendationReconciliationSchema, ruleChecksSchema } from "../domain/editorial-board";
 import { editorialProfilesSchema, profileSnapshotFields, refineProfileSnapshot } from "../domain/editorial-profiles";
 import { knowledgeBaseSchema } from "../domain/knowledge";
 import { changeOperationSchema, MAX_CHANGE_OPERATIONS } from "../domain/narrative-change";
@@ -10,6 +10,7 @@ import { researchLogSchema, webResearchSettingsSchema } from "../domain/web-rese
 import { bookEditSchema, MAX_EDITS, reviewStaleSchema } from "../domain/book-edits";
 import { manualReviewSchema, MAX_REVIEWS } from "../domain/manual-review";
 import { interruptImportedReviews } from "../domain/manual-review-flow";
+import { BOOK_FORMAT_VERSION, migrateBook, NewerBookFormatError } from "../domain/book-format";
 import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "./ai";
@@ -113,6 +114,7 @@ const archivedReportSchema = z.object({
   profileStamp: z.string().regex(/^\d+:[a-f0-9]{8}$/).optional(),
 }).passthrough();
 const archivedJudgmentSchema = z.object({
+  ruleChecks: ruleChecksSchema.optional(),
   authorTransferCritique:authorTransferCritiqueSchema.optional(),
   recommendationReconciliations:z.array(recommendationReconciliationSchema).max(6).optional(),
   decisions: z.array(z.object({
@@ -126,6 +128,7 @@ const archivedRoundSchema = z.object({
   reports: z.array(archivedReportSchema).max(MAX_EDITORIAL_REPORTS),
   judgment: archivedJudgmentSchema,
 }).passthrough().superRefine(refineProfileSnapshot);
+const MAX_ARCHIVED_ROUNDS = 300;
 const archivedCycleSchema = z.object({
   ...profileSnapshotFields,
   reports: z.array(archivedReportSchema).max(MAX_EDITORIAL_REPORTS),
@@ -144,7 +147,8 @@ const chapterSchema = z.object({
   purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
   continuityRecheck: continuityRecheckSchema.optional(),
   editorialMode: z.literal("light").optional(),
-  editorialRounds: z.array(archivedRoundSchema).max(3).optional(),
+  // Each reopening (Rivaluta, tracked change, edit) archives up to three more rounds.
+  editorialRounds: z.array(archivedRoundSchema).max(MAX_ARCHIVED_ROUNDS).optional(),
   lastContinuityReview: continuityAuditSchema.optional(),
   reviewStale: reviewStaleSchema.optional(), summaryStale: z.boolean().optional(),
 }).passthrough();
@@ -311,6 +315,7 @@ const bookSchema = z.object({
   edits: z.array(bookEditSchema).max(MAX_EDITS).optional(),
   manualReviews: z.array(manualReviewSchema).max(MAX_REVIEWS).optional(),
   authorInterventions: z.array(authorInterventionSchema).max(MAX_AUTHOR_INTERVENTIONS).optional(),
+  formatVersion: z.number().int().min(0).max(BOOK_FORMAT_VERSION).optional(),
   editorialCycle: archivedCycleSchema.optional(),
   editorialRecoveryArchives: z.array(editorialRecoveryArchiveSchema).max(8).optional(),
   // Legacy books omit aiBudget. If present, untrusted ZIPs must not supply
@@ -625,6 +630,12 @@ export async function readBackup(file: File, passphrase?: string): Promise<Backu
   let value: unknown;
   try { value = JSON.parse(strFromU8(textBytes)); }
   catch { throw new Error("Il payload non contiene JSON valido."); }
+  // A book saved by a newer app gets a clear explanation instead of a generic schema error.
+  const books = (value as { books?: unknown })?.books;
+  if (Array.isArray(books)) for (const book of books) {
+    const version = (book as { formatVersion?: unknown } | null)?.formatVersion;
+    if (typeof version === "number" && Number.isSafeInteger(version) && version > BOOK_FORMAT_VERSION) throw new NewerBookFormatError(version);
+  }
   const result = backupSchema.safeParse(value);
   if (!result.success) throw new Error("Schema backup non valido o incompatibile.");
   if (result.data.kind !== manifest.mode) throw new Error("Tipo di backup incoerente.");
@@ -716,8 +727,8 @@ async function importBackupInternal(
       :"Importato da ZIP: verifica endpoint e modelli prima di riprendere.",
     updatedAt: new Date().toISOString(),
   })) as BookProject[];
-  // An archive never resumes a review by itself.
-  for (const book of safeBooks) interruptImportedReviews(book, new Date().toISOString());
+  // An archive never resumes a review by itself; older formats are brought up to date.
+  for (const book of safeBooks) { interruptImportedReviews(book, new Date().toISOString()); migrateBook(book); }
   const safeActivities: Activity[] = data.activities
     .filter(activity => idMap.has(activity.bookId))
     .map(activity => ({

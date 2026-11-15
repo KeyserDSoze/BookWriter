@@ -1,9 +1,10 @@
 import { z } from "zod";
-import type { BookProject } from "./types";
+import type { BookProject, Chapter } from "./types";
 import { contentStamp, currentContent, currentStamp, findScene, pendingElements, type BookEdit, type EditChangeKind, type EditTarget, CHANGE_KINDS } from "./book-edits";
 import { describeEntities, describeEvents } from "./knowledge";
 import { dependentEvents, entityReferences, relevantKnowledge } from "./knowledge-index";
 import { directorInstructions, writerInstructions, writerRules } from "./editorial-profiles";
+import { chapterSegments, createEditorialCycle, cycleRoles } from "./editorial-board";
 
 /** A review the AUTHOR asked for after editing. It never starts by itself.
  * Check: reads and reports, never changes the book. Propose: also prepares
@@ -27,6 +28,14 @@ export const REVIEW_MODE_LABELS: Record<ReviewMode, { label: string; hint: strin
 export const MAX_REVIEW_UNITS = 400;
 export const MAX_REVIEWS = 30;
 export const MAX_SCENE_CHARS_FOR_CHECK = 60_000;
+/** Who reads a full review: the single verifier (one call per scene) or the whole editorial
+ * board, which reopens the reviewed chapters and freezes them again one by one. */
+export const REVIEW_ENGINES = ["verifier", "board"] as const;
+export type ReviewEngine = typeof REVIEW_ENGINES[number];
+export const REVIEW_ENGINE_LABELS: Record<ReviewEngine, { label: string; hint: string }> = {
+  verifier: { label: "Verificatore", hint: "Una chiamata per scena: controllo rapido con checklist e direttore." },
+  board: { label: "Redazione completa", hint: "Specialisti, lettori e direttore rileggono ogni capitolo dal primo revisionato; possono correggere il testo." },
+};
 const iso = z.string().max(40).refine(value => Number.isFinite(Date.parse(value)));
 const id = z.string().min(1).max(200);
 const unitSchema = z.object({
@@ -53,6 +62,8 @@ const proposalSchema = z.object({
 }).strict();
 export const manualReviewSchema = z.object({
   id: z.string().uuid(), createdAt: iso, scope: z.enum(REVIEW_SCOPES), mode: z.enum(REVIEW_MODES),
+  /** Absent: the verifier (reviews created before 0.22). */
+  engine: z.enum(REVIEW_ENGINES).optional(),
   targets: z.array(z.object({ kind: z.enum(["scene", "chapter", "entity", "event", "timeline", "structure", "profiles"]), id,
     /** Content stamp when the author asked: what the review is about. */
     stamp: z.string().max(40) }).strict()).max(200),
@@ -122,6 +133,13 @@ export function dependencyUnits(book: BookProject, targets: readonly EditTarget[
   }
   return out.slice(0, 60);
 }
+/** A structural edit is checked on what it touched: the moved or added scenes and their chapters. */
+function structureUnits(book: BookProject): ReviewUnit[] {
+  const related = new Set((pendingElements(book).find(p => p.target.kind === "structure")?.edits ?? []).flatMap(e => e.related));
+  const units = [...book.chapters.filter(c => related.has(c.id)).map(c => unitFor(book, "chapter", c.id, true)),
+    ...[...related].filter(id => findScene(book, id)).map(id => unitFor(book, "scene", id, true))];
+  return units.filter((u): u is ReviewUnit => !!u);
+}
 /** The units a review will check, in book order: edited elements first. */
 export function buildReviewUnits(book: BookProject, scope: ReviewScope, targets: readonly EditTarget[]): ReviewUnit[] {
   const units: ReviewUnit[] = [];
@@ -129,6 +147,7 @@ export function buildReviewUnits(book: BookProject, scope: ReviewScope, targets:
   for (const target of targets) {
     if (target.kind === "scene" || target.kind === "entity" || target.kind === "event" || target.kind === "chapter") push(unitFor(book, target.kind, target.id, true));
     else if (target.kind === "timeline") for (const event of book.knowledge?.events.filter(e => e.timelineIds.includes(target.id)) ?? []) push(unitFor(book, "event", event.id, true));
+    else if (target.kind === "structure") for (const unit of structureUnits(book)) push(unit);
   }
   if (scope === "extended") for (const unit of dependencyUnits(book, targets)) push(unit);
   if (scope === "full") for (const { scene } of writtenScenes(book)) push(unitFor(book, "scene", scene.id, false));
@@ -139,6 +158,28 @@ export function buildReviewUnits(book: BookProject, scope: ReviewScope, targets:
 export function estimateReviewCalls(book: BookProject, scope: ReviewScope, targets: readonly EditTarget[]): number {
   if (scope === "impact") return 1;
   try { return buildReviewUnits(book, scope, targets).length; } catch { return MAX_REVIEW_UNITS + 1; }
+}
+/** Chapters a board review rereads: from the first frozen chapter, every chapter whose scenes are
+ * all canon (a chapter still being written is reviewed by the board when the writing ends). */
+export function boardReviewChapters(book: BookProject): Chapter[] {
+  const sorted = [...book.chapters].sort((a, b) => a.number - b.number);
+  const first = sorted.find(c => c.frozenAt);
+  if (!first) return [];
+  return sorted.filter(c => c.number >= first.number && c.scenes.length > 0 && c.scenes.every(s => s.status === "canon" && s.text.trim()));
+}
+/** One unit per chapter the board rereads: its progress is the chapter frozen again. */
+export function boardReviewUnits(book: BookProject): ReviewUnit[] {
+  return boardReviewChapters(book).map(c => unitFor(book, "chapter", c.id, false)).filter((u): u is ReviewUnit => !!u);
+}
+/** Calls of one board pass (reviewers × segments, judge, synopsis): a floor, before corrections and new rounds. */
+export function estimateBoardCalls(book: BookProject): number {
+  let calls = 0;
+  for (const chapter of boardReviewChapters(book)) {
+    let segments = 1, roles = 12;
+    try { segments = chapterSegments(chapter).length; roles = cycleRoles(book, createEditorialCycle(chapter.id, book)).length; } catch { /* estimate only */ }
+    calls += segments * roles + 1 + segments;
+  }
+  return calls;
 }
 
 /* ---------------------------------- prompts --------------------------------- */

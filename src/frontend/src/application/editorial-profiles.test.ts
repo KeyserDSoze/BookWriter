@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { profileBook } from "../domain/__fixtures__/editorial-profiles";
 import { createEditorialCycle } from "../domain/editorial-board";
-import { bumpProfileVersions } from "../domain/editorial-profiles";
+import { BASE_READER_ROLES, bumpProfileVersions, withStandardReaders } from "../domain/editorial-profiles";
 import { saveEditorialProfiles } from "./editorial-profiles";
 import { getBook, getDb, listActivities, saveBook } from "../infrastructure/db";
 
@@ -77,5 +77,39 @@ describe("Salvataggio autore dei profili", () => {
     book.phase = "prose"; await saveBook(book, false);
     await saveEditorialProfiles(book.id, book.updatedAt, undefined, true);
     expect((await getBook(book.id))!.editorialProfiles).toBeUndefined();
+  });
+});
+
+describe("Profili nel registro delle modifiche e lettori standard", () => {
+  it("ogni salvataggio che cambia qualcosa è una modifica confrontabile e ripristinabile; nessuna voce se nulla cambia", async () => {
+    const book = profileBook(); await saveBook(book, false);
+    const original = structuredClone(book.editorialProfiles!);
+    const draft = structuredClone(original);
+    draft.director = { instructions: "Privilegia il ritmo e respingi i rilievi di puro gusto personale." };
+    await saveEditorialProfiles(book.id, book.updatedAt, draft, true);
+    let saved = (await getBook(book.id))!;
+    expect(saved.edits).toHaveLength(1);
+    expect(saved.edits![0]).toMatchObject({ target: { kind: "profiles", id: "book" }, field: "profili", origin: "manual", changeKind: "behavior" });
+    expect(JSON.parse(saved.edits![0]!.before!)).toEqual(original);
+    expect(JSON.parse(saved.edits![0]!.after!).director.instructions).toContain("ritmo");
+    await saveEditorialProfiles(book.id, saved.updatedAt, saved.editorialProfiles, true);
+    saved = (await getBook(book.id))!;
+    expect(saved.edits).toHaveLength(1);
+    await saveEditorialProfiles(book.id, saved.updatedAt, JSON.parse(saved.edits![0]!.before!), true, () => true, { restoredEditId: saved.edits![0]!.id });
+    saved = (await getBook(book.id))!;
+    expect(saved.editorialProfiles!.director).toBeUndefined();
+    expect(saved.edits!.at(-1)).toMatchObject({ field: "ripristino" });
+    expect((await listActivities(book.id)).map(a => a.title)).toContain("Profili editoriali ripristinati");
+  });
+  it("i cinque lettori standard non si perdono: se mancano tornano disattivati al salvataggio", async () => {
+    const book = profileBook(); await saveBook(book, false);
+    const draft = structuredClone(book.editorialProfiles!);
+    draft.readers = draft.readers.filter(p => p.role !== "readerSkeptic");
+    expect(withStandardReaders(draft).readers.find(p => p.role === "readerSkeptic")).toMatchObject({ enabled: false, name: "Lettore critico e scettico" });
+    expect(withStandardReaders(book.editorialProfiles!)).toBe(book.editorialProfiles);
+    await saveEditorialProfiles(book.id, book.updatedAt, draft, true);
+    const readers = (await getBook(book.id))!.editorialProfiles!.readers;
+    expect(BASE_READER_ROLES.every(role => readers.some(p => p.role === role))).toBe(true);
+    expect(readers.find(p => p.role === "readerSkeptic")!.enabled).toBe(false);
   });
 });

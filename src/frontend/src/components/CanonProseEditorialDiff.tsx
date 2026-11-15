@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
 import { loadTaskProseCheckpoint } from "../infrastructure/task-prose-checkpoint";
+import { Button } from "./ui/button";
 import {
   diffProseParagraphs, selectCanonSceneText,
   type CanonSceneIdentity,
@@ -84,25 +85,24 @@ export function CanonProseEditorialDiff({ checkpoint }: Props) {
           </button>;
         })}
       </div>
-      {visible<changed.length&&<button type="button"
-        className="rounded-lg border border-slate-400 px-3 py-2 text-xs"
+      {visible<changed.length&&<Button type="button" size="sm" variant="outline" className="h-auto py-1.5"
         onClick={()=>setVisible(x=>Math.min(x+PAGE_SIZE,changed.length))}>
-        Mostra altre scene cambiate ({changed.length-visible} rimanenti)
-      </button>}
+        <span className="text-xs">Mostra altre scene cambiate ({changed.length-visible} rimanenti)</span>
+      </Button>}
       {selected&&<div className="space-y-2 rounded-lg border border-slate-400/40 p-2"
         aria-label="Scena selezionata per il confronto">
         <p className="text-xs">Scena selezionata: capitolo {selected.chapterId},
           scena {selected.sceneId}. Anteprima privata {reveal?"visibile":"nascosta"}.</p>
-        {picked?.kind==="ready"&&<button type="button"
+        {picked?.kind==="ready"&&<Button type="button" size="sm" variant="outline"
           disabled={revealing}
-          className="rounded-lg border border-amber-600 px-3 py-2 text-xs disabled:opacity-40"
+          className="h-auto border-amber-600 py-1.5 dark:border-amber-600"
           onClick={()=>{
             if(reveal){revealFence.current.invalidate();setReveal(false);}
             else void requestReveal();
           }}>
-          {reveal?"Nascondi anteprima privata":
-            revealing?"Verifica consenso in corso":"Mostra anteprima privata dei paragrafi"}
-        </button>}
+          <span className="text-xs">{reveal?"Nascondi anteprima privata":
+            revealing?"Verifica consenso in corso":"Mostra anteprima privata dei paragrafi"}</span>
+        </Button>}
         {revealError&&<p role="status" className="text-xs">{revealError}</p>}
         {picked?.kind==="unavailable"&&<p className="text-xs" role="status">
           Scena non disponibile o non modificata nel checkpoint locale.</p>}

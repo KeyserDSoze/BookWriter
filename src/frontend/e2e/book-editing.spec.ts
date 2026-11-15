@@ -117,6 +117,45 @@ test("review mirata di solo controllo: la esegue l'autopilot, poi il libro torna
   expect(await noOverflow(page)).toBe(true);
 });
 
+test("review di una parte delle modifiche: le escluse restano da rivedere; la redazione completa si sceglie a parte", async ({ page }) => {
+  test.setTimeout(90_000);
+  const seen: string[] = [];
+  await provider(page, system => system.includes("verificatore editoriale") ? pass : undefined, seen);
+  await seed(page);
+  await page.evaluate(async () => {
+    const { getDb, saveBook } = await import("/src/infrastructure/db.ts");
+    const { editScene } = await import("/src/domain/book-editing.ts");
+    const book = (await (await getDb()).getAll("books"))[0];
+    editScene(book, "scene:002:001", { text: "Markus aspetta sul molo al tramonto. Dice di conoscere il Consiglio cittadino." }, { now: "2026-11-14T10:00:00.000Z", origin: "manual" });
+    editScene(book, "scene:002:001", { text: "Markus aspetta sul molo al tramonto, nervoso. Dice di conoscere il Consiglio cittadino." }, { now: "2026-11-14T11:00:00.000Z", origin: "manual" });
+    await saveBook(book, false);
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Revisioni: 1 da rivedere" }).click();
+  const list = page.getByRole("list", { name: "Elenco delle modifiche da rivedere" });
+  await list.getByRole("checkbox", { name: "Seleziona scena «Cap. 2 · 1. Il molo»" }).check();
+  await list.getByRole("group", { name: /Quali modifiche rivedere \(2 di 2\)/ }).getByRole("checkbox").nth(1).uncheck();
+  await expect(list.getByRole("group", { name: /Quali modifiche rivedere \(1 di 2\)/ })).toBeVisible();
+  const actions = page.getByRole("region", { name: "Scegli la review" });
+  await expect(actions.getByText(/Alcune modifiche degli elementi scelti sono escluse/)).toBeVisible();
+  await actions.getByRole("radio", { name: /Review mirata/ }).click();
+  await actions.getByRole("radio", { name: /Solo controllo/ }).click();
+  await actions.getByRole("button", { name: "Avvia la review" }).click();
+  await expect.poll(async () => (await stored(page)).manualReviews?.[0]?.status, { timeout: 60_000 }).toBe("completed");
+  const book = await stored(page);
+  expect(book.edits.map((e: { reviewState: string }) => e.reviewState)).toEqual(["review_passed", "modified_unreviewed"]);
+  expect(seen.filter(s => s.includes("verificatore editoriale"))).toHaveLength(1);
+  // The change left out is still waiting for the author.
+  await expect(list.getByRole("checkbox", { name: "Seleziona scena «Cap. 2 · 1. Il molo»" })).toBeVisible();
+  // The whole board is an explicit choice of the full review, with its own estimate and no «Come».
+  await actions.getByRole("radio", { name: /Review completa/ }).click();
+  await actions.getByRole("radio", { name: /Redazione completa/ }).click();
+  await expect(actions.getByText(/Stima: almeno \d+ chiamate AI per 2 capitoli/)).toBeVisible();
+  await expect(actions.getByRole("radiogroup", { name: "Modalità della review" })).toHaveCount(0);
+  expect((await stored(page)).manualReviews).toHaveLength(1);
+  expect(await noOverflow(page)).toBe(true);
+});
+
 test("modifica solo questo con l'AI su una scheda, poi review con proposta di correzione approvata dall'autore", async ({ page }) => {
   test.setTimeout(120_000);
   await provider(page, (system, prompt) => {
@@ -161,6 +200,51 @@ test("modifica solo questo con l'AI su una scheda, poi review con proposta di co
   book = await stored(page);
   expect(book.chapters[1].scenes[0].text).toContain("Esita prima di nominare");
   expect(book.edits.at(-1)).toMatchObject({ origin: "ai", target: { kind: "scene", id: "scene:002:001" }, reviewState: "modified_unreviewed" });
+  expect(await noOverflow(page)).toBe(true);
+});
+
+test("riscrivi la selezione con l'AI: confronto, solo il passaggio scelto cambia, poi review con la scena già scelta", async ({ page }) => {
+  test.setTimeout(90_000);
+  const prompts: string[] = [];
+  await provider(page, (system, prompt) => {
+    if (!system.includes("Sei il romanziere e l'editor di questo libro") || !prompt.includes("[[INIZIO SELEZIONE]]")) return undefined;
+    prompts.push(prompt);
+    return "Esita, poi sussurra il nome del Consiglio cittadino.";
+  });
+  await seed(page);
+  await nav(page).getByRole("button", { name: "Libro", exact: true }).click();
+  await page.getByRole("button", { name: "Cap. 2", exact: true }).click();
+  await page.getByRole("button", { name: "Modifica la scena 1. Il molo" }).click();
+  const editor = page.getByRole("form", { name: "Modifica di Cap. 2 · 1. Il molo" });
+  const text = editor.getByLabel("Testo della scena");
+  // Select the second sentence; the last character comes from a real keystroke, as an author would do.
+  await text.evaluate((el: HTMLTextAreaElement) => { el.focus(); el.setSelectionRange(el.value.indexOf("Dice"), el.value.length - 1); });
+  await text.press("Shift+ArrowRight");
+  await expect(editor.getByText(/selezionati 41 caratteri/)).toBeVisible();
+  await editor.getByRole("button", { name: "Riscrivi la selezione con l'AI" }).click();
+  await expect(editor.getByText("Passaggio selezionato:")).toBeVisible();
+  await editor.getByLabel("Richiesta di modifica per «la selezione»").fill("Rendi Markus esitante quando nomina il Consiglio.");
+  await editor.getByRole("button", { name: "Proponi la modifica" }).click();
+  const proposal = editor.getByRole("list", { name: "Modifiche proposte dall'AI" });
+  await expect(proposal.locator("ins", { hasText: "sussurra" })).toBeVisible();
+  await expect(proposal.locator("del", { hasText: "Dice" })).toBeVisible();
+  expect(prompts).toHaveLength(1);
+  expect(prompts[0]).toContain("Markus aspetta sul molo. [[INIZIO SELEZIONE]]Dice di conoscere il Consiglio cittadino.[[FINE SELEZIONE]]");
+  // Nothing changes until the author applies the proposal.
+  expect((await stored(page)).chapters[1].scenes[0].text).toBe("Markus aspetta sul molo. Dice di conoscere il Consiglio cittadino.");
+  await proposal.getByRole("button", { name: "Applica questa modifica" }).click();
+  await expect(editor.getByText(/Passaggio riscritto con l'AI/)).toBeVisible();
+  const book = await stored(page);
+  expect(book.chapters[1].scenes[0].text).toBe("Markus aspetta sul molo. Esita, poi sussurra il nome del Consiglio cittadino.");
+  expect(book.edits.at(-1)).toMatchObject({ origin: "ai", target: { kind: "scene", id: "scene:002:001" }, reviewState: "modified_unreviewed" });
+  expect(book.manualReviews).toBeUndefined();
+  expect(await noOverflow(page)).toBe(true);
+  // From the editor straight to the reviews, with this scene already chosen: no review starts by itself.
+  await editor.getByRole("button", { name: "Scegli se e come rivederla" }).click();
+  await expect(page).toHaveURL(/#\/revisioni/);
+  await expect(page.getByRole("checkbox", { name: "Seleziona scena «Cap. 2 · 1. Il molo»" })).toBeChecked();
+  await expect(page.getByText("Selezionati 1 elemento: scegli il tipo di review qui sotto.")).toBeVisible();
+  expect((await stored(page)).manualReviews).toBeUndefined();
   expect(await noOverflow(page)).toBe(true);
 });
 

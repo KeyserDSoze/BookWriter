@@ -56,13 +56,19 @@ export async function requestNarrativeChange(bookId: string, target: ChangeTarge
     nextStep: "Analisi dell'impatto, riscrittura mirata e nuova revisione dei capitoli toccati.", summary: text.slice(0, 340),
   }, (book, now) => {
     assertChangeAllowed(book);
-    if (target.kind !== "scene") {
-      if (!book.knowledge || book.knowledge.pending) throw new Error("Le schede del libro non sono ancora state generate.");
-      const exists = target.kind === "entity" ? book.knowledge.entities.some(e => e.id === target.id) : book.knowledge.events.some(e => e.id === target.id);
-      if (!exists) throw new Error("L'elemento da modificare non esiste più.");
-    } else {
+    if (target.kind === "scene") {
       const scene = book.chapters.flatMap(c => c.scenes).find(s => s.id === target.id);
       if (!scene?.text.trim() || scene.status === "planned") throw new Error("Si possono modificare solo scene già scritte.");
+    } else if (target.kind === "chapter") {
+      const chapter = book.chapters.find(c => c.id === target.id);
+      if (!chapter) throw new Error("Il capitolo da modificare non esiste più.");
+      if (!chapter.scenes.some(s => s.status !== "planned" && s.text.trim())) throw new Error("Il capitolo non ha ancora scene scritte: modifica il piano o lascialo scrivere.");
+    } else {
+      if (!book.knowledge || book.knowledge.pending) throw new Error("Le schede del libro non sono ancora state generate.");
+      const kb = book.knowledge;
+      const exists = target.kind === "entity" ? kb.entities.some(e => e.id === target.id) : target.kind === "event" ? kb.events.some(e => e.id === target.id)
+        : kb.timelines.some(t => t.id === target.id);
+      if (!exists) throw new Error("L'elemento da modificare non esiste più.");
     }
     const label = targetLabel(book, target);
     created = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, target, targetLabel: label.slice(0, 200), instruction: text,
@@ -96,8 +102,9 @@ export async function confirmNarrativeChange(bookId: string, operationId: string
     // A scene already rewritten (comparison pending/awaiting) goes back to its exact previous text.
     for (const snap of op.before.scenes) {
       const scene = book.chapters.flatMap(c => c.scenes).find(s => s.id === snap.sceneId);
-      if (scene && op.target.kind === "scene" && snap.sceneId === op.target.id) { scene.text = snap.text; scene.summary = snap.summary; }
+      if (scene && op.target.kind === "scene" && snap.sceneId === op.target.id && op.draftText === undefined) { scene.text = snap.text; scene.summary = snap.summary; }
     }
+    delete op.draftText;
     op.state = "cancelled"; op.updatedAt = now;
     const before = book.revision!.beforePhase;
     book.revision = undefined;

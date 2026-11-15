@@ -63,6 +63,7 @@ test("redazione contestuale desktop/mobile: prove precedenti solo ai quattro spe
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Continuità critica");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara e Ombra potrebbero essere la stessa persona.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");open.onerror=()=>reject(open.error);

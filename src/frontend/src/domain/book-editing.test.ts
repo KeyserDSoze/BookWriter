@@ -3,12 +3,45 @@ import { knowledgeBook } from "./__fixtures__/knowledge";
 import { createEditorialCycle } from "./editorial-board";
 import { currentStamp, elementReviewState, MAX_EDIT_SNAPSHOT_CHARS, pendingElements, pruneEdits, setReviewState } from "./book-edits";
 import { addEntity, addEvent, assertEditable, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editScene,
-  editStructure, editTimeline, moveEvent, restoreBefore, type EditContext } from "./book-editing";
+  editSceneMetadata, editStructure, editTimeline, moveEvent, restoreBefore, type EditContext } from "./book-editing";
 
 const ctx = (at = "2026-11-14T10:00:00.000Z"): EditContext => ({ now: at, origin: "manual" });
 const scene = (book: ReturnType<typeof knowledgeBook>, id: string) => book.chapters.flatMap(c => c.scenes).find(s => s.id === id)!;
 
 describe("Modifiche manuali: scene e capitoli", () => {
+  it("chi c'è nella scena, punto di vista e data: modifica a s\u00e9, confrontabile e ripristinabile, senza toccare l'impronta del testo", () => {
+    const book = knowledgeBook();
+    const target = { kind: "scene" as const, id: "scene:001:002" };
+    const stamp = currentStamp(book, target);
+    const edit = editSceneMetadata(book, "scene:001:002", { viewpoint: "Elena", date: " inverno 1923 ", characters: ["Elena", "Markus", "elena", " "] }, ctx());
+    expect(edit).toMatchObject({ changeKind: "descriptive", reviewState: "modified_unreviewed", target });
+    expect(edit.field).toBe("metadati: punto di vista+data+personaggi");
+    expect(edit.related).toEqual(expect.arrayContaining(["character:elena", "character:markus"]));
+    expect(scene(book, "scene:001:002")).toMatchObject({ viewpoint: "Elena", date: "inverno 1923", characters: ["Elena", "Markus"] });
+    // The prose stamp is unchanged: old validations of the text are not invalidated by a metadata change.
+    expect(currentStamp(book, target)).toBe(stamp);
+    expect(book.chapters[0]!.reviewStale!.editIds).toContain(edit.id);
+    expect(() => editSceneMetadata(book, "scene:001:002", { viewpoint: "Elena" }, ctx())).toThrow(/Nessuna modifica/);
+    expect(() => editSceneMetadata(book, "scene:001:002", { items: Array.from({ length: 41 }, (_, i) => "Oggetto " + i) }, ctx())).toThrow(/massimo 40/);
+    const restored = restoreBefore(book, edit.id, ctx("2026-11-14T11:00:00.000Z"));
+    expect(restored.field).toMatch(/^metadati/);
+    expect(scene(book, "scene:001:002").viewpoint).toBeUndefined();
+    expect(scene(book, "scene:001:002").date).toBe(JSON.parse(edit.before!).date || undefined);
+  });
+  it("un evento si colloca in un capitolo e nella cronologia della storia, e si ripristina", () => {
+    const book = knowledgeBook();
+    const event = book.knowledge!.events.find(e => e.id === "event:primo-indizio")!;
+    const edit = editEvent(book, event.id, { plannedChapter: 2, storyOrder: 7.5 }, ctx());
+    expect(edit.changeKind).toBe("structural");
+    expect(book.knowledge!.events.find(e => e.id === event.id)).toMatchObject({ plannedChapter: 2, storyOrder: 7.5 });
+    editEvent(book, event.id, { plannedChapter: null }, ctx());
+    expect(book.knowledge!.events.find(e => e.id === event.id)!.plannedChapter).toBeUndefined();
+    expect(() => editEvent(book, event.id, { storyOrder: Number.NaN }, ctx())).toThrow(/cronologia/);
+    expect(() => editEvent(book, event.id, { plannedChapter: 0 }, ctx())).toThrow(/Capitolo previsto/);
+    restoreBefore(book, edit.id, ctx());
+    expect(book.knowledge!.events.find(e => e.id === event.id)).toMatchObject({ storyOrder: event.storyOrder });
+    expect(book.knowledge!.events.find(e => e.id === event.id)!.plannedChapter).toBe(event.plannedChapter);
+  });
   it("salvare non valida: la modifica resta da rivedere, il capitolo congelato resta congelato ma segnato", () => {
     const book = knowledgeBook();
     const edit = editScene(book, "scene:001:002", { text: "Nell'archivio municipale Elena sfoglia il registro con calma e trova una firma cancellata." }, ctx());

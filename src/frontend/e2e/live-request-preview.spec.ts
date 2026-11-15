@@ -150,6 +150,7 @@ test("cancellare le conversazioni durante lo stream svuota il testo già arrivat
   await expect(toast).toContainText("PRIMA_DELLA_CANCELLAZIONE");
   const nav=page.getByRole("navigation",{name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale"});
   await nav.getByRole("button",{name:"Impostazioni"}).click();
+  await page.getByRole("tab",{name:"Conversazioni AI"}).click();
   page.once("dialog",dialog=>void dialog.accept());
   await page.getByRole("button",{name:"Cancella tutte le conversazioni salvate in questo browser"}).click();
   await expect(page.getByText(/Eliminate \d+ conversazioni AI salvate in questo browser/)).toBeVisible();
@@ -180,6 +181,7 @@ test("conservazione impostabile: tempo e numero di task, poi senza scadenza e Gi
   });
   const nav=page.getByRole("navigation",{name:test.info().project.name==="mobile-chromium"?"Navigazione mobile":"Navigazione principale"});
   await nav.getByRole("button",{name:"Impostazioni"}).click();
+  await page.getByRole("tab",{name:"Conversazioni AI"}).click();
   const section=page.locator("section").filter({has:page.getByRole("heading",{name:"Richieste e risposte dell'AI"})});
   await expect(section.getByText(/Il testo che il modello sta scrivendo si vede sempre/)).toBeVisible();
   await expect(section.getByText("Salvate ora: 2 temporanee, 0 senza scadenza.")).toBeVisible();
@@ -197,6 +199,7 @@ test("conservazione impostabile: tempo e numero di task, poi senza scadenza e Gi
   })).toEqual({maxTasks:7,maxMinutes:30});
   await page.reload();
   await nav.getByRole("button",{name:"Impostazioni"}).click();
+  await page.getByRole("tab",{name:"Conversazioni AI"}).click();
   await expect(section.getByLabel("Cancella quelli più vecchi di")).toHaveValue("30");
   await expect(section.getByLabel("Tieni gli ultimi (task)")).toHaveValue("7");
 

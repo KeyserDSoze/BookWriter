@@ -31,6 +31,8 @@ profiles/writers/*.md
 profiles/director/*.md             # linee guida del direttore, se presenti
 profiles/board.md                  # cicli massimi, se meno di tre
 reviews/chapters/NNN-titolo/*.md    # rapporti per tornata (formato 2)
+reviews/manual/AAAA-MM-GG-id.md    # review richieste dall'autore (formato 3)
+history/edits.md                   # registro leggibile delle modifiche (formato 3)
 changes/*.md                       # report leggibili delle modifiche via prompt
 schemas/*.schema.json              # JSON Schema generati (non Markdown)
 research/private/notes.md          # esempio di cartella aggiuntiva
@@ -166,11 +168,17 @@ Investigatrice, cerca il fratello.
 
 Scritto a mano, le liste possono usare anche la forma `  - valore`.
 
-Un evento in `events/*.md` ha `type: event`, `id: event:...`, `title`, `story_order` (posizione nella cronologia della storia), `narration: scene|flashback|foreshadowing|offscreen|backstory`, facoltativi `when` e `chapter`, `secret`, liste `involves` (ID delle schede), `causes` (ID di eventi precedenti), `scenes` (ID delle scene), `timelines` (ID) e `perspectives` come righe `knows|unaware|believes_false|conceals | id-della-scheda | nota`; il corpo è la sintesi. Una timeline in `timelines/timeline-*.md` ha `type: timeline`, `id: timeline:...`, `title`, `kind: global|arc|event` e la descrizione nel corpo. Gli ID già presenti nei Markdown restano stabili: BookWriter traduce relazioni ed eventi verso quegli ID. Riferimenti a schede, eventi, scene o timeline inesistenti, cause circolari e nomi duplicati **fanno fallire l'import**, senza correzioni silenziose; le schede importate hanno origine `imported`.
+Un evento in `events/*.md` ha `type: event`, `id: event:...`, `title`, `story_order` (posizione nella cronologia della storia), `narration: scene|flashback|foreshadowing|offscreen|backstory`, facoltativi `when` e `chapter`, `secret`, liste `involves` (ID delle schede), `causes` (ID di eventi precedenti), `scenes` (ID delle scene), `timelines` (ID) e `perspectives` come righe `knows|unaware|believes_false|conceals | id-della-scheda | nota`; il corpo è la sintesi. Una timeline in `timelines/timeline-*.md` ha `type: timeline`, `id: timeline:...`, `title`, `kind: global|arc|event` (al massimo una `global`), facoltativa la lista `subjects` (ID delle schede che la timeline segue, massimo 12) e la descrizione nel corpo. Gli ID già presenti nei Markdown restano stabili: BookWriter traduce relazioni ed eventi verso quegli ID. Riferimenti a schede, eventi, scene o timeline inesistenti, cause circolari e nomi duplicati **fanno fallire l'import**, senza correzioni silenziose; le schede importate hanno origine `imported`.
 
 `changes/*.md` contiene i report leggibili delle modifiche richieste con un prompt (richiesta, piano, scene dirette/indirette, controlli locali): sono storia per chi legge, non vengono reimportati come operazioni attive. `schemas/*.schema.json` contiene JSON Schema (draft 2020-12) generati dagli stessi validatori dell'app per knowledge base, scheda, evento, timeline, profili editoriali e operazione di modifica, con `x-bookwriter-schema-version`. Servono a validare i dati con altri strumenti; non sono Markdown e non sono letti come testo del libro.
 
-Le nuove proiezioni dichiarano `markdownFormat: 2` nel manifest. Lettura e verifica delle proiezioni formato 1 e legacy restano disponibili: la sola aggiunta dei template standard non rende incongruente un vecchio export.
+Le proiezioni del formato 2 dichiarano `markdownFormat: 2` nel manifest. Lettura e verifica delle proiezioni formato 1 e legacy restano disponibili: la sola aggiunta dei template standard non rende incongruente un vecchio export.
+
+### Registro delle modifiche e review richieste — formato 3
+
+Il formato 3 (`markdownFormat: 3`, quello delle nuove proiezioni) è il formato 2 più due documenti di sola lettura: `history/edits.md` (`type: edit_history`, una riga per modifica manuale o AI, dalla più recente, con elemento, campi, tipo, origine, stato di review ed eventuale richiesta) e un file per review in `reviews/manual/` (`type: manual_review`, con ambito, modalità, chi rilegge, stato, esito, elementi controllati, rilievi e correzioni), più gli schemi `schemas/book-edit.schema.json` e `schemas/manual-review.schema.json`. Le copie complete prima/dopo restano solo in `.bookwriter/project.json`. Reimportati, questi documenti restano note opache: non ricreano modifiche, stati o review.
+
+Il controllo dello snapshot usa il formato scritto nel manifest, quindi una repository in formato 2 resta leggibile e passa al 3 al primo push. Le app fino alla 0.21 non leggono il formato 3 (si fermano senza scrivere). Indipendentemente dal Markdown, il JSON del libro dichiara `formatVersion`: un libro con una versione più recente di quella che l'app conosce non viene importato né sovrascritto.
 
 ## Importazione e modifiche esterne
 

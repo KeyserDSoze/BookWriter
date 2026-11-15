@@ -49,6 +49,8 @@ export function projectEditorialDocuments(book: BookProject): Record<string, str
       "Rapporti indipendenti; non sono certificazioni di qualità o di verità.\n\n" +
       record.reports.map(reportMarkdown).join("\n\n---\n\n") + (record.judgment ? "\n\n## Direttore editoriale\n\nEsito: " +
         record.judgment.verdict + "\n\n" + record.judgment.reasoning + "\n\n" +
+        (record.judgment.ruleChecks?.length ? "Regole obbligatorie verificate dal direttore:\n\n" + record.judgment.ruleChecks.map(c =>
+          "- " + c.ruleId + ": " + (c.verdict === "respected" ? "rispettata" : "violata") + " — " + c.rationale).join("\n") + "\n\n" : "") +
         record.judgment.decisions.map(d => "- " + d.findingId + ": " + d.action + " — " + d.rationale).join("\n") : ""));
   }
   for (const chapter of book.chapters) {

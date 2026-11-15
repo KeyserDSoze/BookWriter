@@ -19,7 +19,7 @@ Il cloud è la **cartella privata dell'app** (Google Drive «appDataFolder», na
 ## Primo PC
 
 1. Crea le app registration e imposta i Client ID ([guida](cloud-app-registration-ste100.md)).
-2. **Impostazioni → Account cloud → Accedi con Google** (o **Microsoft**).
+2. **Impostazioni → scheda Account e cloud → Accedi con Google** (o **Microsoft**).
 3. Il nome dell'account compare come «Connesso come …». L'elenco dei libri è creato subito.
 4. Scegli come proteggere PAT e chiavi:
    - **Con passphrase (consigliato)**: cifrate nel browser, nemmeno Google o Microsoft le leggono. Almeno 12 caratteri. «Ricorda la passphrase su questo dispositivo» tiene solo la chiave derivata (non estraibile), così non la digiti a ogni invio. **Se la dimentichi non c'è recupero.**
@@ -28,7 +28,7 @@ Il cloud è la **cartella privata dell'app** (Google Drive «appDataFolder», na
 
 ## Nuovo PC
 
-1. Apri il sito, **Impostazioni → Account cloud → Accedi** con lo stesso account.
+1. Apri il sito, **Impostazioni → scheda Account e cloud → Accedi** con lo stesso account.
 2. Se il profilo è protetto da passphrase, scrivila e premi **Usa il profilo cloud su questo dispositivo**. Arrivano endpoint, modelli, router, tariffe, PAT e chiavi (il tema resta tuo).
 3. **Libreria → Dagli altri tuoi dispositivi**: i libri degli altri PC con stato e repository.
 4. **Scarica da GitHub**: il testo viene da GitHub con il PAT appena recuperato. Non serve digitare owner e repository.

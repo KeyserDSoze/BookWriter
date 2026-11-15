@@ -12,6 +12,7 @@ test("testimone precedente ritirato: blocco del giudice e recupero senza AI (des
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Mara e la chiave");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" })
     .fill("La chiave cambia luogo fra due capitoli.");
+  await page.getByRole("checkbox", { name: /Checklist dello scrittore/ }).uncheck();
   await page.getByRole("button", { name: "Crea libro" }).click();
 
   await page.evaluate(() => new Promise<void>((resolve, reject) => {

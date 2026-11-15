@@ -147,6 +147,19 @@ describe("Modifica solo questo, con l'AI", () => {
     expect(saved.edits!.at(-1)).toMatchObject({ origin: "ai", prompt: "Rendi la frase più misteriosa", aiActivityId: activity.id, reviewState: "modified_unreviewed" });
     expect(saved.manualReviews).toBeUndefined();
   });
+  it("se l'autore cambia l'elemento mentre il modello lavora, la proposta è scartata: niente passaggi sostituiti nel punto sbagliato", async () => {
+    const book = knowledgeBook(); await saveBook(book, false);
+    const text = book.chapters[1]!.scenes[0]!.text;
+    const start = text.indexOf("Dice"), end = text.length;
+    modelCall.mockImplementationOnce(async () => {
+      await saveSceneEdit(book.id, sceneTarget.id, editBase(await stored(book.id), sceneTarget, "Il molo"), { text: "All'alba, " + text });
+      return answer("Sussurra di conoscere il Consiglio cittadino.");
+    });
+    await expect(proposeAiEdit(book.id, { kind: "scene", id: sceneTarget.id, selection: { start, end } }, "Rendi la frase più misteriosa", new AbortController()))
+      .rejects.toThrow(/cambiato mentre il modello lavorava/);
+    expect((await stored(book.id)).chapters[1]!.scenes[0]!.text).toBe("All'alba, " + text);
+    expect((await listActivities(book.id)).find(a => a.title.startsWith("Modifica AI proposta"))).toMatchObject({ status: "failed", aiRequested: true });
+  });
   it("una scheda: i nomi citati dall'AI devono esistere; accettare su una scheda cambiata è rifiutato", async () => {
     const book = knowledgeBook(); await saveBook(book, false);
     script(() => JSON.stringify({ name: "Markus", importance: "main", summary: "Informatore che teme il Consiglio.", relationships: [{ target: "Elena", type: "protegge" }] }));

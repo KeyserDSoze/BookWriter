@@ -91,6 +91,7 @@ test("conoscenze dei personaggi: 12 agenti, percorso della notizia e rigetto mot
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Conflitti non attestati");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara parla di una lettera il cui contenuto le è stato nascosto.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");open.onerror=()=>reject(open.error);

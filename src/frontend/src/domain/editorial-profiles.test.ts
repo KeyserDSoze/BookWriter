@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { profileBook } from "./__fixtures__/editorial-profiles";
-import { defaultEditorialProfiles, parseEditorialProfiles, profileSnapshotSchema, writerInstructions } from "./editorial-profiles";
+import { checklistEditorialProfiles, defaultEditorialProfiles, parseEditorialProfiles, profileSnapshotSchema, writerInstructions } from "./editorial-profiles";
 import { EDITORIAL_ROLES, archiveEditorialRound, assertEditorialReviewCoverage, chapterSegments, createEditorialCycle,
   cycleRoles, nextReviewSlot, repairPrompt, reviewerPrompt, validateJudgment, validateReport } from "./editorial-board";
 import { describeNextAutopilotStep } from "./autopilot-step";
@@ -12,6 +12,15 @@ import { readMarkdownDocument } from "./markdown-document";
 const pass = JSON.stringify({ verdict: "pass", summary: "Nessun problema concreto nel segmento letto.", memoryNote: "", findings: [] });
 
 describe("Profili editoriali per libro", () => {
+  it("un libro nuovo con la checklist ha lo scrittore-revisore con regole consultive", () => {
+    const profiles = parseEditorialProfiles(checklistEditorialProfiles("w-1"));
+    const writer = profiles.writers.find(item => item.id === profiles.selectedWriterId)!;
+    expect(writer.reviewEnabled).toBe(true);
+    expect(writer.rules?.length).toBeGreaterThan(0);
+    expect(writer.rules?.every(rule => !rule.mandatory)).toBe(true);
+    const book = profileBook(); book.editorialProfiles = profiles;
+    expect(cycleRoles(book, createEditorialCycle(book.chapters[0]!.id, book)).at(-1)).toBe("writerReview");
+  });
   it("senza configurazione mantiene esattamente il panel standard", () => {
     const book = profileBook(); delete book.editorialProfiles;
     expect(cycleRoles(book, createEditorialCycle(book.chapters[0]!.id, book))).toEqual(EDITORIAL_ROLES);

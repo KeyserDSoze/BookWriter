@@ -1,5 +1,11 @@
 # UX responsive e flussi
 
+## Navigazione
+
+- **Libreria** da sola; poi tre gruppi: **Scrittura** (Dashboard, Libro, Mondo, Revisioni), **Controllo** (Attività, Costi, Archivio), **Configurazione** (Modelli e redazione: solo questo libro; Impostazioni: tutti i libri). Revisioni mostra quante modifiche attendono; un punto verde indica l'autopilot al lavoro.
+- Una sola intestazione per pagina: gruppo, titolo, a cosa serve la pagina, libro attivo e tema. La barra dell'autopilot compare nelle pagine del libro, non in Libreria e Impostazioni.
+- Le due pagine di configurazione sono divise in schede, ricordate nell'indirizzo (`?tab=`): Impostazioni → Modelli AI, Account e cloud, Conversazioni AI; Modelli e redazione → Modelli, Redazione, Ricerca web.
+
 ## Pagine
 
 - **Accesso**: “Continua con Google” e “Continua con Microsoft” oppure “Modalità locale” (facoltativa, senza sync cloud), spiegando che accesso non oscura il sito statico. Le connessioni OAuth abilitano i servizi cloud.
@@ -16,7 +22,7 @@
 
 ## Mobile
 
-- Navigazione mobile a tab sticky in alto, sempre accessibile durante la lettura e i form, con sei sezioni principali.
+- Barra di navigazione sticky in alto con **tutte** le pagine, nome intero, separatori fra i gruppi; scorre di lato e tiene in vista la pagina aperta.
 - Header compatto con stato autopilot persistente; barra “Sto facendo: [attività]” sticky con tap per dettagli.
 - “Pausa”, “Intervieni” e “Riprendi” raggiungibili con un pollice; touch target minimo 44x44, form fullscreen e textarea con autosize.
 - Lettore con tipografia adattiva, indice capitoli a drawer, revisione su dettaglio separato e tasto per tornare alla posizione di lettura.

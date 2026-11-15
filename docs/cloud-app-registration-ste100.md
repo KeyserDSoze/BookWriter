@@ -236,7 +236,7 @@ NOTE: A build takes the variables when it runs. After you change a variable, run
 ### 6.2 Option B: one device only
 
 1. Open `https://ghostwriting.ws`.
-2. Click "Impostazioni".
+2. Click "Impostazioni". Then click the tab "Account e cloud".
 3. Find the section "Account cloud: impostazioni, chiavi e libreria su ogni PC".
 4. Click "Impostazioni avanzate: Client ID e nome del dispositivo".
 5. In "Client ID Google", enter the Google Client ID.
@@ -248,7 +248,7 @@ NOTE: The values that you save on a device have priority over the values of the 
 
 ## 7 Task 4: Test the sign-in
 
-1. Open `https://ghostwriting.ws`. Click "Impostazioni".
+1. Open `https://ghostwriting.ws`. Click "Impostazioni". Then click the tab "Account e cloud".
 2. In the section "Account cloud", click "Accedi con Google" or "Accedi con Microsoft".
 3. Select your account in the window that opens. Accept the permission.
 4. Make sure that the message "Connesso come ..." shows your account.
@@ -304,7 +304,7 @@ Table 4: Faults and actions
 
 To stop the sign-in on one device:
 
-1. Click "Impostazioni". Find the section "Account cloud".
+1. Click "Impostazioni". Then click the tab "Account e cloud". Find the section "Account cloud".
 2. Click "Scollega questo dispositivo".
 
 To remove the permission of Google:

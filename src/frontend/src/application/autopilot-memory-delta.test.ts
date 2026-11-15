@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, newBook, type TaskKind } from "../domain/types";
+import { emptyKnowledge, syncKnowledgeWithMemory } from "../domain/knowledge";
 
 const { modelCall, writerGuard } = vi.hoisted(() => ({ modelCall: vi.fn(), writerGuard: vi.fn() }));
 vi.mock("../infrastructure/ai", () => ({ callModel: modelCall }));
@@ -44,6 +45,35 @@ function twoSceneBook(phase: "consolidate" | "prose") {
 }
 
 describe("Memoria narrativa a delta e compattazione", () => {
+  it("con le schede attive il consolidamento deve dire cosa cambia nelle schede, anche quelle esistenti", async () => {
+    const book = twoSceneBook("consolidate");
+    book.knowledge = syncKnowledgeWithMemory(emptyKnowledge(), book.memory, "2026-11-14T12:00:00.000Z");
+    await saveBook(book, false);
+    const runner = new AutopilotRunner();
+    script(runner, [JSON.stringify({ mode: "delta", sceneSummary: "Mara trova una lettera sul molo e la nasconde.",
+      characters: { Mara: "Ha una lettera" } })]);
+    await runner.run(book.id, async () => undefined);
+    expect(calls[0]!.prompt).toContain('aggiungi SEMPRE al JSON la chiave "knowledge"');
+    let saved = (await getBook(book.id))!;
+    expect(saved.status).toBe("error");
+    expect(saved.previousError).toContain('"knowledge"');
+    expect(saved.memory.characters.Mara).toBe("Arriva al porto");
+    saved.status = "paused"; await saveBook(saved, false);
+    const second = new AutopilotRunner();
+    calls.length = 0;
+    script(second, [JSON.stringify({ mode: "delta", sceneSummary: "Mara trova una lettera sul molo e la nasconde.",
+      characters: { Mara: "Ha una lettera" },
+      knowledge: { entities: [{ type: "character", name: "Ivo", relationships: [{ target: "Mara", type: "protettore" }] }] } })]);
+    await second.run(book.id, async () => undefined);
+    saved = (await getBook(book.id))!;
+    const ivo = saved.knowledge!.entities.find(e => e.name === "Ivo")!, mara = saved.knowledge!.entities.find(e => e.name === "Mara")!;
+    expect(ivo).toMatchObject({ version: 2, relationships: [{ targetId: mara.id, type: "protettore" }] });
+    // The sheet created from the memory follows it; the history keeps the old text.
+    expect(mara).toMatchObject({ version: 2, summary: "Ha una lettera" });
+    expect(mara.history![0]!.snapshot.summary).toBe("Arriva al porto");
+    expect(saved.phase).toBe("prose");
+  });
+
   it("il consolidamento applica solo il delta e salva il riassunto reale della scena", async () => {
     const book = twoSceneBook("consolidate");
     await saveBook(book, false);

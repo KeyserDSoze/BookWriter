@@ -48,6 +48,34 @@ describe("Knowledge base narrativa", () => {
     expect(kb.entities.map(e => [e.id, e.status, e.origin])).toEqual([["character:ada", "draft", "written"], ["item:chiave", "draft", "written"]]);
     expect(syncKnowledgeWithMemory(kb, { characters: { Ada: "x" }, locations: {}, items: {}, factions: {} }, now).entities).toHaveLength(2);
   });
+  it("una scheda bozza che rispecchia ancora la memoria la segue; una scheda toccata dall'autore no", () => {
+    const empty = { characters: {}, locations: {}, items: {}, factions: {} };
+    const before = { ...empty, characters: { Ada: "Una testimone.", Bruno: "Il cocchiere." } };
+    let kb = syncKnowledgeWithMemory(emptyKnowledge(), before, now);
+    kb.entities.find(e => e.name === "Bruno")!.summary = "Il cocchiere, scritto dall'autore.";
+    const after = { ...empty, characters: { Ada: "Una testimone che ha visto il furto.", Bruno: "Il cocchiere, ora ferito." } };
+    kb = syncKnowledgeWithMemory(kb, after, "2026-11-15T12:00:00.000Z", before);
+    const ada = kb.entities.find(e => e.name === "Ada")!, bruno = kb.entities.find(e => e.name === "Bruno")!;
+    expect(ada).toMatchObject({ summary: "Una testimone che ha visto il furto.", version: 2 });
+    expect(ada.history![0]!.snapshot.summary).toBe("Una testimone.");
+    expect(bruno).toMatchObject({ summary: "Il cocchiere, scritto dall'autore.", version: 1 });
+    // Without the previous memory nothing existing is touched.
+    expect(syncKnowledgeWithMemory(kb, { ...empty, characters: { Ada: "Altro." } }, now).entities.find(e => e.name === "Ada")!.version).toBe(2);
+  });
+  it("un cambio delle sole relazioni \u00e8 una nuova versione, e la versione precedente non cambia dopo", () => {
+    const kb = knowledgeBook().knowledge!;
+    const merged = mergeKnowledgeReply(kb, { entities: [{ type: "character", name: "Elena", relationships: [{ target: "Markus", type: "nemico" }] }] },
+      { origin: "written", reason: "Tradimento", now });
+    const elena = merged.entities.find(e => e.id === "character:elena")!;
+    expect(elena.version).toBe(2);
+    expect(elena.relationships.find(r => r.targetId === "character:markus")!.type).toBe("nemico");
+    expect(elena.history![0]!.snapshot.relationships.find(r => r.targetId === "character:markus")!.type).toBe("alleato");
+    const both = mergeKnowledgeReply(kb, { entities: [{ type: "character", name: "Elena", summary: "Tradita.", relationships: [{ target: "Markus", type: "nemico" }] }] },
+      { origin: "written", reason: "Tradimento", now });
+    const once = both.entities.find(e => e.id === "character:elena")!;
+    expect(once.version).toBe(2);
+    expect(once.history![0]!.snapshot.relationships.find(r => r.targetId === "character:markus")!.type).toBe("alleato");
+  });
   it("le descrizioni per i prompt sono compatte e includono prospettive e segreti", () => {
     const kb = knowledgeBook().knowledge!;
     expect(describeEntities(kb.entities.slice(0, 1), kb)).toContain("Modo di parlare: Frasi brevi");

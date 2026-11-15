@@ -146,6 +146,32 @@ export function defaultEditorialProfiles(): EditorialProfiles {
 export function isReaderRole(role: string): role is ReaderRole {
   return (READER_ROLES as readonly string[]).includes(role);
 }
+export function isStandardReader(role: string): boolean {
+  return (BASE_READER_ROLES as readonly string[]).includes(role);
+}
+/** The five standard readers stay in every profile set: they can be edited or turned off, never removed.
+ * Missing ones (older books, Markdown templates) come back turned off. */
+export function withStandardReaders(profiles: EditorialProfiles): EditorialProfiles {
+  const missing = defaultEditorialProfiles().readers.filter(d => !profiles.readers.some(p => p.role === d.role));
+  if (!missing.length) return profiles;
+  const ids = new Set([...profiles.readers, ...profiles.writers].map(p => p.id));
+  return { ...profiles, readers: [...profiles.readers, ...missing.map(d => ({ ...d, id: ids.has(d.id) ? d.id + "-standard" : d.id, enabled: false }))] };
+}
+/** Plain-text view of a profile set, for the change history comparison. */
+export function describeProfiles(profiles?: EditorialProfiles | null): string {
+  if (!profiles) return "Workflow standard: cinque lettori, nessuna rilettura dello scrittore, direttore standard, massimo 3 cicli.";
+  const writer = selectedWriter(profiles);
+  return [
+    "Scrittore in uso: " + (writer?.name ?? "standard (stile del libro)"),
+    "Massimo cicli di revisione: " + maxEditorialRounds(profiles),
+    ...profiles.readers.map(p => `Lettore «${p.name}»${p.enabled ? "" : " (disattivato)"}: ${p.instructions}`),
+    ...profiles.writers.map(p => `Scrittore «${p.name}» (${STRENGTH_LABELS[p.strength]}${p.reviewEnabled ? ", con rilettura" : ""}): ${p.writingPrompt}` +
+      (p.reviewEnabled ? `\n  Rilettura: ${p.reviewPrompt}` : "") +
+      (p.rules ?? []).map(r => `\n  Regola ${r.mandatory ? "obbligatoria" : "consultiva"} «${r.label}»${r.description ? ": " + r.description : ""}`).join("")),
+    "Direttore: " + (profiles.director?.instructions ?? "standard"),
+  ].join("\n");
+}
+const STRENGTH_LABELS = { gentle: "flessibile", balanced: "bilanciato", strict: "vincolo forte" } as const;
 export function selectedWriter(profiles?: EditorialProfiles): WriterProfile | undefined {
   return profiles?.writers.find(p => p.id === profiles.selectedWriterId);
 }
@@ -205,6 +231,12 @@ export function newWriterProfile(id: string): WriterProfile {
 }
 export const DEFAULT_DIRECTOR_INSTRUCTIONS =
   "Valuta la qualità complessiva del capitolo: coerenza con il canone, ritmo, voce e intenzione dell'autore. Accetta solo correzioni motivate e necessarie; respingi i rilievi di gusto personale.";
+/** New books: standard readers plus a writer whose checklist is verified in every review.
+ * The rules start advisory: blocking a chapter on a rule is the author's explicit choice. */
+export function checklistEditorialProfiles(writerId: string): EditorialProfiles {
+  const writer = newWriterProfile(writerId);
+  return { ...defaultEditorialProfiles(), writers: [{ ...writer, rules: writer.rules?.map(rule => ({ ...rule, mandatory: false })) }], selectedWriterId: writerId };
+}
 export function directorInstructions(profiles?: EditorialProfiles): string {
   const director = profiles === undefined ? undefined : parseEditorialProfiles(profiles).director;
   if (!director) return "";

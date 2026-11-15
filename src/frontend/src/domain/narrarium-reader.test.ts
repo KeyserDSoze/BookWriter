@@ -13,7 +13,7 @@ const scenePath = "chapters/001-arrivo/001-il-molo.md";
 
 describe("Contratto Markdown indipendente dall'operatore", () => {
   it("gli esempi pubblicati nella guida formano davvero un libro importabile", () => {
-    const guide = readFileSync(new URL("../../../../docs/markdown-book-format.md", import.meta.url), "utf8");
+    const guide = readFileSync(new URL("../../../../docs/markdown-book-format.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const examples = Object.fromEntries([...guide.matchAll(/`([^`\n]+\.md)`:\n\n```markdown\n([\s\S]*?)\n```/g)]
       .map(match => [match[1]!, match[2]!]));
     expect(Object.keys(examples)).toHaveLength(5);

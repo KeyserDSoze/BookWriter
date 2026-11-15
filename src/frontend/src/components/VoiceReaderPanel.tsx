@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppSettings, BookProject } from "../domain/types";
 import { speechSegments } from "../domain/speech-segments";
+import { Button } from "./ui/button";
 
 interface VoiceScene { id: string; label: string; text: string; }
 type Playback = {
@@ -151,12 +152,12 @@ export function VoiceReaderPanel({book,settings}: {book:BookProject;settings:App
           <label htmlFor="listen-speed" className="text-sm font-semibold">Velocità: {speed.toFixed(1)}×</label>
           <input id="listen-speed" type="range" min="0.7" max="1.3" step="0.1" value={speed}
             onChange={e=>{stop();setSpeed(Number(e.target.value));}}/>
-          <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
-            onClick={read}>{state==="idle"?"Ascolta scena":"Ricomincia scena"}</button>
-          <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
-            onClick={toggle} disabled={state==="idle"}>{state==="paused"?"Riprendi":"Pausa"}</button>
-          <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
-            onClick={stop} disabled={state==="idle"}>Ferma</button>
+          <Button type="button" variant="outline"
+            onClick={read}>{state==="idle"?"Ascolta scena":"Ricomincia scena"}</Button>
+          <Button type="button" variant="outline"
+            onClick={toggle} disabled={state==="idle"}>{state==="paused"?"Riprendi":"Pausa"}</Button>
+          <Button type="button" variant="outline"
+            onClick={stop} disabled={state==="idle"}>Ferma</Button>
         </div>
         {total>0 && <p className="muted mt-2 text-xs" aria-label="Progresso della lettura">
           Blocco {part} di {total} (avanzamento per segmenti, non per tempo trascorso).

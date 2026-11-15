@@ -33,6 +33,7 @@ import type { NarrativeChangeOperation } from "./narrative-change";
 import type { ResearchEntry, WebResearchSettings } from "./web-research";
 import type { BookEdit } from "./book-edits";
 import type { ManualReview } from "./manual-review";
+import { BOOK_FORMAT_VERSION } from "./book-format";
 
 export interface EncryptedSecret { iv: string; data: string; }
 /** Author-declared roles; /models does not attest capabilities. */
@@ -287,6 +288,8 @@ export interface BookProject {
   manualReviews?: ManualReview[];
   /** Every author prompt given to the autopilot, never rewritten. */
   authorInterventions?: AuthorIntervention[];
+  /** Version of the stored data format (absent = 0, books before 0.22); see `book-format.ts`. */
+  formatVersion?: number;
   memory: NarrativeMemory;
   currentSceneId?: string;
   revision?: RevisionRequest;
@@ -350,7 +353,7 @@ export function newBook(
     id: crypto.randomUUID(), title: title.trim() || "Nuovo libro", brief,
     writingStyle, audience, authorConstraints: [], createdAt: now, updatedAt: now,
     status: "idle", phase: "brainstorm", audienceReviews: [],
-    chapters: [], memory: structuredClone(EMPTY_MEMORY),
+    chapters: [], memory: structuredClone(EMPTY_MEMORY), formatVersion: BOOK_FORMAT_VERSION,
   };
   if (options.startMode === "synopsis" && options.authorChapterSynopses?.length) {
     book.startMode = "synopsis";

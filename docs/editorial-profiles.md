@@ -1,12 +1,12 @@
 # Lettori, scrittore e direttore: gli agenti del libro
 
-**Preparazione locale 0.20.0, non pubblicata.** Apri il libro e poi **Modelli e redazione → Lettori e scrittore del libro**. Il pannello ha quattro schede: **Scrittore**, **Lettori**, **Direttore** e **Ciclo**. In alto il flusso mostra in ordine chi scrive, chi rilegge, chi decide e quanti cicli sono ammessi; il segno **Modifiche non salvate** ricorda che le bozze non sono ancora attive.
+**Preparazione locale 0.20.0, non pubblicata.** Apri il libro e poi **Modelli e redazione → scheda Redazione** (pannello «Lettori e scrittore del libro»). Il pannello ha quattro schede: **Scrittore**, **Lettori**, **Direttore** e **Ciclo**. In alto il flusso mostra in ordine chi scrive, chi rilegge, chi decide e quanti cicli sono ammessi; il segno **Modifiche non salvate** ricorda che le bozze non sono ancora attive.
 
 ## Parti dal workflow esistente
 
 Senza personalizzazioni restano i cinque lettori attuali: genere, generalista, critico/scettico, relazioni, misteri/promesse. La redazione completa conserva sette specialisti più cinque lettori; quella leggera conserva la sua composizione standard. Non serve creare uno scrittore per ottenere il comportamento precedente.
 
-Puoi modificare nome e template dei lettori, aggiungerne fino a **dieci**, rimuoverli o disattivarli. Almeno uno deve restare attivo. Il panel personalizzato si usa sia nella valutazione iniziale delle idee sia nei nuovi cicli dei capitoli. In modalità leggera i lettori personalizzati attivi **non sono ridotti a uno**: considera le chiamate aggiuntive.
+Puoi modificare nome e template dei lettori, aggiungerne fino a **dieci**, rimuovere quelli aggiunti o disattivarli. I cinque lettori standard non si eliminano: si modificano o si disattivano (se in un libro ne manca uno, torna disattivato). Almeno uno deve restare attivo. Il panel personalizzato si usa sia nella valutazione iniziale delle idee sia nei nuovi cicli dei capitoli. In modalità leggera i lettori personalizzati attivi **non sono ridotti a uno**: considera le chiamate aggiuntive.
 
 ## Scegli lo scrittore
 
@@ -29,10 +29,13 @@ Il prompt di scrittura guida stesura, controllo di scena e revisione. Il giudice
 
 Ogni scrittore ha una **checklist** (fino a 20 regole). Un nuovo scrittore parte con quattro regole modificabili: «Applicare rigorosamente Show, Don't Tell» (obbligatoria), «Mantenere coerente la voce dei personaggi», «Evitare ripetizioni e ridondanze», «Verificare la continuità narrativa» (consultive). Per ogni regola scrivi un'etichetta e **Come verificarla**, poi scegli **Obbligatoria** oppure lasciala consultiva.
 
+**Nei libri nuovi** la casella *Checklist dello scrittore in ogni revisione (consigliata)*, attiva per impostazione predefinita, crea già lo scrittore «mostra, non spiegare» con la rilettura attiva e le quattro regole **tutte consultive**: rendere obbligatoria una regola (che può fermare un capitolo) resta una tua scelta. Togliendo la spunta il libro parte con il workflow standard.
+
 - La scrittura riceve le regole da rispettare.
 - La rilettura dello scrittore le verifica **una per una** su ogni segmento e registra per ciascuna *rispettata*, *non rispettata* o *non pertinente*; ogni violazione ha un rilievo con la citazione esatta del testo. Una checklist incompleta o incoerente viene rifiutata.
 - Nel pannello Redazione, per ogni tornata, vedi i controlli fatti (✓, ✗, –) e i rilievi collegati alle regole.
 - Se il direttore respinge la correzione di una regola **obbligatoria**, il capitolo **non** viene congelato: l'autopilot si ferma e spiega quale regola resta violata. Decidi tu: riparti con un'indicazione dal pannello Redazione oppure rendi la regola consultiva.
+- Il direttore non si fida della checklist dello scrittore: per ogni regola obbligatoria verificata nella tornata deve dichiarare, motivandolo, se il testo la rispetta. Una violazione che nessuna correzione accettata risolve blocca il congelamento allo stesso modo.
 
 Una regola obbligatoria richiede la rilettura dello scrittore: se la disattivi, le regole diventano consultive.
 
@@ -52,6 +55,7 @@ Le modifiche sono bozze fino a **Salva profili del libro** e alla conferma. Il d
 
 - non avvia AI, non pubblica su GitHub e non riscrive il manoscritto;
 - registra un'attività generica senza i template, disattiva autosync e svuota la coda pendente;
+- entra nel **registro delle modifiche** del libro con la versione prima e dopo in chiaro: dalla cronologia puoi confrontarle e ripristinare quella precedente (è un nuovo salvataggio, non una review);
 - rifiuta una revisione obsoleta o un writer occupato, senza perdere il testo digitato;
 - è bloccato con autopilot attivo o panel iniziale delle idee già parzialmente svolto.
 

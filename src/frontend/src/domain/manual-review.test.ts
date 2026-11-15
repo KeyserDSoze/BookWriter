@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { knowledgeBook } from "./__fixtures__/knowledge";
 import type { BookProject } from "./types";
-import { elementReviewState, pendingElements } from "./book-edits";
+import { elementReviewState, pendingElements, settleChapterEdits } from "./book-edits";
 import { editEntity, editScene } from "./book-editing";
-import { activeManualReview, buildReviewUnits, estimateReviewCalls, MAX_REVIEW_UNITS, validateImpactReply, validateReviewReply } from "./manual-review";
+import { activeManualReview, buildReviewUnits, estimateBoardCalls, estimateReviewCalls, MAX_REVIEW_UNITS, validateImpactReply, validateReviewReply } from "./manual-review";
 import { cancelManualReview, createManualReview, decideReviewProposal, describeManualReview, interruptImportedReviews,
   ManualReviewChanged, nextManualReviewStep, type ManualReviewAiStep, type ManualReviewRequest } from "./manual-review-flow";
 import { describeNextAutopilotStep } from "./autopilot-step";
@@ -24,6 +24,12 @@ function run(book: BookProject, reply: (step: ManualReviewAiStep) => string): Ma
   }
   throw new Error("La review non termina.");
 }
+/** Runs the next step, which must be local, and returns its summary. */
+function runLocal(book: BookProject): string {
+  const step = nextManualReviewStep(book);
+  if (step?.type !== "local") throw new Error("Atteso un passo locale.");
+  return step.run(book, NOW);
+}
 function edited(): BookProject {
   const book = knowledgeBook();
   editScene(book, "scene:002:001", { text: "Markus aspetta sul molo al tramonto. Dice di conoscere il Consiglio cittadino." }, ctx);
@@ -34,6 +40,55 @@ const request = (patch: Partial<ManualReviewRequest> = {}): ManualReviewRequest 
   ({ scope: "targeted", mode: "check", targets: [{ kind: "scene", id: "scene:002:001" }], ...patch });
 
 describe("Review controllata dall'autore", () => {
+  it("si può rivedere solo una parte delle modifiche di un elemento: le altre restano da rivedere", () => {
+    const book = edited();
+    editScene(book, "scene:002:001", { text: "Markus aspetta sul molo al tramonto, nervoso. Dice di conoscere il Consiglio cittadino." }, { ...ctx, now: "2026-11-14T11:00:00.000Z" });
+    const [first, second] = (book.edits ?? []).filter(e => e.target.id === "scene:002:001");
+    expect(() => createManualReview(book, request({ editIds: [] }), NOW)).toThrow(/almeno una modifica/);
+    expect(() => createManualReview(book, request({ editIds: ["00000000-0000-4000-8000-000000000000"] }), NOW)).toThrow(/non è più da rivedere/);
+    const review = createManualReview(book, request({ editIds: [first!.id] }), NOW);
+    expect(review.editIds).toEqual([first!.id]);
+    expect(first!.reviewState).toBe("review_pending");
+    expect(second!.reviewState).toBe("modified_unreviewed");
+    book.status = "running";
+    const asked = run(book, () => pass);
+    expect(asked[0]!.prompt).toContain("MODIFICHE DA VERIFICARE");
+    expect(first!.reviewState).toBe("review_passed");
+    // The latest change was left out: the element is still to review.
+    expect(second!.reviewState).toBe("modified_unreviewed");
+    expect(elementReviewState(book, { kind: "scene", id: "scene:002:001" })).toBe("modified_unreviewed");
+  });
+  it("la review completa con la redazione riapre i capitoli revisionati e finisce quando sono congelati di nuovo", () => {
+    const book = edited();
+    book.status = "paused";
+    expect(estimateBoardCalls(book)).toBeGreaterThanOrEqual(2 * (12 + 2));
+    expect(() => createManualReview(book, request({ scope: "targeted", engine: "board" }), NOW)).toThrow(/review completa/);
+    const review = createManualReview(book, request({ scope: "full", mode: "auto", engine: "board", targets: [] }), NOW);
+    expect(review).toMatchObject({ engine: "board", units: [{ kind: "chapter", targetId: "chapter:001" }, { kind: "chapter", targetId: "chapter:002" }] });
+    expect(book.chapters.every(c => !c.frozenAt)).toBe(true);
+    expect(book.editorialCycle?.chapterId).toBe("chapter:001");
+    expect(book.phase).toBe("chapterReview");
+    book.status = "running";
+    runLocal(book);
+    expect(activeManualReview(book)?.status).toBe("in_progress");
+    // While the board works the review asks for nothing: the runner does the board steps.
+    expect(nextManualReviewStep(book)).toBeUndefined();
+    expect(describeManualReview(book, activeManualReview(book)!).headline).toContain("0 di 2");
+    for (const chapter of book.chapters) chapter.frozenAt = NOW;
+    book.editorialCycle = undefined; book.phase = "prose";
+    expect(runLocal(book)).toMatch(/congelat/);
+    expect(book.manualReviews!.at(-1)).toMatchObject({ status: "completed", outcome: "passed" });
+    expect(pendingElements(book)).toEqual([]);
+    expect(book.status).toBe("completed");
+  });
+  it("il congelamento della redazione chiude le modifiche ancora da rivedere del capitolo", () => {
+    const book = edited();
+    const chapter = book.chapters[1]!;
+    settleChapterEdits(book, chapter);
+    expect(elementReviewState(book, { kind: "scene", id: "scene:002:001" })).toBe("review_passed");
+    // A change to a sheet is not part of the chapter's text: it stays to review.
+    expect(elementReviewState(book, { kind: "entity", id: "character:markus" })).toBe("modified_unreviewed");
+  });
   it("costruisce gli elementi da controllare per ambito, con stima delle chiamate", () => {
     const book = edited();
     const targets = [{ kind: "scene" as const, id: "scene:002:001" }, { kind: "entity" as const, id: "character:markus" }];
@@ -64,7 +119,8 @@ describe("Review controllata dall'autore", () => {
     expect(done).toMatchObject({ status: "completed", outcome: "passed", stage: "done" });
     expect(elementReviewState(book, { kind: "scene", id: "scene:002:001" })).toBe("review_passed");
     expect(JSON.stringify(book.chapters.map(c => ({ ...c, reviewStale: undefined })))).toBe(JSON.stringify(JSON.parse(chapters).map((c: object) => ({ ...c, reviewStale: undefined }))));
-    expect(book.chapters[1]!.reviewStale).toBeUndefined();
+    // Chapter 2 uses Markus: his card changed and is still to review, so the chapter stays stale for that change only.
+    expect(book.chapters[1]!.reviewStale!.editIds).toEqual(book.edits!.filter(e => e.target.kind === "entity").map(e => e.id));
     expect(book.status).toBe("paused");
     expect(pendingElements(book).map(p => p.target.id)).toEqual(["character:markus"]);
   });

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "../ui/button";
 
 const MANUAL = "__manual__";
 
@@ -20,9 +21,9 @@ export function ModelPicker({ value, models, onChange, ariaLabel, emptyLabel, di
             onBlur={e => { if (e.target.value !== value) onChange(e.target.value); }} />
         : <input className="field field-sm" aria-label={ariaLabel} disabled={disabled} value={value}
             placeholder={emptyLabel ?? "ID modello"} onChange={e => onChange(e.target.value)} />}
-      {manual && models.length > 0 && <button type="button" className="shrink-0 rounded border px-2 py-1 text-xs"
+      {manual && models.length > 0 && <Button type="button" size="sm" variant="outline" className="shrink-0 px-2"
         title="Torna all'elenco dei modelli" aria-label={`Torna all'elenco: ${ariaLabel}`}
-        onClick={() => setManual(false)}>Elenco</button>}
+        onClick={() => setManual(false)}><span className="text-xs">Elenco</span></Button>}
     </div>;
   }
   const listed = models.includes(value);

@@ -1,7 +1,7 @@
 import type { BookProject } from "../domain/types";
-import { currentStamp, setReviewState, type BookEdit, type EditTarget, CHANGE_KIND_LABELS } from "../domain/book-edits";
-import { addEntity, addEvent, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editScene, editStructure,
-  editTimeline, moveEvent, restoreBefore, type ChapterPatch, type EditContext, type EntityPatch, type EventPatch, type ScenePatch,
+import { contentStamp, currentStamp, findScene, setReviewState, type BookEdit, type EditTarget, CHANGE_KIND_LABELS } from "../domain/book-edits";
+import { addEntity, addEvent, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editScene, editSceneMetadata, editStructure,
+  editTimeline, moveEvent, restoreBefore, sceneMetaContent, type ChapterPatch, type EditContext, type EntityPatch, type EventPatch, type SceneMetaPatch, type ScenePatch,
   type StructureOperation, type TimelinePatch } from "../domain/book-editing";
 import type { EntityType, KnowledgeEntity } from "../domain/knowledge";
 import { mutateCurrentAsAuthor, type AuthorActivity } from "./author-mutation";
@@ -40,6 +40,16 @@ async function applyEdit(bookId: string, base: EditBase | undefined, change: (bo
 
 export const saveSceneEdit = (bookId: string, sceneId: string, base: EditBase, patch: ScenePatch) =>
   applyEdit(bookId, base, (book, ctx) => editScene(book, sceneId, patch, ctx));
+/** Scene details (point of view, date, who and what is there): guarded by their own content. */
+export function sceneMetaBase(book: BookProject, sceneId: string, label: string): EditBase {
+  const found = findScene(book, sceneId);
+  return { target: { kind: "scene", id: sceneId }, stamp: found ? contentStamp(sceneMetaContent(found.scene)) : "deleted", label };
+}
+export const saveSceneMetadata = (bookId: string, sceneId: string, base: EditBase, patch: SceneMetaPatch) =>
+  applyEdit(bookId, undefined, (book, ctx) => {
+    if (sceneMetaBase(book, sceneId, base.label).stamp !== base.stamp) throw new ElementChangedError(base.label);
+    return editSceneMetadata(book, sceneId, patch, ctx);
+  });
 export const saveChapterEdit = (bookId: string, chapterId: string, base: EditBase, patch: ChapterPatch) =>
   applyEdit(bookId, base, (book, ctx) => editChapter(book, chapterId, patch, ctx));
 export const saveStructureEdit = (bookId: string, base: EditBase, operation: StructureOperation) =>

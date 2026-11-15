@@ -26,7 +26,7 @@ Cosa **non** è: una scheda non approva niente. «Rilievo» significa che il mod
 
 **Non serve attivare niente per vedere cosa sta facendo il modello.** Il testo che arriva (risposta e reasoning, se il modello lo trasmette) compare mentre arriva: nella Dashboard, nel riquadro in basso a destra e in Attività, insieme alle scritte su cosa sta succedendo («il modello si sta caricando», «sta ragionando», «sta scrivendo: N caratteri»…). Il vecchio invito «Abilita l'ispezione per vedere il testo» non esiste più.
 
-Cosa si sceglie è **per quanto tempo restano consultabili richiesta e risposta di ogni task**, in **Impostazioni → Richieste e risposte dell'AI**:
+Cosa si sceglie è **per quanto tempo restano consultabili richiesta e risposta di ogni task**, in **Impostazioni → scheda Conversazioni AI** (sezione «Richieste e risposte dell'AI»):
 
 | Scelta | Cosa fa | Predefinito |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ In **Impostazioni → Endpoint OpenAI-compatible** seleziona il server `http://l
 - **Reasoning effort AI:** seleziona Automatico (omette il parametro), Low, Medium, High oppure Extra high (`xhigh`). Il parametro è `reasoning_effort` di Chat Completions e la compatibilità dipende dal modello/provider. Un modello può usarlo, ignorarlo o rifiutarlo. Non va confuso con il selettore di reasoning dell'interfaccia chat di LM Studio: quella interfaccia ha sessioni e impostazioni proprie.
 - Premi **Salva impostazioni**. La versione frontend numerata resta indipendente dal commit di funzione.
 
-Non serve nessuna opzione per vedere il testo in arrivo. Richiesta e risposta (system e user possono includere testo del libro, fatti riservati e istruzioni) si salvano per default in modo temporaneo: vedi **Impostazioni → Richieste e risposte dell'AI** per tenerle più a lungo, senza scadenza o anche su GitHub. Le credenziali non vengono mai registrate.
+Non serve nessuna opzione per vedere il testo in arrivo. Richiesta e risposta (system e user possono includere testo del libro, fatti riservati e istruzioni) si salvano per default in modo temporaneo: vedi **Impostazioni → scheda Conversazioni AI** per tenerle più a lungo, senza scadenza o anche su GitHub. Le credenziali non vengono mai registrate.
 
 ## 2. Vedere ciò che accade
 

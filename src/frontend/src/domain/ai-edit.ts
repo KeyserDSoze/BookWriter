@@ -3,10 +3,11 @@ import type { BookProject } from "./types";
 import { parseJsonReply } from "./json-reply";
 import { writerInstructions } from "./editorial-profiles";
 import { ATTRIBUTE_FIELDS, findEntity, NARRATION_LABELS, NARRATION_MODES, STANCE_LABELS, STANCES,
-  type KnowledgeBase, type KnowledgeEntity, type KnowledgeEvent } from "./knowledge";
+  type KnowledgeBase, type KnowledgeEntity, type KnowledgeEvent, type KnowledgeTimeline } from "./knowledge";
 import { attributeLabel } from "./knowledge-markdown";
 import { findScene, type EditTarget } from "./book-edits";
-import { editChapter, editEntity, editEvent, editScene, type ChapterPatch, type EntityPatch, type EventPatch, type ScenePatch } from "./book-editing";
+import { editChapter, editEntity, editEvent, editScene, editTimeline, type ChapterPatch, type EntityPatch, type EventPatch, type ScenePatch,
+  type TimelinePatch } from "./book-editing";
 
 /** «Modifica solo questo»: the AI proposes a new version of ONE element (or of the
  * scenes of one chapter). Nothing changes until the author accepts a change after the
@@ -15,8 +16,9 @@ export type AiEditRequest =
   | { kind: "scene"; id: string; selection?: { start: number; end: number } }
   | { kind: "chapter"; id: string; scope: "details" | "text" }
   | { kind: "entity"; id: string }
-  | { kind: "event"; id: string };
-export type AiEditPatch = ScenePatch | ChapterPatch | EntityPatch | EventPatch;
+  | { kind: "event"; id: string }
+  | { kind: "timeline"; id: string };
+export type AiEditPatch = ScenePatch | ChapterPatch | EntityPatch | EventPatch | TimelinePatch;
 export interface AiEditChange {
   key: string; target: EditTarget; label: string;
   /** Content the proposal was built on: accepting it on newer content is refused. */
@@ -216,7 +218,38 @@ export function aiEditCalls(book: BookProject, request: AiEditRequest, instructi
         return { patch, before: eventText(now, ckb), after: eventText(merged, ckb) };
       } }];
     }
+    case "timeline": {
+      const kb = book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
+      const timeline = kb?.timelines.find(t => t.id === request.id);
+      if (!kb || !timeline) throw new Error("Timeline non trovata.");
+      const events = kb.events.filter(e => e.timelineIds.includes(timeline.id)).sort((a, b) => a.storyOrder - b.storyOrder);
+      return [{ key: "timeline|" + timeline.id, target: { kind: "timeline", id: timeline.id }, label: timeline.title, prompt: [
+        `RICHIESTA DELL'AUTORE: «${clean}»`,
+        `Modifica SOLO questa timeline secondo la richiesta. Rispondi SOLO JSON: {"title":"...","kind":"global|arc|event","summary":"max 600 caratteri","subjects":["NOMI delle schede che la timeline segue"]}. Riporta invariato ciò che non cambia; cita solo nomi di schede esistenti. Gli eventi si modificano dalle loro schede, non da qui.`,
+        "TIMELINE ATTUALE:\n" + timelineText(timeline, kb),
+        events.length ? "EVENTI DELLA TIMELINE (ordine della storia): " + events.map(e => e.title).slice(0, 80).join("; ") : "",
+        "SCHEDE ESISTENTI: " + kb.entities.map(e => e.name).slice(0, 200).join(", "),
+      ].filter(Boolean).join("\n\n"), parse: (text, current) => {
+        const reply = timelineReply.parse(parseJsonReply(text));
+        const ckb = current.knowledge!;
+        const now = ckb.timelines.find(t => t.id === timeline.id)!;
+        const patch: TimelinePatch = { title: reply.title, kind: reply.kind ?? now.kind, summary: reply.summary ?? now.summary,
+          subjectIds: reply.subjects ? [...new Set(reply.subjects.map(n => resolveName(ckb, n)))] : now.subjectIds ?? [] };
+        if (!dryRun(current, copy => editTimeline(copy, timeline.id, patch, ctx))) return undefined;
+        return { patch, before: timelineText(now, ckb), after: timelineText({ ...now, ...patch }, ckb) };
+      } }];
+    }
   }
+}
+const timelineReply = z.object({
+  title: z.string().min(2).max(120), kind: z.enum(["global", "arc", "event"]).optional(), summary: z.string().max(600).optional(),
+  subjects: z.array(z.string().min(1).max(120)).max(12).optional(),
+}).passthrough();
+const TIMELINE_KINDS = { global: "Globale", arc: "Arco narrativo o personaggio", event: "Linea di un evento" } as const;
+export function timelineText(timeline: Pick<KnowledgeTimeline, "title" | "kind" | "summary" | "subjectIds">, kb: KnowledgeBase): string {
+  const name = (id: string) => kb.entities.find(e => e.id === id)?.name ?? id;
+  return [`Titolo: ${timeline.title}`, `Tipo: ${TIMELINE_KINDS[timeline.kind]}`, `Descrizione: ${timeline.summary}`,
+    timeline.subjectIds?.length ? "Segue: " + timeline.subjectIds.map(name).join(", ") : ""].filter(Boolean).join("\n");
 }
 
 /** Apply one accepted change to the book (validated again on the current content). */
@@ -226,6 +259,7 @@ export function applyAiEditChange(book: BookProject, change: AiEditChange, ctx: 
     case "chapter": return editChapter(book, change.target.id, change.patch as ChapterPatch, ctx);
     case "entity": return editEntity(book, change.target.id, change.patch as EntityPatch, ctx);
     case "event": return editEvent(book, change.target.id, change.patch as EventPatch, ctx);
+    case "timeline": return editTimeline(book, change.target.id, change.patch as TimelinePatch, ctx);
     default: throw new Error("Elemento non modificabile con l'AI da qui.");
   }
 }

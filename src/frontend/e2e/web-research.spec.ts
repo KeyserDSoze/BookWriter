@@ -49,6 +49,7 @@ test("ricerca web: consenso esplicito, Wikipedia senza chiave, prova e registro 
   });
   await seed(page);
   await page.getByRole("button", { name: "Modelli e redazione" }).first().click();
+  await page.getByRole("tab", { name: /^Ricerca web/ }).click();
   const panel = page.getByRole("region", { name: "Ricerca web dell'AI" });
   await expect(panel.getByText("Spenta")).toBeVisible();
   page.once("dialog", dialog => { expect(dialog.message()).toContain("lasciano il dispositivo"); void dialog.accept(); });
@@ -89,7 +90,9 @@ test("ricerca web nell'autopilot: la scrittura chiede, il modello di ricerca ris
       if (!prompt.includes("RISULTATI DELLA RICERCA WEB")) { steps.push("ask"); content = JSON.stringify({ web_search: { queries: ["colore dei tram di Vienna nel 1923"], reason: "Dettaglio d'epoca." } }); }
       else { steps.push("write"); content = "Elena sale sul tram rosso e bianco. Markus non si volta."; }
     } else if (prompt.includes("RISCRIVI la scena")) { steps.push("review"); content = "Elena sale sul tram rosso e bianco. Markus non si volta, ma la vede."; }
-    else { steps.push("other"); content = JSON.stringify({ mode: "delta" }); }
+    else if (prompt.includes('"sceneSummaries"')) { steps.push("summaries"); content = JSON.stringify({ sceneSummaries: Object.fromEntries(
+      [...prompt.matchAll(/SCENA (\S+) «/g)].map(match => [match[1], "Elena sale sul tram e Markus finge di non vederla."])) }); }
+    else { steps.push("other"); content = JSON.stringify({ mode: "delta", knowledge: {} }); }
     await route.fulfill({ json: { choices: [{ message: { content } }], usage: { prompt_tokens: 100, completion_tokens: 30 } } });
   });
   await seed(page, { searchModel: true, planned: true });

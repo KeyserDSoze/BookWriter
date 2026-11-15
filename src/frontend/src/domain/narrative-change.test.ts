@@ -21,6 +21,39 @@ describe("Motore di modifica: regole pure", () => {
     expect(detectFactDrift("Elena parla con Markus. Erano le 9.", "Elena parla da sola. Erano le 10.", ["Elena", "Markus"]))
       .toEqual(["«Markus» non compare più nella scena.", "Numeri o date cambiati: 9, 10."]);
   });
+  it("il controllo locale vede anche i nomi propri senza scheda, non le maiuscole di inizio frase", () => {
+    expect(detectFactDrift("Elena entra. La stanza è buia.", "Elena entra con Tommaso. La stanza è buia.", ["Elena"])).toEqual(["Nomi propri nuovi: Tommaso."]);
+    expect(detectFactDrift("Sul tavolo c'è una lettera di Bianca.", "Sul tavolo c'è una lettera.", [])).toEqual(["Nomi propri spariti: Bianca."]);
+    // Moving a known word to the start of a sentence, or a sentence-initial capital, is not a new name.
+    expect(detectFactDrift("Corre verso Trieste. Piove.", "Trieste è lontana, corre. Piove ancora.", [])).toEqual([]);
+  });
+  it("il ripristino esatto riporta anche la revisione precedente del capitolo, se il testo torna identico", () => {
+    const book = knowledgeBook();
+    const op = withOperation(book, { target: { kind: "scene", id: "scene:002:002" }, targetLabel: "La prova" });
+    op.before = { scenes: sceneSnapshots(book, ["scene:002:002"]), memoryJson: JSON.stringify(book.memory) };
+    op.plan = { interpretation: "x", changeKind: "narrative", rationale: "x", direct: ["scene:002:002"], indirect: [], global: false, rewriteSceneIds: [], changedFacts: [] };
+    const frozen = { frozenAt: book.chapters[1]!.frozenAt, summary: book.chapters[1]!.summary, book: book.bookSummary };
+    applyChangePlan(book, op, now);
+    expect(book.chapters.map(c => !!c.frozenAt)).toEqual([true, false]);
+    book.chapters[1]!.scenes[1]!.text = "Elena capisce che la firma era del sindaco.";
+    book.revision = undefined; book.phase = "prose";
+    settleAfterRewrite(book, op, now);
+    revertChange(book, op, now);
+    expect(book.chapters[1]!.scenes[1]!.text).toContain("del Consiglio cittadino");
+    // Chapter 2 is the last written chapter and its text is exactly the validated one again.
+    expect(book.chapters[1]).toMatchObject({ frozenAt: frozen.frozenAt, summary: frozen.summary });
+    expect(book.bookSummary).toBe(frozen.book);
+    // A revert touching a chapter followed by other written chapters still sends them back to review.
+    const earlier = knowledgeBook();
+    const op2 = withOperation(earlier, { target: { kind: "scene", id: "scene:001:002" } });
+    op2.before = { scenes: sceneSnapshots(earlier, ["scene:001:002"]), memoryJson: JSON.stringify(earlier.memory) };
+    op2.plan = { interpretation: "x", changeKind: "narrative", rationale: "x", direct: ["scene:001:002"], indirect: [], global: false, rewriteSceneIds: [], changedFacts: [] };
+    applyChangePlan(earlier, op2, now);
+    earlier.revision = undefined; earlier.phase = "prose";
+    settleAfterRewrite(earlier, op2, now);
+    revertChange(earlier, op2, now);
+    expect(earlier.chapters.map(c => !!c.frozenAt)).toEqual([false, false]);
+  });
   it("le scene da riscrivere devono esistere, essere scritte e restano in ordine di libro", () => {
     const book = knowledgeBook();
     expect(validRewriteTargets(book, ["scene:002:002", "scene:001:002", "scene:001:002"])).toEqual(["scene:001:002", "scene:002:002"]);

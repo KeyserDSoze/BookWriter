@@ -4,6 +4,7 @@ import { readNarrarium } from "./narrarium-reader";
 import { projectEditorialDocuments } from "./editorial-markdown";
 import { findEntity, MEMORY_FOLDER, type EntityType } from "./knowledge";
 import { changeReportDocuments, eventMetadata, schemaDocuments, sheetMetadata } from "./knowledge-markdown";
+import { editHistoryDocuments } from "./edit-markdown";
 
 export interface NarrariumProjection {
   files: Record<string, string>;
@@ -136,7 +137,12 @@ export function projectLegacyBook(book: BookProject, activities: Activity[]): Na
 
 /** Portable folders/frontmatter independent of Book.Bot's novel and tools.
  * Format 2 adds editorial documents; format 1 remains comparable for old exports. */
-export function projectBook(book: BookProject, activities: Activity[], format: 1 | 2 = 2): NarrariumProjection {
+/** Markdown format: 1 = core contract; 2 = + sheets, events, timelines, agent profiles, change
+ * reports and JSON Schemas; 3 = + readable edit history and requested reviews (0.22).
+ * A repository keeps the format it was pushed with until the next push. */
+export type MarkdownFormat = 1 | 2 | 3;
+export const MARKDOWN_FORMAT: MarkdownFormat = 3;
+export function projectBook(book: BookProject, activities: Activity[], format: MarkdownFormat = MARKDOWN_FORMAT): NarrariumProjection {
   if (book.markdownSource !== undefined && !validMarkdownSource(book.markdownSource))
     throw new Error("Documenti Markdown originali non validi o oltre il limite.");
   const source = book.markdownSource ?? {};
@@ -196,7 +202,7 @@ export function projectBook(book: BookProject, activities: Activity[], format: 1
   const kinds = ["characters", "locations", "factions", "items", "secrets"] as const;
   // Format 2 carries the structured sheets; IDs already written in the Markdown win (stable),
   // so references in sheets and events are translated through this map.
-  const kb = format === 2 && book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
+  const kb = format >= 2 && book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
   const idMap = new Map<string, string>();
   const sheetKeys = (meta?: Record<string, MarkdownValue>) => Object.keys(meta ?? {}).filter(k => k.startsWith("attr_") ||
     ["importance", "summary", "status", "version", "aliases", "relations", "knowledge_only"].includes(k));
@@ -275,19 +281,22 @@ export function projectBook(book: BookProject, activities: Activity[], format: 1
     for (const timeline of kb.timelines) {
       const doc = documents.find(d => d.metadata.type === "timeline" && d.metadata.id === timeline.id && d.path.startsWith("timelines/"));
       const path = doc?.path ?? entityPath("timelines", "timeline-" + timeline.id.slice("timeline:".length), used);
-      write(path, { type: "timeline", id: timeline.id, title: timeline.title, kind: timeline.kind }, timeline.summary, doc?.metadata);
+      write(path, { type: "timeline", id: timeline.id, title: timeline.title, kind: timeline.kind,
+        ...(timeline.subjectIds?.length ? { subjects: timeline.subjectIds.map(mapId) } : {}) }, timeline.summary, doc?.metadata, ["subjects"]);
     }
     for (const event of kb.events) {
       const doc = documents.find(d => d.metadata.type === "event" && d.metadata.id === event.id && d.path.startsWith("events/"));
       const path = doc?.path ?? entityPath("events", event.id.slice("event:".length), used);
-      write(path, eventMetadata(event, mapId, sceneRef), event.summary, doc?.metadata);
+      // Optional fields removed in the app must not come back from the original file.
+      write(path, eventMetadata(event, mapId, sceneRef), event.summary, doc?.metadata, ["chapter", "when"]);
     }
   }
-  if (format === 2) Object.assign(files, projectEditorialDocuments(book), changeReportDocuments(book));
+  if (format >= 2) Object.assign(files, projectEditorialDocuments(book), changeReportDocuments(book));
+  if (format >= 3) Object.assign(files, editHistoryDocuments(book));
   // A generated repository must satisfy the same contract as a hand-written
   // one, including ID/number uniqueness and resolvable references.
   readNarrarium(files, book.id, book.updatedAt);
-  if (format === 2) Object.assign(files, schemaDocuments());
+  if (format >= 2) Object.assign(files, schemaDocuments(format === 2 ? 2 : 3));
   files[".bookwriter/project.json"] = old.files[".bookwriter/project.json"]!;
   files[".bookwriter/activities.json"] = old.files[".bookwriter/activities.json"]!;
   const manifest = { schemaVersion: 1, markdownFormat: format, bookId: book.id,

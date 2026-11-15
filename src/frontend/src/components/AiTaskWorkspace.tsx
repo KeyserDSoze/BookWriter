@@ -31,6 +31,7 @@ import {
 } from "../infrastructure/ai-observability";
 import { LiveTaskStream } from "./LiveTaskStream";
 import { AiRequestTrace } from "./AiRequestTrace";
+import { Button } from "./ui/button";
 
 interface Props {
   book?: RewindPreflightBook & Pick<BookProject, "updatedAt">;
@@ -332,108 +333,6 @@ export function AiTaskWorkspace({
       ({retentionText}).{" "}
       {onOpenTraceSettings&&<button type="button" className="min-h-11 underline" onClick={onOpenTraceSettings}>
         Cambia quanto tenerle</button>}</p>}
-    {!compact&&<section aria-label="Consenso copie testuali per il rewind"
-      className="mt-3 space-y-2 rounded-lg border border-amber-500/40 p-3 text-sm">
-      <p className="font-semibold">Copie locali della prosa canonica per task (opt-in)</p>
-      <p className="muted text-xs">Disattivato per impostazione predefinita.
-        Se lo attivi, ogni futuro task riuscito salva in IndexedDB una copia
-        integrale, non troncata, del testo delle scene canoniche prima e dopo
-        il commit. Duplica contenuti riservati e può occupare molto spazio.
-        Nessun backup ZIP o GitHub contiene queste copie. Non è un ripristino.</p>
-      <p className="text-xs">Stato per questo libro: {proseReady
-        ?proseEnabled?"attivo":"disattivato"
-        :"in caricamento o non verificabile"}.</p>
-      <button type="button" disabled={!proseReady||consentBusy||storageBusy}
-        className="rounded-lg border border-amber-600 px-3 py-2 text-sm disabled:opacity-40"
-        onClick={()=>void changeProseConsent(!proseEnabled)}>
-        {proseEnabled?"Revoca consenso ed elimina tutte le copie testuali del libro"
-          :"Attiva copie testuali locali per questo libro"}</button>
-      {consentMessage&&<p role="status" className="muted text-xs">{consentMessage}</p>}
-      {proseEnabled&&<div className="space-y-2 border-t border-amber-500/30 pt-3"
-        aria-label="Gestione spazio snapshot testuali">
-        <p className="font-semibold">Spazio e conservazione delle copie testuali</p>
-        <p className="muted text-xs">Per default tutte le copie restano conservate finché
-          non scegli di eliminarle. Nessuna cancellazione automatica.
-          Le dimensioni mostrate sono stime dei payload JSON UTF-8,
-          <b> non lo spazio effettivo IndexedDB</b> né la quota fisica del browser.
-          Un nuovo task può produrre più testo di quello attuale.</p>
-        <button type="button" disabled={storageBusy}
-          className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
-          onClick={()=>void refreshStorage()}>Aggiorna stima spazio locale</button>
-        {storageInventory?.bookId===bookId&&<>
-          <p className="text-xs" aria-label="Riepilogo archivio locale">
-            Copie conservate: {storageInventory.records};
-            stima payload: {(storageInventory.estimatedBytes/PROSE_MIB).toFixed(2)} MiB
-            ({storageInventory.estimatedBytes} byte).
-            Prossima coppia, <b>ipotizzando la prosa attuale invariata</b>:
-            {" "}{(storageInventory.nextPairEstimateBytes/PROSE_MIB).toFixed(2)} MiB.
-            {storageInventory.limitMiB===null
-              ?" Nessun limite applicativo impostato (resta la quota del browser)."
-              :` Limite applicativo: ${storageInventory.limitMiB} MiB.`}
-          </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs">Limite archivio (MiB, 1–1024)
-              <input className="field mt-1 w-32" type="number" min="1" max="1024"
-                step="1" value={limitDraft}
-                onChange={e=>setLimitDraft(e.target.value)}
-                aria-label="Limite copie testuali MiB"/>
-            </label>
-            <button type="button" disabled={storageBusy}
-              className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
-              onClick={()=>void changeStorageLimit(Number(limitDraft))}>
-              Applica limite copie testuali</button>
-            <button type="button" disabled={storageBusy||storageInventory.limitMiB===null}
-              className="rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
-              onClick={()=>void changeStorageLimit(null)}>
-              Rimuovi limite copie testuali</button>
-          </div>
-          <p className="muted text-xs">Se la prossima coppia completa supera il limite
-            (considerando le copie già presenti), il commit del task viene
-            rifiutato: niente troncamenti, rollback parziali o cancellazioni automatiche.</p>
-          {storageInventory.entries.length>0&&<div className="space-y-2">
-            <p className="font-medium text-xs">Seleziona da 1 a 20 copie da cancellare
-              manualmente; vengono mostrati al massimo i primi 20 ID.
-              La selezione non modifica il libro.</p>
-            <div className="max-h-44 space-y-1 overflow-auto"
-              aria-label="Copie testuali disponibili">
-              {storageInventory.entries.slice(0,20).map(entry=><label key={entry.activityId}
-                className="flex items-center gap-2 text-xs">
-                <input type="checkbox"
-                  aria-label={`Seleziona copia task ${entry.activityId}`}
-                  checked={selectedCopyIds.includes(entry.activityId)}
-                  onChange={e=>{
-                    setPendingDeleteIds([]);
-                    setSelectedCopyIds(ids=>e.target.checked
-                      ?[...ids,entry.activityId]:ids.filter(id=>id!==entry.activityId));
-                  }}/>
-                <span>{activities.find(x=>x.id===entry.activityId)?.title??"Task non presente nel registro"}
-                  {" · "}{entry.activityId.slice(0,8)}…
-                  {" · "}{(entry.estimatedBytes/1024).toFixed(1)} KiB stimati</span>
-              </label>)}
-            </div>
-            <button type="button" disabled={storageBusy||selectedCopyIds.length===0}
-              className="rounded-lg border border-amber-600 px-3 py-2 text-xs disabled:opacity-40"
-              onClick={()=>setPendingDeleteIds([...selectedCopyIds])}>
-              Richiedi cancellazione copie selezionate ({selectedCopyIds.length})</button>
-            {pendingDeleteIds.length>0&&<div className="space-y-2 rounded-lg border border-red-600/40 p-2">
-              <p className="text-xs">Confermi la cancellazione irreversibile di
-                {" "}{pendingDeleteIds.length} copie testuali di questo libro?
-                Manoscritto, audit e checkpoint strutturali rimangono invariati;
-                il futuro confronto di quei task non sarà più disponibile.</p>
-              <button type="button" disabled={storageBusy}
-                className="rounded-lg border border-red-600 px-3 py-2 text-xs"
-                onClick={()=>void deleteSelectedCopies()}>
-                Conferma cancellazione copie selezionate</button>
-              <button type="button" className="ml-2 rounded-lg border border-slate-400 px-3 py-2 text-xs"
-                onClick={()=>setPendingDeleteIds([])}>Annulla cancellazione copie</button>
-            </div>}
-          </div>}
-        </>}
-        {storageMessage&&<p role="status" className="muted text-xs">{storageMessage}</p>}
-      </div>}
-    </section>}
-    {!compact&&<TaskBookHistoryPanel key={bookId} bookId={bookId}
-      focusedTaskId={focused?.id??null}/>}
     <p className="muted mt-3 text-sm">Ogni attività è separata e ispezionabile. Un output in streaming non modifica il libro finché non supera i controlli di validazione e viene confermato come canonico.</p>
     {!compact&&focused&&<div role="region" aria-label="Scheda task dedicata"
       className="mt-4 space-y-3 rounded-xl border border-slate-400/50 p-4">
@@ -497,9 +396,9 @@ export function AiTaskWorkspace({
           versionato nella stessa transazione del canone e dell'audit.
           Non contiene il testo del romanzo, né prompt, segreti o reasoning.
           Non è un backup né permette di ripristinare lo stato precedente.</p>
-        <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
+        <Button type="button" variant="outline"
           onClick={()=>{if(focused)void inspectStructure(focused.id);}}>
-          Carica confronto strutturale</button>
+          Carica confronto strutturale</Button>
         {structuralMessage&&<p role="status" className="muted text-xs">{structuralMessage}</p>}
         {structuralChanges&&structural&&<div className="space-y-1 text-xs"
           aria-label="Differenze strutturali registrate">
@@ -527,10 +426,9 @@ export function AiTaskWorkspace({
           prima del commit del task. Il confronto conta le scene con testo
           differente, aggiunte o rimosse; non ripristina nulla e non mostra
           automaticamente il testo privato.</p>
-        <button type="button" disabled={!proseEnabled}
-          className="rounded-lg border border-slate-400 px-3 py-2 text-sm disabled:opacity-40"
+        <Button type="button" variant="outline" disabled={!proseEnabled}
           onClick={()=>{if(focused)void inspectProse(focused.id);}}>
-          Carica confronto della prosa canonica</button>
+          Carica confronto della prosa canonica</Button>
         {!proseEnabled&&<p className="muted text-xs">Consenso non attivo: il confronto
           testuale locale non è disponibile.</p>}
         {proseMessage&&<p role="status" className="muted text-xs">{proseMessage}</p>}
@@ -551,14 +449,12 @@ export function AiTaskWorkspace({
         </div>}
       </section>
       <div className="flex flex-wrap gap-2" aria-label="Navigazione task">
-        <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
-          onClick={()=>focusTask("")}>Torna al registro dei task</button>
-        <button type="button" disabled={!focused.previousId}
-          className="rounded-lg border border-slate-400 px-3 py-2 text-sm disabled:opacity-40 dark:border-slate-700"
-          onClick={()=>{if(focused.previousId)focusTask(focused.previousId);}}>Task precedente</button>
-        <button type="button" disabled={!focused.nextId}
-          className="rounded-lg border border-slate-400 px-3 py-2 text-sm disabled:opacity-40 dark:border-slate-700"
-          onClick={()=>{if(focused.nextId)focusTask(focused.nextId);}}>Task successivo</button>
+        <Button type="button" variant="outline"
+          onClick={()=>focusTask("")}>Torna al registro dei task</Button>
+        <Button type="button" variant="outline" disabled={!focused.previousId}
+          onClick={()=>{if(focused.previousId)focusTask(focused.previousId);}}>Task precedente</Button>
+        <Button type="button" variant="outline" disabled={!focused.nextId}
+          onClick={()=>{if(focused.nextId)focusTask(focused.nextId);}}>Task successivo</Button>
       </div>
     </div>}
     {!compact&&!focused&&<div className="mt-4 space-y-2 rounded-lg border border-slate-400/30 p-3" aria-label="Filtri timeline">
@@ -604,10 +500,10 @@ export function AiTaskWorkspace({
       </p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p role="status" className="muted text-xs">{filtered.length} task trovati su {activities.length}</p>
-        <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-xs dark:border-slate-700"
+        <Button type="button" size="sm" variant="outline"
           onClick={()=>{setSearch("");setStatusFilter("all");setPhaseFilter("");setOrder("newest");setGroupByRun(false);focusTask("");}}>
-          Azzera filtri
-        </button>
+          <span className="text-xs">Azzera filtri</span>
+        </Button>
       </div>
     </div>}
     {!activities.length ? <p className="muted mt-3 text-sm">Nessun task ancora eseguito per questo libro.</p> :
@@ -629,9 +525,8 @@ export function AiTaskWorkspace({
               Non è una fattura né una stima del totale reale.
             </p>
           </div>}
-          {!compact&&!focused&&<button type="button"
-            className="mb-2 rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
-            onClick={()=>focusTask(item.id)}>Apri scheda task</button>}
+          {!compact&&!focused&&<Button type="button" variant="outline" className="mb-2"
+            onClick={()=>focusTask(item.id)}>Apri scheda task</Button>}
           <details className="rounded-lg border border-slate-300 p-3 dark:border-slate-700"
             open={!!focused||item.status==="running"}>
             <summary className="cursor-pointer text-sm">
@@ -663,10 +558,10 @@ export function AiTaskWorkspace({
                 <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{item.output}</pre>
               </details>}
               <div className="flex flex-wrap gap-2">
-                {item.aiRequested!==false&&<button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
-                  onClick={()=>void inspect(item.id)}>Ispeziona richiesta e risposta</button>}
-                <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
-                  onClick={()=>onPrepareRevision(item)}>Prepara revisione da questo task</button>
+                {item.aiRequested!==false&&<Button type="button" variant="outline"
+                  onClick={()=>void inspect(item.id)}>Ispeziona richiesta e risposta</Button>}
+                <Button type="button" variant="outline"
+                  onClick={()=>onPrepareRevision(item)}>Prepara revisione da questo task</Button>
               </div>
               {chosen===item.id&&<div className="space-y-2 rounded border border-slate-400/30 p-2">
                 {message&&<p role="status" className="muted text-xs">{message}</p>}
@@ -681,8 +576,107 @@ export function AiTaskWorkspace({
     {!compact&&activities.length>0&&recent.length===0&&<p className="muted mt-3 text-sm">
       Nessun task corrisponde ai filtri attivi. Modifica i filtri oppure premi «Azzera filtri».
     </p>}
+    {/* Opt-in local copies for a future rewind: after the timeline, which is what the page is for. */}
+    {!compact&&<section aria-label="Consenso copie testuali per il rewind"
+      className="mt-5 space-y-2 rounded-lg border border-amber-500/40 p-3 text-sm">
+      <p className="font-semibold">Copie locali della prosa canonica per task (opt-in)</p>
+      <p className="muted text-xs">Disattivato per impostazione predefinita.
+        Se lo attivi, ogni futuro task riuscito salva in IndexedDB una copia
+        integrale, non troncata, del testo delle scene canoniche prima e dopo
+        il commit. Duplica contenuti riservati e può occupare molto spazio.
+        Nessun backup ZIP o GitHub contiene queste copie. Non è un ripristino.</p>
+      <p className="text-xs">Stato per questo libro: {proseReady
+        ?proseEnabled?"attivo":"disattivato"
+        :"in caricamento o non verificabile"}.</p>
+      <Button type="button" variant="outline" className="h-auto border-amber-600 text-left dark:border-amber-600" disabled={!proseReady||consentBusy||storageBusy}
+        onClick={()=>void changeProseConsent(!proseEnabled)}>
+        {proseEnabled?"Revoca consenso ed elimina tutte le copie testuali del libro"
+          :"Attiva copie testuali locali per questo libro"}</Button>
+      {consentMessage&&<p role="status" className="muted text-xs">{consentMessage}</p>}
+      {proseEnabled&&<div className="space-y-2 border-t border-amber-500/30 pt-3"
+        aria-label="Gestione spazio snapshot testuali">
+        <p className="font-semibold">Spazio e conservazione delle copie testuali</p>
+        <p className="muted text-xs">Per default tutte le copie restano conservate finché
+          non scegli di eliminarle. Nessuna cancellazione automatica.
+          Le dimensioni mostrate sono stime dei payload JSON UTF-8,
+          <b> non lo spazio effettivo IndexedDB</b> né la quota fisica del browser.
+          Un nuovo task può produrre più testo di quello attuale.</p>
+        <Button type="button" size="sm" variant="outline" disabled={storageBusy}
+          onClick={()=>void refreshStorage()}><span className="text-xs">Aggiorna stima spazio locale</span></Button>
+        {storageInventory?.bookId===bookId&&<>
+          <p className="text-xs" aria-label="Riepilogo archivio locale">
+            Copie conservate: {storageInventory.records};
+            stima payload: {(storageInventory.estimatedBytes/PROSE_MIB).toFixed(2)} MiB
+            ({storageInventory.estimatedBytes} byte).
+            Prossima coppia, <b>ipotizzando la prosa attuale invariata</b>:
+            {" "}{(storageInventory.nextPairEstimateBytes/PROSE_MIB).toFixed(2)} MiB.
+            {storageInventory.limitMiB===null
+              ?" Nessun limite applicativo impostato (resta la quota del browser)."
+              :` Limite applicativo: ${storageInventory.limitMiB} MiB.`}
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs">Limite archivio (MiB, 1–1024)
+              <input className="field mt-1 w-32" type="number" min="1" max="1024"
+                step="1" value={limitDraft}
+                onChange={e=>setLimitDraft(e.target.value)}
+                aria-label="Limite copie testuali MiB"/>
+            </label>
+            <Button type="button" size="sm" variant="outline" disabled={storageBusy}
+              onClick={()=>void changeStorageLimit(Number(limitDraft))}>
+              <span className="text-xs">Applica limite copie testuali</span></Button>
+            <Button type="button" size="sm" variant="outline" disabled={storageBusy||storageInventory.limitMiB===null}
+              onClick={()=>void changeStorageLimit(null)}>
+              <span className="text-xs">Rimuovi limite copie testuali</span></Button>
+          </div>
+          <p className="muted text-xs">Se la prossima coppia completa supera il limite
+            (considerando le copie già presenti), il commit del task viene
+            rifiutato: niente troncamenti, rollback parziali o cancellazioni automatiche.</p>
+          {storageInventory.entries.length>0&&<div className="space-y-2">
+            <p className="font-medium text-xs">Seleziona da 1 a 20 copie da cancellare
+              manualmente; vengono mostrati al massimo i primi 20 ID.
+              La selezione non modifica il libro.</p>
+            <div className="max-h-44 space-y-1 overflow-auto"
+              aria-label="Copie testuali disponibili">
+              {storageInventory.entries.slice(0,20).map(entry=><label key={entry.activityId}
+                className="flex items-center gap-2 text-xs">
+                <input type="checkbox"
+                  aria-label={`Seleziona copia task ${entry.activityId}`}
+                  checked={selectedCopyIds.includes(entry.activityId)}
+                  onChange={e=>{
+                    setPendingDeleteIds([]);
+                    setSelectedCopyIds(ids=>e.target.checked
+                      ?[...ids,entry.activityId]:ids.filter(id=>id!==entry.activityId));
+                  }}/>
+                <span>{activities.find(x=>x.id===entry.activityId)?.title??"Task non presente nel registro"}
+                  {" · "}{entry.activityId.slice(0,8)}…
+                  {" · "}{(entry.estimatedBytes/1024).toFixed(1)} KiB stimati</span>
+              </label>)}
+            </div>
+            <Button type="button" size="sm" variant="outline" className="h-auto border-amber-600 py-1.5 dark:border-amber-600" disabled={storageBusy||selectedCopyIds.length===0}
+              onClick={()=>setPendingDeleteIds([...selectedCopyIds])}>
+              <span className="text-xs">Richiedi cancellazione copie selezionate ({selectedCopyIds.length})</span></Button>
+            {pendingDeleteIds.length>0&&<div className="space-y-2 rounded-lg border border-red-600/40 p-2">
+              <p className="text-xs">Confermi la cancellazione irreversibile di
+                {" "}{pendingDeleteIds.length} copie testuali di questo libro?
+                Manoscritto, audit e checkpoint strutturali rimangono invariati;
+                il futuro confronto di quei task non sarà più disponibile.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="destructive" className="h-auto py-1.5" disabled={storageBusy}
+                  onClick={()=>void deleteSelectedCopies()}>
+                  <span className="text-xs">Conferma cancellazione copie selezionate</span></Button>
+                <Button type="button" size="sm" variant="outline"
+                  onClick={()=>setPendingDeleteIds([])}><span className="text-xs">Annulla cancellazione copie</span></Button>
+              </div>
+            </div>}
+          </div>}
+        </>}
+        {storageMessage&&<p role="status" className="muted text-xs">{storageMessage}</p>}
+      </div>}
+    </section>}
+    {!compact&&<TaskBookHistoryPanel key={bookId} bookId={bookId}
+      focusedTaskId={focused?.id??null}/>}
     {compact&&activities.length>recent.length&&<p className="muted mt-3 text-xs">Mostrati gli ultimi {recent.length} task. Apri Attività per lo storico completo.</p>}
-    {compact&&onOpenFull&&<button type="button" className="mt-3 rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-700"
-      onClick={onOpenFull}>Apri registro completo e filtri</button>}
+    {compact&&onOpenFull&&<Button type="button" variant="outline" className="mt-3"
+      onClick={onOpenFull}>Apri registro completo e filtri</Button>}
   </section>;
 }

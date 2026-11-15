@@ -10,6 +10,7 @@ test("recupero checkpoint incompleto: conferma autore, archivio e riavvio senza 
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("La porta di Mara");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" })
     .fill("Un romanzo sulla custode di un segreto.");
+  await page.getByRole("checkbox", { name: /Checklist dello scrittore/ }).uncheck();
   await page.getByRole("button", { name: "Crea libro" }).click();
 
   await page.evaluate(() => new Promise<void>((resolve, reject) => {

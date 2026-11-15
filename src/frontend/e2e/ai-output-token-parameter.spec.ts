@@ -26,6 +26,7 @@ test("parametro output scelto: persistito e inviato una volta senza fallback su 
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Scelta limite output");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara arriva al castello e incontra il guardiano.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");

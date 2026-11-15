@@ -15,6 +15,8 @@ function provider(page: Page, handler: Handler, seen: string[] = []) {
     let content = handler(system, prompt);
     if (content === undefined) {
       if (system.includes("direttore editoriale")) content = JSON.stringify({ reasoning: "Rapporti esaminati criticamente, nessun difetto.", decisions: [] });
+      else if (prompt.includes('"sceneSummaries"') && !prompt.includes("rifletta la NUOVA versione")) content = JSON.stringify({ sceneSummaries: Object.fromEntries(
+        [...prompt.matchAll(/SCENA (\S+) «/g)].map(match => [match[1], "Elena segue un indizio e lo collega al Consiglio cittadino."])) });
       else if (prompt.includes('"chapterSummary"')) content = JSON.stringify({ chapterSummary: "Elena segue la pista della firma e del Consiglio.",
         bookSummary: "Elena cerca il fratello scomparso e scopre il ruolo del Consiglio." });
       else if (system.includes("revisore letterario INDIPENDENTE")) content = pass;
@@ -96,10 +98,12 @@ test("modifica automatica di una scheda: analisi, riscrittura mirata, nuova reda
     if (prompt.includes("L'autore chiede di modificare la scheda «Elena»")) return JSON.stringify({
       interpretation: "Elena reagisce d'istinto, l'obiettivo resta trovare il fratello.", rationale: "Solo la scena dell'archivio mostra il carattere.",
       rewriteSceneIds: ["scene:001:002"], changedFacts: ["Elena è impulsiva"],
+      unchangedDirect: [{ sceneId: "scene:001:001", reason: "Ricordo d'infanzia: il carattere adulto non conta." },
+        { sceneId: "scene:002:002", reason: "Elena tace e riflette: nessuna reazione da cambiare." }],
       entity: { name: "Elena", aliases: ["Elena Voss"], importance: "main", summary: "Investigatrice impulsiva ed emotiva.", attributes: { role: "Protagonista", personality: "Impulsiva ed emotiva", speech: "Esclamazioni, frasi spezzate" } } });
     if (prompt.includes("Riscrivi SOLO la scena scene:001:002")) return "Nell'archivio municipale Elena strappa il registro dallo scaffale e trova una firma cancellata.";
     if (prompt.includes("rifletta la NUOVA versione")) return JSON.stringify({ mode: "delta", characters: { Elena: "Investigatrice impulsiva, cerca il fratello." },
-      sceneSummaries: { "scene:001:002": "Elena strappa il registro e trova una firma cancellata." } });
+      sceneSummaries: { "scene:001:002": "Elena strappa il registro e trova una firma cancellata." }, knowledge: {} });
     return undefined;
   }, seen);
   await seed(page);
@@ -141,7 +145,7 @@ test("con conferma: il piano mostra scene dirette e indirette e attende la decis
       event: { title: "Primo indizio", summary: "Una fotografia nascosta nel registro." } });
     if (prompt.includes("Riscrivi SOLO la scena scene:001:002")) return "Nell'archivio municipale Elena trova una fotografia nascosta nel registro.";
     if (prompt.includes("Riscrivi SOLO la scena scene:002:002")) return "Elena capisce che la fotografia ritrae il Consiglio cittadino. Non dice nulla a Markus.";
-    if (prompt.includes("rifletta la NUOVA versione")) return JSON.stringify({ mode: "delta" });
+    if (prompt.includes("rifletta la NUOVA versione")) return JSON.stringify({ mode: "delta", knowledge: {} });
     return undefined;
   });
   await seed(page);

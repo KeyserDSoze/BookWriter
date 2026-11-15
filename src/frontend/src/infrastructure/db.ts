@@ -1,6 +1,7 @@
 import { openDB, type IDBPDatabase } from "idb";
 import type { Activity, AppSettings, BookProject } from "../domain/types";
 import { DEFAULT_SETTINGS } from "../domain/types";
+import { bookFormatVersion, migrateBook } from "../domain/book-format";
 import { enqueueCheckpoint } from "./outbox";
 import { markCloudProfileDirty } from "./cloud/cloud-dirty";
 import { createTaskStructuralCheckpoint } from "../domain/task-structural-checkpoint";
@@ -72,12 +73,21 @@ export async function saveSettings(
 export async function listBooks(): Promise<BookProject[]> {
   const db = await getDb();
   const all = (await db.getAll("books")) as BookProject[];
+  // A book from a newer app stays listed as stored; reading or saving it fails with an explanation.
+  for (const book of all) try { migrateBook(book); } catch { /* left untouched */ }
   return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+/** The book in the current data format (migrations run in memory; the next save stores them). */
 export async function getBook(id: string): Promise<BookProject | undefined> {
   const db = await getDb();
-  return (await db.get("books", id)) as BookProject | undefined;
+  const book = (await db.get("books", id)) as BookProject | undefined;
+  return book && migrateBook(book);
+}
+/** Older code must never overwrite a book saved by a newer app. */
+function assertWritable(book: BookProject, stored: BookProject | undefined): void {
+  bookFormatVersion(book);
+  if (stored) bookFormatVersion(stored);
 }
 
 /** A manual editor is submitting a snapshot that is no longer current. */
@@ -102,6 +112,7 @@ export async function saveBook(
     await tx.done; // Commit an unchanged transaction, without touching outbox.
     throw new BookRevisionConflict();
   }
+  assertWritable(book, stored);
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   if (queueSync) await enqueueCheckpoint(book, tx.objectStore("outbox"));
@@ -128,6 +139,7 @@ export async function saveBookWithAuthorActivity(
     await tx.done;
     throw new BookRevisionConflict();
   }
+  assertWritable(book, stored);
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   await tx.objectStore("activities").put(activity, activity.id);
@@ -153,6 +165,7 @@ export async function saveBookAndActivity(
     await tx.done; // Read-only transaction: no book, activity or outbox writes.
     throw new BookRevisionConflict();
   }
+  assertWritable(book, stored);
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   await tx.objectStore("activities").put(activity, activity.id);

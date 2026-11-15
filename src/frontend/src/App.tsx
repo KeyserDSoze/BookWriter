@@ -3,7 +3,9 @@ import {
   BookOpen, BrainCircuit, Globe2,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
   Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet, Library, ClipboardCheck,
+  SlidersHorizontal,
 } from "lucide-react";
+import { Tabs } from "./components/ui/primitives";
 import { ReviewsPage } from "./components/review/ReviewsPage";
 import { findScene, pendingElements, type EditTarget } from "./domain/book-edits";
 import { activeManualReview } from "./domain/manual-review";
@@ -34,6 +36,7 @@ import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type GitHubRemote, type TaskKind, type TaskReasoning } from "./domain/types";
 import { connectGitHubBook } from "./application/github-connect";
 import { recommendedReasoningPreset } from "./domain/reasoning-presets";
+import { checklistEditorialProfiles } from "./domain/editorial-profiles";
 import { fetchLmStudioReasoningCatalog } from "./infrastructure/lmstudio-models";
 import { bookProgress, describeNextAutopilotStep } from "./domain/autopilot-step";
 import { missingModelRoutes } from "./domain/model-routes";
@@ -67,18 +70,34 @@ import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./ap
 import packageInfo from "../package.json";
 import { useWakeLock } from "./application/use-wake-lock";
 
-const navigation: Array<{ id: Page; label: string; icon: typeof BookOpen; mobile?: false }> = [
-  { id: "library", label: "Libreria", icon: Library },
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "activities", label: "Attività", icon: ListChecks },
-  { id: "costs", label: "Costi", icon: Wallet },
-  { id: "reader", label: "Libro", icon: BookOpen },
-  { id: "atlas", label: "Mondo", icon: Globe2 },
-  // Reached from the status bar on phones: the bottom bar keeps its eight tabs.
-  { id: "reviews", label: "Revisioni", icon: ClipboardCheck, mobile: false },
-  { id: "settings", label: "Impostazioni", icon: Settings2 },
-  { id: "export", label: "Archivio", icon: FileArchive },
+type NavGroup = "work" | "control" | "config";
+const NAV_GROUPS: ReadonlyArray<{ id: NavGroup; label: string }> = [
+  { id: "work", label: "Scrittura" }, { id: "control", label: "Controllo" }, { id: "config", label: "Configurazione" },
 ];
+/** The library stands alone; the book pages are grouped, and the two configuration pages say what they apply to. */
+const navigation: ReadonlyArray<{ id: Page; label: string; icon: typeof BookOpen; group?: NavGroup; hint?: string; description: string }> = [
+  { id: "library", label: "Libreria", icon: Library, description: "Tutti i tuoi libri, anche quelli iniziati su un altro dispositivo." },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "work", description: "Che cosa fa l'autopilot adesso, che cosa farà dopo e come intervenire." },
+  { id: "reader", label: "Libro", icon: BookOpen, group: "work", description: "Il manoscritto capitolo per capitolo: testo completo, scene e riassunti." },
+  { id: "atlas", label: "Mondo", icon: Globe2, group: "work", description: "Schede, eventi e timeline della storia, con la loro cronologia." },
+  { id: "reviews", label: "Revisioni", icon: ClipboardCheck, group: "work", description: "Le modifiche ancora da rivedere e le review che chiedi tu." },
+  { id: "activities", label: "Attività", icon: ListChecks, group: "control", description: "Ogni task dell'AI: che cosa ha chiesto, che cosa ha risposto, quanto è durato." },
+  { id: "costs", label: "Costi", icon: Wallet, group: "control", description: "Consumo di token e spesa stimata di questo libro." },
+  { id: "export", label: "Archivio", icon: FileArchive, group: "control", description: "Sincronizzazione su GitHub, copie di sicurezza ed esportazione del libro." },
+  { id: "bookSettings", label: "Modelli e redazione", icon: SlidersHorizontal, group: "config", hint: "Solo questo libro",
+    description: "Valgono solo per questo libro e prevalgono sulle impostazioni generali." },
+  { id: "settings", label: "Impostazioni", icon: Settings2, group: "config", hint: "Tutti i libri",
+    description: "Valgono per tutti i libri di questo browser." },
+];
+const SETTINGS_TABS = [
+  { id: "modelli", label: "Modelli AI" }, { id: "cloud", label: "Account e cloud" }, { id: "conversazioni", label: "Conversazioni AI" },
+] as const;
+const BOOK_SETTINGS_TABS = [
+  { id: "modelli", label: "Modelli" }, { id: "redazione", label: "Redazione" }, { id: "ricerca", label: "Ricerca web" },
+] as const;
+type SettingsTab = typeof SETTINGS_TABS[number]["id"];
+type BookSettingsTab = typeof BOOK_SETTINGS_TABS[number]["id"];
+const tabOf = <T extends string>(tabs: ReadonlyArray<{ id: T }>, value: string): T => tabs.find(tab => tab.id === value)?.id ?? tabs[0]!.id;
 const LABELS: Record<TaskKind, string> = {
   brainstorm: "Brainstorming", validate: "Validazione", audience: "Audience (5 profili)",
   adversarial: "Adversarial review", outline: "Piano capitoli", prose: "Scrittura",
@@ -113,6 +132,11 @@ function Empty({ children }: { children: React.ReactNode }) {
 export default function App() {
   const [initialRoute] = useState(() => parseRoute(window.location.hash));
   const [page, setPage] = useState<Page>(initialRoute.page);
+  // The tab belongs to the page it was chosen on: another page never inherits it.
+  const [tabState, setTabState] = useState({ page: initialRoute.page, tab: initialRoute.tab ?? "" });
+  const activeTab = tabState.page === page ? tabState.tab : "";
+  /** Opens a page from the navigation or a link, on its first tab unless one is asked for. */
+  const openPage = (next: Page, tab = "") => { setPage(next); setTabState({ page: next, tab }); };
   const [focusTaskId, setFocusTaskId] = useState(initialRoute.task ?? "");
   const [chapterId, setChapterId] = useState(initialRoute.chapter ?? "");
   const [books, setBooks] = useState<BookProject[]>([]);
@@ -286,6 +310,7 @@ export default function App() {
       page, book: selectedId || undefined,
       task: page === "activities" ? focusTaskId || undefined : undefined,
       chapter: page === "reader" ? chapterId || undefined : undefined,
+      tab: page === "settings" || page === "bookSettings" ? activeTab || undefined : undefined,
     });
     const here = parseRoute(window.location.hash);
     const initialized = routeWritten.current;
@@ -294,12 +319,13 @@ export default function App() {
     // A new page is a history entry (Back works); refinements and the first sync replace it.
     if (initialized && here.page !== page) window.history.pushState(null, "", next);
     else window.history.replaceState(null, "", next);
-  }, [ready, page, selectedId, focusTaskId, chapterId]);
+  }, [ready, page, selectedId, focusTaskId, chapterId, activeTab]);
   useEffect(() => {
     // URL -> state, for Back/Forward and hand-edited addresses.
     const apply = () => {
       const route = parseRoute(window.location.hash);
       setPage(route.page);
+      setTabState({ page: route.page, tab: route.tab ?? "" });
       setFocusTaskId(route.task ?? "");
       setChapterId(route.chapter ?? "");
       if (route.book && booksRef.current.some(book => book.id === route.book)) {
@@ -351,7 +377,15 @@ export default function App() {
   const pendingReview = useMemo(() => current ? pendingElements(current).filter(p => p.state === "modified_unreviewed" || p.state === "review_failed").length : 0, [current]);
   const reviewRunning = !!current && !!activeManualReview(current);
   const [worldFocus, setWorldFocus] = useState<{ kind: "entity" | "event" | "timeline"; id: string }>();
+  const [reviewPreselect, setReviewPreselect] = useState<EditTarget[]>();
+  function openReviews(targets?: EditTarget[]) { setReviewPreselect(targets?.length ? targets : undefined); setPage("reviews"); }
   useEffect(() => { if (page !== "atlas") setWorldFocus(undefined); }, [page]);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // On phones the bar scrolls sideways: keep the current page in view.
+    const bar = mobileNavRef.current, active = bar?.querySelector<HTMLElement>("[aria-current=page]");
+    if (bar && active) bar.scrollLeft = active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2;
+  }, [page]);
   /** From the reviews page to the element: the book for text, the world for sheets. */
   function openElement(target: EditTarget) {
     if (!current) return;
@@ -396,6 +430,7 @@ export default function App() {
 
   async function createProject(draft: NewBookDraft): Promise<boolean> {
     const book = newBook(draft.brief, draft.title, draft.writingStyle, draft.audience, draft.options);
+    if (draft.writerChecklist) book.editorialProfiles = checklistEditorialProfiles(crypto.randomUUID());
     try { await saveBook(book); }
     catch { setNotice("Impossibile salvare il libro in IndexedDB."); return false; }
     let connectionError = "";
@@ -744,35 +779,65 @@ export default function App() {
     } finally { setBusy(false); }
   }
 
+  const pageInfo = navigation.find(item => item.id === page) ?? navigation[1]!;
+  const pageGroup = NAV_GROUPS.find(group => group.id === pageInfo.group);
+  // The library and the general settings concern every book: the active book's controls stay on its own pages.
+  const bookPage = page !== "library" && page !== "settings";
+  const navBadge = (id: Page) =>
+    id === "reviews" && reviewRunning || id === "dashboard" && current?.status === "running" ? <span aria-hidden className="nav-dot"/>
+    : id === "reviews" && pendingReview > 0 ? <span aria-hidden className="nav-count">{pendingReview}</span> : null;
+  const sideItem = (item: typeof navigation[number]) => <button key={item.id} type="button" aria-label={item.label}
+    aria-current={page === item.id ? "page" : undefined} className="nav-item" onClick={() => openPage(item.id)}>
+    <item.icon size={18} aria-hidden className="shrink-0"/>
+    <span className="min-w-0 flex-1"><span className="block truncate">{item.label}</span>{item.hint && <span className="nav-hint">{item.hint}</span>}</span>
+    {navBadge(item.id)}
+  </button>;
+
   return <div className="site-nav">
     <aside className="sidebar">
-      <h1 className="mb-1 flex items-center gap-2 text-xl font-bold"><BookOpen className="text-emerald-500" /> BookWriter</h1>
-      <p className="muted mb-7 text-xs">Autore autonomo e supervisionabile</p>
-      <nav aria-label="Navigazione principale" className="space-y-1">
-        {navigation.map(({ id, label, icon: Icon }) =>
-          <button key={id} className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm ${page === id ? "bg-emerald-600/20 text-emerald-500 font-semibold" : "hover:bg-slate-300/25 dark:hover:bg-slate-700/40"}`} onClick={() => setPage(id)}>
-            <Icon size={19} /> {label}
-          </button>)}
+      <p className="mb-1 flex items-center gap-2 px-3 text-xl font-bold"><BookOpen className="text-emerald-500" aria-hidden/> BookWriter</p>
+      <p className="muted mb-5 px-3 text-xs">Autore autonomo e supervisionabile</p>
+      <nav aria-label="Navigazione principale">
+        {sideItem(navigation[0]!)}
+        {NAV_GROUPS.map(group => <div key={group.id} role="group" aria-labelledby={"nav-group-" + group.id}>
+          <p id={"nav-group-" + group.id} className="nav-group">{group.label}</p>
+          <div className="space-y-0.5">{navigation.filter(item => item.group === group.id).map(sideItem)}</div>
+        </div>)}
       </nav>
-      <p className="muted mt-8 text-xs">v{packageInfo.version} · Local-first e GitHub sync opzionale</p>
+      <p className="muted mt-auto px-3 pt-6 text-xs">v{packageInfo.version} · local-first</p>
     </aside>
 
-    <nav className="mobile-tabs" aria-label="Navigazione mobile">
-      {navigation.filter(item => item.mobile !== false).map(({id,label,icon:Icon}) => <button key={id} aria-label={label} aria-current={page===id ? "page" : undefined}
-        className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-md px-0.5 text-[10px] ${page===id ? "text-emerald-500 font-bold" : "muted"}`}
-        onClick={() => setPage(id)}><Icon size={19}/><span className="block max-w-full truncate">{label}</span></button>)}
+    <nav ref={mobileNavRef} className="mobile-tabs" aria-label="Navigazione mobile">
+      {navigation.flatMap((item, index) => [
+        index > 0 && item.group !== navigation[index - 1]!.group && <span key={"sep-" + item.id} aria-hidden className="nav-sep"/>,
+        <button key={item.id} type="button" aria-label={item.label} aria-current={page === item.id ? "page" : undefined}
+          className="nav-chip" onClick={() => openPage(item.id)}>
+          <item.icon size={17} aria-hidden className="shrink-0"/>{item.label}{navBadge(item.id)}
+        </button>,
+      ])}
     </nav>
 
-    <main className="min-w-0 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
-      <header className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold sm:text-2xl">{navigation.find(x => x.id === page)?.label ?? "Modelli e redazione"}</h1>
-          <p className="muted text-sm">Progetto local-first · GitHub autosync opzionale <span className="sm:hidden">· v{packageInfo.version}</span></p>
+    <main className="app-main min-w-0 px-3 pt-3 sm:px-6 sm:pt-5">
+      <header className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 flex-1 basis-72">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            {pageGroup ? pageGroup.label + (pageInfo.hint ? " · " + pageInfo.hint : "") : "Tutti i libri"}</p>
+          <h1 className="text-xl font-bold sm:text-2xl">{pageInfo.label}</h1>
+          <p className="muted text-sm">{pageInfo.description}<span className="min-[841px]:hidden"> · v{packageInfo.version}</span></p>
         </div>
-        <div className="flex items-center gap-2">
-          {pwa.canInstall && <button className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-600/60 px-3 text-sm font-semibold text-emerald-500"
-            onClick={() => void pwa.install()}><Download size={18}/> Installa app</button>}
-          <button className="flex size-11 items-center justify-center rounded-lg border border-slate-400 disabled:opacity-50 dark:border-slate-700" aria-label="Cambia tema chiaro/scuro"
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+          <label className="shrink-0 text-sm font-semibold" htmlFor="book-select">Libro attivo</label>
+          <select id="book-select" className="field book-select min-w-0" value={selectedId} onChange={e => {
+            creatingNewBook.current = e.target.value === "";
+            if (e.target.value === "") openPage("dashboard"); // the new-book form lives there
+            setSelectedId(e.target.value);
+          }}>
+            <option value="">{books.length ? "+ Nuovo libro" : "Nessun libro"}</option>
+            {books.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+          </select>
+          {pwa.canInstall && <button className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-emerald-600/60 px-3 text-sm font-semibold text-emerald-500"
+            onClick={() => void pwa.install()}><Download size={18}/> <span className="max-sm:sr-only">Installa app</span></button>}
+          <button className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-slate-400 disabled:opacity-50 dark:border-slate-700" aria-label="Cambia tema chiaro/scuro"
             disabled={!ready}
             onClick={() => void toggleTheme()}>
             {settings.theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
@@ -783,21 +848,7 @@ export default function App() {
       {!ready && <p role="status" className="muted mb-4">Caricamento archivio locale…</p>}
       {notice && <div role="status" className="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">{notice}</div>}
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="text-sm font-semibold" htmlFor="book-select">Libro attivo</label>
-        <select id="book-select" className="field max-w-xs" value={selectedId} onChange={e => {
-          creatingNewBook.current = e.target.value === "";
-          if (e.target.value === "") setPage("dashboard"); // the new-book form lives there
-          setSelectedId(e.target.value);
-        }}>
-          <option value="">{books.length ? "+ Nuovo libro" : "Nessun libro"}</option>
-          {books.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-        </select>
-        {current && <Button variant="outline" size="sm" onClick={() => setPage("bookSettings")}>
-          <Settings2 size={15} /> Modelli e redazione</Button>}
-      </div>
-
-      {current && <div className="panel status-bar z-20 mb-4 flex flex-col gap-3 p-3 shadow-md sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
+      {current && bookPage && <div className="panel status-bar z-20 mb-4 flex flex-col gap-3 p-3 shadow-md sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{statusText[current.status]} · {phaseText[current.phase]}</p>
           <p className="muted truncate text-xs">{runningActivity ? `Ora: ${runningActivity.title}` : `Prossimo: ${nextStep?.headline ?? phaseText[current.phase]}`}</p>
@@ -823,24 +874,35 @@ export default function App() {
 
       {page === "library" && <LibraryPage books={books} selectedId={selectedId} lastOpenedId={lastOpenedId}
         onOpen={id => { creatingNewBook.current = false; setSelectedId(id); setPage("dashboard"); }}
-        onOpenSettings={id => { creatingNewBook.current = false; setSelectedId(id); setPage("bookSettings"); }}
+        onOpenSettings={id => { creatingNewBook.current = false; setSelectedId(id); openPage("bookSettings"); }}
         onNew={() => { setNewBookDestination(undefined); creatingNewBook.current = true; setSelectedId(""); setPage("dashboard"); }}
         cloud={cloudState.link ? {
           views: libraryView(cloudState.library, books, cloudState.device?.id ?? ""),
           connected: cloudState.phase === "connected", busy: cloudState.busy, hasPat: !!settings.githubToken,
         } : undefined}
         onDownload={entry => void downloadCloudBook(entry)} onPull={id => void pullCloudBook(id)}
-        onForget={id => void cloud.removeBook(id)} onOpenCloud={() => setPage("settings")} />}
+        onForget={id => void cloud.removeBook(id)} onOpenCloud={() => openPage("settings", "cloud")} />}
 
-      {page === "bookSettings" && (current
-        ? <div className="space-y-4"><BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
-          onRoute={(kind, endpointId, modelId) => void updateBookRoute(kind, endpointId, modelId)}
-          onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
-          onEditorialMode={mode => void updateBookEditorial(mode)}
-          onConcurrency={value => void updateBookConcurrency(value)} />
-          <WebResearchPanel key={"research-" + current.id} book={current} settings={settings} onRefresh={refresh}
-            onRoute={(endpointId, modelId) => void updateBookRoute("research", endpointId, modelId)}/>
-          <EditorialProfilesPanel key={current.id} book={current} onRefresh={refresh}/></div>
+      {page === "bookSettings" && (current ? (() => {
+        const tab = tabOf(BOOK_SETTINGS_TABS, activeTab);
+        return <div className="space-y-3">
+          <Tabs label="Sezioni di Modelli e redazione" value={("book-" + tab) as `book-${BookSettingsTab}`}
+            onChange={id => setTabState({ page, tab: id.slice(5) })}
+            tabs={BOOK_SETTINGS_TABS.map(item => ({ id: ("book-" + item.id) as `book-${BookSettingsTab}`, label: item.label,
+              count: item.id === "ricerca" ? (current.webResearch?.enabled ? "attiva" : "spenta")
+                : item.id === "redazione" && current.editorialProfiles ? "personalizzata" : undefined }))}/>
+          <div role="tabpanel" id={"panel-book-" + tab} aria-labelledby={"tab-book-" + tab} className="min-w-0">
+            {tab === "modelli" && <BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
+              onRoute={(kind, endpointId, modelId) => void updateBookRoute(kind, endpointId, modelId)}
+              onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
+              onEditorialMode={mode => void updateBookEditorial(mode)}
+              onConcurrency={value => void updateBookConcurrency(value)} />}
+            {tab === "redazione" && <EditorialProfilesPanel key={current.id} book={current} onRefresh={refresh}/>}
+            {tab === "ricerca" && <WebResearchPanel key={"research-" + current.id} book={current} settings={settings} onRefresh={refresh}
+              onRoute={(endpointId, modelId) => void updateBookRoute("research", endpointId, modelId)}/>}
+          </div>
+        </div>;
+      })()
         : <Empty>Scegli un libro dalla Libreria per configurarne modelli e redazione.</Empty>)}
 
       {page === "dashboard" && <div className="space-y-4">
@@ -858,7 +920,7 @@ export default function App() {
               <AutopilotFocusPanel book={current} activities={activities} live={liveAi}
                 runningHere={runningHere}
                 settings={settings} onEnableRetry={enableRetry}
-                modelWarning={modelWarning} onOpenReader={() => setPage("reader")} onOpenSettings={() => setPage("settings")}/>
+                modelWarning={modelWarning} onOpenReader={() => setPage("reader")} onOpenSettings={() => openPage("settings")}/>
             </div>
             <div className="order-4 min-w-0 xl:order-none">
               <AiTaskWorkspace bookId={current.id} activities={activities}
@@ -903,7 +965,7 @@ export default function App() {
         </div>
         <div className="space-y-4">
           <EditorialBoardPanel book={current} onRefresh={refresh}/>
-          <Section title="Memoria narrativa" description="Dettagli completi nella pagina Memoria.">
+          <Section title="Memoria narrativa" description="Dettagli completi nella pagina Mondo.">
             <div className="grid grid-cols-2 gap-2 text-sm">
               {[
                 ["Capitoli", current.chapters.length],
@@ -931,7 +993,7 @@ export default function App() {
         <AiTaskWorkspace key={current.id} book={current} bookId={current.id} activities={activities} live={liveAi}
           focusId={focusTaskId} onFocusChange={setFocusTaskId}
           retentionText={describeAiTraceRetention(aiTracePolicy(settings))+(aiTracePolicy(settings).keepForever?", più quelle conservate senza scadenza":"")}
-          onOpenTraceSettings={()=>setPage("settings")}
+          onOpenTraceSettings={()=>openPage("settings", "conversazioni")}
           onPrepareRevision={prepareActivityRevision}
           onForkCreated={async(forkBookId)=>{
             await refresh();
@@ -949,24 +1011,26 @@ export default function App() {
         : <Section title="Costi AI"><Empty>Seleziona un libro per vedere consumi e budget.</Empty></Section>)}
 
       {page === "reader" && <div className="space-y-4">
-        {current && <>
-          <VoiceReaderPanel book={current} settings={settings} />
-          <SemanticSearchPanel book={current} settings={settings} />
-        </>}
         <Section title="Il libro" description="Ogni capitolo si legge per intero, scena per scena o in riassunto. Le scene canoniche sono il testo approvato; bozze e scene pianificate sono ancora in lavorazione. Esporta EPUB, DOCX e PDF dall'Archivio.">
         {!current?.chapters.length ? <Empty>Non c'è ancora un piano capitoli. Avvia l'autopilot.</Empty>
           : <BookWorkspace book={current} chapterId={chapterId} onChapter={setChapterId} busy={busy}
-            onApprove={sceneId => void approveEditorialScene(sceneId)} onRefresh={refresh} onStart={startRunner} onOpenReviews={() => setPage("reviews")}/>}
+            onApprove={sceneId => void approveEditorialScene(sceneId)} onRefresh={refresh} onStart={startRunner} onOpenReviews={openReviews}/>}
         </Section>
+        {/* Listening and semantic search are tools for the manuscript: they come after it. */}
+        {current && <div className="grid min-w-0 gap-4 xl:grid-cols-2 xl:items-start">
+          <VoiceReaderPanel book={current} settings={settings} />
+          <SemanticSearchPanel book={current} settings={settings} />
+        </div>}
       </div>}
 
       {page === "atlas" && (current
         ? <WorldPage key={current.id + (worldFocus ? ":" + worldFocus.id : "")} book={current} onRefresh={refresh} onStart={startRunner} runningHere={runningHere}
-          onOpenAgents={() => setPage("bookSettings")} onOpenBook={() => setPage("reader")} focus={worldFocus}/>
+          onOpenAgents={() => openPage("bookSettings", "redazione")} onOpenBook={() => setPage("reader")} focus={worldFocus}/>
         : <Section title="Mondo del libro"><Empty>Seleziona un libro per consultarne personaggi, luoghi, eventi e timeline.</Empty></Section>)}
 
       {page === "reviews" && (current
-        ? <ReviewsPage key={current.id} book={current} runningHere={runningHere} onStart={startRunner} onRefresh={refresh} onOpen={openElement}/>
+        ? <ReviewsPage key={current.id} book={current} runningHere={runningHere} onStart={startRunner} onRefresh={refresh} onOpen={openElement}
+          preselect={reviewPreselect} onPreselectUsed={() => setReviewPreselect(undefined)}/>
         : <Section title="Revisioni"><Empty>Seleziona un libro per vedere le modifiche da rivedere.</Empty></Section>)}
 
       {page === "export" && <div className="grid min-w-0 gap-4 lg:grid-cols-2">
@@ -1020,10 +1084,19 @@ export default function App() {
         </Section>
       </div>}
 
-      {ready && page === "settings" && <div className="space-y-3">
+      {ready && page === "settings" && (() => {
+        const tab = tabOf(SETTINGS_TABS, activeTab);
+        return <div className="space-y-3">
         <SaveBar dirty={settingsDirty} savedAt={savedAt}
           onSave={() => void saveEndpointSettings()} onDiscard={() => void discardSettingsChanges()} />
-        <CloudSyncPanel controller={cloud} settingsDirty={settingsDirty} />
+        <Tabs label="Sezioni delle impostazioni" value={("settings-" + tab) as `settings-${SettingsTab}`}
+          onChange={id => setTabState({ page, tab: id.slice(9) })}
+          tabs={SETTINGS_TABS.map(item => ({ id: ("settings-" + item.id) as `settings-${SettingsTab}`, label: item.label }))}/>
+        <div role="tabpanel" id={"panel-settings-" + tab} aria-labelledby={"tab-settings-" + tab} className="min-w-0 space-y-3">
+        {tab === "modelli" && <>
+        {current && <p className="muted rounded-lg border border-slate-300 p-3 text-xs dark:border-slate-700">Qui scegli endpoint e modelli per tutti i libri.
+          Modelli diversi per un solo libro, thinking, redazione leggera, revisori in parallelo, lettori e ricerca web
+          si impostano nella sua pagina. <button type="button" className="underline" onClick={() => openPage("bookSettings")}>Apri Modelli e redazione di «{current.title}»</button></p>}
         <section className="panel min-w-0 space-y-3 p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -1044,19 +1117,23 @@ export default function App() {
         <ModelRouterTable settings={settings} setSettings={setSettings} labels={LABELS} notify={setNotice}
           onRecommendedThinking={applyRecommendedThinking} />
         <ModelCapabilitiesPanel settings={settings} updateSettings={setSettings} />
-        {current && <p className="muted text-xs">I modelli, il thinking, la redazione leggera e i revisori in parallelo di un singolo libro
-          si impostano nella pagina del libro. <button type="button" className="underline" onClick={() => setPage("bookSettings")}>Apri Modelli e redazione di «{current.title}»</button></p>}
-        <Section title="Richieste e risposte dell'AI" description="Il testo in arrivo dal modello si vede sempre. Qui scegli per quanto tempo restano consultabili richiesta e risposta di ogni task: contengono prompt, testo del romanzo e possibili segreti.">
+        </>}
+        {tab === "cloud" && <>
+        <CloudSyncPanel controller={cloud} settingsDirty={settingsDirty} />
+        <Section title="GitHub" description="Il PAT GitHub si configura in Archivio; con l'account cloud qui sopra lo ritrovi su ogni PC.">
+          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Il PAT resta cifrato nel browser. Sincronizzazione manuale, autosync e lease del writer sono in Archivio.</p>
+        </Section>
+        </>}
+        {tab === "conversazioni" && <Section title="Richieste e risposte dell'AI" description="Il testo in arrivo dal modello si vede sempre. Qui scegli per quanto tempo restano consultabili richiesta e risposta di ogni task: contengono prompt, testo del romanzo e possibili segreti.">
           <AiTraceSettings settings={settings} onChange={patch => changeAiTracePreference(patch)}
             onClear={async () => {
               try { const count = await clearAiTraces(); setNotice(`Eliminate ${count} conversazioni AI salvate in questo browser.`); return count; }
               catch { setNotice("Impossibile eliminare le conversazioni AI salvate."); return 0; }
             }} />
-        </Section>
-        <Section title="GitHub" description="Il PAT GitHub si configura in Archivio; con l'account cloud qui sopra lo ritrovi su ogni PC.">
-          <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Il PAT resta cifrato nel browser. Sincronizzazione manuale, autosync e lease del writer sono in Archivio.</p>
-        </Section>
-      </div>}
+        </Section>}
+        </div>
+      </div>;
+      })()}
 
       <footer className="muted mt-10 flex flex-wrap items-center gap-2 text-xs"><BrainCircuit size={14} /> Autopilot nel browser aperto: nessuna attività garantita in background. <FileText size={14} /> Versione iniziale.</footer>
     </main>

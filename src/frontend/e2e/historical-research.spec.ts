@@ -143,6 +143,7 @@ test("dossier storico desktop/mobile: consenso e query pubblica, citazione contr
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Ricerca storica guidata");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara custodisce un segreto e usa un telegrafo nel 1848.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(async()=>new Promise<void>((resolve,reject)=>{
     const req=indexedDB.open("bookwriter");

@@ -35,8 +35,10 @@ function fullCycle(book: BookProject, writer: string): ChapterEditorialCycle {
     cycle.reports.push(validateReport(cycle, role, segment, 1, role === "writerReview" ? writer : pass, chapter, book));
   return cycle;
 }
-const judgment = (action: "accept" | "reject") => JSON.stringify({ reasoning: "Valutazione indipendente della checklist.", decisions: [
-  { findingId: "1:writerReview:0:0", action, rationale: "Valutato sul testo del segmento.", remediation: "Mostrare con un gesto concreto." }] });
+const judgment = (action: "accept" | "reject", verdict: "respected" | "violated" | false = action === "accept" ? "violated" : "respected") =>
+  JSON.stringify({ reasoning: "Valutazione indipendente della checklist.",
+    ...(verdict ? { ruleChecks: [{ ruleId: "show-dont-tell", verdict, rationale: "Verificata sul testo del segmento letto." }] } : {}),
+    decisions: [{ findingId: "1:writerReview:0:0", action, rationale: "Valutato sul testo del segmento.", remediation: "Mostrare con un gesto concreto." }] });
 
 describe("Checklist dello scrittore", () => {
   it("la scrittura riceve le regole; la rilettura deve verificarle tutte", () => {
@@ -96,8 +98,23 @@ describe("Checklist dello scrittore", () => {
     expect(blockOnMandatoryRules(accepted)).toBe(false);
     const advisory = ruleBook(RULES.map(rule => ({ ...rule, mandatory: false })));
     const cycle = fullCycle(advisory, writerReply("fail"));
-    cycle.judgment = validateJudgment(cycle, judgment("reject"), advisory.chapters[0]!, advisory);
+    cycle.judgment = validateJudgment(cycle, judgment("reject", false), advisory.chapters[0]!, advisory);
     expect(blockOnMandatoryRules(cycle)).toBe(false);
+  });
+  it("il direttore verifica da sé ogni regola obbligatoria: senza verifica il giudizio è respinto, violata senza correzione blocca", () => {
+    const book = ruleBook(), chapter = book.chapters[0]!;
+    const passed = fullCycle(book, writerReply("pass"));
+    const noFindings = (checks?: unknown) => JSON.stringify({ reasoning: "Valutazione indipendente della checklist.", decisions: [], ...(checks ? { ruleChecks: checks } : {}) });
+    expect(adjudicationPrompt(book, passed).system).toContain("ruleChecks");
+    expect(() => validateJudgment(passed, noFindings(), chapter, book)).toThrow(/regola obbligatoria/);
+    expect(() => validateJudgment(passed, noFindings([{ ruleId: "no-redundancy", verdict: "respected", rationale: "Regola consultiva, non richiesta qui." }]), chapter, book)).toThrow(/regola obbligatoria/);
+    passed.judgment = validateJudgment(passed, noFindings([{ ruleId: "show-dont-tell", verdict: "violated", rationale: "La seconda frase dichiara l'emozione invece di mostrarla." }]), chapter, book);
+    expect(passed.judgment.verdict).toBe("freeze");
+    expect(blockOnMandatoryRules(passed)).toBe(true);
+    expect(passed.blockedReason).toContain("ritiene violata");
+    const advisory = ruleBook(RULES.map(rule => ({ ...rule, mandatory: false })));
+    const free = fullCycle(advisory, writerReply("pass"));
+    expect(() => validateJudgment(free, noFindings([{ ruleId: "show-dont-tell", verdict: "respected", rationale: "Nessuna emozione dichiarata nel segmento." }]), advisory.chapters[0]!, advisory)).toThrow(/non prevista/);
   });
   it("una regola obbligatoria richiede la rilettura e id univoci", () => {
     const profiles = ruleBook().editorialProfiles!;

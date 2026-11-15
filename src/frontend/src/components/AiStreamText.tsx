@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button } from "./ui/button";
 
 /** Follow new text unless the author has scrolled up to inspect an earlier passage. */
 export function AiStreamText({ text, label, compact=false }: {
@@ -18,8 +19,8 @@ export function AiStreamText({ text, label, compact=false }: {
     if(compact&&viewport.current)setOverflowing(viewport.current.scrollHeight>viewport.current.clientHeight);
   },[text,compact]);
   return <div className="min-w-0">
-    {!compact&&paused&&<button type="button" className="mb-1 min-h-11 rounded-lg border border-slate-400 px-3 text-xs"
-      onClick={follow}>Segui il testo in arrivo</button>}
+    {!compact&&paused&&<Button type="button" variant="outline" className="mb-1 px-3"
+      onClick={follow}><span className="text-xs">Segui il testo in arrivo</span></Button>}
     <pre ref={viewport} aria-label={label} tabIndex={compact?undefined:0}
       onScroll={compact?undefined:()=>{
         const element=viewport.current;

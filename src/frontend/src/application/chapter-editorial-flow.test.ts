@@ -43,6 +43,9 @@ const judgment=(accept:boolean, round=1) => JSON.stringify({
     rationale:"La motivazione del guardiano non risulta dal testo e serve un chiarimento.",
     remediation:"Inserire una battuta che spieghi il motivo per cui il guardiano apre."}]:[],
 });
+/** The «Riassunti delle scene» step after a correction: one real summary per listed scene. */
+const sceneSummaries=(prompt:string)=>JSON.stringify({sceneSummaries:Object.fromEntries(
+  [...prompt.matchAll(/SCENA (\S+) «/g)].map(match=>[match[1],"Mara saluta il guardiano, che la lascia entrare nel castello."]))});
 beforeEach(async()=>{
   const db=await getDb();
   await db.clear("books");await db.clear("activities");await db.clear("outbox");
@@ -135,6 +138,8 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
         return {text:"Mara saluta il guardiano; lui apre per ordine del castellano.",endpointId:"test",modelId:"Writer"};
       if(kind==="consolidate")
         return {text:JSON.stringify(source.memory),endpointId:"test",modelId:"Memory"};
+      if(kind==="summarize"&&prompt.includes('"sceneSummaries"'))
+        return {text:sceneSummaries(prompt),endpointId:"test",modelId:"Luna"};
       if(kind==="summarize")
         return {text:JSON.stringify({chapterSummary:"La guardia lascia passare Mara, come ordinato dal castellano.",
           bookSummary:"Nel primo capitolo Mara entra al castello per ordine del castellano."}),endpointId:"test",modelId:"Luna"};
@@ -152,6 +157,10 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(tasks.filter(x=>x==="chapterReaders")).toHaveLength(10);
     expect(tasks.filter(x=>x==="chapterRepair")).toHaveLength(1);
     expect(tasks.filter(x=>x==="consolidate")).toHaveLength(1);
+    // The corrected scene gets a real summary before the second round (no cut of the prose).
+    expect(updated?.chapters[0]?.scenes[0]?.summary).toBe("Mara saluta il guardiano, che la lascia entrare nel castello.");
+    expect(updated?.chapters[0]?.scenes[0]?.summaryStale).toBeUndefined();
+    expect(tasks.filter(x=>x==="summarize")).toHaveLength(2);
   });
   it("scarta il report dello storico quando un restore cambia l'estratto senza cambiare updatedAt, poi lo rifà sulla fonte nuova",async()=>{
     const source=book();
@@ -346,10 +355,11 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
   it("ferma l'autopilot dopo tre tornate senza consensus e NON congela il capitolo",async()=>{
     const source=book();await saveBook(source,false);
     let round=1;
-    modelCall.mockImplementation(async(kind:string,system:string)=>{
+    modelCall.mockImplementation(async(kind:string,system:string,prompt:string)=>{
       if(kind==="chapterJudge") return {text:judgment(true,round++),endpointId:"test",modelId:"Judge"};
       if(kind==="chapterRepair") return {text:"Mara saluta il guardiano; resta un problema di motivazione.",endpointId:"test",modelId:"Writer"};
       if(kind==="consolidate") return {text:JSON.stringify(source.memory),endpointId:"test",modelId:"Memory"};
+      if(kind==="summarize") return {text:sceneSummaries(prompt),endpointId:"test",modelId:"Luna"};
       return {text:report(kind==="chapterAudit" && system.includes("Coerenza")),
         endpointId:"test",modelId:"Reviewer"};
     });

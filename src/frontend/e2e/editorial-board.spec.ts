@@ -36,6 +36,7 @@ test("redazione capitolo desktop/mobile: 12 agenti separati, giudice, freeze e r
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Castello in revisione");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara custodisce una chiave e arriva al castello.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(async()=>await new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");
@@ -129,6 +130,7 @@ test("divergenze documentali desktop/mobile: il report distingue posizioni e pro
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Cronache in contrasto");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Romanzo storico su una linea telegrafica controversa.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");
@@ -240,6 +242,7 @@ test("relazioni tra fonti desktop/mobile: consenso, audit e riapertura capitoli"
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Le cronache");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Romanzo ambientato nel periodo del telegrafo.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");

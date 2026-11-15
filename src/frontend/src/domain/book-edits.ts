@@ -156,3 +156,29 @@ export function setReviewState(book: BookProject, targets: readonly EditTarget[]
     }
   }
 }
+/** Derived data was rewritten from unchanged content (a scene summary written from the same
+ * text): a review that validated the previous content still holds, so its stamp follows. */
+export function carryReviewedStamp(book: BookProject, target: EditTarget, previousStamp: string): void {
+  const now = currentStamp(book, target);
+  if (now === previousStamp) return;
+  for (const edit of book.edits ?? [])
+    if (sameTarget(edit.target, target) && edit.reviewedStamp === previousStamp &&
+      (edit.reviewState === "review_passed" || edit.reviewState === "review_skipped")) edit.reviewedStamp = now;
+}
+/** The editorial board has just frozen this chapter on its current text: the author's edits to
+ * the chapter and its scenes still waiting for a review are validated by it, bound to the exact
+ * content it read. Edits owned by a running review are left to that review. */
+export function settleChapterEdits(book: BookProject, chapter: Chapter): void {
+  const targets: EditTarget[] = [{ kind: "chapter", id: chapter.id }, ...chapter.scenes.map(s => ({ kind: "scene" as const, id: s.id }))];
+  const running = new Set((book.manualReviews ?? []).filter(r => r.status === "pending" || r.status === "in_progress").map(r => r.id));
+  const owned = (edit: BookEdit) => !!edit.reviewId && running.has(edit.reviewId) && !SETTLED.has(edit.reviewState) && edit.reviewState !== "modified_unreviewed";
+  for (const target of targets) {
+    if (!["modified_unreviewed", "review_failed"].includes(elementReviewState(book, target))) continue;
+    const edits = (book.edits ?? []).filter(edit => sameTarget(edit.target, target));
+    const latest = edits.at(-1);
+    const stamp = currentStamp(book, target);
+    for (const edit of edits) if ((!SETTLED.has(edit.reviewState) || edit === latest) && !owned(edit)) {
+      edit.reviewState = "review_passed"; edit.reviewedStamp = stamp;
+    }
+  }
+}

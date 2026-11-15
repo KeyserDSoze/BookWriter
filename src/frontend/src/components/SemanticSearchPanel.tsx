@@ -5,6 +5,7 @@ import {
   type SemanticMatch, type SemanticScene,
 } from "../application/semantic-search";
 import { embedTextBatch, localEmbeddingSelection, MAX_EMBED_BATCH } from "../infrastructure/embeddings";
+import { Button } from "./ui/button";
 
 interface SearchIndex {
   bookId: string;
@@ -153,12 +154,12 @@ export function SemanticSearchPanel({ book, settings }: Props) {
       {selection.route ? ` Modello: ${selection.route.modelId}.` : ` ${selection.reason}`}
     </p>
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
+      <Button type="button" variant="outline"
         onClick={() => void build()} disabled={busy!==null || !selection.route || !sceneSet.scenes.length}>
         {busy==="index" ? `Indicizzazione ${progress}/${passages.length} passaggi` :
           currentIndex ? "Reindicizza scene" : "Indicizza scene su localhost"}
-      </button>
-      {busy && <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600" onClick={stop}>Annulla</button>}
+      </Button>
+      {busy && <Button type="button" variant="outline" onClick={stop}>Annulla</Button>}
     </div>
     <form className="mt-3 space-y-2" onSubmit={event => {event.preventDefault();void search();}}>
       <label htmlFor="semantic-search-question" className="block text-sm font-semibold">
@@ -167,8 +168,8 @@ export function SemanticSearchPanel({ book, settings }: Props) {
       <input id="semantic-search-question" className="field" value={query} maxLength={180}
         onChange={e => setQuery(e.target.value)}
         placeholder="Es. Dove abbiamo anticipato il tradimento del protagonista?" />
-      <button type="submit" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
-        disabled={busy!==null || !currentIndex || query.trim().length < 3}>Cerca scene simili</button>
+      <Button type="submit" variant="outline"
+        disabled={busy!==null || !currentIndex || query.trim().length < 3}>Cerca scene simili</Button>
     </form>
     <div role="group" aria-label="Confronto scene per continuità narrativa"
       className="mt-4 space-y-2 rounded-lg border border-slate-300 p-3 dark:border-slate-700">
@@ -186,10 +187,10 @@ export function SemanticSearchPanel({ book, settings }: Props) {
           Capitolo {scene.chapter}, scena {scene.number}: {scene.title}
         </option>)}
       </select>
-      <button type="button" className="rounded-lg border border-slate-400 px-3 py-2 text-sm dark:border-slate-600"
+      <Button type="button" variant="outline"
         onClick={related} disabled={busy!==null || !currentIndex || currentIndex.scenes.length<2}>
         Trova scene collegate
-      </button>
+      </Button>
     </div>
     <p role="status" aria-live="polite" className="muted mt-3 text-sm">{status}</p>
     {matches.length>0 && resultKind && <ol aria-label={resultKind==="related"?"Scene collegate":"Risultati semantici"} className="mt-3 space-y-3">
@@ -199,10 +200,10 @@ export function SemanticSearchPanel({ book, settings }: Props) {
           <p className="muted mt-1 text-xs">Affinità coseno: {similarity.toFixed(3)} (ordinamento, non percentuale di certezza)</p>
           {passageNumber && <p className="muted mt-1 text-xs">Passaggio corrispondente {passageNumber} di {(scene.passages??[scene.excerpt]).length}</p>}
           <p className="mt-2 whitespace-pre-wrap break-words text-sm">{(matchedExcerpt??scene.excerpt).slice(0,360)}{(matchedExcerpt??scene.excerpt).length>360?"…":""}</p>
-          <button type="button" className="mt-2 text-sm underline" onClick={() =>
+          <Button type="button" size="sm" variant="ghost" className="mt-2" onClick={() =>
             document.getElementById(`book-scene-${scene.id}`)?.scrollIntoView({behavior:"smooth",block:"center"})}>
             Vai alla scena
-          </button>
+          </Button>
         </li>)}
     </ol>}
   </section>;

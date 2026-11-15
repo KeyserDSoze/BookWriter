@@ -5,6 +5,7 @@ import {
   prepareBookSafetyBackup, verifyDownloadedBookSafetyBackup,
   type BookSafetyEvidence,
 } from "../infrastructure/rewind-safety-backup";
+import { Button } from "./ui/button";
 
 interface Props {
   bookId: string;
@@ -112,11 +113,10 @@ export function RewindSafetyBackupPanel({
       <b> fork locale dello stato corrente</b>: non è una versione storica.</p>
     {bookStatus==="running"&&<p role="alert" className="text-xs">
       Autopilot in esecuzione: mettilo in pausa prima della copia.</p>}
-    <button type="button" disabled={busy||bookStatus==="running"}
-      className="rounded-lg border border-amber-600 px-3 py-2 text-xs disabled:opacity-40"
+    <Button type="button" size="sm" variant="outline" className="h-auto border-amber-600 py-1.5 dark:border-amber-600" disabled={busy||bookStatus==="running"}
       onClick={()=>void generate()}>
-      Genera e scarica ZIP di sicurezza del libro corrente
-    </button>
+      <span className="text-xs">Genera e scarica ZIP di sicurezza del libro corrente</span>
+    </Button>
     {evidence&&<div className="space-y-2 text-xs"
       aria-label="Dati della copia di sicurezza">
       <p>Libro: {evidence.bookId}. Revisione: {evidence.bookRevision}.
@@ -147,27 +147,26 @@ export function RewindSafetyBackupPanel({
           al ripristino. Capitoli congelati e dipendenze narrative
           richiedono una revisione manuale prima di riprendere.
           Il libro originale non viene modificato.</p>
-        <button type="button" disabled={busy||bookStatus==="running"}
-          className="rounded-lg border border-amber-600 px-3 py-2 text-xs disabled:opacity-40"
+        <Button type="button" size="sm" variant="outline" className="h-auto border-amber-600 py-1.5 dark:border-amber-600" disabled={busy||bookStatus==="running"}
           onClick={()=>setForkConfirmation(true)}>
-          Prepara fork locale da ZIP verificato
-        </button>
+          <span className="text-xs">Prepara fork locale da ZIP verificato</span>
+        </Button>
         {forkConfirmation&&<div className="space-y-2 rounded-lg border border-red-600/40 p-2">
           <p className="text-xs">Confermi la creazione di un nuovo libro
             dalla revisione corrente {evidence.bookRevision}? Il task
             selezionato è soltanto il riferimento dell'archivio,
             non la destinazione temporale. Verranno ricontrollati SHA-256,
             Web Lock e revisione CAS. Nessun undo sarà eseguito.</p>
-          <button type="button" disabled={busy||bookStatus==="running"}
-            className="rounded-lg border border-red-600 px-3 py-2 text-xs disabled:opacity-40"
-            onClick={()=>void fork()}>
-            Conferma creazione fork locale separato
-          </button>
-          <button type="button" disabled={busy}
-            className="ml-2 rounded-lg border border-slate-400 px-3 py-2 text-xs disabled:opacity-40"
-            onClick={()=>setForkConfirmation(false)}>
-            Annulla fork locale
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" className="h-auto py-1.5" disabled={busy||bookStatus==="running"}
+              onClick={()=>void fork()}>
+              <span className="text-xs">Conferma creazione fork locale separato</span>
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={busy}
+              onClick={()=>setForkConfirmation(false)}>
+              <span className="text-xs">Annulla fork locale</span>
+            </Button>
+          </div>
         </div>}
       </div>}
     </div>}

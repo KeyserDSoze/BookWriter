@@ -130,7 +130,7 @@ describe("GitHub Markdown portabile, senza strumenti esterni", () => {
     await saveBook(book, false);
     await pushGitHubBook(book.id);
     expect(api.files()["reviews/sinossi-autore.md"]).toBe(syntheticNarrarium["reviews/sinossi-autore.md"]);
-    expect(api.files()[".bookwriter/manifest.json"]).toContain('"markdownFormat": 2');
+    expect(api.files()[".bookwriter/manifest.json"]).toContain('"markdownFormat": 3');
     const snapshot = await readGitHubSnapshot(remote);
     expect(snapshot?.book.chapters[0]!.scenes[0]!.text).toBe(book.chapters[0]!.scenes[0]!.text);
     expect(snapshot?.head).toBe(NEXT);
@@ -139,7 +139,10 @@ describe("GitHub Markdown portabile, senza strumenti esterni", () => {
   it("schede, eventi e timeline viaggiano nello snapshot GitHub; modifiche esterne o collegamenti falsi bloccano", async () => {
     const book = knowledgeBook();
     const files = projectBook(book, []).files;
-    expect(Object.keys(files).filter(p => p.startsWith("schemas/"))).toHaveLength(6);
+    expect(Object.keys(files).filter(p => p.startsWith("schemas/"))).toHaveLength(8);
+    // A repository pushed in format 2 (0.20–0.21) is still read as it is.
+    await repository(projectBook(book, [], 2).files);
+    expect((await readGitHubSnapshot(remote))!.book.knowledge).toEqual(book.knowledge);
     let api = await repository(files);
     const snapshot = await readGitHubSnapshot(remote);
     expect(snapshot!.book.knowledge).toEqual(book.knowledge);

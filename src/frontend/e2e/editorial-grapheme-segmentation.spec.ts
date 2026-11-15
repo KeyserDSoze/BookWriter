@@ -49,6 +49,7 @@ test("redazione a segmenti Unicode: i primi due prompt conservano interi i grafe
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("La scena con emoji");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" })
     .fill("La protagonista Mara incontra un guardiano.");
+  await page.getByRole("checkbox", { name: /Checklist dello scrittore/ }).uncheck();
   await page.getByRole("button", { name: "Crea libro" }).click();
 
   await page.evaluate(async text => await new Promise<void>((resolve, reject) => {

@@ -36,6 +36,7 @@ test("Header POST bloccati: pausa, ripresa supervisionata e usage ignoto (deskto
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Il manoscritto protetto");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara arriva al castello e incontra un guardiano enigmatico.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(() => new Promise<void>((resolve,reject) => {
     const opened = indexedDB.open("bookwriter");

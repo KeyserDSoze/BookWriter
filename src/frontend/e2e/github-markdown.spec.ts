@@ -44,6 +44,7 @@ async function prepare(page: Page, files: Record<string, string>) {
   await page.route("**/chat/completions", async route => { aiCalls++; await route.abort(); });
   await page.goto("/");
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Libro locale intatto");
+  await page.getByRole("checkbox", { name: /Checklist dello scrittore/ }).uncheck();
   await page.getByRole("button", { name: "Crea libro", exact: true }).click();
   const before = await page.evaluate(async () => {
     const { getDb } = await import("/src/infrastructure/db.ts");

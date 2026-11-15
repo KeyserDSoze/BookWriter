@@ -5,6 +5,7 @@ import {
   type HistoricalTarget,
 } from "../domain/historical-rewind-review-plan";
 import { prepareHistoricalRewindReviewPlan } from "../infrastructure/task-book-checkpoint";
+import { Button } from "./ui/button";
 
 interface Props { bookId:string; activityId:string; }
 const BLOCKER_LABELS:Record<HistoricalPlanBlocker,string>={
@@ -95,11 +96,10 @@ export function HistoricalReviewPlanPanel({bookId,activityId}:Props){
         <option value="after">Dopo il task (post-task)</option>
       </select>
     </label>
-    <button type="button" disabled={busy}
-      className="rounded-lg border border-amber-600 px-3 py-2 disabled:opacity-40"
+    <Button type="button" variant="outline" className="border-amber-600 dark:border-amber-600" disabled={busy}
       onClick={()=>void prepare()}>
       Genera preflight del piano storico
-    </button>
+    </Button>
     {plan&&plan.target===target&&
       <div role="region" aria-label="Metadati piano storico"
         className="space-y-2 rounded-lg border border-slate-400/40 p-2">
@@ -147,11 +147,10 @@ export function HistoricalReviewPlanPanel({bookId,activityId}:Props){
         <p className="muted">{instruction.length}/2000 caratteri solo in memoria
           della schermata. Non viene salvato, esportato o inviato.
           Non costituisce un permesso di riscrittura.</p>
-        <button type="button" disabled={busy}
-          className="rounded-lg border border-amber-600 px-3 py-2 disabled:opacity-40"
+        <Button type="button" variant="outline" className="border-amber-600 dark:border-amber-600" disabled={busy}
           onClick={()=>void revalidate()}>
           Riconvalida impronte e revisione
-        </button>
+        </Button>
         <p className="muted">Non è presente alcuna azione di
           ripristino o conferma del canone: il piano non è eseguibile.
           Prima di un futuro fork storico servono un backup verificato,

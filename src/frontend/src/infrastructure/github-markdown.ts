@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { BookProject, GitHubRemote } from "../domain/types";
 import { projectBook, projectLegacyBook } from "../domain/narrarium";
 import { readNarrarium } from "../domain/narrarium-reader";
+import { migrateBook } from "../domain/book-format";
 import { isCoreNarrativePath, isNarrativePath, MAX_DOCUMENT_BYTES, MAX_MARKDOWN_BYTES, MAX_MARKDOWN_FILES, readMarkdownDocument } from "../domain/markdown-document";
 
 type Get = (suffix: string) => Promise<unknown>;
@@ -80,14 +81,14 @@ export async function readGitHubMarkdown(get: Get, ref: string, remote: GitHubRe
       throw new Error("Dimensione o impronta di un documento GitHub non valida.");
     files[path] = value;
   }
-  return readNarrarium(files, identity.id, new Date().toISOString());
+  return migrateBook(readNarrarium(files, identity.id, new Date().toISOString()));
 }
 
 /** Compare actual Git blobs, not merely metadata or file timestamps. New,
  * removed and changed Markdown all block a stale JSON snapshot. */
 export async function assertMarkdownSnapshot(get: Get, ref: string, book: BookProject, format: number): Promise<void> {
   const tree = await narrativeTree(get, ref);
-  const expected = format === 0 ? projectLegacyBook(book, []).files : projectBook(book, [], format === 1 ? 1 : 2).files;
+  const expected = format === 0 ? projectLegacyBook(book, []).files : projectBook(book, [], format === 1 ? 1 : format === 2 ? 2 : 3).files;
   const managed = new Map(Object.entries(expected).filter(([path]) => isNarrativePath(path)));
   for (const [path, content] of managed) if (tree.get(path) !== await gitBlobSha(content)) throw new MarkdownSnapshotConflict();
   // New extension documents are also data: an older JSON cannot hide them.

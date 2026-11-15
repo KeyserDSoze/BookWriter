@@ -9,8 +9,15 @@ const nav = (page: Page) => page.getByRole("navigation", {
 async function create(page: Page) {
   await page.goto("/");
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Profili del libro sintetico");
+  // These tests start from the standard workflow; the default checklist has its own test.
+  await page.getByRole("checkbox", { name: /Checklist dello scrittore/ }).uncheck();
   await page.getByRole("button", { name: "Crea libro", exact: true }).click();
+  await openProfiles(page);
+}
+/** Readers, writer and director are in the «Redazione» tab of the book's settings. */
+async function openProfiles(page: Page) {
   await page.getByRole("button", { name: "Modelli e redazione", exact: true }).click();
+  await page.getByRole("tab", { name: /^Redazione/ }).click();
 }
 const panel = (page: Page) => page.getByRole("region", { name: "Profili dei lettori e dello scrittore" });
 async function saved(page: Page) {
@@ -59,7 +66,7 @@ test("CMS per libro: lettori e scrittori modificabili, conferma, persistenza e i
   });
   await page.reload();
   await page.getByRole("combobox", { name: "Libro attivo", exact: true }).selectOption(otherId);
-  await page.getByRole("button", { name: "Modelli e redazione", exact: true }).click();
+  await openProfiles(page);
   await expect(panel(page).getByText(/Workflow standard attivo/)).toBeVisible();
   await expect(panel(page).getByLabel("Nome scrittore 1", { exact: true })).toHaveCount(0);
   await panel(page).getByRole("tab", { name: /Lettori/ }).click();
@@ -68,6 +75,27 @@ test("CMS per libro: lettori e scrittori modificabili, conferma, persistenza e i
   await expect(panel(page).getByText(/Profili personalizzati attivi/)).toBeVisible();
   await panel(page).getByRole("tab", { name: /Scrittore/ }).click();
   await expect(panel(page).getByLabel("Prompt di scrittura 1", { exact: true })).toHaveValue(/WRITER_PRIVATE_PROFILE/);
+  expect(calls).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("un libro nuovo parte con la checklist dello scrittore, con regole consultive e i cinque lettori standard", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/chat/completions", async route => { calls++; await route.abort(); });
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Libro con checklist");
+  await expect(page.getByRole("checkbox", { name: /Checklist dello scrittore/ })).toBeChecked();
+  await page.getByRole("button", { name: "Crea libro", exact: true }).click();
+  await expect.poll(async () => (await saved(page)).length).toBe(1);
+  const profiles = (await saved(page))[0]!.editorialProfiles;
+  expect(profiles.writers).toHaveLength(1);
+  expect(profiles.selectedWriterId).toBe(profiles.writers[0].id);
+  expect(profiles.writers[0].reviewEnabled).toBe(true);
+  // Blocking a chapter on a rule stays an explicit choice of the author.
+  expect(profiles.writers[0].rules.map((r: { mandatory: boolean }) => r.mandatory)).toEqual([false, false, false, false]);
+  expect(profiles.readers.filter((r: { enabled: boolean }) => r.enabled)).toHaveLength(5);
+  await openProfiles(page);
+  await expect(panel(page).getByText(/Profili personalizzati attivi/)).toBeVisible();
   expect(calls).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
@@ -113,7 +141,8 @@ test("una regola obbligatoria respinta dal direttore ferma il capitolo per l'aut
       checklist: [{ ruleId: "show-dont-tell", outcome: "fail", note: "Stato d'animo spiegato." }],
       findings: [{ sceneId: "scene:001:001", category: "show", severity: "major", evidence: "Mara attraversa il porto",
         reason: "Il passaggio dichiara invece di mostrare.", remediation: "Mostrare con un gesto concreto.", ruleId: "show-dont-tell" }] });
-    else if (system.includes("direttore editoriale")) content = JSON.stringify({ reasoning: "Valutazione dei rapporti.", decisions: [
+    else if (system.includes("direttore editoriale")) content = JSON.stringify({ reasoning: "Valutazione dei rapporti.",
+      ruleChecks: [{ ruleId: "show-dont-tell", verdict: "respected", rationale: "Il passaggio mostra un gesto concreto." }], decisions: [
       { findingId: "1:writerReview:0:0", action: "reject", rationale: "Il passaggio è già concreto e breve.", remediation: "Nessuna modifica." }] });
     await route.fulfill({ json: { choices: [{ message: { content } }], usage: { prompt_tokens: 50, completion_tokens: 10 } } });
   });
@@ -189,7 +218,7 @@ test("due schede: un salvataggio stale dei profili viene rifiutato e il testo di
   await create(page);
   const other = await context.newPage();
   await other.goto("/");
-  await other.getByRole("button", { name: "Modelli e redazione", exact: true }).click();
+  await openProfiles(other);
   await panel(other).getByRole("tab", { name: /Lettori/ }).click();
   await panel(page).getByRole("tab", { name: /Lettori/ }).click();
   await panel(other).getByLabel("Nome lettore 1", { exact: true }).fill("Seconda scheda da conservare");
@@ -217,7 +246,7 @@ test("i template Markdown sono soltanto bozze fino al salvataggio confermato", a
     await db.put("books", book, book.id);
   }, files);
   await page.reload();
-  await page.getByRole("button", { name: "Modelli e redazione", exact: true }).click();
+  await openProfiles(page);
   await expect(panel(page).getByText(/Workflow standard attivo/)).toBeVisible();
   await panel(page).getByRole("button", { name: "Carica template Markdown del libro", exact: true }).click();
   await expect(panel(page).getByText(/caricati soltanto come bozza/)).toBeVisible();

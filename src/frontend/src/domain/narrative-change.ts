@@ -1,11 +1,13 @@
 import { z } from "zod";
-import type { BookProject, Scene } from "./types";
+import type { BookProject, Chapter, Scene } from "./types";
 import { ENTITY_ID, findEntity, type KnowledgeBase, type KnowledgeEntity, type KnowledgeEvent, knowledgeEntitySchema,
-  knowledgeEventSchema, knowledgeReplySchema, mergeKnowledgeReply, parseKnowledge, STANCES, NARRATION_MODES } from "./knowledge";
+  knowledgeEventSchema, knowledgeReplySchema, knowledgeTimelineSchema, mergeKnowledgeReply, parseKnowledge, STANCES, NARRATION_MODES } from "./knowledge";
+import { contentStamp } from "./book-edits";
 
-/** A prompt-driven change to an entity, an event or one scene, tracked from the
- * request to the re-frozen chapters. Snapshots allow a guarded restore. */
-export type ChangeTarget = { kind: "entity" | "event" | "scene"; id: string };
+/** A prompt-driven change to a sheet, an event, a timeline, a chapter or one scene,
+ * tracked from the request to the re-frozen chapters. Snapshots allow a guarded restore. */
+export const CHANGE_TARGET_KINDS = ["entity", "event", "scene", "chapter", "timeline"] as const;
+export type ChangeTarget = { kind: typeof CHANGE_TARGET_KINDS[number]; id: string };
 export const CHANGE_STATES = ["pending", "analyzing", "awaiting_confirmation", "rewriting", "reviewing", "completed", "failed", "cancelled", "reverted"] as const;
 export type ChangeState = typeof CHANGE_STATES[number];
 export const CHANGE_STATE_LABELS: Record<ChangeState, string> = {
@@ -32,36 +34,62 @@ const proposedEvent = z.object({
   causes: z.array(z.string()).max(12).optional(), secret: z.boolean().optional(),
   perspectives: z.array(z.object({ who: z.string(), stance: z.enum(STANCES), note: z.string().max(200).optional() })).max(12).optional(),
 });
+const proposedTimeline = z.object({
+  title: z.string().min(2).max(120), kind: z.enum(["global", "arc", "event"]).optional(), summary: z.string().max(600).optional(),
+  subjects: z.array(z.string().min(1).max(120)).max(12).optional(),
+});
+const proposedChapter = z.object({ title: z.string().trim().min(1).max(300).optional(), purpose: z.string().max(20_000).optional() });
+/** A direct scene the analysis decided to leave as it is, and why. */
+const keptScene = z.object({ sceneId: z.string().min(1).max(200), reason: z.string().trim().min(8).max(400) });
 export const changeAnalysisSchema = z.object({
   interpretation: z.string().min(8).max(2000),
   rationale: z.string().min(8).max(3000),
   rewriteSceneIds: z.array(z.string()).max(400),
+  /** Every direct scene is either rewritten or listed here with a reason. */
+  unchangedDirect: z.array(keptScene).max(400).optional(),
   global: z.boolean().optional(),
   changedFacts: z.array(z.string().max(400)).max(30).optional(),
   entity: proposedEntity.optional(),
   event: proposedEvent.optional(),
+  timeline: proposedTimeline.optional(),
+  chapter: proposedChapter.optional(),
 });
 const planSchema = z.object({
   interpretation: z.string().max(2000), changeKind: z.enum(["style", "narrative"]), rationale: z.string().max(3000),
   direct: z.array(z.string()).max(400), indirect: z.array(z.string()).max(400), global: z.boolean(),
   rewriteSceneIds: z.array(z.string()).max(400), changedFacts: z.array(z.string().max(400)).max(30),
   drift: z.array(z.string().max(300)).max(30).optional(),
+  /** Direct scenes left unchanged on purpose, with the analysis' reason. */
+  kept: z.array(keptScene).max(400).optional(),
   /** New sheet proposed by the analysis; applied at once or after confirmation. */
-  proposal: z.object({ entity: proposedEntity.optional(), event: proposedEvent.optional() }).optional(),
+  proposal: z.object({ entity: proposedEntity.optional(), event: proposedEvent.optional(), timeline: proposedTimeline.optional(),
+    chapter: proposedChapter.optional(), sceneSummary: z.string().max(800).optional() }).optional(),
 });
+/** Validation state of a chapter when the change reopened it: restored as is when a revert
+ * brings back exactly the same text (the old validation covers it again). */
+const chapterFreezeSnapshot = z.object({
+  chapterId: z.string().min(1).max(200), textStamp: z.string().max(40), frozenAt: z.string().max(40).optional(),
+  summary: z.string().max(6000).optional(), bookSummaryAtFreeze: z.string().max(9000).optional(), hadRecheck: z.boolean(),
+}).strict();
 export const changeOperationSchema = z.object({
   id: z.string().uuid(), createdAt: z.string(), updatedAt: z.string(),
-  target: z.object({ kind: z.enum(["entity", "event", "scene"]), id: z.string().min(1).max(200) }).strict(),
+  target: z.object({ kind: z.enum(CHANGE_TARGET_KINDS), id: z.string().min(1).max(200) }).strict(),
   targetLabel: z.string().max(200), instruction: z.string().min(1).max(8000), mode: z.enum(["auto", "confirm"]),
   state: z.enum(CHANGE_STATES), plan: planSchema.optional(),
   before: z.object({
-    entity: knowledgeEntitySchema.optional(), event: knowledgeEventSchema.optional(),
+    entity: knowledgeEntitySchema.optional(), event: knowledgeEventSchema.optional(), timeline: knowledgeTimelineSchema.optional(),
+    chapter: z.object({ title: z.string().max(300), purpose: z.string().max(20_000) }).strict().optional(),
+    chapters: z.array(chapterFreezeSnapshot).max(60).optional(),
     scenes: z.array(sceneSnapshot).max(400), memoryJson: z.string().max(400_000).optional(), pruned: z.boolean().optional(),
   }).strict(),
   after: z.object({
     scenes: z.array(z.object({ sceneId: z.string(), text: z.string().max(2_000_000) }).strict()).max(400),
     memoryJson: z.string().max(400_000), entityVersion: z.number().int().optional(), eventVersion: z.number().int().optional(),
+    /** Chapter details or timeline after the change: a later edit blocks the automatic restore. */
+    sheetJson: z.string().max(40_000).optional(),
   }).strict().optional(),
+  /** Confirm mode, scene target: the rewritten text waits here; the book keeps the old one until confirmed. */
+  draftText: z.string().max(2_000_000).optional(),
   report: z.array(z.object({ sceneId: z.string(), at: z.string(), drift: z.array(z.string().max(300)).max(30), summary: z.string().max(800).optional() }).strict()).max(400),
   error: z.string().max(2000).optional(), completedAt: z.string().optional(), revertedAt: z.string().optional(),
 }).strict();
@@ -91,24 +119,52 @@ export function pruneChangeOperations(ops: NarrativeChangeOperation[]): Narrativ
   let budget = MAX_SNAPSHOT_CHARS;
   for (let i = kept.length - 1; i >= 0; i--) {
     const op = kept[i]!;
-    const size = op.before.scenes.reduce((n, s) => n + s.text.length, 0) + (op.after?.scenes.reduce((n, s) => n + s.text.length, 0) ?? 0) + (op.before.memoryJson?.length ?? 0);
+    const size = op.before.scenes.reduce((n, s) => n + s.text.length, 0) + (op.after?.scenes.reduce((n, s) => n + s.text.length, 0) ?? 0) +
+      (op.before.memoryJson?.length ?? 0) + (op.draftText?.length ?? 0) +
+      (op.before.chapters ?? []).reduce((n, c) => n + (c.summary?.length ?? 0) + (c.bookSummaryAtFreeze?.length ?? 0), 0);
     if (size <= budget) { budget -= size; continue; }
-    kept[i] = { ...op, before: { ...op.before, scenes: [], pruned: true, memoryJson: undefined }, after: undefined };
+    kept[i] = { ...op, before: { ...op.before, scenes: [], pruned: true, memoryJson: undefined, chapters: undefined }, after: undefined };
   }
   return kept;
 }
+/** Deterministic fingerprint of a chapter's prose (local, not a signature). */
+export function chapterTextStamp(chapter: Chapter): string {
+  return contentStamp(JSON.stringify([...chapter.scenes].sort((a, b) => a.number - b.number).map(s => [s.id, s.text])));
+}
 
-/** Local, AI-free guard: names of sheets and numbers present in only one version. */
+/** Capitalized words inside a sentence: in Italian prose almost always proper names. */
+function properNouns(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const sentence of text.split(/[.!?…]+[\s"»”)]*|\n+|[:;«“—–-]\s/u)) {
+    const words = sentence.match(/[\p{L}\p{M}'’]+/gu) ?? [];
+    for (const word of words.slice(1)) {
+      const bare = word.replace(/^.*['’]/u, "");
+      if (/^\p{Lu}[\p{Ll}\p{M}]{2,}$/u.test(bare)) out.add(bare);
+    }
+  }
+  return out;
+}
+
+/** Local, AI-free guard: names of sheets, other proper names and numbers present in only one version. */
 export function detectFactDrift(before: string, after: string, names: readonly string[]): string[] {
   const fold = (value: string) => value.normalize("NFC").toLocaleLowerCase("it");
   const a = fold(before), b = fold(after);
   const has = (text: string, name: string) => new RegExp("(?<![\\p{L}\\p{N}\\p{M}_])" + fold(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}\\p{N}\\p{M}_])", "u").test(text);
   const drift: string[] = [];
-  for (const name of [...new Set(names.filter(n => n.trim().length >= 3))]) {
+  const known = [...new Set(names.filter(n => n.trim().length >= 3))];
+  for (const name of known) {
     const was = has(a, name), is = has(b, name);
     if (was && !is) drift.push("«" + name + "» non compare più nella scena.");
     else if (!was && is) drift.push("«" + name + "» compare ora nella scena.");
   }
+  // Names without a sheet (a new character, a place) are caught by their capital letter.
+  const knownFolded = new Set(known.flatMap(n => n.split(/\s+/)).map(fold));
+  const pa = properNouns(before.normalize("NFC")), pb = properNouns(after.normalize("NFC"));
+  const presentIn = (text: string, word: string) => has(text, word);
+  const appeared = [...pb].filter(w => !pa.has(w) && !presentIn(a, w) && !knownFolded.has(fold(w)));
+  const vanished = [...pa].filter(w => !pb.has(w) && !presentIn(b, w) && !knownFolded.has(fold(w)));
+  if (appeared.length) drift.push("Nomi propri nuovi: " + appeared.slice(0, 6).join(", ") + ".");
+  if (vanished.length) drift.push("Nomi propri spariti: " + vanished.slice(0, 6).join(", ") + ".");
   const numbers = (text: string) => new Set(text.match(/\b\d+(?:[.,]\d+)?\b/g) ?? []);
   const na = numbers(a), nb = numbers(b);
   const changed = [...na].filter(n => !nb.has(n)).concat([...nb].filter(n => !na.has(n)));
@@ -200,8 +256,36 @@ export function validRewriteTargets(book: BookProject, ids: readonly string[], e
 export function targetLabel(book: BookProject, target: ChangeTarget): string {
   if (target.kind === "entity") return book.knowledge?.entities.find(e => e.id === target.id)?.name ?? target.id;
   if (target.kind === "event") return book.knowledge?.events.find(e => e.id === target.id)?.title ?? target.id;
+  if (target.kind === "timeline") return book.knowledge?.timelines.find(t => t.id === target.id)?.title ?? target.id;
+  if (target.kind === "chapter") {
+    const chapter = book.chapters.find(c => c.id === target.id);
+    return chapter ? `Capitolo ${chapter.number} «${chapter.title}»` : target.id;
+  }
   const found = scenes(book).find(x => x.scene.id === target.id);
   return found ? `Capitolo ${found.chapterNumber}, scena ${found.scene.number} «${found.scene.title}»` : target.id;
+}
+/** The timeline as the analysis proposed it: names resolved to sheets, one global timeline. */
+export function replaceTimelineSheet(kb: KnowledgeBase, timelineId: string, sheet: NonNullable<z.infer<typeof changeAnalysisSchema>["timeline"]>): KnowledgeBase {
+  const base: KnowledgeBase = structuredClone(kb);
+  const target = base.timelines.find(t => t.id === timelineId);
+  if (!target) throw new Error("La timeline da modificare non esiste più.");
+  const title = sheet.title.trim();
+  if (base.timelines.some(t => t.id !== timelineId && t.title.toLocaleLowerCase("it") === title.toLocaleLowerCase("it")))
+    throw new Error("Esiste già una timeline intitolata «" + title + "».");
+  if (sheet.kind === "global" && target.kind !== "global" && base.timelines.some(t => t.id !== timelineId && t.kind === "global"))
+    throw new Error("Esiste già una timeline globale: la modifica non può renderne globale una seconda.");
+  target.title = title;
+  if (sheet.kind) target.kind = sheet.kind;
+  if (sheet.summary !== undefined) target.summary = sheet.summary.trim();
+  if (sheet.subjects) {
+    const ids = [...new Set(sheet.subjects.map(name => {
+      const found = findEntity(base, undefined, name);
+      if (!found) throw new Error("La timeline segue «" + name + "», che non è una scheda.");
+      return found.id;
+    }))].slice(0, 12);
+    if (ids.length) target.subjectIds = ids; else delete target.subjectIds;
+  }
+  return parseKnowledge(base);
 }
 export function isEntityId(id: string): boolean { return ENTITY_ID.test(id); }
 export type { KnowledgeEntity, KnowledgeEvent };

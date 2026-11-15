@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import type { BookProject } from "../../domain/types";
 import { ATTRIBUTE_FIELDS, ENTITY_LABELS, NARRATION_LABELS, NARRATION_MODES, STANCE_LABELS, STANCES,
   type EntityType, type KnowledgeEntity, type KnowledgeEvent, type KnowledgeTimeline } from "../../domain/knowledge";
@@ -8,7 +8,7 @@ import { createEntity, createEvent, editBase, ElementChangedError, removeEntity,
   saveEventEdit, saveTimelineEdit } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/primitives";
-import { ChipPicker } from "./EditKit";
+import { AiEditPanel, ChipPicker, EditHistory, PromptEditChoices, ReviewStateBadge } from "./EditKit";
 
 const IMPORTANCE: Record<KnowledgeEntity["importance"], string> = { main: "Principale", secondary: "Secondario", minor: "Minore" };
 const errorText = (error: unknown, fallback: string) => error instanceof ElementChangedError
@@ -142,10 +142,11 @@ export function NewEntityForm({ book, type, onRefresh, onCreated }: { book: Book
   </form>;
 }
 
-type EventDraft = Pick<KnowledgeEvent, "title" | "summary" | "narration" | "secret" | "involves" | "causes" | "sceneIds" | "timelineIds" | "perspectives"> & { when: string };
+type EventDraft = Pick<KnowledgeEvent, "title" | "summary" | "narration" | "secret" | "involves" | "causes" | "sceneIds" | "timelineIds" | "perspectives">
+  & { when: string; storyOrder: string; plannedChapter: string };
 const eventDraft = (event: KnowledgeEvent): EventDraft => ({ title: event.title, summary: event.summary, when: event.when ?? "", narration: event.narration,
   secret: event.secret, involves: [...event.involves], causes: [...event.causes], sceneIds: [...event.sceneIds], timelineIds: [...event.timelineIds],
-  perspectives: event.perspectives.map(p => ({ ...p })) });
+  perspectives: event.perspectives.map(p => ({ ...p })), storyOrder: String(event.storyOrder), plannedChapter: event.plannedChapter ? String(event.plannedChapter) : "" });
 
 /** Every field of an event: who, when, why (causes), where it is told, who knows. */
 export function EventEditor({ book, event, onRefresh, onDone }: { book: BookProject; event: KnowledgeEvent; onRefresh: () => Promise<void>; onDone: () => void }) {
@@ -165,7 +166,10 @@ export function EventEditor({ book, event, onRefresh, onDone }: { book: BookProj
   const set = (patch: Partial<EventDraft>) => setDraft(d => ({ ...d, ...patch }));
   const scenes = [...book.chapters].sort((a, b) => a.number - b.number).flatMap(c => c.scenes.map(s => ({ value: s.id, label: `Cap. ${c.number} · ${s.number}. ${s.title}` })));
   async function save() {
-    const ok = await run(() => saveEventEdit(book.id, event.id, base, { ...draft, perspectives: draft.perspectives.filter(p => p.entityId) }), "Evento salvato." + NO_REVIEW);
+    const { storyOrder, plannedChapter, ...rest } = draft;
+    const ok = await run(() => saveEventEdit(book.id, event.id, base, { ...rest, perspectives: draft.perspectives.filter(p => p.entityId),
+      storyOrder: storyOrder.trim() === "" ? Number.NaN : Number(storyOrder.replace(",", ".")), plannedChapter: plannedChapter ? Number(plannedChapter) : null }),
+    "Evento salvato." + NO_REVIEW);
     if (ok && mounted.current) setInitial(JSON.stringify(draft));
   }
   async function remove() {
@@ -180,6 +184,15 @@ export function EventEditor({ book, event, onRefresh, onDone }: { book: BookProj
       <label className="block text-sm">Come viene raccontato<select className="field mt-1" value={draft.narration} disabled={busy} onChange={e => set({ narration: e.target.value as EventDraft["narration"] })}>
         {NARRATION_MODES.map(m => <option key={m} value={m}>{NARRATION_LABELS[m]}</option>)}</select></label>
       <label className="flex min-h-11 items-center gap-2 self-end text-sm"><input type="checkbox" className="size-5" checked={draft.secret} disabled={busy} onChange={e => set({ secret: e.target.checked })}/> Evento segreto (non va rivelato prima del tempo)</label>
+      <label className="block text-sm">Posizione nella cronologia della storia
+        <input className="field mt-1" inputMode="decimal" value={draft.storyOrder} disabled={busy} onChange={e => set({ storyOrder: e.target.value })}/>
+        <span className="muted mt-0.5 block text-xs">Più basso = prima nella storia (anche se raccontato dopo). Le frecce della timeline la cambiano per te.</span></label>
+      <label className="block text-sm">Capitolo in cui va raccontato
+        <select className="field mt-1" value={draft.plannedChapter} disabled={busy} onChange={e => set({ plannedChapter: e.target.value })}>
+          <option value="">Non previsto</option>
+          {[...book.chapters].sort((a, b) => a.number - b.number).map(c => <option key={c.id} value={String(c.number)}>Cap. {c.number} — {c.title}</option>)}
+          {draft.plannedChapter && !book.chapters.some(c => String(c.number) === draft.plannedChapter) && <option value={draft.plannedChapter}>Cap. {draft.plannedChapter} (non ancora nel piano)</option>}
+        </select></label>
     </div>
     <label className="block text-sm">Sintesi<textarea className="field mt-1" rows={2} maxLength={800} value={draft.summary} disabled={busy} onChange={e => set({ summary: e.target.value })}/></label>
     <div className="grid gap-3 md:grid-cols-2">
@@ -218,16 +231,29 @@ export function EventEditor({ book, event, onRefresh, onDone }: { book: BookProj
 }
 
 /** Create, rename and delete timelines; add new events. */
-export function TimelineManager({ book, onRefresh, selected }: { book: BookProject; onRefresh: () => Promise<void>; selected?: string }) {
+export function TimelineManager({ book, onRefresh, onStart, selected }: { book: BookProject; onRefresh: () => Promise<void>; onStart?: (bookId: string) => void; selected?: string }) {
   const kb = book.knowledge!;
   const [editing, setEditing] = useState<string>();
-  const [timeline, setTimeline] = useState<{ title: string; kind: KnowledgeTimeline["kind"]; summary: string }>({ title: "", kind: "arc", summary: "" });
+  const [timeline, setTimeline] = useState<{ title: string; kind: KnowledgeTimeline["kind"]; summary: string; subjectIds: string[] }>({ title: "", kind: "arc", summary: "", subjectIds: [] });
   const [event, setEvent] = useState({ title: "", summary: "", timelineId: selected ?? "" });
   const { busy, message, run } = useSaver(onRefresh);
   const current = kb.timelines.find(t => t.id === editing);
+  const globalTimeline = kb.timelines.find(t => t.kind === "global" && t.id !== current?.id);
+  const formOf = (found?: KnowledgeTimeline) => found ? { title: found.title, kind: found.kind, summary: found.summary, subjectIds: [...(found.subjectIds ?? [])] }
+    : { title: "", kind: "arc" as const, summary: "", subjectIds: [] };
+  // The saved version the form shows: without unsaved edits it follows AI edits and restores.
+  const shown = useRef("");
+  const storedKey = current ? JSON.stringify(formOf(current)) : "";
+  useEffect(() => {
+    if (!current) return;
+    if (JSON.stringify(timeline) === shown.current) setTimeline(formOf(current));
+    shown.current = storedKey;
+  }, [storedKey]); // eslint-disable-line react-hooks/exhaustive-deps
   function open(id?: string) {
     const found = kb.timelines.find(t => t.id === id);
-    setEditing(id ?? "new"); setTimeline(found ? { title: found.title, kind: found.kind, summary: found.summary } : { title: "", kind: "arc", summary: "" });
+    setEditing(id ?? "new");
+    setTimeline(formOf(found));
+    shown.current = found ? JSON.stringify(formOf(found)) : "";
   }
   async function saveTimeline() {
     const ok = await run(() => saveTimelineEdit(book.id, current?.id, current ? editBase(book, { kind: "timeline", id: current.id }, current.title) : undefined, timeline),
@@ -253,20 +279,37 @@ export function TimelineManager({ book, onRefresh, selected }: { book: BookProje
       </form>
       <div className="space-y-2">
         <h4 className="font-semibold">Timeline</h4>
-        <ul className="flex flex-wrap gap-1.5">{kb.timelines.map(t => <li key={t.id}><Button type="button" size="sm" variant={editing === t.id ? "default" : "outline"} onClick={() => open(t.id)}><span className="text-xs">{t.title}</span></Button></li>)}
+        <ul className="flex flex-wrap gap-1.5">{kb.timelines.map(t => <li key={t.id} className="flex items-center gap-1"><Button type="button" size="sm" variant={editing === t.id ? "default" : "outline"} onClick={() => open(t.id)}><span className="text-xs">{t.title}{t.kind === "global" ? " (globale)" : ""}</span></Button>
+          <ReviewStateBadge book={book} target={{ kind: "timeline", id: t.id }} quiet/></li>)}
           <li><Button type="button" size="sm" variant={editing === "new" ? "default" : "ghost"} onClick={() => open()}><Plus size={14}/><span className="text-xs">Nuova timeline</span></Button></li></ul>
         {editing && <form aria-label={current ? "Modifica la timeline " + current.title : "Nuova timeline"} className="space-y-2 rounded-lg border border-slate-300 p-2.5 dark:border-slate-700"
           onSubmit={e => { e.preventDefault(); void saveTimeline(); }}>
           <label className="block text-sm">Titolo<input className="field mt-1" maxLength={120} value={timeline.title} disabled={busy} onChange={e => setTimeline(t => ({ ...t, title: e.target.value }))}/></label>
           <label className="block text-sm">Tipo<select className="field mt-1" value={timeline.kind} disabled={busy} onChange={e => setTimeline(t => ({ ...t, kind: e.target.value as KnowledgeTimeline["kind"] }))}>
-            <option value="global">Globale</option><option value="arc">Arco narrativo o personaggio</option><option value="event">Linea di un evento</option></select></label>
+            <option value="global" disabled={!!globalTimeline && current?.kind !== "global"}>Globale{globalTimeline && current?.kind !== "global" ? ` (c'è già: «${globalTimeline.title}»)` : ""}</option>
+            <option value="arc">Arco narrativo o personaggio</option><option value="event">Linea di un evento</option></select></label>
           <label className="block text-sm">Descrizione<textarea className="field mt-1" rows={2} maxLength={600} value={timeline.summary} disabled={busy} onChange={e => setTimeline(t => ({ ...t, summary: e.target.value }))}/></label>
+          <ChipPicker label="Chi o cosa segue" disabled={busy} value={timeline.subjectIds} empty="Nessuna scheda: segue solo i suoi eventi"
+            onChange={subjectIds => setTimeline(t => ({ ...t, subjectIds: subjectIds.slice(0, 12) }))}
+            options={kb.entities.map(e => ({ value: e.id, label: `${e.name} (${ENTITY_LABELS[e.type].one.toLowerCase()})` }))}/>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={busy || timeline.title.trim().length < 2}><Save size={16}/> Salva</Button>
             <Button type="button" variant="outline" disabled={busy} onClick={() => setEditing(undefined)}>Chiudi</Button>
             {current && <Button type="button" variant="ghost" className="text-rose-700 dark:text-rose-300" disabled={busy} onClick={() => void deleteCurrent()}><Trash2 size={16}/> Elimina</Button>}
           </div>
         </form>}
+        {current && (onStart
+          ? <PromptEditChoices book={book} request={{ kind: "timeline", id: current.id }} label={current.title} onRefresh={onRefresh} onStart={onStart}
+              propagate={{ kind: "timeline", id: current.id }}
+              examples={["Rendi la descrizione più precisa: chi segue e quale periodo copre.", "Fai seguire a questa timeline anche Markus."]}/>
+          : <details className="rounded-lg border border-violet-500/40 bg-violet-500/5">
+            <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-2.5 text-sm font-semibold"><Sparkles size={15} className="text-violet-600 dark:text-violet-300"/> Modifica questa timeline con l'AI</summary>
+            <div className="border-t border-violet-500/30 p-2.5">
+              <AiEditPanel book={book} request={{ kind: "timeline", id: current.id }} label={current.title} onRefresh={onRefresh}
+                examples={["Rendi la descrizione più precisa: chi segue e quale periodo copre.", "Fai seguire a questa timeline anche Markus."]}/>
+            </div>
+          </details>)}
+        {current && <EditHistory book={book} target={{ kind: "timeline", id: current.id }} label={current.title} onRefresh={onRefresh}/>}
       </div>
       {message && <p role="status" className="text-sm lg:col-span-2">{message}</p>}
     </div>

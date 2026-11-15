@@ -32,10 +32,13 @@ import { persistResearchLog, runResearchQueries } from "./web-research";
 import { ManualReviewChanged, nextManualReviewStep, type ManualReviewAiStep } from "../domain/manual-review-flow";
 import { describeEntities, describeEvents, emptyKnowledge, KNOWLEDGE_REPLY_SHAPE, mergeKnowledgeReply, syncKnowledgeWithMemory,
   MEMORY_FOLDER, findEntity, type KnowledgeBase } from "../domain/knowledge";
-import { analyzeImpact, dependentEvents, relevantKnowledge } from "../domain/knowledge-index";
+import { analyzeImpact, dependentEvents, relevantKnowledge, timelineEvents } from "../domain/knowledge-index";
 import { activeChange, changeAnalysisSchema, changeById, detectFactDrift, knownNames, replaceEntitySheet, replaceEventSheet,
-  sceneComparisonSchema, sceneSnapshots, validRewriteTargets } from "../domain/narrative-change";
-import { applyChangePlan, reopenForRewrite, settleAfterRewrite, settleChangeOperations } from "../domain/narrative-change-flow";
+  replaceTimelineSheet, sceneComparisonSchema, sceneSnapshots, validRewriteTargets } from "../domain/narrative-change";
+import { applyChangePlan, captureFreezeState, reopenForRewrite, settleAfterRewrite, settleChangeOperations } from "../domain/narrative-change-flow";
+import { timelineText } from "../domain/ai-edit";
+import { applySceneSummaries, sceneSummariesPrompt, scenesNeedingSummary, summaryBatch } from "../domain/scene-summaries";
+import { settleChapterEdits } from "../domain/book-edits";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -426,15 +429,22 @@ const knowledgeUpdateSchema = z.object({
   sceneEntities: z.array(z.string().min(1).max(120)).max(40).optional(),
   sceneSummaries: z.record(z.string(), z.string().trim().min(20).max(800)).optional(),
 });
-/** Optional sheet/event updates sent with a memory delta. Unknown names fail closed. */
-function applyKnowledgeUpdate(b: BookProject, raw: unknown, reason: string, sceneId?: string): void {
+/** Sheet/event updates sent with a memory delta. Unknown names fail closed. When the
+ * prompt asked for it, the "knowledge" key is required ({} = nothing changed): the
+ * model must look at the existing sheets every time, not only when it remembers to. */
+function applyKnowledgeUpdate(b: BookProject, raw: unknown, reason: string,
+  options: { sceneId?: string; previousMemory?: NarrativeMemory; required?: boolean } = {}): void {
   if (!b.knowledge || b.knowledge.pending) return;
   const now = new Date().toISOString();
   const reply = raw as { knowledge?: unknown } | null;
+  const sceneId = options.sceneId;
   let kb = b.knowledge;
-  if (reply && typeof reply === "object" && reply.knowledge !== undefined)
-    kb = mergeKnowledgeReply(kb, reply.knowledge, { origin: "written", reason, now, sceneIds: sceneIdsOf(b), ...(sceneId ? { defaultSceneId: sceneId } : {}) });
-  kb = syncKnowledgeWithMemory(kb, b.memory, now);
+  const hasKnowledge = !!reply && typeof reply === "object" && reply.knowledge !== undefined;
+  if (options.required && !hasKnowledge)
+    throw new Error("La risposta non contiene \"knowledge\": restituisci le schede nuove o cambiate e gli eventi, oppure \"knowledge\":{} se nulla è cambiato.");
+  if (hasKnowledge)
+    kb = mergeKnowledgeReply(kb, reply!.knowledge, { origin: "written", reason, now, sceneIds: sceneIdsOf(b), ...(sceneId ? { defaultSceneId: sceneId } : {}) });
+  kb = syncKnowledgeWithMemory(kb, b.memory, now, options.previousMemory);
   const extra = knowledgeUpdateSchema.parse(reply ?? {});
   const scene = sceneId ? allScenes(b).find(s => s.id === sceneId) : undefined;
   if (scene && extra.sceneEntities?.length) for (const name of extra.sceneEntities) {
@@ -447,7 +457,8 @@ function applyKnowledgeUpdate(b: BookProject, raw: unknown, reason: string, scen
   }
   b.knowledge = kb;
 }
-const KNOWLEDGE_DELTA_RULE = "Se la knowledge base è attiva, aggiungi al JSON anche \"sceneEntities\":[nomi delle schede presenti nella scena] e, solo per ciò che è nuovo o cambiato, \"knowledge\":{\"entities\":[...],\"events\":[...]} nel formato " + KNOWLEDGE_REPLY_SHAPE + ". Gli eventi accaduti nella scena omettono sceneIds (si collegano a questa scena). Non ripetere schede invariate.";
+const KNOWLEDGE_DELTA_RULE = "Knowledge base: aggiungi SEMPRE al JSON la chiave \"knowledge\":{\"entities\":[...],\"events\":[...]} nel formato " + KNOWLEDGE_REPLY_SHAPE + ", con le schede NUOVE e quelle ESISTENTI che questo testo cambia (stesso nome; solo i campi cambiati: riassunto, attributi, relazioni) e gli eventi accaduti; \"knowledge\":{} se nulla è cambiato. Aggiungi anche \"sceneEntities\":[nomi delle schede presenti nella scena]. Gli eventi accaduti nella scena omettono sceneIds (si collegano a questa scena). Non ripetere schede invariate.";
+const knowledgeActive = (book: BookProject) => !!book.knowledge && !book.knowledge.pending;
 
 /** Shrinks canon memory so later prompts (and the model's context) can carry it. The reply must
  * be the complete memory and must be clearly smaller, otherwise the task fails instead of looping. */
@@ -572,25 +583,27 @@ function nextWork(book: BookProject): Work | null {
         reason: "Controllare personaggi, timeline, stile, logica e segreti rispetto ai capitoli precedenti.",
         nextStep: "Consolidamento della memoria narrativa",
         prompt: `Rivedi e RISCRIVI la scena qui sotto in forma finale. Controlla coerenza con brief, outline, voci dei personaggi, stato, cronologia, oggetti, segreti e raccordo con la scena precedente. Applica show-don't-tell dove serve, evita contraddizioni e rivelazioni premature. Restituisci SOLTANTO il testo corretto.\n\nSCENA:\n${scene.text}\n\nFOCUS DELLA SCENA:\n${sceneFocus(book, scene.id)}\n\nCONTESTO:\n${base}`,
-        apply: (b, text) => { const target = ensureScene(b); assertScenePlausible(text, target.text); target.text = text; target.status = "canon"; target.summary = text.slice(0, 520); b.phase = "consolidate"; },
+        apply: (b, text) => { const target = ensureScene(b); assertScenePlausible(text, target.text); target.text = text; target.status = "canon"; target.summaryStale = true; b.phase = "consolidate"; },
       };
     }
     case "consolidate": {
       const scene = targetScene(book);
+      const withKnowledge = knowledgeActive(book);
       return {
         phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon",
         reason: "Aggiornare personaggi, luoghi, fazioni, oggetti, segreti e timeline dopo la scena.",
         nextStep: "Prossima scena o completamento del libro",
-        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE}${book.knowledge && !book.knowledge.pending ? " " + KNOWLEDGE_DELTA_RULE + "\n\n" + knowledgeIndexText(book.knowledge) : ""}\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
+        prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE}${withKnowledge ? " " + KNOWLEDGE_DELTA_RULE + "\n\n" + knowledgeIndexText(book.knowledge!) : ""}\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
         apply: (b, text) => {
           const reply = parseJson(text);
           const update = applyMemoryResponse(b.memory, reply);
+          const previousMemory = b.memory;
           b.memory = update.memory; b.currentSceneId = undefined;
-          applyKnowledgeUpdate(b, reply, "Consolidamento dopo la scena " + (scene?.id ?? ""), scene?.id);
-          // A real summary of the scene (events and ending) replaces the opening-text fallback.
+          applyKnowledgeUpdate(b, reply, "Consolidamento dopo la scena " + (scene?.id ?? ""), { sceneId: scene?.id, previousMemory, required: withKnowledge });
+          // A real summary of the scene (events and ending); without it the scene keeps its "to update" flag.
           if (update.sceneSummary) {
             const done = allScenes(b).find(s => s.id === scene?.id);
-            if (done) done.summary = update.sceneSummary;
+            if (done) { done.summary = update.sceneSummary; delete done.summaryStale; }
           }
           const chapter = b.chapters.find(ch => ch.scenes.some(s => s.id === scene?.id));
           if (chapter && !chapter.frozenAt && chapter.scenes.every(s => s.status === "canon")) {
@@ -612,6 +625,11 @@ function nextWork(book: BookProject): Work | null {
       };
       if (cycle.stage === "blocked")
         throw new Error(cycle.blockedReason ?? "Redazione bloccata: intervento autore necessario.");
+      // Before a round starts, the scenes get their real summaries (new, rewritten or corrected text).
+      if (cycle.stage === "review" && !cycle.reports.length) {
+        const stale = scenesNeedingSummary(chapter);
+        if (stale.length) return sceneSummariesWork(book, chapter, stale);
+      }
       if (cycle.stage === "review") {
         const next = nextReviewSlot(book, cycle);
         if (!next) throw new Error("Checkpoint revisioni incompleto: nessun revisore disponibile.");
@@ -708,6 +726,7 @@ function nextWork(book: BookProject): Work | null {
             scene.text = text.trim();
             scene.status = "draft";
             scene.summary = undefined;
+            scene.summaryStale = true;
             b.editorialCycle.repairCursor++;
             if (b.editorialCycle.repairCursor >= unique.length) {
               b.editorialCycle.stage = "reconcile";
@@ -721,6 +740,7 @@ function nextWork(book: BookProject): Work | null {
         // Imported or incomplete cursors must fail before the provider call.
         const checkpoint = captureEditorialReconcileStep(book);
         const segment = chapterSegments(chapter)[checkpoint.cursor]!;
+        const withKnowledge = knowledgeActive(book);
         return {
           phase: "chapterReview", kind: "consolidate",
           title: "Riconciliazione canone dopo remediation " + (checkpoint.cursor + 1) +
@@ -732,6 +752,7 @@ function nextWork(book: BookProject): Work | null {
             "Rispondi SOLO con le modifiche alla memoria in JSON valido.",
             DELTA_REPLY_RULE_NO_SUMMARY,
             MEMORY_COMPACTION_RULE,
+            ...(withKnowledge ? [KNOWLEDGE_DELTA_RULE, knowledgeIndexText(book.knowledge!)] : []),
             "MEMORIA PRECEDENTE: " + checkpoint.memoryJson,
             "SCENA " + segment.sceneId + ", SEGMENTO " + (checkpoint.cursor + 1) +
               "/" + checkpoint.segmentCount + ":\n" + segment.text,
@@ -741,8 +762,11 @@ function nextWork(book: BookProject): Work | null {
             // validating the exact checkpoint used by this editorial agent.
             const current = assertCurrentEditorialReconcileStep(b, checkpoint);
             assertProfilesCurrent(current.cycle);
-            const memory = applyMemoryResponse(b.memory, parseJson(text)).memory;
+            const reply = parseJson(text);
+            const memory = applyMemoryResponse(b.memory, reply).memory;
+            const previousMemory = b.memory;
             b.memory = memory;
+            applyKnowledgeUpdate(b, reply, "Riconciliazione dopo una correzione editoriale", { sceneId: segment.sceneId, previousMemory, required: withKnowledge });
             current.cycle.reconcileCursor = checkpoint.cursor + 1;
             if (current.cycle.reconcileCursor >= checkpoint.segmentCount) {
               // Never re-use a scene object captured before the AI request.
@@ -806,6 +830,9 @@ function nextWork(book: BookProject): Work | null {
               // A style-only edit reopens one chapter: later frozen chapters keep the full synopsis.
               if (!b.chapters.some(other => other.number > ch.number && other.frozenAt)) b.bookSummary = data.bookSummary;
               ch.frozenAt = freezeTime;
+              // The new validation covers the current text: older «modified after review» marks are settled.
+              delete ch.summaryStale; delete ch.reviewStale;
+              settleChapterEdits(b, ch);
               if (current.profileSettings ? current.profileMode === "light" : !!current.roles) ch.editorialMode = "light"; else delete ch.editorialMode;
               ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, archiveEditorialRound(current)];
               b.editorialCycle = undefined;
@@ -859,24 +886,27 @@ function nextWork(book: BookProject): Work | null {
           .filter((scene): scene is Scene => !!scene);
         const last = rewritten.at(-1);
         const changeContext = change ? changePromptContext(book, change) : "";
+        const withKnowledge = knowledgeActive(book);
         return {
           phase: "revision", kind: "consolidate", title: "Memoria narrativa dopo la revisione",
           reason: "Allineare personaggi, segreti, oggetti e cronologia alle scene riscritte.",
           nextStep: "Nuova redazione dei capitoli toccati e ripresa della scrittura",
           prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}` +
-            (book.knowledge && !book.knowledge.pending ? ` Aggiungi anche "sceneSummaries":{"ID scena":"riassunto fedele della scena riscritta in 2-4 frasi"} per OGNI scena riscritta e, se cambiano schede o eventi, "knowledge":{"entities":[...],"events":[...]} nel formato ${KNOWLEDGE_REPLY_SHAPE}.\n\n${knowledgeIndexText(book.knowledge)}` : "") +
+            ` Aggiungi anche "sceneSummaries":{"ID scena":"riassunto fedele della scena riscritta in 2-4 frasi"} per OGNI scena riscritta.` +
+            (withKnowledge ? ` ${KNOWLEDGE_DELTA_RULE}\n\n${knowledgeIndexText(book.knowledge!)}` : "") +
             `${changeContext}\n\nULTIMA SCENA RISCRITTA:\n${last?.text ?? "Nessuna"}\n\nCONTESTO:\n${base}`,
           apply: (b, text) => {
             const reply = parseJson(text);
             const memory = applyMemoryResponse(b.memory, reply).memory;
             const current = b.revision;
             if (!current || current.id !== rev.id) throw new Error("Revisione cambiata durante l'aggiornamento della memoria.");
+            const previousMemory = b.memory;
             b.memory = memory;
-            applyKnowledgeUpdate(b, reply, "Aggiornamento dopo la revisione: " + rev.instruction.slice(0, 200));
+            applyKnowledgeUpdate(b, reply, "Aggiornamento dopo la revisione: " + rev.instruction.slice(0, 200), { previousMemory, required: withKnowledge });
             const summaries = knowledgeUpdateSchema.parse(reply ?? {}).sceneSummaries ?? {};
             for (const id of current.affectedSceneIds) {
               const target = allScenes(b).find(s => s.id === id);
-              if (target && summaries[id]) target.summary = summaries[id];
+              if (target && summaries[id]) { target.summary = summaries[id]; delete target.summaryStale; }
             }
             closeRevision(b, current);
           },
@@ -898,7 +928,7 @@ function nextWork(book: BookProject): Work | null {
             op.report = [...op.report, { sceneId, at: new Date().toISOString(), drift: detectFactDrift(target.text, text, knownNames(b)) }].slice(-400);
             op.updatedAt = new Date().toISOString();
           }
-          target.text = text; target.status = "canon"; target.summary = text.slice(0, 520); b.revision.cursor++;
+          target.text = text; target.status = "canon"; target.summaryStale = true; b.revision.cursor++;
         },
       };
     }
@@ -940,51 +970,96 @@ function scenesCatalog(book: BookProject, ids: readonly string[], limit = 14000)
   }
   return out || "nessuna";
 }
-/** Entity or event change: interpret, propose the new sheet, choose the scenes to rewrite. */
+/** Real summaries of new or changed scenes, before the chapter's board reads them. */
+function sceneSummariesWork(book: BookProject, chapter: Chapter, stale: readonly Scene[]): Work {
+  const batch = summaryBatch(stale);
+  const expected = batch.map(scene => ({ id: scene.id, text: scene.text }));
+  return {
+    phase: book.phase, kind: "summarize", noAuthorNotes: true,
+    title: `Riassunti delle scene: capitolo ${chapter.number} (${batch.length} di ${stale.length})`,
+    reason: "Le scene nuove o cambiate hanno bisogno di un riassunto vero, non di un taglio del testo, prima della redazione.",
+    nextStep: stale.length > batch.length ? "Altri riassunti delle scene" : "Redazione del capitolo",
+    prompt: sceneSummariesPrompt(batch),
+    apply: (b, text) => { applySceneSummaries(b, expected, parseJson(text)); },
+  };
+}
+/** Sheet, event, timeline or chapter change: interpret, propose the new version, choose the scenes to rewrite.
+ * Every direct scene must be classified: rewritten, or left as it is with a reason. */
 function changeAnalysisWork(book: BookProject, change: NonNullable<ReturnType<typeof changeById>>, base: string): Work {
-  const kb = book.knowledge;
-  if (!kb || change.target.kind === "scene") throw new Error("Knowledge base non disponibile per la modifica.");
-  const impact = analyzeImpact(book, kb, { kind: change.target.kind, id: change.target.id });
+  const kind = change.target.kind;
+  if (kind === "scene") throw new Error("Una modifica di scena non passa da questa analisi.");
+  const kb = book.knowledge && !book.knowledge.pending ? book.knowledge : undefined;
+  if (!kb && kind !== "chapter") throw new Error("Knowledge base non disponibile per la modifica.");
+  const knowledge = kb ?? emptyKnowledge();
+  const impact = analyzeImpact(book, knowledge, { kind, id: change.target.id });
   const written = allScenes(book).filter(s => s.status !== "planned" && s.text.trim()).map(s => s.id);
-  const entity = change.target.kind === "entity" ? kb.entities.find(e => e.id === change.target.id) : undefined;
-  const event = change.target.kind === "event" ? kb.events.find(e => e.id === change.target.id) : undefined;
+  const entity = kind === "entity" ? knowledge.entities.find(e => e.id === change.target.id) : undefined;
+  const event = kind === "event" ? knowledge.events.find(e => e.id === change.target.id) : undefined;
+  const timeline = kind === "timeline" ? knowledge.timelines.find(t => t.id === change.target.id) : undefined;
+  const chapter = kind === "chapter" ? book.chapters.find(c => c.id === change.target.id) : undefined;
+  const what = { entity: "la scheda", event: "l'evento", timeline: "la timeline", chapter: "il capitolo" }[kind];
+  const proposalRule = {
+    entity: "Prepara la NUOVA versione completa della scheda (entity), concisa, conservando ciò che la richiesta non cambia.",
+    event: "Prepara la NUOVA versione completa dell'evento (event), concisa, conservando ciò che la richiesta non cambia.",
+    timeline: "Se la richiesta cambia titolo, tipo, descrizione o schede seguite della timeline, proponili in timeline (altrimenti omettilo); gli eventi della timeline cambiano solo attraverso le scene riscritte.",
+    chapter: "Se la richiesta cambia titolo o scopo del capitolo, proponili in chapter (altrimenti omettilo).",
+  }[kind];
+  const shape = {
+    entity: '"entity":{"name":"...","aliases":[],"importance":"main|secondary|minor","summary":"...","attributes":{"role":"...","personality":"...","speech":"..."},"relationships":[{"target":"nome scheda","type":"...","note":"..."}]}',
+    event: '"event":{"title":"...","summary":"...","storyOrder":10,"when":"...","narration":"scene|flashback|foreshadowing|offscreen|backstory","involves":["nomi"],"causes":["titoli eventi"],"secret":false,"perspectives":[{"who":"nome","stance":"knows|unaware|believes_false|conceals","note":"..."}]}',
+    timeline: '"timeline":{"title":"...","kind":"global|arc|event","summary":"...","subjects":["nomi delle schede seguite"]}',
+    chapter: '"chapter":{"title":"...","purpose":"..."}',
+  }[kind];
+  const current = entity ? "SCHEDA ATTUALE:\n" + describeEntities([entity], knowledge, 5000)
+    : event ? "EVENTO ATTUALE:\n" + describeEvents([event], knowledge, 4000)
+      : timeline ? "TIMELINE ATTUALE:\n" + timelineText(timeline, knowledge) + "\nEVENTI: " + timelineEvents(knowledge, timeline.id).map(e => e.title).slice(0, 80).join("; ")
+        : chapter ? `CAPITOLO ATTUALE: ${chapter.number} «${chapter.title}»\nScopo: ${chapter.purpose}${chapter.summary ? "\nRiassunto: " + chapter.summary : ""}` : "";
   return {
     phase: "revision", kind: "revision", noAuthorNotes: true,
     title: "Analisi della modifica: " + change.targetLabel,
-    reason: "Interpretare la richiesta, aggiornare la scheda e trovare le scene da riscrivere senza toccare il resto del libro.",
+    reason: "Interpretare la richiesta, aggiornare l'elemento e trovare le scene da riscrivere senza toccare il resto del libro.",
     nextStep: change.mode === "confirm" ? "Piano da confermare dall'autore" : "Riscrittura mirata delle scene coinvolte",
     prompt: [
-      `L'autore chiede di modificare ${entity ? "la scheda" : "l'evento"} «${change.targetLabel}» con questa richiesta PRIORITARIA: "${change.instruction}".`,
-      "1) Interpreta la richiesta. 2) Prepara la NUOVA versione completa " + (entity ? "della scheda (entity)" : "dell'evento (event)") + ", concisa, conservando ciò che la richiesta non cambia. 3) Valuta l'impatto: scene DIRETTE (citano o usano l'elemento), INDIRETTE (dipendono da eventi, relazioni o conseguenze cambiate), GLOBALE (struttura dell'intero libro). 4) Scegli in rewriteSceneIds SOLO le scene già scritte che vanno davvero riscritte: non riscrivere tutto il libro. Una modifica di carattere o voce richiede le scene dove il personaggio agisce o parla; un cambio di ruolo può richiedere molto di più.",
-      "Rispondi ESCLUSIVAMENTE JSON: " + (entity
-        ? '{"interpretation":"...","rationale":"perché queste scene","global":false,"changedFacts":["..."],"rewriteSceneIds":["scene:001:001"],"entity":{"name":"...","aliases":[],"importance":"main|secondary|minor","summary":"...","attributes":{"role":"...","personality":"...","speech":"..."},"relationships":[{"target":"nome scheda","type":"...","note":"..."}]}}'
-        : '{"interpretation":"...","rationale":"...","global":false,"changedFacts":["..."],"rewriteSceneIds":["scene:001:001"],"event":{"title":"...","summary":"...","storyOrder":10,"when":"...","narration":"scene|flashback|foreshadowing|offscreen|backstory","involves":["nomi"],"causes":["titoli eventi"],"secret":false,"perspectives":[{"who":"nome","stance":"knows|unaware|believes_false|conceals","note":"..."}]}}'),
-      entity ? "SCHEDA ATTUALE:\n" + describeEntities([entity], kb, 5000) : "EVENTO ATTUALE:\n" + describeEvents(event ? [event] : [], kb, 4000),
-      "ANALISI LOCALE DELLE DIPENDENZE (indizi lessicali e strutturali, non prove):\n" + impact.reasons.join("\n"),
+      `L'autore chiede di modificare ${what} «${change.targetLabel}» con questa richiesta PRIORITARIA: "${change.instruction}".`,
+      "1) Interpreta la richiesta. 2) " + proposalRule + " 3) Valuta l'impatto: scene DIRETTE (citano o usano l'elemento), INDIRETTE (dipendono da eventi, relazioni o conseguenze cambiate), GLOBALE (struttura dell'intero libro). 4) Scegli in rewriteSceneIds SOLO le scene già scritte che vanno davvero riscritte: non riscrivere tutto il libro. Una modifica di carattere o voce richiede le scene dove il personaggio agisce o parla; un cambio di ruolo può richiedere molto di più. 5) OGNI scena DIRETTA va classificata: o in rewriteSceneIds, o in unchangedDirect con il motivo per cui resta com'è.",
+      `Rispondi ESCLUSIVAMENTE JSON: {"interpretation":"...","rationale":"perché queste scene","global":false,"changedFacts":["..."],"rewriteSceneIds":["scene:001:001"],"unchangedDirect":[{"sceneId":"scene:001:002","reason":"perché resta invariata"}],${shape}}`,
+      current,
+      "ANALISI LOCALE DELLE DIPENDENZE (indizi lessicali e strutturali, non prove):\n" + (impact.reasons.join("\n") || "nessuna"),
       "SCENE DIRETTE:\n" + scenesCatalog(book, impact.direct),
       "SCENE INDIRETTE:\n" + scenesCatalog(book, impact.indirect),
       "ALTRE SCENE GIÀ SCRITTE (usa questi ID se l'impatto è più ampio):\n" + scenesCatalog(book, written.filter(id => !impact.direct.includes(id) && !impact.indirect.includes(id)), 8000),
-      knowledgeIndexText(kb),
+      kb ? knowledgeIndexText(kb) : "",
       "CONTESTO:\n" + base,
-    ].join("\n\n"),
+    ].filter(Boolean).join("\n\n"),
     apply: (b, text) => {
       const op = b.revision?.changeOperationId ? changeById(b, b.revision.changeOperationId) : undefined;
-      if (!op || op.id !== change.id || op.state !== "pending" || !b.knowledge) throw new Error("La modifica è cambiata durante l'analisi.");
+      if (!op || op.id !== change.id || op.state !== "pending" || (!b.knowledge && kind !== "chapter")) throw new Error("La modifica è cambiata durante l'analisi.");
       const parsed = changeAnalysisSchema.parse(parseJson(text));
-      if (op.target.kind === "entity" && !parsed.entity) throw new Error("L'analisi deve proporre la nuova scheda completa (entity).");
-      if (op.target.kind === "event" && !parsed.event) throw new Error("L'analisi deve proporre il nuovo evento completo (event).");
+      if (kind === "entity" && !parsed.entity) throw new Error("L'analisi deve proporre la nuova scheda completa (entity).");
+      if (kind === "event" && !parsed.event) throw new Error("L'analisi deve proporre il nuovo evento completo (event).");
       const now = new Date().toISOString();
-      const live = analyzeImpact(b, b.knowledge, { kind: op.target.kind as "entity" | "event", id: op.target.id });
+      const liveKb = b.knowledge && !b.knowledge.pending ? b.knowledge : emptyKnowledge();
+      const live = analyzeImpact(b, liveKb, { kind, id: op.target.id });
       const rewriteSceneIds = validRewriteTargets(b, parsed.rewriteSceneIds);
+      const kept = (parsed.unchangedDirect ?? []).filter(k => live.direct.includes(k.sceneId) && !rewriteSceneIds.includes(k.sceneId));
+      const missing = live.direct.filter(id => !rewriteSceneIds.includes(id) && !kept.some(k => k.sceneId === id));
+      if (missing.length) throw new Error(`Il piano non dice cosa fare di ${missing.length} scene dirette (${missing.slice(0, 5).join(", ")}): mettile in rewriteSceneIds o in unchangedDirect con il motivo.`);
+      const proposal = { ...(kind === "entity" && parsed.entity ? { entity: parsed.entity } : {}), ...(kind === "event" && parsed.event ? { event: parsed.event } : {}),
+        ...(kind === "timeline" && parsed.timeline ? { timeline: parsed.timeline } : {}), ...(kind === "chapter" && parsed.chapter ? { chapter: parsed.chapter } : {}) };
       op.plan = { interpretation: parsed.interpretation, changeKind: "narrative", rationale: parsed.rationale,
         direct: live.direct, indirect: live.indirect, global: parsed.global ?? live.global, rewriteSceneIds,
-        changedFacts: parsed.changedFacts ?? [], proposal: { ...(parsed.entity ? { entity: parsed.entity } : {}), ...(parsed.event ? { event: parsed.event } : {}) } };
-      op.before = { ...(op.target.kind === "entity" ? { entity: b.knowledge.entities.find(e => e.id === op.target.id) } : {}),
-        ...(op.target.kind === "event" ? { event: b.knowledge.events.find(e => e.id === op.target.id) } : {}),
+        changedFacts: parsed.changedFacts ?? [], ...(kept.length ? { kept } : {}), proposal };
+      const targetChapter = kind === "chapter" ? b.chapters.find(c => c.id === op.target.id) : undefined;
+      if (kind === "chapter" && !targetChapter) throw new Error("Il capitolo da modificare non esiste più.");
+      op.before = { ...(kind === "entity" ? { entity: liveKb.entities.find(e => e.id === op.target.id) } : {}),
+        ...(kind === "event" ? { event: liveKb.events.find(e => e.id === op.target.id) } : {}),
+        ...(kind === "timeline" ? { timeline: liveKb.timelines.find(t => t.id === op.target.id) } : {}),
+        ...(targetChapter ? { chapter: { title: targetChapter.title, purpose: targetChapter.purpose } } : {}),
         scenes: sceneSnapshots(b, rewriteSceneIds), memoryJson: JSON.stringify(b.memory) };
-      // Validate the proposed sheet now: a bad proposal must not be stored for later confirmation.
-      if (parsed.entity) replaceEntitySheet(b.knowledge, op.target.id, parsed.entity, now, "verifica");
-      if (parsed.event) replaceEventSheet(b.knowledge, op.target.id, parsed.event, now, "verifica");
+      // Validate the proposed version now: a bad proposal must not be stored for later confirmation.
+      if (parsed.entity && kind === "entity") replaceEntitySheet(liveKb, op.target.id, parsed.entity, now, "verifica");
+      if (parsed.event && kind === "event") replaceEventSheet(liveKb, op.target.id, parsed.event, now, "verifica");
+      if (parsed.timeline && kind === "timeline") replaceTimelineSheet(liveKb, op.target.id, parsed.timeline);
       if (op.mode === "confirm") {
         op.state = "awaiting_confirmation"; op.updatedAt = now;
         b.status = "paused";
@@ -1013,9 +1088,15 @@ function sceneEditWork(book: BookProject, change: NonNullable<ReturnType<typeof 
       const now = new Date().toISOString();
       op.before = { scenes: sceneSnapshots(b, [target.id]), memoryJson: JSON.stringify(b.memory) };
       op.report = [{ sceneId: target.id, at: now, drift: detectFactDrift(target.text, text, knownNames(b)) }];
-      target.text = text.trim();
-      // The chapter is no longer the frozen version: it must be reviewed again.
-      reopenForRewrite(b, [target.id], "single");
+      if (op.mode === "confirm") {
+        // Nothing changes in the book until the author confirms: the new text waits in the operation.
+        op.draftText = text.trim();
+      } else {
+        captureFreezeState(b, op, [target.id]);
+        target.text = text.trim();
+        // The chapter is no longer the frozen version: it must be reviewed again.
+        reopenForRewrite(b, [target.id], "single");
+      }
       op.state = "analyzing"; op.updatedAt = now;
     },
   };
@@ -1024,6 +1105,8 @@ function sceneComparisonWork(book: BookProject, change: NonNullable<ReturnType<t
   const scene = allScenes(book).find(s => s.id === change.target.id);
   const before = change.before.scenes.find(s => s.sceneId === change.target.id);
   if (!scene || !before) throw new Error("Versione precedente della scena non disponibile.");
+  // Confirm mode: the new version is the draft kept aside, the book still has the old text.
+  const newText = change.draftText ?? scene.text;
   const flat = allScenes(book);
   const position = flat.findIndex(s => s.id === scene.id);
   const later = flat.slice(position + 1).filter(s => s.status !== "planned" && s.text.trim()).map(s => s.id);
@@ -1041,7 +1124,7 @@ function sceneComparisonWork(book: BookProject, change: NonNullable<ReturnType<t
       'Rispondi ESCLUSIVAMENTE JSON {"changeKind":"style|narrative","changedFacts":[],"dependentSceneIds":[],"summary":"...","rationale":"..."}',
       drift.length ? "CONTROLLO LOCALE (nomi e numeri presenti in una sola versione): " + drift.join(" ") : "Il controllo locale non ha trovato nomi o numeri cambiati.",
       "VERSIONE PRECEDENTE:\n" + before.text,
-      "VERSIONE NUOVA:\n" + scene.text,
+      "VERSIONE NUOVA:\n" + newText,
       "SCENE SUCCESSIVE GIÀ SCRITTE:\n" + scenesCatalog(book, [...new Set([...eventScenes, ...later])], 12000),
     ].join("\n\n"),
     apply: (b, text) => {
@@ -1055,14 +1138,17 @@ function sceneComparisonWork(book: BookProject, change: NonNullable<ReturnType<t
       const changeKind = parsed.changeKind === "style" && !drift.length ? "style" : "narrative";
       const dependents = changeKind === "narrative" ? validRewriteTargets(b, parsed.dependentSceneIds, target.id)
         .filter(id => later.includes(id)) : [];
-      target.summary = parsed.summary;
+      const draft = op.draftText !== undefined;
+      if (!draft) { target.summary = parsed.summary; delete target.summaryStale; }
       op.plan = { interpretation: parsed.rationale, changeKind, rationale: parsed.rationale, direct: [target.id], indirect: dependents,
-        global: false, rewriteSceneIds: dependents, changedFacts: parsed.changedFacts, drift };
+        global: false, rewriteSceneIds: dependents, changedFacts: parsed.changedFacts, drift, ...(draft ? { proposal: { sceneSummary: parsed.summary } } : {}) };
       op.before = { ...op.before, scenes: [...op.before.scenes, ...sceneSnapshots(b, dependents)] };
-      if (op.mode === "confirm" && dependents.length) {
+      // Confirm mode always waits: nothing (not even this scene) changes before the author's decision.
+      if (op.mode === "confirm" && (dependents.length || draft)) {
         op.state = "awaiting_confirmation"; op.updatedAt = now;
         b.status = "paused";
-        b.previousError = "La modifica cambia fatti narrativi: conferma o annulla la riscrittura delle scene dipendenti.";
+        b.previousError = dependents.length ? "La modifica cambia fatti narrativi: conferma o annulla la riscrittura delle scene dipendenti."
+          : "La scena riscritta è pronta: confrontala e conferma o annulla la modifica.";
         return;
       }
       applyChangePlan(b, op, now);

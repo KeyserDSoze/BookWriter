@@ -6,7 +6,7 @@
 
 ## Le schede si creano da sole
 
-Dopo il piano dei capitoli l'autopilot fa un passo in più: **Schede narrative, eventi e timeline**. Crea personaggi principali e secondari, luoghi, oggetti rilevanti, fazioni, eventi fondamentali e una o più timeline. Le schede sono concise: contengono solo ciò che serve alla storia (funzione narrativa, personalità e motivazione, modo di parlare, background, relazioni). Durante la scrittura, dopo ogni scena, l'autopilot può aggiungere schede o eventi nuovi e aggiornare quelli esistenti; ogni cambiamento crea una nuova versione e conserva la precedente.
+Dopo il piano dei capitoli l'autopilot fa un passo in più: **Schede narrative, eventi e timeline**. Crea personaggi principali e secondari, luoghi, oggetti rilevanti, fazioni, eventi fondamentali e una o più timeline. Le schede sono concise: contengono solo ciò che serve alla storia (funzione narrativa, personalità e motivazione, modo di parlare, background, relazioni). Durante la scrittura, dopo ogni scena, l'autopilot aggiunge schede o eventi nuovi e aggiorna quelli esistenti; ogni cambiamento crea una nuova versione e conserva la precedente. Dopo ogni scena, revisione o riconciliazione della redazione deve dire esplicitamente cosa cambia nelle schede (anche «niente»): una risposta che lo dimentica è rifiutata e ripetuta. Una scheda ancora in bozza segue la memoria narrativa; cambiare solo le relazioni crea comunque una nuova versione.
 
 Per un libro creato prima di questa versione apri **Mondo** e premi **Genera le schede del libro**: è una chiamata AI, il testo non cambia.
 
@@ -20,20 +20,20 @@ Gli eventi distinguono ciò che accade da ciò che i personaggi sanno: per ogni 
 
 - **Panoramica**: quanti capitoli, personaggi, luoghi, oggetti, fazioni, eventi, modifiche e agenti. Ogni riquadro apre la sezione.
 - **Schede**: cerca per nome, alias o contenuto, filtra per importanza, apri una scheda per vedere attributi, relazioni (cliccabili), presenza nel libro capitolo per capitolo, eventi, stato nella memoria e versioni precedenti. Su telefono la scheda sostituisce l'elenco: **Torna all'elenco** riporta indietro.
-- **Timeline**: **Ordine della storia** (quando accadono gli eventi) e **Ordine del racconto** (come li incontra il lettore, utile per flashback e antefatti); scegli la timeline globale o un arco. Ogni evento mostra modalità, stato, coinvolti, cause ed eventi che ne dipendono.
+- **Timeline**: **Ordine della storia** (quando accadono gli eventi) e **Ordine del racconto** (come li incontra il lettore, utile per flashback e antefatti); scegli la timeline globale (una sola per libro) o un arco. Una timeline può **seguire** schede precise («Segue: …»): i loro eventi vi compaiono anche se non vi sono stati aggiunti uno per uno. Ogni evento mostra modalità, stato, coinvolti, cause ed eventi che ne dipendono.
 - **Modifiche**: storico delle richieste, piano, controlli e ripristino.
 - **Memoria**: la memoria narrativa completa, compresi i segreti dell'autore.
 
 ## Cambiare il libro con un prompt
 
-Apri una scheda o un evento e scrivi in **Modifica con un prompt**, per esempio:
+Apri una scheda, un evento, una timeline o la scheda *Modifica* di un capitolo e scrivi in **Modifica con un prompt**, per esempio:
 
 > Elena non deve più essere fredda e razionale. Voglio che sia impulsiva ed emotiva e che reagisca prima di riflettere. Mantieni invariato il suo obiettivo principale.
 
 Premi **Applica la modifica**. L'autopilot parte da solo e:
 
 1. interpreta la richiesta e prepara la nuova versione della scheda;
-2. cerca le scene **dirette** (citano o usano l'elemento), **indirette** (dipendono da eventi o conseguenze cambiate) e valuta se l'impatto è **globale**;
+2. cerca le scene **dirette** (citano o usano l'elemento), **indirette** (dipendono da eventi o conseguenze cambiate) e valuta se l'impatto è **globale**; ogni scena diretta è riscritta oppure dichiarata **invariata** con il motivo (se ne dimentica una, l'analisi è rifiutata e ripetuta);
 3. riscrive soltanto le scene scelte, con la scheda aggiornata come riferimento e l'istruzione di non introdurre altri fatti;
 4. aggiorna memoria, schede e riassunti delle scene;
 5. rimanda i capitoli toccati alla redazione completa (specialisti, lettori, scrittore, direttore);
@@ -43,7 +43,7 @@ Il banner **Modifica in corso** mostra l'avanzamento (Analisi → Riscrittura �
 
 ### Automatico o con conferma
 
-In alto nella pagina Mondo scegli **Applica le modifiche: Automaticamente** (predefinito) oppure **Dopo la mia conferma**. Con la conferma l'autopilot si ferma dopo l'analisi: vedi le scene dirette, indirette, quelle da riscrivere e i fatti che cambiano, poi premi **Conferma il piano** o **Annulla la modifica**. Finché non decidi non cambia nulla: né la scheda, né il testo, né i capitoli congelati.
+In alto nella pagina Mondo scegli **Applica le modifiche: Automaticamente** (predefinito) oppure **Dopo la mia conferma**. Con la conferma l'autopilot si ferma dopo l'analisi: vedi le scene dirette, indirette, quelle da riscrivere, quelle che restano come sono e i fatti che cambiano, poi premi **Conferma il piano** o **Annulla la modifica**. Finché non decidi non cambia nulla: né la scheda, né il testo, né i capitoli congelati. Per una scena la riscrittura arriva come **bozza** da confrontare con il testo attuale: il libro cambia solo quando confermi.
 
 ### Una scena alla volta
 
@@ -56,7 +56,7 @@ L'autopilot riscrive la scena e la confronta con la versione precedente:
 - **solo forma e stile**: si rivede soltanto quel capitolo; i capitoli successivi restano congelati;
 - **fatti cambiati**: riscrive anche le scene successive che diventerebbero incoerenti, poi rivede il capitolo e i successivi.
 
-Un controllo locale senza AI verifica nomi delle schede e numeri presenti in una sola delle due versioni: se trova differenze, la modifica è trattata come cambio dei fatti anche se il modello l'aveva giudicata di stile.
+Un controllo locale senza AI verifica nomi delle schede, nomi propri e numeri presenti in una sola delle due versioni: se trova differenze, la modifica è trattata come cambio dei fatti anche se il modello l'aveva giudicata di stile.
 
 ### Correggere una scheda senza riscrivere
 
@@ -64,19 +64,19 @@ Un controllo locale senza AI verifica nomi delle schede e numeri presenti in una
 
 ## Ripristino
 
-In **Modifiche**, una modifica completata (o in revisione) mostra **Ripristina versione precedente**. Riporta testi delle scene, scheda e memoria a prima della modifica e rimanda i capitoli alla redazione. È possibile solo se nel frattempo scene e scheda non sono cambiate: in caso contrario il pulsante spiega il motivo e trovi comunque il **Testo precedente** da consultare. Per spazio, le copie dei testi più vecchie vengono eliminate quando superano 3 milioni di caratteri complessivi: il registro resta, il ripristino no.
+In **Modifiche**, una modifica completata (o in revisione) mostra **Ripristina versione precedente**. Riporta testi delle scene, scheda (o timeline, o dati del capitolo) e memoria a prima della modifica. I capitoli il cui testo torna identico a prima ritrovano il loro congelamento e riassunto; gli altri tornano alla redazione. È possibile solo se nel frattempo scene e scheda non sono cambiate: in caso contrario il pulsante spiega il motivo e trovi comunque il **Testo precedente** da consultare. Per spazio, le copie dei testi più vecchie vengono eliminate quando superano 3 milioni di caratteri complessivi: il registro resta, il ripristino no.
 
 ## Capitoli, scene e riassunti
 
 Nella pagina **Libro** ogni capitolo è una scheda con il suo stato (da scrivere, in scrittura, in redazione, revisione completata). Un capitolo si legge in tre modi:
 
 - **Testo completo**: tutte le scene in ordine;
-- **Scene**: per ognuna stato, riassunto, personaggi, luoghi ed eventi coinvolti, modifiche ricevute;
-- **Riassunto**: quello consolidato al congelamento del capitolo, oppure un riassunto **provvisorio** composto dai riassunti delle scene. I riassunti dicono cosa accade, non giudicano.
+- **Scene**: per ognuna stato, riassunto, personaggi, luoghi ed eventi coinvolti (modificabili in *Chi c'è e quando*), modifiche ricevute;
+- **Riassunto**: quello consolidato al congelamento del capitolo, oppure un riassunto **provvisorio** composto dai riassunti delle scene. I riassunti dicono cosa accade, non giudicano; un riassunto segnato *da aggiornare* viene riscritto dal testo prima della redazione del capitolo, mai sostituito con l'inizio della scena.
 
 ## Cosa resta nel repository
 
-Nel formato Markdown 2 le schede restano nelle cartelle `characters/`, `locations/`, `items/`, `factions/` con i campi strutturati nel frontmatter; si aggiungono `events/`, `timelines/`, `changes/` (report leggibili) e `schemas/` (JSON Schema versionati). Dettagli in [formato portabile](markdown-book-format.md).
+Nel formato Markdown 2 le schede restano nelle cartelle `characters/`, `locations/`, `items/`, `factions/` con i campi strutturati nel frontmatter; si aggiungono `events/`, `timelines/` (con `subjects`, le schede seguite), `changes/` (report leggibili) e `schemas/` (JSON Schema versionati). Il formato 3 aggiunge il registro leggibile delle modifiche e delle review richieste (`history/edits.md`, `reviews/manual/`). Dettagli in [formato portabile](markdown-book-format.md).
 
 ## Limiti
 
@@ -85,4 +85,4 @@ Nel formato Markdown 2 le schede restano nelle cartelle `characters/`, `location
 - Ogni modifica costa chiamate AI (analisi, riscritture, nuova redazione); una modifica globale può costare molto.
 - Il ripristino non è una transazione fra più dispositivi; valgono il blocco di scrittura e i controlli esistenti.
 
-[ADR 0161](../ADR/0161-agents-knowledge-base-and-tracked-changes.md)
+[ADR 0161](../ADR/0161-agents-knowledge-base-and-tracked-changes.md) · [ADR 0163](../ADR/0163-complete-reviews-living-world-and-versioned-format.md)

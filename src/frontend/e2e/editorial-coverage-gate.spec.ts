@@ -18,6 +18,7 @@ test("checkpoint incompleto non chiama il giudice e non congela il capitolo desk
     .fill("Controllo rapporti di redazione");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" })
     .fill("Mara raggiunge il castello dopo una lunga traversata.");
+  await page.getByRole("checkbox", { name: /Checklist dello scrittore/ }).uncheck();
   await page.getByRole("button", { name: "Crea libro" }).click();
 
   await page.evaluate(() => new Promise<void>((resolve, reject) => {

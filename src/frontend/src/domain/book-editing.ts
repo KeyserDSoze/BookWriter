@@ -1,7 +1,7 @@
 import type { BookProject, Chapter, Scene } from "./types";
 import { ENTITY_TYPES, findEntity, LIMITS, MEMORY_FOLDER, NARRATION_MODES, parseKnowledge, slug, STANCES,
   type EntityType, type KnowledgeEntity, type KnowledgeEvent, type KnowledgeTimeline } from "./knowledge";
-import { relevantKnowledge } from "./knowledge-index";
+import { entityReferences, relevantKnowledge, timelineEvents } from "./knowledge-index";
 import { detectFactDrift, knownNames } from "./narrative-change";
 import { archiveJudgedRounds } from "./narrative-change-flow";
 import { contentStamp, currentContent, entityContent, eventContent, findScene, newEdit, pruneEdits, structureContent,
@@ -65,6 +65,17 @@ function record(book: BookProject, edit: BookEdit): BookEdit {
   book.edits = pruneEdits([...(book.edits ?? []), edit]);
   return edit;
 }
+/** A frozen chapter was validated against the old sheet or event: that validation is outdated too.
+ * Only the flag changes; the board is not restarted and the text is untouched. */
+function staleChaptersUsing(book: BookProject, sceneIdsUsed: Iterable<string>, edit: BookEdit, now: string): BookEdit {
+  const used = new Set(sceneIdsUsed);
+  for (const chapter of book.chapters)
+    if (chapter.frozenAt && chapter.scenes.some(s => used.has(s.id)))
+      chapter.reviewStale = { since: chapter.reviewStale?.since ?? now, editIds: [...(chapter.reviewStale?.editIds ?? []), edit.id].slice(-50) };
+  return edit;
+}
+const entityScenes = (book: BookProject, ...entities: KnowledgeEntity[]) =>
+  book.knowledge ? entities.flatMap(entity => entityReferences(book, book.knowledge!, entity).map(r => r.sceneId)) : [];
 function relatedOfText(book: BookProject, text: string, sceneId?: string, chapterNumber?: number): string[] {
   const kb = book.knowledge;
   if (!kb || kb.pending) return [];
@@ -126,6 +137,70 @@ export function editScene(book: BookProject, sceneId: string, patch: ScenePatch,
     ...(ctx.aiActivityId ? { aiActivityId: ctx.aiActivityId } : {}),
     before, after, changeKind, related: [...later, ...relatedOfText(book, scene.text, scene.id, chapter.number)], stampAfter: contentStamp(after) });
   touchChapter(book, chapter, edit.id, textChanged, ctx.now);
+  return record(book, edit);
+}
+
+/** Who and what is in a scene, its point of view and its date. Kept out of the scene
+ * content stamp (old validations stay valid) and recorded as their own edit, so the
+ * history can compare and restore them. Values are names (or imported reference IDs). */
+export const SCENE_META_LISTS = ["characters", "locations", "items", "factions"] as const;
+export type SceneMetaList = typeof SCENE_META_LISTS[number];
+export const SCENE_META_LABELS: Record<SceneMetaList | "viewpoint" | "date", string> = {
+  viewpoint: "punto di vista", date: "data", characters: "personaggi", locations: "luoghi", items: "oggetti", factions: "fazioni",
+};
+export type SceneMetaPatch = { viewpoint?: string; date?: string } & Partial<Record<SceneMetaList, string[]>>;
+export const SCENE_META_FIELD = "metadati";
+export function sceneMetaContent(scene: Scene): string {
+  return JSON.stringify({ viewpoint: scene.viewpoint ?? "", date: scene.date ?? "", characters: scene.characters ?? [],
+    locations: scene.locations ?? [], items: scene.items ?? [], factions: scene.factions ?? [] });
+}
+function cleanNames(values: readonly string[], label: string): string[] {
+  const out: string[] = [];
+  for (const value of values) {
+    const name = clean(value).trim();
+    if (!name) continue;
+    if (name.length > 120 || ["__proto__", "constructor", "prototype"].includes(name)) throw new Error(`${label}: nome non valido.`);
+    if (!out.some(v => v.toLocaleLowerCase("it") === name.toLocaleLowerCase("it"))) out.push(name);
+  }
+  if (out.length > 40) throw new Error(`${label}: massimo 40 per scena.`);
+  return out;
+}
+export function editSceneMetadata(book: BookProject, sceneId: string, patch: SceneMetaPatch, ctx: EditContext): BookEdit {
+  const found = findScene(book, sceneId);
+  if (!found) throw new Error("Scena non trovata.");
+  const { chapter, scene } = found;
+  assertEditable(book, [sceneId]);
+  const before = sceneMetaContent(scene);
+  const fields: string[] = [];
+  for (const key of ["viewpoint", "date"] as const) {
+    const raw = patch[key];
+    if (raw === undefined) continue;
+    const value = clean(raw).trim();
+    if (value.length > (key === "date" ? 100 : 120)) throw new Error(`${SCENE_META_LABELS[key]}: testo troppo lungo.`);
+    if (value === (scene[key] ?? "")) continue;
+    if (value) scene[key] = value; else delete scene[key];
+    fields.push(SCENE_META_LABELS[key]);
+  }
+  for (const key of SCENE_META_LISTS) {
+    const raw = patch[key];
+    if (raw === undefined) continue;
+    const list = cleanNames(raw, SCENE_META_LABELS[key]);
+    if (JSON.stringify(list) === JSON.stringify(scene[key] ?? [])) continue;
+    if (list.length) scene[key] = list; else delete scene[key];
+    fields.push(SCENE_META_LABELS[key]);
+  }
+  if (!fields.length) throw new Error("Nessuna modifica da salvare.");
+  const after = sceneMetaContent(scene);
+  const kb = book.knowledge;
+  const mentioned = [before, after].flatMap(json => {
+    const meta = JSON.parse(json) as { viewpoint: string } & Record<SceneMetaList, string[]>;
+    return [meta.viewpoint, ...SCENE_META_LISTS.flatMap(key => meta[key])].filter(Boolean);
+  });
+  const related = kb && !kb.pending ? [...new Set(mentioned.map(name => findEntity(kb, undefined, name)?.id).filter((id): id is string => !!id))] : [];
+  const edit = newEdit({ at: ctx.now, target: { kind: "scene", id: sceneId }, label: `Cap. ${chapter.number} · ${scene.number}. ${scene.title}`,
+    field: (SCENE_META_FIELD + ": " + fields.join("+")).slice(0, 60), origin: ctx.origin, ...(ctx.prompt ? { prompt: ctx.prompt.slice(0, 4000) } : {}),
+    before, after, changeKind: "descriptive", related: [sceneId, ...related], stampAfter: contentStamp(after) });
+  touchChapter(book, chapter, edit.id, false, ctx.now);
   return record(book, edit);
 }
 
@@ -315,7 +390,7 @@ export function editEntity(book: BookProject, entityId: string, patch: EntityPat
     ...(ctx.prompt ? { prompt: ctx.prompt.slice(0, 4000) } : {}), ...(ctx.aiActivityId ? { aiActivityId: ctx.aiActivityId } : {}),
     before, after, changeKind: entityChangeKind(previous, next), related: [...next.relationships.map(r => r.targetId),
       ...kb.events.filter(e => e.involves.includes(entityId)).map(e => e.id)], stampAfter: contentStamp(after) });
-  return record(book, edit);
+  return record(book, staleChaptersUsing(book, entityScenes(book, previous, next), edit, ctx.now));
 }
 export function addEntity(book: BookProject, input: { type: EntityType; name: string; importance: KnowledgeEntity["importance"]; summary: string }, ctx: EditContext): BookEdit {
   const kb = requireKnowledge(book);
@@ -340,6 +415,7 @@ export function deleteEntity(book: BookProject, entityId: string, ctx: EditConte
   if (!entity) throw new Error("Scheda non trovata.");
   const folder = MEMORY_FOLDER[entity.type];
   const memory = Object.hasOwn(book.memory[folder], entity.name) ? book.memory[folder][entity.name] : undefined;
+  const usedBy = entityScenes(book, entity);
   const affected = kb.events.filter(e => e.involves.includes(entityId) || e.perspectives.some(p => p.entityId === entityId)).map(e => e.id);
   const referencing = kb.entities.filter(e => e.relationships.some(r => r.targetId === entityId)).map(e => e.id);
   kb.entities = kb.entities.filter(e => e.id !== entityId);
@@ -348,17 +424,23 @@ export function deleteEntity(book: BookProject, entityId: string, ctx: EditConte
     event.involves = event.involves.filter(id => id !== entityId);
     event.perspectives = event.perspectives.filter(p => p.entityId !== entityId);
   }
+  for (const timeline of kb.timelines) if (timeline.subjectIds?.includes(entityId)) {
+    timeline.subjectIds = timeline.subjectIds.filter(id => id !== entityId);
+    if (!timeline.subjectIds.length) delete timeline.subjectIds;
+  }
   book.knowledge = parseKnowledge(kb);
   // Without this the next memory sync would recreate the sheet as a draft.
   if (memory !== undefined) delete book.memory[folder][entity.name];
-  return record(book, newEdit({ at: ctx.now, target: { kind: "entity", id: entityId }, label: entity.name, field: "eliminata", origin: ctx.origin,
-    before: JSON.stringify({ entity, memory: memory ?? null }), after: null, changeKind: "structural", related: [...affected, ...referencing], stampAfter: "deleted" }));
+  return record(book, staleChaptersUsing(book, usedBy, newEdit({ at: ctx.now, target: { kind: "entity", id: entityId }, label: entity.name, field: "eliminata", origin: ctx.origin,
+    before: JSON.stringify({ entity, memory: memory ?? null }), after: null, changeKind: "structural", related: [...affected, ...referencing], stampAfter: "deleted" }), ctx.now));
 }
 
-export type EventPatch = Partial<Pick<KnowledgeEvent, "title" | "summary" | "when" | "storyOrder" | "narration" | "secret" | "involves" | "causes" | "sceneIds" | "timelineIds" | "perspectives">>;
+export type EventPatch = Partial<Pick<KnowledgeEvent, "title" | "summary" | "when" | "storyOrder" | "narration" | "secret" | "involves" | "causes" | "sceneIds" | "timelineIds" | "perspectives">>
+  /** The chapter where the event is planned to be told; null removes it. */
+  & { plannedChapter?: number | null };
 function eventChangeKind(before: KnowledgeEvent, after: KnowledgeEvent): EditChangeKind {
   if (before.storyOrder !== after.storyOrder || JSON.stringify(before.causes) !== JSON.stringify(after.causes) || before.when !== after.when ||
-      JSON.stringify(before.sceneIds) !== JSON.stringify(after.sceneIds)) return "structural";
+      JSON.stringify(before.sceneIds) !== JSON.stringify(after.sceneIds) || before.plannedChapter !== after.plannedChapter) return "structural";
   if (before.summary !== after.summary || before.title !== after.title || before.secret !== after.secret ||
       JSON.stringify(before.involves) !== JSON.stringify(after.involves) || JSON.stringify(before.perspectives) !== JSON.stringify(after.perspectives)) return "event";
   return "descriptive";
@@ -372,11 +454,18 @@ export function editEvent(book: BookProject, eventId: string, patch: EventPatch,
   if (patch.sceneIds?.some(id => !known.has(id))) throw new Error("L'evento cita una scena inesistente.");
   if (patch.narration && !NARRATION_MODES.includes(patch.narration)) throw new Error("Modalità di racconto non valida.");
   if (patch.perspectives?.some(p => !STANCES.includes(p.stance))) throw new Error("Prospettiva non valida.");
-  const next: KnowledgeEvent = { ...event, ...patch,
+  if (patch.storyOrder !== undefined && !(Number.isFinite(patch.storyOrder) && patch.storyOrder >= 0 && patch.storyOrder <= 100_000))
+    throw new Error("Posizione nella cronologia della storia: un numero da 0 a 100.000.");
+  if (patch.plannedChapter !== undefined && patch.plannedChapter !== null && !(Number.isInteger(patch.plannedChapter) && patch.plannedChapter >= 1 && patch.plannedChapter <= 200))
+    throw new Error("Capitolo previsto non valido.");
+  const { plannedChapter, ...fields } = patch;
+  const next: KnowledgeEvent = { ...event, ...fields,
     ...(patch.title !== undefined ? { title: requireText(patch.title, "Titolo", 2, 160).trim() } : {}),
     ...(patch.summary !== undefined ? { summary: requireText(patch.summary, "Sintesi", 0, 800) } : {}),
-    ...(patch.when !== undefined ? (patch.when.trim() ? { when: clean(patch.when).trim().slice(0, 80) } : {}) : {}) };
+    ...(patch.when !== undefined ? (patch.when.trim() ? { when: clean(patch.when).trim().slice(0, 80) } : {}) : {}),
+    ...(typeof plannedChapter === "number" ? { plannedChapter } : {}) };
   if (patch.when !== undefined && !patch.when.trim()) delete next.when;
+  if (plannedChapter === null) delete next.plannedChapter;
   if (eventContent(next) === before) throw new Error("Nessuna modifica da salvare.");
   if (kb.events.some(e => e.id !== eventId && e.title.toLocaleLowerCase("it") === next.title.toLocaleLowerCase("it")))
     throw new Error("Esiste già un evento con questo titolo.");
@@ -386,10 +475,10 @@ export function editEvent(book: BookProject, eventId: string, patch: EventPatch,
   kb.events[kb.events.indexOf(event)] = next;
   book.knowledge = parseKnowledge(kb); // refs and acyclic causes, fail closed
   const after = eventContent(next);
-  return record(book, newEdit({ at: ctx.now, target: { kind: "event", id: eventId }, label: next.title, field: "evento", origin: ctx.origin,
+  return record(book, staleChaptersUsing(book, [...previous.sceneIds, ...next.sceneIds], newEdit({ at: ctx.now, target: { kind: "event", id: eventId }, label: next.title, field: "evento", origin: ctx.origin,
     ...(ctx.prompt ? { prompt: ctx.prompt.slice(0, 4000) } : {}), ...(ctx.aiActivityId ? { aiActivityId: ctx.aiActivityId } : {}),
     before, after, changeKind: eventChangeKind(previous, next),
-    related: [...next.sceneIds, ...next.involves, ...kb.events.filter(e => e.causes.includes(eventId)).map(e => e.id)], stampAfter: contentStamp(after) }));
+    related: [...next.sceneIds, ...next.involves, ...kb.events.filter(e => e.causes.includes(eventId)).map(e => e.id)], stampAfter: contentStamp(after) }), ctx.now));
 }
 export function addEvent(book: BookProject, input: { title: string; summary: string; timelineId?: string }, ctx: EditContext): BookEdit {
   const kb = requireKnowledge(book);
@@ -416,13 +505,13 @@ export function deleteEvent(book: BookProject, eventId: string, ctx: EditContext
   kb.events = kb.events.filter(e => e.id !== eventId);
   for (const other of kb.events) other.causes = other.causes.filter(id => id !== eventId);
   book.knowledge = parseKnowledge(kb);
-  return record(book, newEdit({ at: ctx.now, target: { kind: "event", id: eventId }, label: event.title, field: "eliminato", origin: ctx.origin,
-    before: JSON.stringify({ event }), after: null, changeKind: "structural", related: [...dependents, ...event.sceneIds], stampAfter: "deleted" }));
+  return record(book, staleChaptersUsing(book, event.sceneIds, newEdit({ at: ctx.now, target: { kind: "event", id: eventId }, label: event.title, field: "eliminato", origin: ctx.origin,
+    before: JSON.stringify({ event }), after: null, changeKind: "structural", related: [...dependents, ...event.sceneIds], stampAfter: "deleted" }), ctx.now));
 }
 /** Move an event one step earlier or later in the STORY chronology (not the narration). */
 export function moveEvent(book: BookProject, eventId: string, direction: -1 | 1, ctx: EditContext, timelineId?: string): BookEdit {
   const kb = requireKnowledge(book);
-  const ordered = kb.events.filter(e => !timelineId || e.timelineIds.includes(timelineId))
+  const ordered = timelineEvents(kb, timelineId)
     .sort((a, b) => a.storyOrder - b.storyOrder || a.title.localeCompare(b.title));
   const index = ordered.findIndex(e => e.id === eventId);
   const other = ordered[index + direction];
@@ -434,7 +523,7 @@ export function moveEvent(book: BookProject, eventId: string, direction: -1 | 1,
   return editEvent(book, eventId, { storyOrder: nextSelf }, ctx) && editEvent(book, other.id, { storyOrder: a }, ctx);
 }
 
-export type TimelinePatch = Partial<Pick<KnowledgeTimeline, "title" | "kind" | "summary">>;
+export type TimelinePatch = Partial<Pick<KnowledgeTimeline, "title" | "kind" | "summary" | "subjectIds">>;
 export function editTimeline(book: BookProject, timelineId: string | undefined, patch: TimelinePatch, ctx: EditContext): BookEdit {
   const kb = requireKnowledge(book);
   const existing = timelineId ? kb.timelines.find(t => t.id === timelineId) : undefined;
@@ -450,6 +539,14 @@ export function editTimeline(book: BookProject, timelineId: string | undefined, 
     while (taken.has(id)) id = "timeline:" + slug(title) + "-" + n++;
   }
   const next: KnowledgeTimeline = { id, title, kind: patch.kind ?? existing?.kind ?? "arc", summary: requireText(patch.summary ?? existing?.summary ?? "", "Descrizione", 0, 600) };
+  // One global chronology: an author makes another timeline global only after changing the current one.
+  const otherGlobal = kb.timelines.find(t => t.id !== id && t.kind === "global");
+  if (next.kind === "global" && existing?.kind !== "global" && otherGlobal)
+    throw new Error(`Esiste già la timeline globale «${otherGlobal.title}»: cambia prima il suo tipo.`);
+  const subjects = [...new Set(patch.subjectIds ?? existing?.subjectIds ?? [])];
+  if (subjects.length > 12) throw new Error("Una timeline segue al massimo 12 schede.");
+  if (subjects.some(subject => !kb.entities.some(e => e.id === subject))) throw new Error("La timeline segue una scheda inesistente.");
+  if (subjects.length) next.subjectIds = subjects;
   if (existing && JSON.stringify(next) === before) throw new Error("Nessuna modifica da salvare.");
   kb.timelines = existing ? kb.timelines.map(t => t.id === id ? next : t) : [...kb.timelines, next];
   book.knowledge = parseKnowledge(kb);
@@ -483,6 +580,11 @@ export function restoreBefore(book: BookProject, editId: string, ctx: EditContex
   switch (target.kind) {
     case "scene": {
       if (edit.before === null) throw new Error("Questa scena non aveva una versione precedente.");
+      if (edit.field.startsWith(SCENE_META_FIELD)) {
+        const before = JSON.parse(edit.before) as Required<SceneMetaPatch>;
+        return editSceneMetadata(book, target.id, { viewpoint: before.viewpoint, date: before.date, characters: before.characters,
+          locations: before.locations, items: before.items, factions: before.factions }, restoreCtx);
+      }
       const before = JSON.parse(edit.before) as { title: string; objective: string; text: string; summary: string };
       return editScene(book, target.id, { title: before.title, objective: before.objective, text: before.text, ...(before.summary ? { summary: before.summary } : {}) }, restoreCtx);
     }
@@ -530,6 +632,7 @@ export function restoreBefore(book: BookProject, editId: string, ctx: EditContex
       const before = JSON.parse(edit.before!) as KnowledgeEvent;
       const entities = new Set(kb.entities.map(e => e.id)), events = new Set(kb.events.map(e => e.id)), known = sceneIds(book), timelines = new Set(kb.timelines.map(t => t.id));
       return editEvent(book, target.id, { title: before.title, summary: before.summary, when: before.when ?? "", storyOrder: before.storyOrder, narration: before.narration,
+        plannedChapter: before.plannedChapter ?? null,
         secret: before.secret, involves: before.involves.filter(id => entities.has(id)), causes: before.causes.filter(id => events.has(id)),
         sceneIds: before.sceneIds.filter(id => known.has(id)), timelineIds: before.timelineIds.filter(id => timelines.has(id)),
         perspectives: before.perspectives.filter(p => entities.has(p.entityId)) }, restoreCtx);
@@ -537,8 +640,10 @@ export function restoreBefore(book: BookProject, editId: string, ctx: EditContex
     case "timeline": {
       if (edit.field === "creata") return deleteTimeline(book, target.id, restoreCtx);
       const before = JSON.parse(edit.before!) as KnowledgeTimeline;
-      if (edit.field === "eliminata") return editTimeline(book, undefined, before, restoreCtx);
-      return editTimeline(book, target.id, before, restoreCtx);
+      const known = new Set(requireKnowledge(book).entities.map(e => e.id));
+      const restored = { ...before, subjectIds: (before.subjectIds ?? []).filter(id => known.has(id)) };
+      if (edit.field === "eliminata") return editTimeline(book, undefined, restored, restoreCtx);
+      return editTimeline(book, target.id, restored, restoreCtx);
     }
     case "structure": {
       if (edit.field === "deleteScene") {

@@ -12,9 +12,13 @@ describe("routing a frammento", () => {
     expect(parseRoute(formatRoute(route))).toEqual(route);
     const reader = { page: "reader" as const, book: "b-1", chapter: "ch-3" };
     expect(parseRoute(formatRoute(reader))).toEqual(reader);
+    const settings = { page: "settings" as const, tab: "cloud" };
+    expect(formatRoute(settings)).toBe("#/impostazioni?tab=cloud");
+    expect(parseRoute(formatRoute(settings))).toEqual(settings);
   });
   it("scarta identificatori non validi o troppo lunghi", () => {
     expect(parseRoute("#/attivita?book=<script>&task=" + "x".repeat(500))).toEqual({ page: "activities" });
     expect(parseRoute("#/libreria?book=../etc")).toEqual({ page: "library" });
+    expect(parseRoute("#/modelli?tab=<b>")).toEqual({ page: "bookSettings" });
   });
 });

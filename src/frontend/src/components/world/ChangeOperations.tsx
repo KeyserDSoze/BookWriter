@@ -6,6 +6,7 @@ import { revertProblem } from "../../domain/narrative-change-flow";
 import { confirmNarrativeChange, revertNarrativeChange } from "../../application/narrative-change";
 import { Button } from "../ui/button";
 import { Badge, EmptyState } from "../ui/primitives";
+import { DiffView } from "../edit/EditKit";
 
 const STEPS: Array<{ state: ChangeState; label: string }> = [
   { state: "analyzing", label: "Analisi" }, { state: "rewriting", label: "Riscrittura" },
@@ -51,8 +52,15 @@ function PlanDetails({ book, op }: { book: BookProject; op: NarrativeChangeOpera
     </div>
     <div><p className="text-xs font-semibold">Dirette ({plan.direct.length})</p><SceneList book={book} ids={plan.direct} empty="Nessuna scena cita direttamente l'elemento."/></div>
     <div><p className="text-xs font-semibold">Indirette ({plan.indirect.length})</p><SceneList book={book} ids={plan.indirect} empty="Nessuna dipendenza indiretta trovata."/></div>
-    <div><p className="text-xs font-semibold">Da riscrivere ({plan.rewriteSceneIds.length})</p><SceneList book={book} ids={plan.rewriteSceneIds} empty="Nessuna scena da riscrivere: si aggiorna solo la scheda o si rivede il capitolo."/></div>
+    <div><p className="text-xs font-semibold">Da riscrivere ({plan.rewriteSceneIds.length})</p><SceneList book={book} ids={plan.rewriteSceneIds} empty="Nessuna scena da riscrivere: si aggiorna solo l'elemento o si rivede il capitolo."/></div>
+    {plan.kept && plan.kept.length > 0 && <div><p className="text-xs font-semibold">Dirette lasciate come sono ({plan.kept.length})</p>
+      <ul className="space-y-1 text-xs" aria-label="Scene dirette lasciate come sono">{plan.kept.map(k => <li key={k.sceneId}><Badge>{sceneName(book, k.sceneId)}</Badge> <span className="muted">{k.reason}</span></li>)}</ul></div>}
     {plan.changedFacts.length > 0 && <ul className="list-disc pl-5 text-xs">{plan.changedFacts.map(f => <li key={f}>{f}</li>)}</ul>}
+    {op.draftText !== undefined && (() => {
+      const previous = op.before.scenes.find(s => s.sceneId === op.target.id)?.text ?? "";
+      return <div className="space-y-1"><p className="text-xs font-semibold">Scena proposta (il libro non cambia finché non confermi)</p>
+        <DiffView before={previous} after={op.draftText} label="Confronto della scena proposta"/></div>;
+    })()}
     <p className="muted text-xs">{plan.rationale}</p>
   </div>;
 }
@@ -106,9 +114,9 @@ export function ChangeHistory({ book, onRefresh }: { book: BookProject; onRefres
   const ops = [...(book.changeOperations ?? [])].reverse();
   if (!ops.length) return <EmptyState title="Nessuna modifica ancora" icon={<History size={28}/>}>Le richieste fatte con un prompt su schede, eventi e scene compaiono qui, con piano, controlli e ripristino.</EmptyState>;
   async function revert(op: NarrativeChangeOperation) {
-    if (!window.confirm("Ripristinare scene e scheda com'erano prima di questa modifica? I capitoli toccati verranno rivisti di nuovo dalla redazione.")) return;
+    if (!window.confirm("Ripristinare com'era prima di questa modifica? Se il testo torna identico a quello già revisionato, la revisione precedente torna valida; altrimenti i capitoli toccati verranno rivisti di nuovo.")) return;
     setBusy(true); setMessage("");
-    try { await revertNarrativeChange(book.id, op.id, book.updatedAt); await onRefresh(); setMessage("Versione precedente ripristinata: i capitoli toccati torneranno in redazione."); }
+    try { await revertNarrativeChange(book.id, op.id, book.updatedAt); await onRefresh(); setMessage("Versione precedente ripristinata."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Ripristino non riuscito."); await onRefresh().catch(() => undefined); }
     finally { setBusy(false); }
   }
@@ -128,7 +136,7 @@ export function ChangeHistory({ book, onRefresh }: { book: BookProject; onRefres
           <details className="mt-2"><summary className="cursor-pointer text-sm font-semibold">Piano e controlli</summary>
             <div className="mt-2 space-y-2"><PlanDetails book={book} op={op}/>
               {drift.length > 0 && <div role="note" className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
-                <p className="font-semibold">Controllo locale dei fatti (nomi e numeri presenti in una sola versione)</p>
+                <p className="font-semibold">Controllo locale dei fatti (nomi, nomi propri e numeri presenti in una sola versione)</p>
                 <ul className="list-disc pl-5">{drift.map(d => <li key={d.sceneId + d.text}>{sceneName(book, d.sceneId)}: {d.text}</li>)}</ul></div>}
               {op.before.scenes.length > 0 && <details><summary className="cursor-pointer text-xs font-semibold">Testo precedente ({op.before.scenes.length} scene)</summary>
                 {op.before.scenes.map(s => <div key={s.sceneId} className="mt-2"><p className="text-xs font-semibold">{sceneName(book, s.sceneId)}</p>

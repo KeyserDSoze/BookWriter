@@ -101,7 +101,7 @@ function sniff(root: PartialNode): LiveShape {
   if (has("decisions", "reasoning")) return "judgment";
   if (has("chapters")) return "plan";
   if (has("scenes")) return "scenes";
-  if (has("chapterSummary", "bookSummary")) return "summary";
+  if (has("chapterSummary", "bookSummary", "sceneSummaries")) return "summary";
   if (has("affectedSceneIds", "rationale")) return "impact";
   if (has("mode", "characters", "locations", "factions", "items", "secrets", "timeline", "timelineAdd", "currentState", "sceneSummary", "remove"))
     return "memory";
@@ -239,14 +239,26 @@ function describeMemory(root: PartialNode & { type: "object" }): Collector {
   return out;
 }
 
-function describeSummary(root: PartialNode & { type: "object" }): Collector {
+function describeSummary(root: PartialNode & { type: "object" }, resolve?: SceneResolver): Collector {
   const out: Collector = { actions: [], counters: [] };
+  let scenes = 0;
   for (const { key, value } of root.entries) {
+    if (key === "sceneSummaries") {
+      if (value.type !== "object") continue;
+      value.entries.forEach((entry, index) => {
+        const text = entry.value.done ? str(entry.value, 190) : undefined;
+        if (!text) return;
+        scenes++;
+        out.actions.push({ id: `scene-summary-${index}`, tone: "info", title: `Riassunto: ${describeSceneRef(entry.key, resolve)}`, detail: text });
+      });
+      continue;
+    }
     const text = str(value, 200);
     if (!text) continue;
     if (key === "chapterSummary") out.actions.push({ id: key, tone: "info", title: "Sinossi del capitolo", detail: text });
     if (key === "bookSummary") out.actions.push({ id: key, tone: "info", title: "Sinossi del libro", detail: text });
   }
+  if (scenes) out.counters.push({ label: scenes === 1 ? "riassunto" : "riassunti", value: scenes });
   return out;
 }
 
@@ -369,7 +381,10 @@ function describeForming(shape: LiveShape, root: PartialNode): LiveForming | und
     if (top === "timelineAdd" || top === "timeline") return typed("Sta aggiungendo un evento alla cronologia");
     return typed("Sta aggiornando la memoria…");
   }
-  if (shape === "summary") return typed(top === "bookSummary" ? "Sta scrivendo la sinossi del libro" : "Sta scrivendo la sinossi del capitolo");
+  if (shape === "summary") {
+    if (top === "sceneSummaries") return typeof path[1] === "string" ? typed(`Sta scrivendo il riassunto: ${describeSceneRef(path[1])}`) : typed("Sta scrivendo i riassunti delle scene…");
+    return typed(top === "bookSummary" ? "Sta scrivendo la sinossi del libro" : "Sta scrivendo la sinossi del capitolo");
+  }
   if (shape === "impact") return typed(top === "affectedSceneIds" ? "Sta cercando le scene coinvolte…" : "Sta scrivendo la motivazione");
   if (shape === "research") return typed(path[1] === "reason" ? "Sta spiegando perché le serve una ricerca" : "Sta preparando una ricerca web…");
   if (shape === "search") return typed(top === "sources" ? "Sta elencando le fonti consultate…" : "Sta scrivendo la sintesi della ricerca");
@@ -417,7 +432,7 @@ export function describeLiveProgress(input: LiveProgressInput, resolve?: SceneRe
     : shape === "judgment" ? describeJudgment(root)
     : shape === "plan" || shape === "scenes" ? describePlan(root)
     : shape === "memory" ? describeMemory(root)
-    : shape === "summary" ? describeSummary(root)
+    : shape === "summary" ? describeSummary(root, resolve)
     : shape === "impact" ? describeImpact(root, resolve)
     : shape === "research" ? describeResearch(root)
     : shape === "search" ? describeSearch(root)

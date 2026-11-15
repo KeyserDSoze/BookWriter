@@ -283,19 +283,36 @@ export function assertWriterChecklist(
     if (!report.findings.some(f => f.ruleId === ruleId))
       throw new Error("Ogni regola violata deve avere un rilievo con prova testuale.");
 }
-/** Findings of a MANDATORY writer rule that the director rejected: the board
- * may not freeze silently, the author decides (adjust text, rule or intent). */
+/** Findings of a MANDATORY writer rule that the director rejected, or mandatory
+ * rules the director judged violated without accepting a fix: the board may not
+ * freeze silently, the author decides (adjust text, rule or intent). */
 export function mandatoryRuleRejections(cycle: Pick<ChapterEditorialCycle, "reports" | "judgment" | "profileSettings">):
   Array<{ findingId: string; ruleId: string; label: string }> {
   const rules = new Map(writerRules(cycle.profileSettings).filter(rule => rule.mandatory).map(rule => [rule.id, rule]));
   if (!rules.size || !cycle.judgment) return [];
   const findings = new Map(cycle.reports.flatMap(r => r.findings).map(f => [f.id, f]));
-  return cycle.judgment.decisions.flatMap(decision => {
+  const rejected = cycle.judgment.decisions.flatMap(decision => {
     const finding = findings.get(decision.findingId);
     const rule = finding?.ruleId ? rules.get(finding.ruleId) : undefined;
     return decision.action === "reject" && rule ? [{ findingId: decision.findingId, ruleId: rule.id, label: rule.label }] : [];
   });
+  const fixed = new Set(cycle.judgment.decisions.filter(d => d.action === "accept").map(d => findings.get(d.findingId)?.ruleId).filter(Boolean));
+  const violated = (cycle.judgment.ruleChecks ?? []).flatMap(check => {
+    const rule = rules.get(check.ruleId);
+    return check.verdict === "violated" && rule && !fixed.has(rule.id) ? [{ findingId: "", ruleId: rule.id, label: rule.label }] : [];
+  });
+  return [...rejected, ...violated];
 }
+/** Mandatory rules the director must confirm in this cycle: only when the writer review checked them. */
+export function mandatoryRulesToConfirm(cycle: Pick<ChapterEditorialCycle, "reports" | "profileSettings">): WriterRule[] {
+  const rules = writerRules(cycle.profileSettings).filter(rule => rule.mandatory);
+  return rules.length && cycle.reports.some(r => r.role === "writerReview" && r.checklist) ? rules : [];
+}
+export const ruleChecksSchema = z.array(z.object({
+  ruleId: z.string().min(1).max(80),
+  verdict: z.enum(["respected", "violated"]),
+  rationale: z.string().min(20).max(800),
+}).strict()).max(20);
 /** Exact fragment located deterministically in the single segment reviewed.
  * Absent on legacy persisted reports: never infer provenance retrospectively. */
 export interface NarrativeEvidenceAnchor {
@@ -411,6 +428,7 @@ export function buildEditorialRecommendationDisagreements(
 
 const judgmentSchema = z.object({
   reasoning: z.string().min(25).max(5000),
+  ruleChecks: ruleChecksSchema.optional(),
   authorTransferCritique:authorTransferCritiqueSchema.optional(),
   recommendationReconciliations:z.array(recommendationReconciliationSchema)
     .max(MAX_RECOMMENDATION_GROUPS).optional(),
@@ -434,6 +452,8 @@ const judgmentSchema = z.object({
 export type EditorialDecision = z.infer<typeof judgmentSchema>["decisions"][number];
 export interface EditorialJudgment {
   reasoning: string; decisions: EditorialDecision[];
+  /** The director's own verdict on each mandatory writer rule (absent on legacy judgments). */
+  ruleChecks?: z.infer<typeof ruleChecksSchema>;
   authorTransferCritique?:z.infer<typeof authorTransferCritiqueSchema>;
   recommendationReconciliations?:z.infer<typeof recommendationReconciliationSchema>[];
   verdict: "freeze" | "repair"; createdAt: string;
@@ -1199,6 +1219,10 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
       "Il software, non la tua risposta, deciderà congelamento o revisione.",
       writerRules(cycle.profileSettings).some(rule => rule.mandatory) ?
         "I finding con ruleId di una regola OBBLIGATORIA dello scrittore non sono gusti personali: se ne respingi uno, il capitolo NON viene congelato e passa all'autore. Respingi solo con una motivazione verificabile sul testo." : "",
+      mandatoryRulesToConfirm(cycle).length ?
+        "Non fidarti della checklist dello scrittore per le regole OBBLIGATORIE: verificale tu sul testo dei segmenti. Aggiungi al JSON ruleChecks:[{\"ruleId\":\"...\",\"verdict\":\"respected|violated\",\"rationale\":\"...\"}] con UNA voce per ciascuna di queste regole (id esatti): " +
+        mandatoryRulesToConfirm(cycle).map(rule => rule.id + " (" + rule.label + ")").join(", ") +
+        ". violated senza un rilievo accettato che la corregga ferma il capitolo per l'autore; motiva con riferimenti precisi al testo (20+ caratteri)." : "",
       directorInstructions(cycle.profileSettings),
     ].filter(Boolean).join(" "),
     prompt: [
@@ -1508,6 +1532,13 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
   }
   if (decided.size !== expected.size)
     throw new Error("Il direttore non ha valutato tutti i rilievi.");
+  const mandatory = mandatoryRulesToConfirm(cycle);
+  const checks = parsed.ruleChecks ?? [];
+  if (!mandatory.length && checks.length)
+    throw new Error("Verifica delle regole obbligatorie non prevista in questo ciclo.");
+  if (mandatory.length && (checks.length !== mandatory.length || new Set(checks.map(c => c.ruleId)).size !== checks.length ||
+      checks.some(c => !mandatory.some(rule => rule.id === c.ruleId))))
+    throw new Error("Il direttore deve dire, per ogni regola obbligatoria dello scrittore, se il testo la rispetta.");
   return { ...parsed, verdict: parsed.decisions.some(x => x.action === "accept") ?
     "repair" : "freeze", createdAt: new Date().toISOString() };
 }
@@ -1735,12 +1766,17 @@ export function beginNextRound(cycle: ChapterEditorialCycle): void {
     cycle.blockedReason = ({ 1: "Un ciclo non ha", 2: "Due cicli non hanno" } as Record<number, string>)[limit] ?? "Tre cicli non hanno";
     cycle.blockedReason += " risolto i problemi: serve una decisione umana.";
 }
-/** Applied after the director's verdict: a rejected mandatory rule stops the board. */
+/** Applied after the director's verdict: a rejected or violated mandatory rule stops the board. */
 export function blockOnMandatoryRules(cycle: ChapterEditorialCycle): boolean {
   const rejected = mandatoryRuleRejections(cycle);
   if (!rejected.length) return false;
+  const labels = (list: typeof rejected) => "«" + [...new Set(list.map(r => r.label))].join("», «") + "»";
+  const refused = rejected.filter(r => r.findingId), violated = rejected.filter(r => !r.findingId);
   cycle.stage = "blocked";
-  cycle.blockedReason = "Regola obbligatoria non soddisfatta: «" + [...new Set(rejected.map(r => r.label))].join("», «") +
-    "». Il direttore ha respinto la correzione, quindi il capitolo non viene congelato in automatico. Decidi tu: riparti con un'indicazione oppure rendi la regola consultiva in Modelli e redazione.";
+  cycle.blockedReason = [
+    refused.length ? "Regola obbligatoria non soddisfatta: " + labels(refused) + ". Il direttore ha respinto la correzione, quindi il capitolo non viene congelato in automatico." : "",
+    violated.length ? "Il direttore ritiene violata la regola obbligatoria " + labels(violated) + " senza una correzione accettata: il capitolo non viene congelato in automatico." : "",
+    "Decidi tu: riparti con un'indicazione oppure rendi la regola consultiva in Modelli e redazione.",
+  ].filter(Boolean).join(" ");
   return true;
 }

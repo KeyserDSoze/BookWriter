@@ -81,6 +81,7 @@ test("conflitti da prosa NON attestata: 12 agenti, giudice critico e freeze desk
   await page.getByRole("textbox",{name:"Titolo provvisorio"}).fill("Conflitti non attestati");
   await page.getByRole("textbox",{name:"Descrizione iniziale, spunti e vincoli"})
     .fill("Mara lascia la chiave nel pozzo e la trova in seguito.");
+  await page.getByRole("checkbox",{name:/Checklist dello scrittore/}).uncheck();
   await page.getByRole("button",{name:"Crea libro"}).click();
   await page.evaluate(()=>new Promise<void>((resolve,reject)=>{
     const open=indexedDB.open("bookwriter");open.onerror=()=>reject(open.error);

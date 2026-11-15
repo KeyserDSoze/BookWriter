@@ -12,6 +12,7 @@ test("remediation con fonte ritirata: recupero supervisionato senza AI (desktop/
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Mara e il telegrafo");
   await page.getByRole("textbox", { name: "Descrizione iniziale, spunti e vincoli" })
     .fill("Mara invia un messaggio mentre indaga su un segreto.");
+  await page.getByRole("checkbox", { name: /Checklist dello scrittore/ }).uncheck();
   await page.getByRole("button", { name: "Crea libro" }).click();
 
   await page.evaluate(() => new Promise<void>((resolve, reject) => {

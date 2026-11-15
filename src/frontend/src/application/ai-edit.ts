@@ -53,7 +53,10 @@ export async function proposeAiEdit(bookId: string, request: AiEditRequest, inst
       started.endpointId = answer.endpointId; started.modelId = answer.modelId;
       started.inputTokens = answer.inputTokens; started.outputTokens = answer.outputTokens; started.cachedInputTokens = answer.cachedInputTokens;
       const latest = (await getBook(bookId)) ?? current;
-      // Built and validated on the content of NOW; accepting is refused if it changes again.
+      // The model read the content of `current`: a proposal on newer content would undo the author's edit
+      // (or, for a selection, replace the wrong passage).
+      if (currentStampOf(latest, call.target) !== currentStampOf(current, call.target))
+        throw new Error("L'elemento è cambiato mentre il modello lavorava: proposta scartata. Riprova sulla versione attuale.");
       const parsed = call.parse(answer.text, latest);
       started.status = "succeeded"; started.endedAt = new Date().toISOString(); started.output = answer.text;
       started.summary = parsed ? "Proposta pronta: " + call.label : "Nessuna modifica necessaria: " + call.label;

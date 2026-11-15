@@ -21,17 +21,51 @@ input, select, textarea { outline-offset: 2px; }
 .live-card-in { animation: live-card-in .32s ease-out both; }
 @media (prefers-reduced-motion: reduce) { .live-card-in { animation: none; } }
 .dark .muted { color: #9aa8b9; }
-.site-nav { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100dvh; }
-.sidebar { border-right: 1px solid #cbd5e1; padding: 1.25rem; position: sticky; top: 0; align-self: start; height: 100dvh; }
+.site-nav { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100dvh; }
+.sidebar { display: flex; flex-direction: column; border-right: 1px solid #cbd5e1; padding: 1.25rem .75rem 1rem; position: sticky; top: 0; align-self: start; height: 100dvh; overflow-y: auto; }
 .dark .sidebar { border-color: #303b4a; }
+/* Navigation: one style for the sidebar items and the phone chips. */
+.nav-item, .nav-chip { display: flex; align-items: center; gap: .65rem; border-radius: .6rem; color: #334155; text-align: left; }
+.dark .nav-item, .dark .nav-chip { color: #c3cdd9; }
+.nav-item { width: 100%; min-height: 2.75rem; padding: .3rem .75rem; font-size: .875rem; }
+.nav-item:hover, .nav-chip:hover { background: rgb(148 163 184 / .18); }
+.nav-item[aria-current="page"], .nav-chip[aria-current="page"] { background: rgb(5 150 105 / .14); color: #047857; font-weight: 600; }
+.dark .nav-item[aria-current="page"], .dark .nav-chip[aria-current="page"] { color: #34d399; }
+.nav-item:focus-visible, .nav-chip:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
+.nav-group { margin: 1rem .75rem .3rem; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+.dark .nav-group { color: #8b9bb0; }
+.nav-hint { display: block; font-size: .7rem; font-weight: 400; line-height: 1.1; color: #64748b; }
+.dark .nav-hint { color: #9aa8b9; }
+.nav-count { margin-left: auto; min-width: 1.3rem; border-radius: 999px; padding: 0 .35rem; text-align: center; font-size: .7rem; font-weight: 700; line-height: 1.3rem; background: rgb(245 158 11 / .22); color: #92400e; }
+.dark .nav-count { color: #fcd34d; }
+.nav-dot { margin-left: auto; width: .55rem; height: .55rem; flex: none; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgb(16 185 129 / .2); animation: nav-pulse 1.6s ease-in-out infinite; }
+@keyframes nav-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .nav-dot { animation: none; } }
+.book-select { width: 100%; }
+@media (min-width: 640px) { .book-select { width: 16rem; } }
+/* While the background-work card is shown, the page can scroll its last controls above it. */
+.app-main { padding-bottom: calc(2rem + var(--background-toast-space, 0px)); }
+/* The eight source dossiers of a chapter: one list with dividers instead of eight boxes (wins over the panels' utilities). */
+.source-dossiers { margin-top: .75rem; border: 1px solid #cbd5e1; border-radius: .6rem; }
+.dark .source-dossiers { border-color: #334155; }
+.source-dossiers-title { padding: .45rem .75rem; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
+.dark .source-dossiers-title { color: #8b9bb0; }
+.source-dossiers > details { margin: 0; border-width: 1px 0 0; border-radius: 0; padding: .5rem .75rem; }
+.source-dossiers > details > summary { font-size: .8rem; }
 .mobile-tabs { display: none; }
 .status-bar { position: static; }
 @media (max-width: 840px) {
   .site-nav { display: block; padding-bottom: env(safe-area-inset-bottom); }
   .sidebar { display: none; }
-  .mobile-tabs { display: flex; position: sticky; top: 0; left: 0; right: 0; z-index: 40; background: #fff; border-bottom: 1px solid #cbd5e1; padding: .4rem .5rem; justify-content: space-around; }
+  /* Every page, in the same order and groups as the sidebar; the bar scrolls sideways. */
+  .mobile-tabs { display: flex; gap: .2rem; position: sticky; top: 0; left: 0; right: 0; z-index: 40; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+    background: #fff; border-bottom: 1px solid #cbd5e1; padding: .4rem .5rem; }
+  .mobile-tabs::-webkit-scrollbar { display: none; }
   .dark .mobile-tabs { background: #121923; border-color: #303b4a; }
-  .mobile-tabs > button { min-width: 0; flex: 1 1 0; padding: .25rem 0; overflow: hidden; white-space: nowrap; }
+  .nav-chip { flex: 0 0 auto; gap: .4rem; min-height: 2.75rem; padding: 0 .7rem; white-space: nowrap; font-size: .85rem; }
+  .nav-chip .nav-count, .nav-chip .nav-dot { margin-left: .1rem; }
+  .nav-sep { flex: 0 0 1px; align-self: stretch; margin: .55rem .2rem; background: #cbd5e1; }
+  .dark .nav-sep { background: #303b4a; }
 }
 /* The autopilot bar stays reachable with a thumb, right below the sticky tabs. */
 @media (max-width: 640px) {

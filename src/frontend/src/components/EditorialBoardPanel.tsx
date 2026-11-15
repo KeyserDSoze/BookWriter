@@ -329,6 +329,11 @@ function RoundDetails({ round, reports, judgment, chapter, roles, profileSetting
     {judgment && <div className="space-y-2 rounded-lg border border-slate-300 p-3 text-xs dark:border-slate-700">
       <p className="font-semibold">Decisione finale: {judgment.verdict === "freeze" ? "Nessun rilievo accettato: può congelare" : "Sono richieste correzioni"}</p>
       <p className="whitespace-pre-wrap">{judgment.reasoning}</p>
+      {judgment.ruleChecks?.length ? <ul aria-label="Regole obbligatorie verificate dal direttore" className="space-y-1">
+        {judgment.ruleChecks.map(check => <li key={check.ruleId} className="[overflow-wrap:anywhere]">
+          <span className={"rounded px-1.5 font-semibold " + (check.verdict === "respected" ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/15 text-rose-800 dark:text-rose-300")}>
+            {check.verdict === "respected" ? "Rispettata" : "Violata"}</span> {check.ruleId}: {check.rationale}</li>)}
+      </ul> : null}
       {judgment.authorTransferCritique&&<section
         aria-label="Confronto critico con le piste dell'autore"
         className="mt-2 space-y-2 rounded border border-slate-300 p-2 dark:border-slate-700">
@@ -603,14 +608,17 @@ export function EditorialBoardPanel({
           <summary className="cursor-pointer text-xs">Sinossi del capitolo</summary>
           <p className="mt-2 whitespace-pre-wrap text-xs">{ch.summary}</p>
         </details>}
-        <HistoricalResearchPanel key={ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
-        <HistoricalSourceRelationsPanel key={"relations-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
-        <BibliographyPanel key={"doi-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
-        <ArchiveCatalogPanel key={"archive-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
-        <LocOcrPanel key={"ocr-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
-        <LocIiifPanel key={"iiif-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
-        <WikisourcePanel key={"wikisource-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
-        <ManualEvidencePanel key={"excerpts-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+        <div className="source-dossiers">
+          <p className="source-dossiers-title">Fonti storiche del capitolo</p>
+          <HistoricalResearchPanel key={ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+          <HistoricalSourceRelationsPanel key={"relations-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+          <BibliographyPanel key={"doi-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+          <ArchiveCatalogPanel key={"archive-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+          <LocOcrPanel key={"ocr-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+          <LocIiifPanel key={"iiif-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+          <WikisourcePanel key={"wikisource-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+          <ManualEvidencePanel key={"excerpts-"+ch.id} book={book} chapter={ch} onRefresh={onRefresh}/>
+        </div>
         <EditorialDiffLedgerPanel book={book} chapter={ch}/>
         {(ch.editorialRounds?.length ?? 0) > 0 && <details className="mt-2">
           <summary className="cursor-pointer text-xs">Giudizi archiviati ({ch.editorialRounds?.length})</summary>

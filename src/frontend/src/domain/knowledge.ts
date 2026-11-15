@@ -74,6 +74,8 @@ export const knowledgeEventSchema = eventSnapshot.extend({
 }).strict();
 export const knowledgeTimelineSchema = z.object({
   id: z.string().regex(TIMELINE_ID), title: z.string().min(2).max(120), kind: z.enum(["global", "arc", "event"]), summary: text(600),
+  /** Who the timeline follows (a character's arc, a faction): sheet IDs. */
+  subjectIds: z.array(z.string().regex(ENTITY_ID)).max(12).optional(),
 }).strict();
 export const knowledgeBaseSchema = z.object({
   schemaVersion: z.literal(1),
@@ -116,6 +118,9 @@ export function knowledgeIntegrityProblem(kb: Pick<KnowledgeBase, "entities" | "
     if (event.causes.some(id => !events.has(id) || id === event.id)) return "Evento con una causa inesistente.";
     if (event.timelineIds.some(id => !timelines.has(id))) return "Evento collegato a una timeline inesistente.";
   }
+  for (const timeline of kb.timelines)
+    if (timeline.subjectIds?.some(id => !entities.has(id)) || new Set(timeline.subjectIds ?? []).size !== (timeline.subjectIds ?? []).length)
+      return "Timeline collegata a una scheda inesistente o ripetuta.";
   // Causal dependencies must form a DAG: a cycle would make impact analysis loop.
   const causes = new Map(kb.events.map(e => [e.id, e.causes]));
   const state = new Map<string, 1 | 2>();
@@ -170,13 +175,15 @@ const replyEvent = z.object({
 export const knowledgeReplySchema = z.object({
   entities: z.array(replyEntity).max(80).optional(),
   events: z.array(replyEvent).max(120).optional(),
-  timelines: z.array(z.object({ title: z.string().min(2).max(120), kind: z.enum(["global", "arc", "event"]).optional(), summary: z.string().max(600).optional() })).max(20).optional(),
+  timelines: z.array(z.object({ title: z.string().min(2).max(120), kind: z.enum(["global", "arc", "event"]).optional(), summary: z.string().max(600).optional(),
+    subjects: z.array(z.string().min(1).max(120)).max(12).optional() })).max(20).optional(),
 });
 export type KnowledgeReply = z.infer<typeof knowledgeReplySchema>;
 
 function snapshotOf(entity: KnowledgeEntity): EntitySnapshot {
-  return { name: entity.name, aliases: entity.aliases, importance: entity.importance, summary: entity.summary,
-    attributes: entity.attributes, relationships: entity.relationships };
+  // A deep copy: later in-place edits (relations) must never rewrite a stored version.
+  return structuredClone({ name: entity.name, aliases: entity.aliases, importance: entity.importance, summary: entity.summary,
+    attributes: entity.attributes, relationships: entity.relationships });
 }
 function pushHistory<T extends { version: number; history?: Array<{ version: number; at: string; reason: string; snapshot: S }> }, S>(
   item: T, snapshot: S, at: string, reason: string): void {
@@ -192,12 +199,18 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
   const reply = knowledgeReplySchema.parse(raw);
   const kb: KnowledgeBase = structuredClone(previous);
   const taken = new Set([...kb.entities, ...kb.events, ...kb.timelines].map(x => x.id));
+  const timelineSubjects: Array<{ timeline: KnowledgeTimeline; subjects: string[] }> = [];
   for (const item of reply.timelines ?? []) {
-    if (kb.timelines.some(t => fold(t.title) === fold(item.title))) continue;
-    kb.timelines.push({ id: uniqueId("timeline", item.title, taken), title: item.title.trim(), kind: item.kind ?? "arc", summary: item.summary ?? "" });
+    const existing = kb.timelines.find(t => fold(t.title) === fold(item.title));
+    if (existing) { if (item.subjects?.length) timelineSubjects.push({ timeline: existing, subjects: item.subjects }); continue; }
+    // One global chronology: a second "global" from the model becomes an arc.
+    const kind = item.kind === "global" && kb.timelines.some(t => t.kind === "global") ? "arc" : item.kind ?? "arc";
+    const timeline: KnowledgeTimeline = { id: uniqueId("timeline", item.title, taken), title: item.title.trim(), kind, summary: item.summary ?? "" };
+    kb.timelines.push(timeline);
+    if (item.subjects?.length) timelineSubjects.push({ timeline, subjects: item.subjects });
   }
   // Entities first (create or update), then relations once every name exists.
-  const touched: Array<{ entity: KnowledgeEntity; reply: z.infer<typeof replyEntity> }> = [];
+  const touched: Array<{ entity: KnowledgeEntity; reply: z.infer<typeof replyEntity>; before?: EntitySnapshot; versioned?: boolean }> = [];
   for (const item of reply.entities ?? []) {
     const existing = findEntity(kb, item.type, item.name);
     const cleanAttributes = Object.fromEntries(Object.entries(item.attributes ?? {})
@@ -207,11 +220,12 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       const next = { ...existing, aliases: [...new Set([...existing.aliases, ...(item.aliases ?? [])])].slice(0, 8),
         importance: item.importance ?? existing.importance, summary: item.summary?.trim() || existing.summary,
         attributes: { ...existing.attributes, ...cleanAttributes } };
-      if (JSON.stringify(snapshotOf(next as KnowledgeEntity)) !== JSON.stringify(before)) {
+      const changed = JSON.stringify(snapshotOf(next as KnowledgeEntity)) !== JSON.stringify(before);
+      if (changed) {
         pushHistory(existing, before, options.now, options.reason);
         Object.assign(existing, { aliases: next.aliases, importance: next.importance, summary: next.summary, attributes: next.attributes, updatedAt: options.now });
       }
-      touched.push({ entity: existing, reply: item });
+      touched.push({ entity: existing, reply: item, before, versioned: changed });
     } else {
       if (kb.entities.length >= LIMITS.entities) throw new Error("Knowledge base piena: massimo " + LIMITS.entities + " schede.");
       const entity: KnowledgeEntity = { id: uniqueId(item.type, item.name, taken), type: item.type, name: item.name.trim(),
@@ -222,7 +236,8 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       touched.push({ entity, reply: item });
     }
   }
-  for (const { entity, reply: item } of touched) {
+  for (const { entity, reply: item, before, versioned } of touched) {
+    const previousRelations = JSON.stringify(entity.relationships);
     for (const relation of item.relationships ?? []) {
       const target = findEntity(kb, undefined, relation.target);
       if (!target) throw new Error("Relazione verso «" + relation.target + "», che non è una scheda: aggiungila o usa un nome esistente.");
@@ -232,6 +247,11 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       else if (entity.relationships.length < LIMITS.relationships)
         entity.relationships.push({ targetId: target.id, type: relation.type, ...(relation.note ? { note: relation.note } : {}) });
     }
+    // A change of relations alone is still a new version of an existing sheet.
+    if (before && !versioned && JSON.stringify(entity.relationships) !== previousRelations) {
+      pushHistory(entity, before, options.now, options.reason);
+      entity.updatedAt = options.now;
+    }
   }
   const findEvent = (label: string) => kb.events.find(e => e.id === label || fold(e.title) === fold(label));
   const resolveEntity = (label: string) => {
@@ -239,7 +259,15 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
     if (!found) throw new Error("L'evento cita «" + label + "», che non è una scheda: aggiungila o usa un nome esistente.");
     return found.id;
   };
-  const pendingCauses: Array<{ event: KnowledgeEvent; causes: string[] }> = [];
+  for (const { timeline, subjects } of timelineSubjects) {
+    const ids = subjects.map(label => {
+      const found = findEntity(kb, undefined, label);
+      if (!found) throw new Error("La timeline «" + timeline.title + "» segue «" + label + "», che non è una scheda: aggiungila o usa un nome esistente.");
+      return found.id;
+    });
+    timeline.subjectIds = [...new Set([...(timeline.subjectIds ?? []), ...ids])].slice(0, 12);
+  }
+  const pendingCauses: Array<{ event: KnowledgeEvent; causes: string[]; before?: NonNullable<KnowledgeEvent["history"]>[number]["snapshot"]; versioned?: boolean }> = [];
   let order = Math.max(0, ...kb.events.map(e => e.storyOrder));
   for (const item of reply.events ?? []) {
     const sceneIds = [...new Set(item.sceneIds ?? (options.defaultSceneId ? [options.defaultSceneId] : []))];
@@ -266,11 +294,12 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       const { id: _id, version: _v, origin: _o, updatedAt: _u, history: _h, ...before } = existing;
       const merged = { ...existing, ...fields, sceneIds: [...new Set([...existing.sceneIds, ...sceneIds])].slice(0, 20) };
       const { id: _i2, version: _v2, origin: _o2, updatedAt: _u2, history: _h2, ...after } = merged;
-      if (JSON.stringify(before) !== JSON.stringify(after)) {
+      const changed = JSON.stringify(before) !== JSON.stringify(after);
+      if (changed) {
         pushHistory(existing, before, options.now, options.reason);
         Object.assign(existing, after, { updatedAt: options.now });
       }
-      pendingCauses.push({ event: existing, causes: item.causes ?? [] });
+      pendingCauses.push({ event: existing, causes: item.causes ?? [], before, versioned: changed });
     } else {
       if (kb.events.length >= LIMITS.events) throw new Error("Knowledge base piena: massimo " + LIMITS.events + " eventi.");
       const event: KnowledgeEvent = { id: uniqueId("event", item.title, taken), title: item.title.trim(), summary: "",
@@ -280,26 +309,45 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       pendingCauses.push({ event, causes: item.causes ?? [] });
     }
   }
-  for (const { event, causes } of pendingCauses) {
+  for (const { event, causes, before, versioned } of pendingCauses) {
     const ids = causes.map(label => {
       const found = findEvent(label);
       if (!found) throw new Error("Causa «" + label + "» non trovata fra gli eventi.");
       return found.id;
     }).filter(id => id !== event.id);
-    if (ids.length) event.causes = [...new Set([...event.causes, ...ids])].slice(0, 12);
+    const next = [...new Set([...event.causes, ...ids])].slice(0, 12);
+    if (JSON.stringify(next) === JSON.stringify(event.causes)) continue;
+    // A change of causes alone is still a new version of an existing event.
+    if (before && !versioned) { pushHistory(event, before, options.now, options.reason); event.updatedAt = options.now; }
+    event.causes = next;
   }
   return parseKnowledge(kb);
 }
 
-/** Deterministic, AI-free: every memory entry has a sheet. New sheets are drafts. */
-export function syncKnowledgeWithMemory(kb: KnowledgeBase, memory: Record<"characters" | "locations" | "items" | "factions", Record<string, string>>, now: string): KnowledgeBase {
+type MemoryCards = Record<"characters" | "locations" | "items" | "factions", Record<string, string>>;
+const memorySummary = (value: string) => value.replace(/\s+/g, " ").trim().slice(0, 300);
+/** Deterministic, AI-free: every memory entry has a sheet. New sheets are drafts.
+ * With the previous memory, a draft sheet that still mirrors its memory entry
+ * (never edited by the author or the AI) follows the entry when it changes. */
+export function syncKnowledgeWithMemory(kb: KnowledgeBase, memory: MemoryCards, now: string, previous?: MemoryCards): KnowledgeBase {
   const next = structuredClone(kb);
   const taken = new Set([...next.entities, ...next.events, ...next.timelines].map(x => x.id));
   for (const type of ENTITY_TYPES) for (const [key, value] of Object.entries(memory[MEMORY_FOLDER[type]] ?? {})) {
-    if (findEntity(next, type, key) || next.entities.length >= LIMITS.entities || !key.trim() ||
-      ["__proto__", "constructor", "prototype"].includes(key) || key.length > 120) continue;
+    if (!key.trim() || ["__proto__", "constructor", "prototype"].includes(key) || key.length > 120) continue;
+    const existing = findEntity(next, type, key);
+    if (existing) {
+      const folder = previous?.[MEMORY_FOLDER[type]];
+      const old = folder && Object.hasOwn(folder, key) ? folder[key] : undefined;
+      const fresh = memorySummary(value);
+      if (typeof old === "string" && existing.status === "draft" && existing.summary === memorySummary(old) && fresh && fresh !== existing.summary) {
+        pushHistory(existing, snapshotOf(existing), now, "Aggiornata dalla memoria narrativa");
+        existing.summary = fresh; existing.updatedAt = now;
+      }
+      continue;
+    }
+    if (next.entities.length >= LIMITS.entities) continue;
     next.entities.push({ id: uniqueId(type, key, taken), type, name: key.trim(), aliases: [], importance: "minor",
-      summary: value.replace(/\s+/g, " ").trim().slice(0, 300), attributes: {}, relationships: [],
+      summary: memorySummary(value), attributes: {}, relationships: [],
       version: 1, status: "draft", origin: "written", updatedAt: now });
   }
   return next;
@@ -338,4 +386,4 @@ export const KNOWLEDGE_REPLY_SHAPE =
   '"events":[{"title":"...","summary":"cosa accade","storyOrder":10,"when":"momento nella storia","narration":"scene|flashback|foreshadowing|offscreen|backstory",' +
   '"involves":["nomi delle schede"],"causes":["titolo di un evento precedente da cui dipende"],"chapter":1,"sceneIds":["scene:001:001"],"secret":false,' +
   '"perspectives":[{"who":"nome","stance":"knows|unaware|believes_false|conceals","note":"..."}],"timelines":["titolo della timeline"]}],' +
-  '"timelines":[{"title":"...","kind":"global|arc|event","summary":"..."}]}';
+  '"timelines":[{"title":"...","kind":"global|arc|event","summary":"...","subjects":["nomi delle schede che la timeline segue, per un arco"]}]}';
