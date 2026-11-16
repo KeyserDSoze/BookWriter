@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { newBook, type BookProject } from "./types";
 import {
   EDITORIAL_ROLES, adjudicationPrompt, allFindings, chapterSegments, createEditorialCycle,
-  judgeBatchesOf, nextJudgmentScope, recordJudgeBatch, validateJudgment, validateReport,
+  judgeBatchesOf, judgeFindingsPerOutput, nextJudgmentScope, recordJudgeBatch, validateJudgment, validateReport,
   type ChapterEditorialCycle,
 } from "./editorial-board";
 import { estimateTextTokens } from "./model-token-limits";
@@ -95,6 +95,24 @@ describe("Direttore editoriale a lotti con limite di input", () => {
   it("dichiara l'impossibilità quando nemmeno un gruppo indivisibile entra nel limite, senza troncare", () => {
     const { book, cycle } = fixture();
     expect(() => nextJudgmentScope(book, cycle, 500)).toThrow(/nemmeno con un solo gruppo/);
+  });
+  it("con un limite di output dichiarato divide i rilievi in lotti che lasciano metà output al ragionamento", () => {
+    const { book, cycle } = fixture();
+    const chapter = book.chapters[0]!;
+    const all = allFindings(cycle).map(f => f.id);
+    expect(judgeFindingsPerOutput(8192)).toBe(20);
+    expect(nextJudgmentScope(book, cycle, undefined, 8192)).toBeUndefined();
+    const sizes: number[] = [];
+    let judgment;
+    for (let guard = 0; guard < 20 && !judgment; guard++) {
+      const scope = nextJudgmentScope(book, cycle, undefined, 1200);
+      expect(scope).toBeDefined();
+      sizes.push(scope!.findingIds.size);
+      judgment = recordJudgeBatch(book, cycle, chapter, scope!, reply([...scope!.findingIds]));
+    }
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(judgeFindingsPerOutput(1200));
+    expect(sizes.length).toBeGreaterThan(1);
+    expect(judgment?.decisions.map(d => d.findingId).sort()).toEqual([...all].sort());
   });
   it("ignora lotti salvati incoerenti e ricomincia", () => {
     const { cycle } = fixture();

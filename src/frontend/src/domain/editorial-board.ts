@@ -1617,18 +1617,29 @@ function judgmentAtoms(book: BookProject, cycle: ChapterEditorialCycle): Judgmen
     .filter(a => a.ids.length).sort((a, b) => order.get(a.ids[0]!)! - order.get(b.ids[0]!)!);
 }
 
-/** The next slice the director must judge so every call fits `maxPromptTokens`, or undefined when
- * one call suffices (no limit, or the whole judgment fits). Never truncates: if even one
- * indivisible group of findings does not fit, it says so. */
-export function nextJudgmentScope(book: BookProject, cycle: ChapterEditorialCycle, maxPromptTokens?: number):
-  JudgmentScope | undefined {
+/** Rough reply size of one decision and the share of the output limit kept for reasoning: a thinking model
+ * spends the same output budget on its reasoning, so a verdict on too many findings is cut mid-JSON. */
+const JUDGE_OUTPUT_TOKENS_PER_FINDING = 200;
+const JUDGE_OUTPUT_REASONING_SHARE = 0.5;
+export const judgeFindingsPerOutput = (maxOutputTokens: number): number =>
+  Math.max(1, Math.floor(maxOutputTokens * (1 - JUDGE_OUTPUT_REASONING_SHARE) / JUDGE_OUTPUT_TOKENS_PER_FINDING));
+
+/** The next slice the director must judge so every call fits `maxPromptTokens` and its decisions fit
+ * `maxOutputTokens`, or undefined when one call suffices (no limit, or the whole judgment fits).
+ * Never truncates: if even one indivisible group of findings does not fit the input, it says so. */
+export function nextJudgmentScope(book: BookProject, cycle: ChapterEditorialCycle, maxPromptTokens?: number,
+  maxOutputTokens?: number): JudgmentScope | undefined {
   const batches = judgeBatchesOf(cycle);
-  if (!batches.length && maxPromptTokens === undefined) return undefined;
-  const fits = (scope?: JudgmentScope) => {
+  if (!batches.length && maxPromptTokens === undefined && maxOutputTokens === undefined) return undefined;
+  const outputCap = maxOutputTokens === undefined ? Infinity : judgeFindingsPerOutput(maxOutputTokens);
+  const fitsInput = (scope?: JudgmentScope) => {
     if (maxPromptTokens === undefined) return true;
     const p = adjudicationPrompt(book, cycle, scope);
     return estimateTextTokens(p.system, p.prompt) <= maxPromptTokens;
   };
+  const fitsOutput = (scope?: JudgmentScope) =>
+    (scope ? scope.findingIds.size : allFindings(cycle).length) <= outputCap;
+  const fits = (scope?: JudgmentScope) => fitsOutput(scope) && fitsInput(scope);
   if (!batches.length && fits()) return undefined;
   const doneIds = new Set(batches.flatMap(b => b.findingIds));
   const atoms = judgmentAtoms(book, cycle).filter(a => a.ids.every(id => !doneIds.has(id)));
@@ -1641,10 +1652,14 @@ export function nextJudgmentScope(book: BookProject, cycle: ChapterEditorialCycl
   const chosen: JudgmentAtom[] = [];
   for (const atom of atoms) {
     if (fits(scopeOf([...chosen, atom]))) chosen.push(atom);
-    else if (!chosen.length) throw new Error(
-      "Il direttore non riesce a stare nel limite di input dichiarato (" + maxPromptTokens + " token) nemmeno con un solo gruppo indivisibile di " +
-      atom.ids.length + " rilievi. Aumenta il limite del modello in Impostazioni oppure riduci capitolo e memoria: il canone non viene troncato.");
-    else break;
+    else if (!chosen.length) {
+      const alone = scopeOf([atom]);
+      // An indivisible group over the output estimate is still tried: a cut reply is rejected, never applied.
+      if (fitsInput(alone)) { chosen.push(atom); break; }
+      throw new Error(
+        "Il direttore non riesce a stare nel limite di input dichiarato (" + maxPromptTokens + " token) nemmeno con un solo gruppo indivisibile di " +
+        atom.ids.length + " rilievi. Aumenta il limite del modello in Impostazioni oppure riduci capitolo e memoria: il canone non viene troncato.");
+    } else break;
   }
   return scopeOf(chosen);
 }

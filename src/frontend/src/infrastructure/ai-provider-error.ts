@@ -49,7 +49,7 @@ export class TruncatedProviderContentError extends ProviderContentError {
     endpointId: string, modelId: string,
     usage?: { prompt_tokens?: unknown; completion_tokens?: unknown },
   ) {
-    super("Risposta troncata: il modello si è fermato per limite di lunghezza o di contesto. Nessun testo applicato. Aumenta la lunghezza del contesto del modello (LM Studio), abbassa il thinking o riduci il capitolo.",
+    super("Risposta troncata: il modello si è fermato per limite di lunghezza o di contesto. Nessun testo applicato. Con un modello che ragiona, il ragionamento consuma lo stesso limite di output della risposta: alza il «Max output» sulla piattaforma e i token di output del modello nelle Impostazioni, abbassa il thinking, oppure aumenta il contesto (LM Studio) o riduci il capitolo.",
       endpointId, modelId, usage);
     this.name = "TruncatedProviderContentError";
   }

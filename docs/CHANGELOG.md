@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## 0.27.2 — 2026-11-16 — Il direttore divide i rilievi anche per limite di output
+
+- **Lotti per limite di output.** Con un limite di token di output dichiarato per il modello del direttore, i rilievi sono divisi in lotti che lasciano metà dell'output al ragionamento (circa 200 token a decisione: con 8192 sono 20 rilievi a lotto). Prima i lotti dipendevano solo dal limite di input: un modello che ragiona poteva esaurire l'output a metà JSON con molti rilievi (es. 53) e la risposta veniva scartata come troncata. Gruppi indivisibili (divergenze, conoscenza) restano insieme; i lotti si fondono e il giudizio completo passa dalla validazione di sempre.
+- **Messaggio di troncamento.** Ora spiega che il ragionamento consuma lo stesso limite di output della risposta e indica dove alzarlo.
+- Limiti: la stima di 200 token a decisione e la metà riservata al ragionamento sono euristiche; provato con fornitori simulati.
+
 ## 0.27.1 — 2026-11-16 — Tools: schema dei risultati e niente più `{}` accettato
 
 - **Il modello non riceve più uno schema vuoto.** Per il giudice editoriale e per i revisori la funzione `submit_result` dichiara i campi obbligatori (`reasoning`/`decisions`, `verdict`/`summary`/`findings`); gli altri compiti JSON restano con lo schema generico. Prima un modello con ragionamento lungo poteva consegnare `{}` e il giudizio veniva scartato come «formato non rispettato».

@@ -493,7 +493,13 @@ function declaredJudgeInputBudget(settings: AppSettings, book: BookProject): num
   return limit === undefined ? undefined : limit - Math.min(1500, Math.floor(limit / 10));
 }
 
-function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
+function declaredJudgeOutputBudget(settings: AppSettings, book: BookProject): number | undefined {
+  const route = routeFor("chapterJudge", settings, book);
+  const endpoint = settings.endpoints.find(e => e.id === route.endpointId);
+  return endpoint ? declaredModelTokenLimits(endpoint, route.modelId).outputTokens : undefined;
+}
+
+function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputTokens?: number): Work | null {
   const planning = ["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase);
   // The structured sheets are built once the plan exists (new books, or on request).
   if (book.knowledge?.pending && book.chapters.length && !planning && book.phase !== "revision")
@@ -685,7 +691,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
         assertEditorialReviewCoverage(book, cycle, true);
         const historicalSnapshot = captureHistoricalPromptDossier(book, cycle.chapterId, "adjudicate");
         // With a declared input limit the director may judge in several smaller calls.
-        const scope = nextJudgmentScope(book, cycle, judgeInputTokens);
+        const scope = nextJudgmentScope(book, cycle, judgeInputTokens, judgeOutputTokens);
         const prompt = adjudicationPrompt(book, cycle, scope);
         const finish = (current: NonNullable<typeof cycle>, judgment: NonNullable<typeof cycle.judgment>, b: BookProject) => {
           current.judgment = judgment;
@@ -1333,10 +1339,11 @@ export class AutopilotRunner {
         let work: Work | null;
         const planning = await loadSettings();
         const judgeInputTokens = declaredJudgeInputBudget(planning, book);
+        const judgeOutputTokens = declaredJudgeOutputBudget(planning, book);
         if (manual) work = manualReviewWork(book, manual);
         else try {
           work = book.phase === "prose" && !book.editorialCycle && !book.revision &&
-            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book, judgeInputTokens);
+            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book, judgeInputTokens, judgeOutputTokens);
         } catch (error) {
           // The editorial board refuses oversized canon memory; compact it instead of stopping.
           if (error instanceof Error && !book.revision &&
