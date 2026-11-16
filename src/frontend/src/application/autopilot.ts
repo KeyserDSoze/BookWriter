@@ -17,6 +17,7 @@ import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, sa
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
 import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, judgeBatchesOf, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
+import { JUDGE_RESULT_SCHEMA, REVIEW_REPORT_SCHEMA, type StructuredJson } from "../domain/structured-output";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
@@ -83,7 +84,7 @@ type Work = {
   /** Web research group of this task; null = never, absent = derived from the kind. */
   researchAgent?: ResearchAgent | null;
   /** The reply is one JSON object: models with the tools role may deliver it as function-call arguments. */
-  json?: boolean;
+  json?: StructuredJson;
   phase: Phase;
   kind: TaskKind;
   title: string;
@@ -654,7 +655,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
           reviewSlot: { key: reviewKey(cycle.chapterId, cycle.round, cycle.reports.length),
             index: cycle.reports.length, expected: next.segmentCount * cycleRoles(book, cycle).length },
           researchAgent: reviewerResearchAgent(next.role),
-          phase: "chapterReview", kind: reviewerTask(next.role), title, json: true,
+          phase: "chapterReview", kind: reviewerTask(next.role), title, json: REVIEW_REPORT_SCHEMA,
           system: prompt.system,
           reason: "Una chat autonoma controlla solo la sua competenza, senza pareri degli altri agenti.",
           nextStep: "Prossimo revisore o giudizio critico della redazione",
@@ -695,7 +696,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
           if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
         };
         return {
-          phase: "chapterReview", kind: "chapterJudge", json: true, system: prompt.system,
+          phase: "chapterReview", kind: "chapterJudge", json: JUDGE_RESULT_SCHEMA, system: prompt.system,
           title: "Direttore editoriale: accettazione o rifiuto motivato dei rilievi" +
             (scope ? " (lotto " + (judgeBatchesOf(cycle).length + 1) + ", " + scope.findingIds.size + " rilievi)" : ""),
           reason: "Il direttore valuta criticamente tutti i rapporti previsti dal ciclo senza assumere che siano corretti.",
@@ -1388,7 +1389,7 @@ export class AutopilotRunner {
         try {
           const launch = { book, settings, runId, guard, signal, kind: work.kind, title: work.title,
             systemPrompt, userPrompt, started, assignment, configuredEndpoint,
-            ...(work.json ? { expectsJson: true } : {}),
+            ...(work.json ? { expectsJson: work.json } : {}),
             ...(requestedEffort === undefined ? {} : { requestedEffort }) };
           let call: Promise<ModelAnswer>;
           if (pooled) {

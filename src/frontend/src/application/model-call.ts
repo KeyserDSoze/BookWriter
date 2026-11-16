@@ -12,6 +12,7 @@ import { preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
 import { assertPromptFitsLoadedContext, assertPromptWithinDeclaredInput } from "./context-guard";
 import { declaredModelTokenLimits, effectiveOutputTokens } from "../domain/model-token-limits";
 import type { WriterGuard } from "./writer-guard";
+import type { StructuredJson } from "../domain/structured-output";
 
 export interface LaunchInput {
   book: BookProject; settings: AppSettings; runId: string; guard: WriterGuard; signal: AbortSignal;
@@ -21,7 +22,7 @@ export interface LaunchInput {
   configuredEndpoint?: EndpointProfile;
   requestedEffort?: TaskReasoning;
   /** The reply is one JSON object: a model with the tools role may deliver it as function arguments. */
-  expectsJson?: boolean;
+  expectsJson?: StructuredJson;
   /** The sequential path stores the attempt before the checks (an audit even if they reject it);
    * a parallel look-ahead stores it only once the request is certain to be sent. */
   persisted: boolean;
@@ -72,7 +73,7 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   startLiveFor(i,i.live);
   const provider = callModel(i.kind, i.systemPrompt, i.userPrompt, settings, book, signal, {
     ...(outputCap === undefined ? {} : { maxOutputTokens: outputCap }),
-    ...(i.expectsJson ? { structuredJson: true } : {}),
+    ...(i.expectsJson ? { structuredJson: i.expectsJson } : {}),
     onHeaders: () => markAiHeader(started.id),
     onProgress: (delta: AiStreamDelta) => addAiDelta(started.id, delta),
     onTransport: (stats: AiTransportStats) => markAiTransport(started.id, stats),

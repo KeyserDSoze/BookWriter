@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## 0.27.1 — 2026-11-16 — Tools: schema dei risultati e niente più `{}` accettato
+
+- **Il modello non riceve più uno schema vuoto.** Per il giudice editoriale e per i revisori la funzione `submit_result` dichiara i campi obbligatori (`reasoning`/`decisions`, `verdict`/`summary`/`findings`); gli altri compiti JSON restano con lo schema generico. Prima un modello con ragionamento lungo poteva consegnare `{}` e il giudizio veniva scartato come «formato non rispettato».
+- **Una chiamata con argomenti vuoti non è un risultato.** Se il modello chiama la funzione con `{}` e non scrive testo, l'errore lo dice chiaramente (con i token usati) e suggerisce di disattivare «Output strutturato» o di togliere il tag «tools»; se ha scritto anche del testo, vale quello. Nessun ritentativo automatico.
+- Limiti: provato con fornitori simulati; non so se ogni modello rispetti il `tool_choice` forzato con lo schema.
+
 ## 0.27.0 — 2026-11-16 — Motore «tools»: risultati JSON come argomenti di funzione
 
 - **Un modello con il tag «tools» consegna il JSON con una funzione.** Per i compiti che restituiscono un solo oggetto JSON (revisori e lettori, giudice critico, piano dei capitoli e delle scene, schede narrative, memoria e riconciliazioni, sinossi, analisi d'impatto) la richiesta contiene una sola funzione `submit_result` con `tool_choice` forzato; gli argomenti sono la risposta e passano dalla stessa validazione (Zod, ancore, giudice) del testo. La funzione non viene mai eseguita. Senza il tag, con endpoint LM Studio nativo o con «Output strutturato: Disattivato» (Impostazioni → endpoint → opzioni avanzate) resta il protocollo testuale di prima. La prosa, le riscritture e le ricerche web non cambiano.

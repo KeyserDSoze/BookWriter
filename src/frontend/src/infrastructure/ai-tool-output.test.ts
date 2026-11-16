@@ -32,9 +32,9 @@ function sse(items: string[]): Response {
     },
   }), { headers: { "content-type": "text/event-stream" } });
 }
-const call = (settings: AppSettings, book: ReturnType<typeof newBook>, structuredJson?: boolean) =>
+const call = (settings: AppSettings, book: ReturnType<typeof newBook>, structuredJson?: true | false) =>
   callModel("chapterJudge", "Sistema", "Prompt", settings, book, new AbortController().signal,
-    structuredJson === undefined ? {} : { structuredJson });
+    structuredJson ? { structuredJson: true as const } : {});
 
 describe("Output strutturato via tools", () => {
   it("invia una sola funzione forzata solo per un modello col tag tools e un compito JSON", async () => {
@@ -77,6 +77,24 @@ describe("Output strutturato via tools", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       content: null, tool_calls: [{ function: { name: "altro", arguments: "{}" } }] })));
     await expect(call(settings, book, true)).rejects.toThrow(/senza testo/i);
+  });
+
+  it("una chiamata con argomenti vuoti {} non è un risultato: errore chiaro con usage, o testo se presente", async () => {
+    const { settings, book } = fixture(true);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(toolMessage("{}"))));
+    await expect(call(settings, book, true)).rejects.toThrow(/argomenti vuoti/);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ ...toolMessage("{}"), content: '{"a":1}' })));
+    expect((await call(settings, book, true)).text).toBe('{"a":1}');
+  });
+
+  it("passa lo schema dei parametri quando il compito lo fornisce", async () => {
+    const { settings, book } = fixture(true);
+    const request = vi.fn().mockResolvedValue(jsonResponse(toolMessage('{"x":1}')));
+    vi.stubGlobal("fetch", request);
+    await callModel("chapterJudge", "S", "P", settings, book, new AbortController().signal,
+      { structuredJson: { type: "object", required: ["reasoning"] } });
+    const sent = body(request) as { tools: Array<{ function: { parameters: unknown } }> };
+    expect(sent.tools[0]!.function.parameters).toEqual({ type: "object", required: ["reasoning"] });
   });
 
   it("legge gli argomenti della funzione dallo streaming SSE e li mostra come testo", async () => {

@@ -12,7 +12,9 @@ import { lmStudioNativeProtocol, lmStudioNativeEndpoint, lmStudioNativeReasoning
   readLmStudioNativeStream, type LmStudioPhase, type AiTransportStats } from "./lmstudio-native";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
 import { localEndpointTimeoutHint } from "./local-endpoint-probe";
-import { SUBMIT_TOOL_NOTE, toolCallArguments, toolRequestFields, usesToolOutput } from "../domain/structured-output";
+import { SUBMIT_TOOL_NOTE, hasEmptyToolCall, toolCallArguments, toolRequestFields, usesToolOutput,
+  type StructuredJson } from "../domain/structured-output";
+import { ProviderContentError } from "./ai-provider-error";
 
 export type ModelAnswer = {
   text: string;
@@ -90,7 +92,7 @@ export async function callModel(
   signal: AbortSignal,
   options?: { maxOutputTokens?: number; onProgress?: (delta: AiStreamDelta) => void;
     /** The reply is one JSON object: delivered via a forced function call when the model is tagged «tools». */
-    structuredJson?: boolean;
+    structuredJson?: StructuredJson;
     onHeaders?: () => void; onPhase?: (phase:LmStudioPhase)=>void;
     onTransport?: (stats:AiTransportStats)=>void },
 ): Promise<ModelAnswer> {
@@ -112,7 +114,7 @@ export async function callModel(
   }
   const base = normalizeEndpoint(endpoint.baseUrl);
   const nativeUrl=protocol==="lmstudio_native"?lmStudioNativeEndpoint(base):undefined;
-  const structured = usesToolOutput(endpoint, assignment.modelId, options?.structuredJson, protocol === "lmstudio_native");
+  const structured = usesToolOutput(endpoint, assignment.modelId, !!options?.structuredJson, protocol === "lmstudio_native");
   const nativeReasoning=protocol==="lmstudio_native"?lmStudioNativeReasoning(effort):undefined;
   const authMode = endpointAuthMode(endpoint.authMode, base);
   if (authMode === "api_key" && !endpoint.secret)
@@ -140,7 +142,7 @@ export async function callModel(
       }:{
         model: assignment.modelId,
         messages: [{ role: "system", content: structured ? system + SUBMIT_TOOL_NOTE : system }, { role: "user", content: prompt }],
-        ...(structured ? toolRequestFields() : {}),
+        ...(structured ? toolRequestFields(typeof options?.structuredJson === "object" ? options.structuredJson : undefined) : {}),
         ...(options?.maxOutputTokens !== undefined ? { [outputField]: options.maxOutputTokens } : {}),
         ...(effort === undefined ? {} : { reasoning_effort: effort }),
         ...(streaming ? { stream: true, stream_options: { include_usage: true } } : {}),
@@ -216,6 +218,10 @@ export async function callModel(
     outputTokens: validTokenCount(data.usage?.completion_tokens),
     cachedInputTokens: cachedTokensFromUsage(data.usage),
   };
+  if (structured && toolText === undefined && hasEmptyToolCall(message) &&
+      (typeof content !== "string" || !content.trim())) throw new ProviderContentError(
+    "Il modello ha chiamato la funzione di consegna con argomenti vuoti (\"{}\"): nessun risultato. Nessuna modifica applicata. Se si ripete, imposta «Output strutturato» su Disattivato per questo endpoint o togli il tag «tools» a questo modello.",
+    endpoint.id, assignment.modelId, data.usage);
   if (content === null || content === undefined) throw new EmptyProviderContentError(
     endpoint.id, assignment.modelId, data.usage);
   const text = responseTextContent(content);
