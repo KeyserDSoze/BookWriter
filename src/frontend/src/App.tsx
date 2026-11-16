@@ -47,7 +47,8 @@ import { routeFor, TASK_KINDS } from "./domain/types";
 import { DEFAULT_AUTO_RETRIES } from "./application/auto-retry";
 import { enableFailedTaskRetries } from "./infrastructure/failed-task-retry";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
-import { endpointAuthMode, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
+import { endpointAuthMode, fetchModelDetails, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
+import { tokenLimitsFromDetails, withDetectedTokenLimits } from "./domain/model-token-limits";
 import { getBook, listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
@@ -650,13 +651,20 @@ export default function App() {
       // Optional, loopback-only: which thinking levels each LM Studio model declares.
       const reasoning = authMode === "none" ? await fetchLmStudioReasoningCatalog(endpoint.baseUrl) : undefined;
       if (!current()) { discardStale(); return; }
+      // Optional /models/details (llmproxy): context window and max answer; failures just leave manual entry.
+      const detected = tokenLimitsFromDetails(await fetchModelDetails(endpoint.baseUrl, secret));
+      if (!current()) { discardStale(); return; }
+      const detectedLimits = withDetectedTokenLimits(endpoint, models, detected);
       // Synchronous ref-based commit: there is no async gap after the guard
       // and no side effect inside a React state updater.
       const latest = settingsRef.current;
       setSettings({ ...latest, endpoints: latest.endpoints.map(profile =>
         profile === endpoint ? { ...profile, models,
+          ...(detectedLimits.filled ? { modelTokenLimits: detectedLimits.limits } : {}),
           ...(reasoning ? { modelReasoning: reasoning } : {}) } : profile) });
-      setNotice(`Trovati ${models.length} modelli${reasoning ? " e i livelli di thinking che dichiarano" : ""}. Premi Salva impostazioni per conservarli.`);
+      setNotice(`Trovati ${models.length} modelli${reasoning ? " e i livelli di thinking che dichiarano" : ""}` +
+        (detectedLimits.filled ? `; letti i limiti di token di ${detectedLimits.filled} modelli da /models/details` : "") +
+        ". Premi Salva impostazioni per conservarli.");
     } catch (error) {
       if (!newest()) return;
       if (!current()) { discardStale(); return; }
@@ -1006,7 +1014,7 @@ export default function App() {
 
       {page === "activities" && (current ?
         <div className="min-w-0 space-y-4">
-        <DebugReportPanel key={current.id} book={current} activities={activities} version={packageInfo.version}/>
+        <DebugReportPanel key={current.id} book={current} activities={activities} endpoints={settings.endpoints} version={packageInfo.version}/>
         <AiTaskWorkspace key={current.id} book={current} bookId={current.id} activities={activities} live={liveAi}
           focusId={focusTaskId} onFocusChange={setFocusTaskId}
           retentionText={describeAiTraceRetention(aiTracePolicy(settings))+(aiTracePolicy(settings).keepForever?", più quelle conservate senza scadenza":"")}

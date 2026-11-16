@@ -9,7 +9,8 @@ import { aiTracePolicy } from "../domain/ai-trace-policy";
 import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
 import { listActivities, saveActivity } from "../infrastructure/db";
 import { preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
-import { assertPromptFitsLoadedContext } from "./context-guard";
+import { assertPromptFitsLoadedContext, assertPromptWithinDeclaredInput } from "./context-guard";
+import { declaredModelTokenLimits, effectiveOutputTokens } from "../domain/model-token-limits";
 import type { WriterGuard } from "./writer-guard";
 
 export interface LaunchInput {
@@ -40,9 +41,14 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   );
   await guard.assertActive();
   if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");
-  if (i.configuredEndpoint)
+  const outputCap = effectiveOutputTokens(
+    i.configuredEndpoint ? declaredModelTokenLimits(i.configuredEndpoint, assignment.modelId) : {},
+    preflight?.reservedOutputTokens);
+  if (i.configuredEndpoint) {
+    assertPromptWithinDeclaredInput(i.configuredEndpoint, assignment.modelId, i.title, i.systemPrompt, i.userPrompt);
     await assertPromptFitsLoadedContext(i.configuredEndpoint, assignment.modelId, i.title,
-      i.systemPrompt, i.userPrompt, preflight?.reservedOutputTokens, signal);
+      i.systemPrompt, i.userPrompt, outputCap, signal);
+  }
   // Store the author's validated price BEFORE the provider call.
   // The quote belongs to this attempt even if its output is rejected.
   const quote = snapshotPriceRate(settings, assignment.endpointId, assignment.modelId);
@@ -63,7 +69,7 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   await saveActivity(started);
   startLiveFor(i,i.live);
   const provider = callModel(i.kind, i.systemPrompt, i.userPrompt, settings, book, signal, {
-    ...(preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : {}),
+    ...(outputCap === undefined ? {} : { maxOutputTokens: outputCap }),
     onHeaders: () => markAiHeader(started.id),
     onProgress: (delta: AiStreamDelta) => addAiDelta(started.id, delta),
     onTransport: (stats: AiTransportStats) => markAiTransport(started.id, stats),

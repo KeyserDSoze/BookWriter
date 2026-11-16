@@ -27,6 +27,20 @@ function input(options:{keep?:boolean;retention?:{maxTasks:number;maxMinutes:num
       reason:"Prova",nextStep:"Verifica",status:"running",createdAt:new Date().toISOString()}};
 }
 describe("Trascrizione del provider distinta dal commit canonico",()=>{
+  it("applica i limiti dichiarati: tetto di output inviato, prompt troppo lungo bloccato prima della rete",async()=>{
+    const limited=(inputTokens:number)=>{
+      const i=input();
+      const endpoint={id:"openai",name:"E",baseUrl:"https://api.example.com/v1",secret:null,models:["test"],
+        modelTokenLimits:{test:{inputTokens,outputTokens:4096}}};
+      return {...i,configuredEndpoint:endpoint as never};
+    };
+    call.mockResolvedValue({text:"ok",endpointId:"openai",modelId:"test"});
+    await (await launchModelCall(limited(10_000))).promise;
+    expect(call.mock.calls[0]![6]).toMatchObject({maxOutputTokens:4096});
+    call.mockClear();
+    await expect(launchModelCall({...limited(256),userPrompt:"x".repeat(2_000)})).rejects.toThrow(/limite di input dichiarato/);
+    expect(call).not.toHaveBeenCalled();
+  });
   it("senza alcuna impostazione salva richiesta e risposta in modo temporaneo, senza output nell'Activity",async()=>{
     const i=input();
     call.mockResolvedValue({text:"Risposta non ancora applicata",endpointId:"openai",modelId:"test",inputTokens:12,outputTokens:9});

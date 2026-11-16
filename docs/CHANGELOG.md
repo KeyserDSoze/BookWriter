@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## 0.25.0 — 2026-11-16 — Limiti di token per modello e direttore a lotti
+
+- **Limiti di token per modello.** In Impostazioni → endpoint → «Limiti di token per modello (input e output)» si scrivono i token massimi che ogni modello accetta in input e può produrre in output (vuoto = nessun limite). Valgono per qualunque endpoint, sono validati al salvataggio e seguono l'autore nel profilo cloud e nello ZIP completo. Un prompt stimato sopra il limite di input non viene inviato (messaggio chiaro, nessun costo); la risposta è limitata ai token di output dichiarati.
+- **Lettura automatica da `/models/details`.** «Leggi /models» prova anche `GET <base>/models/details` (come llmproxy: `context_window` = prompt + risposta, `max_output_tokens`) e compila i campi ancora vuoti: input = finestra meno l'output dichiarato (senza output: meno un quarto della finestra, al massimo 4096). I valori `null`, un endpoint senza quella pagina o un errore lasciano l'inserimento a mano; i valori scritti a mano non si sovrascrivono mai.
+- **Direttore editoriale a lotti.** Con un limite di input dichiarato per il modello del direttore, se il prompt completo non entra il direttore giudica sottoinsiemi di rilievi in più chiamate, ognuna dentro il limite. I gruppi di correzioni divergenti e i rilievi sulla conoscenza dei personaggi restano nello stesso lotto; ogni lotto è validato e l'ultimo unisce tutto e rivalida l'intero giudizio col controllo di sempre. Si riprende dopo uno stop. Se un solo gruppo indivisibile non entra, il direttore si ferma con un messaggio chiaro: il canone non viene mai troncato.
+- **Debug più utile.** Il prompt di debug dei task falliti mostra ora la dimensione del prompt inviato (dalla copia locale temporanea), le impostazioni dell'endpoint e, per gli errori 400/422, dove trovare il motivo preciso nel log del server (l'app non legge mai il corpo dell'errore del provider).
+- Limiti: la stima dei token è approssimata (3,4 caratteri per token); lo stesso schema a lotti non è ancora applicato a revisori, riconciliazione e riassunti, che con un limite dichiarato si fermano con il messaggio chiaro; provato con fornitori simulati, non con llmproxy o LM Studio reali.
+
 ## 0.24.0 — 2026-11-15 — Debug: prompt con gli ultimi errori
 
 - **Attività → «Debug: prompt con gli ultimi errori».** Genera sul dispositivo un prompt pronto da incollare con stato del libro, passo in corso, ultimo errore (con la spiegazione dell'app), modifiche o review non riuscite, gli ultimi task falliti o interrotti (fase, modello, durata, token, messaggio) e cosa è successo subito prima. «Copia il prompt» lo mette negli appunti.

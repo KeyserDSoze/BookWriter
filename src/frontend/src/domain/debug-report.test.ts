@@ -35,6 +35,19 @@ describe("Prompt di debug", () => {
     expect(report).not.toContain("Di un altro libro");
     expect(report).not.toContain(book.chapters[0]!.scenes[0]!.text);
   });
+  it("per un HTTP 400 mostra dimensione del prompt, impostazioni dell'endpoint e la nota sul log del server", () => {
+    const book = knowledgeBook();
+    const failed = activity({ bookId: book.id, title: "Direttore editoriale", status: "failed", aiRequested: true, endpointId: "e1", modelId: "m",
+      requestedReasoningEffort: "high", error: "Errore del provider AI (HTTP 400). Verifica disponibilità e configurazione." });
+    const report = buildDebugReport(book, [failed], { ...options, promptSizes: { [failed.id]: { chars: 340000, truncated: true } },
+      endpoints: [{ id: "e1", name: "LM", baseUrl: "http://localhost:1234/v1", authMode: "none", models: [] } as never] });
+    expect(report).toContain("almeno 340.000 caratteri");
+    expect(report).toContain("locale (loopback)");
+    expect(report).toContain("senza API key");
+    expect(report).toContain("thinking richiesto high");
+    expect(report).toContain("Developer");
+    expect(report).not.toContain("localhost:1234");
+  });
   it("senza errori lo dice e limita le liste", () => {
     const book = knowledgeBook();
     const rows = Array.from({ length: 20 }, (_, i) => activity({ bookId: book.id, title: "Task " + i, createdAt: `2026-11-15T10:${String(i).padStart(2, "0")}:00.000Z` }));

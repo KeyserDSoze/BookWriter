@@ -7,6 +7,7 @@ import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS, M
 import { ReasoningSelect } from "../ReasoningSelect";
 import { Button } from "../ui/button";
 import { ModelPriceTable } from "./ModelPriceTable";
+import { ModelTokenLimitsTable } from "./ModelTokenLimitsTable";
 
 function F({ label, hint, className = "", children }: { label: string; hint?: string; className?: string; children: React.ReactNode }) {
   return <label className={`block min-w-0 ${className}`}>
@@ -80,6 +81,13 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
         })}
       </ul>}
     </div>
+
+    <details className="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700" open={endpoint.modelTokenLimits !== undefined}>
+      <summary className="cursor-pointer text-sm font-semibold">Limiti di token per modello (input e output)</summary>
+      <p className="muted mb-2 mt-1 text-xs">Inserisci i token massimi che ogni modello accetta in input e può produrre in output (per un modello locale: contesto caricato meno la risposta). Un prompt stimato sopra il limite di input non viene inviato; la risposta è limitata ai token di output. Vuoto = nessun limite dichiarato.</p>
+      <ModelTokenLimitsTable endpoint={endpoint} models={pricedModels}
+        onChange={next => onUpdate({ modelTokenLimits: next })} />
+    </details>
 
     <details className="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-700" open={!local && pricedModels.length > 0}>
       <summary className="cursor-pointer text-sm font-semibold">Prezzi per modello (€ per 1M token)</summary>

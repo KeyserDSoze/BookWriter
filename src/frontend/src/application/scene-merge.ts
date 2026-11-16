@@ -7,6 +7,8 @@ import {
 } from "../domain/scene-merge";
 import type { ConflictReview } from "../infrastructure/conflict-recovery";
 import { callModel } from "../infrastructure/ai";
+import { declaredModelTokenLimits, effectiveOutputTokens } from "../domain/model-token-limits";
+import { assertPromptWithinDeclaredInput } from "./context-guard";
 import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
 import { confirmGitHubHead, RemoteConflict } from "../infrastructure/github-sync";
 import { getBook, getDb, listActivities, loadSettings, saveActivity } from "../infrastructure/db";
@@ -96,6 +98,10 @@ export async function generateSceneMergeDraft(
     await guard.assertActive();
     if (controller.signal.aborted) throw new DOMException("Interrotto prima del provider.", "AbortError");
     const route = routeFor("merge", settings, current);
+    const endpoint = settings.endpoints.find(e => e.id === route.endpointId);
+    if (endpoint) assertPromptWithinDeclaredInput(endpoint, route.modelId, "Bozza AI di fusione scena", prompt.system, prompt.prompt);
+    const outputCap = effectiveOutputTokens(
+      endpoint ? declaredModelTokenLimits(endpoint, route.modelId) : {}, preflight?.reservedOutputTokens);
     const quote = snapshotPriceRate(settings, route.endpointId, route.modelId);
     const attempted: Activity = {
       id: crypto.randomUUID(), bookId: review.bookId, runId,
@@ -111,7 +117,7 @@ export async function generateSceneMergeDraft(
     try {
       const response = await callModel("merge", prompt.system, prompt.prompt,
         settings, current, controller.signal,
-        preflight ? { maxOutputTokens: preflight.reservedOutputTokens } : undefined);
+        outputCap === undefined ? undefined : { maxOutputTokens: outputCap });
       // A valid provider usage report belongs to the request Activity even if
       // the proposed scene cannot become a draft or the lease is lost.
       attempted.endpointId = response.endpointId;

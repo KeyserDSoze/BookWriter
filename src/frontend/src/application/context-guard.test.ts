@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { parseLmStudioContext } from "../infrastructure/lmstudio-models";
-import { assertPromptFitsLoadedContext, estimatePromptTokens, judgePromptAgainstContext,
+import { assertPromptFitsLoadedContext, assertPromptWithinDeclaredInput, estimatePromptTokens, judgePromptAgainstContext,
   PromptExceedsContextError } from "./context-guard";
 import type { EndpointProfile } from "../domain/types";
 
@@ -52,6 +52,17 @@ describe("Guardia del contesto caricato", () => {
     vi.stubGlobal("fetch", fetcher);
     await expect(assertPromptFitsLoadedContext(keyed, "m", "T", "s", "x".repeat(999_999), undefined, signal))
       .resolves.toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("con un limite di input dichiarato blocca su qualunque endpoint, senza chiamare la rete", () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const keyed = { ...endpoint, authMode: "api_key", modelTokenLimits: { m: { inputTokens: 10_000 } } } as unknown as EndpointProfile;
+    expect(() => assertPromptWithinDeclaredInput(keyed, "m", "Direttore", "s", "x".repeat(40_000)))
+      .toThrow(/Direttore.*10000 token.*Nessuna richiesta è stata inviata/);
+    expect(() => assertPromptWithinDeclaredInput(keyed, "m", "Scena", "s", "x".repeat(30_000))).not.toThrow();
+    expect(() => assertPromptWithinDeclaredInput(keyed, "altro", "T", "s", "x".repeat(999_999))).not.toThrow();
+    expect(() => assertPromptWithinDeclaredInput(endpoint, "m", "T", "s", "x".repeat(999_999))).not.toThrow();
     expect(fetcher).not.toHaveBeenCalled();
   });
 });

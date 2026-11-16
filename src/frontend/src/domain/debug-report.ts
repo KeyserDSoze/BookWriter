@@ -1,4 +1,4 @@
-import type { Activity, BookProject } from "./types";
+import type { Activity, BookProject, EndpointProfile } from "./types";
 import { explainAutopilotError } from "./autopilot-error";
 import { describeNextAutopilotStep } from "./autopilot-step";
 import { activeManualReview } from "./manual-review";
@@ -12,6 +12,18 @@ export interface DebugReportOptions {
   maxFailures?: number;
   /** Latest tasks of any status, to show what happened around the error. */
   maxRecent?: number;
+  /** Characters of system+user prompt per activity, read from the local temporary traces (never the text). */
+  promptSizes?: Readonly<Record<string, { chars: number; truncated: boolean }>>;
+  endpoints?: readonly EndpointProfile[];
+}
+
+function describeEndpoint(endpoint: EndpointProfile | undefined): string {
+  if (!endpoint) return "endpoint non più configurato";
+  let place = "remoto";
+  try { const host = new URL(endpoint.baseUrl).hostname; place = host === "localhost" || host === "127.0.0.1" ? "locale (loopback)" : "remoto"; } catch { place = "URL non valido"; }
+  return [place, endpoint.apiProtocol === "lmstudio_native" ? "protocollo LM Studio nativo" : "Chat Completions",
+    endpoint.authMode === "none" ? "senza API key" : "con API key", endpoint.streamMode === "sse" ? "streaming SSE" : "risposta JSON",
+    `parametro output ${endpoint.outputTokenParameter ?? "max_tokens"}`, endpoint.reasoningEffort ? `thinking predefinito ${endpoint.reasoningEffort}` : "thinking predefinito non impostato"].join(", ");
 }
 
 const clip = (text: string, max: number) => text.length > max ? text.slice(0, max) + "… [troncato]" : text;
@@ -95,6 +107,12 @@ export function buildDebugReport(book: BookProject, activities: readonly Activit
       `- Prossimo passo previsto: ${safe(activity.nextStep, 200)}`,
       `- Errore: ${activity.error ? safe(activity.error, 1500) : "(nessun messaggio salvato)"}`);
     if (activity.error) lines.push(`- Lettura dell'app: ${explainAutopilotError(activity.error).meaning}`);
+    const size = options.promptSizes?.[activity.id];
+    if (size) lines.push(`- Prompt inviato: ${size.truncated ? "almeno " : ""}${size.chars.toLocaleString("it-IT")} caratteri (circa ${Math.ceil(size.chars / 3.4).toLocaleString("it-IT")} token stimati${size.truncated ? ", copia locale troncata" : ""}): confrontalo con il contesto caricato nel modello`);
+    else if (activity.aiRequested) lines.push("- Prompt inviato: dimensione non disponibile (copia locale scaduta o conversazioni cancellate)");
+    if (activity.endpointId) lines.push(`- Endpoint: ${describeEndpoint(options.endpoints?.find(e => e.id === activity.endpointId))}${activity.requestedReasoningEffort ? " · thinking richiesto " + activity.requestedReasoningEffort : ""}`);
+    if (activity.error && /HTTP (400|422)/.test(activity.error))
+      lines.push("- Nota: l'app non legge il corpo dell'errore del provider (regola di sicurezza), quindi il motivo preciso del rifiuto non è qui. Con HTTP 400 su un server locale le cause tipiche sono prompt oltre il contesto caricato o un parametro non supportato dal modello: il motivo esatto è nel log del server (per LM Studio: Developer → Logs).");
   });
 
   lines.push("", `## Cosa è successo subito prima (ultimi ${Math.min(maxRecent, mine.length)} task, dal più recente)`);

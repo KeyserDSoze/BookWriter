@@ -39,6 +39,8 @@ export interface EncryptedSecret { iv: string; data: string; }
 /** Author-declared roles; /models does not attest capabilities. */
 export type ModelCapability = "chat" | "tools" | "embedding" | "voice";
 export type AuxiliaryModelCapability = Exclude<ModelCapability, "chat">;
+/** Author-declared maximum prompt (input) and answer (output) tokens of one model. */
+export interface ModelTokenLimits { inputTokens?: number; outputTokens?: number }
 export interface EndpointProfile {
   id: string;
   name: string;
@@ -47,6 +49,8 @@ export interface EndpointProfile {
   models: string[];
   /** Manual per-model labels. Missing field = legacy, no role restriction. */
   modelCapabilities?: Record<string, ModelCapability[]>;
+  /** Manual per-model token limits: the prompt is never sent above `inputTokens`, answers are capped at `outputTokens`. */
+  modelTokenLimits?: Record<string, ModelTokenLimits>;
   /** Opt out of Bearer only for literal loopback hostnames; legacy requires api_key. */
   authMode?: "api_key" | "none";
   /** Max time awaiting POST /chat/completions headers (60–1800 s); default 300. */

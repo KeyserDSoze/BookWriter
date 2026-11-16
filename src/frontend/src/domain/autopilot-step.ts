@@ -1,5 +1,5 @@
 import type { BookProject, Chapter, Scene } from "./types";
-import { reviewerLabel, acceptedRepairs, chapterSegments, createEditorialCycle, cycleRoles } from "./editorial-board";
+import { reviewerLabel, acceptedRepairs, chapterSegments, createEditorialCycle, cycleRoles, judgeBatchesOf } from "./editorial-board";
 import { parseEditorialProfiles } from "./editorial-profiles";
 import { activeManualReview } from "./manual-review";
 import { describeManualReview } from "./manual-review-flow";
@@ -186,9 +186,12 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
           } catch { /* the board panel explains invalid checkpoints */ }
           return view(`Redazione del ${where}.`, { chapterNumber: chapter.number });
         }
-        case "adjudicate":
+        case "adjudicate": {
+          const batches = judgeBatchesOf(cycle).length;
           return view(`Il direttore editoriale decide i rilievi del ${where}.`, { chapterNumber: chapter.number,
-            detail: "Accetta o respinge ogni rilievo con motivazione." });
+            detail: "Accetta o respinge ogni rilievo con motivazione." +
+              (batches ? ` Lavora a lotti per il limite di input del modello: ${batches} lotti già decisi.` : "") });
+        }
         case "repair": {
           let total = 0;
           try { total = new Set(acceptedRepairs(cycle).map(fix => fix.sceneId)).size; } catch { /* invalid judgment */ }

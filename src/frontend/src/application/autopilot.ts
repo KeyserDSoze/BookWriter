@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Activity, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
+import type { Activity, AppSettings, BookProject, Chapter, NarrativeMemory, Phase, RevisionRequest, Scene, TaskKind } from "../domain/types";
 import type { ModelAnswer } from "../infrastructure/ai";
 import { launchModelCall, ReviewCallPool, startLiveFor, type LaunchInput } from "./model-call";
 import { finishLiveAi } from "../infrastructure/ai-observability";
@@ -16,11 +16,12 @@ import { parseJsonReply } from "../domain/json-reply";
 import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, nextReviewSlot, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, judgeBatchesOf, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
+import { declaredModelTokenLimits } from "../domain/model-token-limits";
 import { AiBudgetStop } from "../domain/ai-budget";
 import { markAuthorNotesApplied, pendingAuthorNotes, taskAcceptsAuthorNotes, withAuthorNotes } from "../domain/author-interventions";
 import { formatAuthorSynopsis } from "../domain/book-start";
@@ -481,7 +482,15 @@ function memoryCompactionWork(book: BookProject): Work {
   };
 }
 
-function nextWork(book: BookProject): Work | null {
+/** Prompt budget for the director: the declared input limit minus room for the research/notes wrapper added at send time. */
+function declaredJudgeInputBudget(settings: AppSettings, book: BookProject): number | undefined {
+  const route = routeFor("chapterJudge", settings, book);
+  const endpoint = settings.endpoints.find(e => e.id === route.endpointId);
+  const limit = endpoint ? declaredModelTokenLimits(endpoint, route.modelId).inputTokens : undefined;
+  return limit === undefined ? undefined : limit - Math.min(1500, Math.floor(limit / 10));
+}
+
+function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
   const planning = ["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase);
   // The structured sheets are built once the plan exists (new books, or on request).
   if (book.knowledge?.pending && book.chapters.length && !planning && book.phase !== "revision")
@@ -672,10 +681,21 @@ function nextWork(book: BookProject): Work | null {
         // segments, quote anchors and source stamps must still be current.
         assertEditorialReviewCoverage(book, cycle, true);
         const historicalSnapshot = captureHistoricalPromptDossier(book, cycle.chapterId, "adjudicate");
-        const prompt = adjudicationPrompt(book, cycle);
+        // With a declared input limit the director may judge in several smaller calls.
+        const scope = nextJudgmentScope(book, cycle, judgeInputTokens);
+        const prompt = adjudicationPrompt(book, cycle, scope);
+        const finish = (current: NonNullable<typeof cycle>, judgment: NonNullable<typeof cycle.judgment>, b: BookProject) => {
+          current.judgment = judgment;
+          current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
+          current.repairCursor = 0;
+          current.summaryCursor = 0;
+          // A rejected MANDATORY writer rule never freezes or repairs silently.
+          if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
+        };
         return {
           phase: "chapterReview", kind: "chapterJudge", system: prompt.system,
-          title: "Direttore editoriale: accettazione o rifiuto motivato dei rilievi",
+          title: "Direttore editoriale: accettazione o rifiuto motivato dei rilievi" +
+            (scope ? " (lotto " + (judgeBatchesOf(cycle).length + 1) + ", " + scope.findingIds.size + " rilievi)" : ""),
           reason: "Il direttore valuta criticamente tutti i rapporti previsti dal ciclo senza assumere che siano corretti.",
           nextStep: "Correzioni accettate oppure preparazione del congelamento",
           prompt: prompt.prompt,
@@ -687,12 +707,13 @@ function nextWork(book: BookProject): Work | null {
             if (!chapter) throw new Error("Capitolo del giudice non disponibile.");
             assertCurrentHistoricalPromptDossier(b, historicalSnapshot);
             assertEditorialReviewCoverage(b, current, true);
-            current.judgment = validateJudgment(current, text, chapter, b);
-            current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
-            current.repairCursor = 0;
-            current.summaryCursor = 0;
-            // A rejected MANDATORY writer rule never freezes or repairs silently.
-            if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
+            if (scope) {
+              const judgment = recordJudgeBatch(b, current, chapter, scope, text);
+              if (judgment) finish(current, judgment, b);
+              return;
+            }
+            current.judgeBatches = undefined;
+            finish(current, validateJudgment(current, text, chapter, b), b);
           },
         };
       }
@@ -1307,10 +1328,12 @@ export class AutopilotRunner {
         }
         }
         let work: Work | null;
+        const planning = await loadSettings();
+        const judgeInputTokens = declaredJudgeInputBudget(planning, book);
         if (manual) work = manualReviewWork(book, manual);
         else try {
           work = book.phase === "prose" && !book.editorialCycle && !book.revision &&
-            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book);
+            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book, judgeInputTokens);
         } catch (error) {
           // The editorial board refuses oversized canon memory; compact it instead of stopping.
           if (error instanceof Error && !book.revision &&

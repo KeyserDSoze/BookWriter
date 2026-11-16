@@ -306,6 +306,42 @@ async function boundedModelCatalog(response: Response, signal: AbortSignal): Pro
   }
 }
 
+/** Optional /models/details (llmproxy): context window and max answer per model. Any failure
+ * (404, CORS, malformed or oversized body, timeout) yields undefined and the author sets limits by hand. */
+export async function fetchModelDetails(
+  endpointUrl: string, secret: string | null, signal?: AbortSignal,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  const timeout = setTimeout(() => controller.abort(), MODEL_CATALOG_TIMEOUT_MS);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  let onDeadline: (() => void) | undefined;
+  try {
+    const base = normalizeEndpoint(endpointUrl);
+    endpointAuthMode(secret === null ? "none" : "api_key", base);
+    if (secret !== null && !secret) return undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      onDeadline = () => reject(new Error("timeout"));
+      controller.signal.addEventListener("abort", onDeadline, { once: true });
+      if (controller.signal.aborted) onDeadline();
+    });
+    const response = await Promise.race([fetch(base + "/models/details", {
+      method: "GET", mode: "cors", credentials: "omit",
+      referrerPolicy: "no-referrer", cache: "no-store", redirect: "error",
+      headers: secret === null ? {} : { Authorization: "Bearer " + secret },
+      signal: controller.signal,
+    }), deadline]);
+    if (!response.ok) { discardModelCatalogBody(response); return undefined; }
+    return await boundedModelCatalog(response, controller.signal);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+    if (onDeadline) controller.signal.removeEventListener("abort", onDeadline);
+    signal?.removeEventListener("abort", onAbort);
+  }
+}
+
 /** GET /models is advisory. Malformed/empty responses must never replace an
  * existing catalogue with incomplete or non-string entries. */
 export async function fetchModels(

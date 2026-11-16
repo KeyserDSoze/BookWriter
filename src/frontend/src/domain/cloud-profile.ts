@@ -37,6 +37,10 @@ const endpointSchema = z.object({
   id: shortText(100), name: shortText(100), baseUrl: shortText(500),
   models: z.array(shortText(300)).max(2_000),
   modelCapabilities: z.record(shortText(300), z.array(capability).min(1).max(4)).optional(),
+  modelTokenLimits: z.record(shortText(300), z.object({
+    inputTokens: z.number().int().min(256).max(10_000_000).optional(),
+    outputTokens: z.number().int().min(256).max(10_000_000).optional(),
+  }).strict().refine(v => v.inputTokens !== undefined || v.outputTokens !== undefined)).optional(),
   authMode: z.enum(["api_key", "none"]).optional(),
   headerTimeoutSeconds: z.number().finite().optional(),
   outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
@@ -151,7 +155,7 @@ function pick<T extends object>(source: T, keys: ReadonlyArray<keyof T>): Partia
   return result;
 }
 const ENDPOINT_KEYS = [
-  "id", "name", "baseUrl", "models", "modelCapabilities", "authMode", "headerTimeoutSeconds",
+  "id", "name", "baseUrl", "models", "modelCapabilities", "modelTokenLimits", "authMode", "headerTimeoutSeconds",
   "outputTokenParameter", "streamMode", "streamTimeoutSeconds", "apiProtocol", "reasoningEffort",
   "autoRetry", "autoRetryMax", "localAutoRetry",
 ] as const satisfies ReadonlyArray<keyof EndpointProfile>;

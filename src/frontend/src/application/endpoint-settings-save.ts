@@ -4,6 +4,7 @@ import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
 import { chatReasoningEffort, chatStreamMode, chatStreamTimeoutSeconds } from "../infrastructure/ai-stream";
 import { lmStudioNativeProtocol,lmStudioNativeEndpoint,lmStudioNativeReasoning } from "../infrastructure/lmstudio-native";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
+import { assertModelTokenLimitSettings } from "../domain/model-token-limits";
 import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
 
 export interface EndpointSettingsSnapshot {
@@ -26,6 +27,7 @@ export class StaleEndpointSettingsSave extends Error {
  * Also applied to profiles read from the cloud, which are untrusted input. */
 export function verifyEndpointSettings(settings: AppSettings) {
   assertModelCapabilitySettings(settings);
+  assertModelTokenLimitSettings(settings);
   validateTaskReasoningOverrides(settings.taskReasoningEfforts);
   return settings.endpoints.map(profile => {
     const baseUrl = normalizeEndpoint(profile.baseUrl);

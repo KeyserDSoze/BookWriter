@@ -1,13 +1,12 @@
 import type { EndpointProfile } from "../domain/types";
+import { declaredModelTokenLimits, estimateTextTokens } from "../domain/model-token-limits";
 import { fetchLmStudioContext } from "../infrastructure/lmstudio-models";
 
-/** Italian prose is ~3.5 characters per token for common tokenizers; 3.4 errs on the safe side. */
-const CHARS_PER_TOKEN = 3.4;
 /** Room reserved for the answer when no output cap is configured (answer plus some reasoning). */
 const MIN_RESERVED_OUTPUT = 768;
 
 export function estimatePromptTokens(system: string, prompt: string): number {
-  return Math.ceil((system.length + prompt.length) / CHARS_PER_TOKEN);
+  return estimateTextTokens(system, prompt);
 }
 
 export interface ContextVerdict { fits: boolean; promptTokens: number; contextTokens: number; maxTokens?: number }
@@ -23,6 +22,18 @@ export function judgePromptAgainstContext(
 
 export class PromptExceedsContextError extends Error {
   constructor(message: string) { super(message); this.name = "PromptExceedsContextError"; }
+}
+
+/** Any endpoint: the author declared the model's maximum prompt, so a larger prompt is never sent.
+ * Throws before any request is billed or sent; no limit declared means no guard. */
+export function assertPromptWithinDeclaredInput(
+  endpoint: EndpointProfile, modelId: string, title: string, system: string, prompt: string,
+): void {
+  const limit = declaredModelTokenLimits(endpoint, modelId).inputTokens;
+  if (limit === undefined) return;
+  const tokens = estimatePromptTokens(system, prompt);
+  if (tokens <= limit) return;
+  throw new PromptExceedsContextError(`Il prompt di «${title}» (circa ${tokens} token stimati) supera il limite di input dichiarato per ${modelId} (${limit} token). Aumenta il limite in Impostazioni se il modello lo permette, oppure riduci il capitolo o la scena. Nessuna richiesta è stata inviata.`);
 }
 
 /** Free LM Studio endpoints only: a prompt that cannot fit the loaded context would be cut or

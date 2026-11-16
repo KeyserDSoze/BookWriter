@@ -15,6 +15,7 @@ import { decryptLocal, encryptLocal } from "./crypto";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "./ai";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
+import { assertModelTokenLimitSettings } from "../domain/model-token-limits";
 import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
 import { MAX_AUTHOR_INTERVENTIONS, MAX_INTERVENTION_CHARS } from "../domain/author-interventions";
 import {
@@ -395,6 +396,10 @@ const backupSchema = z.object({
       modelCapabilities: z.record(z.string(), z.array(
         z.enum(["chat", "tools", "embedding", "voice"]),
       ).min(1).max(4)).optional(),
+      modelTokenLimits: z.record(z.string(), z.object({
+        inputTokens: z.number().int().min(256).max(10_000_000).optional(),
+        outputTokens: z.number().int().min(256).max(10_000_000).optional(),
+      }).strict()).optional(),
     }).refine(profile => {
       try {
         endpointAuthMode(profile.authMode, profile.baseUrl);
@@ -429,6 +434,9 @@ const backupSchema = z.object({
         ...settings, taskRoutes: settings.taskRoutes as AppSettings["taskRoutes"],
         endpoints: settings.endpoints.map(endpoint => ({ ...endpoint, secret: null })),
       });
+      assertModelTokenLimitSettings({
+        endpoints: settings.endpoints.map(endpoint => ({ ...endpoint, secret: null })),
+      });
       return true;
     } catch { return false; }
   }, "Tag o predefiniti dei modelli non validi.").optional(),
@@ -447,7 +455,8 @@ type BackupData = {
       outputTokenParameter?: "max_tokens" | "max_completion_tokens"; authMode?: "api_key" | "none";
       streamMode?: "off" | "sse"; reasoningEffort?: "low" | "medium" | "high" | "xhigh";
       streamTimeoutSeconds?: number; apiProtocol?: "openai" | "lmstudio_native";
-      modelCapabilities?: AppSettings["endpoints"][number]["modelCapabilities"] }>;
+      modelCapabilities?: AppSettings["endpoints"][number]["modelCapabilities"];
+      modelTokenLimits?: AppSettings["endpoints"][number]["modelTokenLimits"] }>;
     defaultRoute: AppSettings["defaultRoute"];
     taskRoutes: AppSettings["taskRoutes"];
     taskReasoningEfforts?: AppSettings["taskReasoningEfforts"];
@@ -565,6 +574,7 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
         id: endpoint.id, name: endpoint.name, baseUrl: endpoint.baseUrl,
         models: endpoint.models,
         modelCapabilities: endpoint.modelCapabilities,
+        modelTokenLimits: endpoint.modelTokenLimits,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
         streamMode: endpoint.streamMode,
@@ -755,6 +765,7 @@ async function importBackupInternal(
         id: endpoint.id, name: endpoint.name, baseUrl: normalizeEndpoint(endpoint.baseUrl),
         models: endpoint.models,
         modelCapabilities: endpoint.modelCapabilities,
+        modelTokenLimits: endpoint.modelTokenLimits,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
         streamMode: endpoint.streamMode,
