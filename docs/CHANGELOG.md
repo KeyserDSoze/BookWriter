@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## 0.27.0 — 2026-11-16 — Motore «tools»: risultati JSON come argomenti di funzione
+
+- **Un modello con il tag «tools» consegna il JSON con una funzione.** Per i compiti che restituiscono un solo oggetto JSON (revisori e lettori, giudice critico, piano dei capitoli e delle scene, schede narrative, memoria e riconciliazioni, sinossi, analisi d'impatto) la richiesta contiene una sola funzione `submit_result` con `tool_choice` forzato; gli argomenti sono la risposta e passano dalla stessa validazione (Zod, ancore, giudice) del testo. La funzione non viene mai eseguita. Senza il tag, con endpoint LM Studio nativo o con «Output strutturato: Disattivato» (Impostazioni → endpoint → opzioni avanzate) resta il protocollo testuale di prima. La prosa, le riscritture e le ricerche web non cambiano.
+- **Streaming.** Gli argomenti arrivano come testo in arrivo: il pannello live li mostra come prima. Se il modello risponde comunque in testo, la risposta è accettata.
+- **Rifiuti.** Un HTTP 400/422 con le funzioni attive non viene ritentato e il messaggio spiega come disattivarle (tag o opzione dell'endpoint).
+- L'impostazione segue il profilo cloud e lo ZIP completo. Limiti: provato con fornitori simulati; i modelli che supportano male `tool_choice` forzato vanno esclusi togliendo il tag.
+
 ## 0.26.1 — 2026-11-16 — «Leggi /models» aggiorna limiti e ruoli dichiarati dal provider
 
 - **I limiti di token si aggiornano.** Una lettura esplicita di «Leggi /models» fa vincere i valori dichiarati da `/models/details` (per esempio `context_window` 131072 e `max_output_tokens` 8192 danno input 122880 e output 8192) anche dove c'erano valori vecchi; un campo `null` lascia quello scritto a mano. Prima venivano compilati solo i campi vuoti. La tabella dei limiti mostra sempre il valore salvato (una bozza solo finché il numero non è valido), quindi non resta a video un valore superato.

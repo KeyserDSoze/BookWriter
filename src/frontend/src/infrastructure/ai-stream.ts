@@ -4,7 +4,10 @@ import { MAX_CHAT_COMPLETION_BYTES, ProviderResponseReadError } from "./ai-compl
  * All deltas are provisional, not canonical book text. */
 export type AiStreamDelta = { kind: "text" | "reasoning"; text: string };
 export interface StreamCompletion {
-  choices: Array<{ message: { content: string }; finish_reason?: string }>;
+  choices: Array<{
+    message: { content: string; tool_calls?: Array<{ function: { name?: string; arguments: string } }> };
+    finish_reason?: string;
+  }>;
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
 }
 
@@ -73,6 +76,9 @@ export async function readChatCompletionStream(
   if (!reader) throw invalid();
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let text = "";
+  // Arguments of the single function call of a structured (tools) reply; never executed.
+  let toolArgs = "";
+  let toolName: string | undefined;
   let reasoningChars = 0;
   let usage:StreamCompletion["usage"];
   let finishReason:string|undefined;
@@ -125,7 +131,25 @@ export async function readChatCompletionStream(
         if(typeof c.finish_reason=="string") finishReason=c.finish_reason;
         if(c.delta===null||c.delta===undefined) continue;
         if(typeof c.delta!=="object"||Array.isArray(c.delta))throw invalid();
-        const d=c.delta as {content?:unknown;reasoning_content?:unknown;reasoning?:unknown};
+        const d=c.delta as {content?:unknown;reasoning_content?:unknown;reasoning?:unknown;tool_calls?:unknown};
+        if(d.tool_calls!==undefined && d.tool_calls!==null){
+          if(!Array.isArray(d.tool_calls))throw invalid();
+          for(const call of d.tool_calls){
+            if(!call||typeof call!="object"||Array.isArray(call))throw invalid();
+            const k=call as {index?:unknown;function?:unknown};
+            if(k.index!==undefined && k.index!==0) continue;
+            if(k.function===undefined||k.function===null) continue;
+            if(typeof k.function!=="object"||Array.isArray(k.function))throw invalid();
+            const fn=k.function as {name?:unknown;arguments?:unknown};
+            if(typeof fn.name==="string"&&fn.name)toolName=fn.name;
+            if(fn.arguments===undefined||fn.arguments===null) continue;
+            if(typeof fn.arguments!=="string")throw invalid();
+            toolArgs+=fn.arguments;
+            if(toolArgs.length>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+            // The live panel shows the arguments like any text answer.
+            try{onDelta?.({kind:"text",text:fn.arguments});}catch{/* observer only */ }
+          }
+        }
         if(d.content!==undefined && d.content!==null){
           if(typeof d.content!=="string")throw invalid();
           text+=d.content;
@@ -174,13 +198,15 @@ export async function readChatCompletionStream(
       // A terminated connection without [DONE] is not an accepted result.
       if(!done)throw invalid();
     }
-    if(!text.trim())throw new ProviderResponseReadError(finishReason==="length"
+    if(!text.trim() && !toolArgs.trim())throw new ProviderResponseReadError(finishReason==="length"
       ? "Il modello ha esaurito il limite di lunghezza o di contesto prima di scrivere la risposta (di solito per il reasoning). Nessun output applicato: aumenta il contesto in LM Studio o abbassa il thinking."
       : reasoningChars>0
       ? "Il provider ha terminato dopo il reasoning ma senza testo finale: nessun output applicato."
       : "Il provider ha terminato senza generare una risposta testuale: nessun output applicato.");
     completed=true;
-    return {choices:[{message:{content:text},...(finishReason===undefined?{}:{finish_reason:finishReason})}],usage};
+    return {choices:[{message:{content:text,
+      ...(toolArgs.trim()?{tool_calls:[{function:{...(toolName===undefined?{}:{name:toolName}),arguments:toolArgs}}]}:{})},
+      ...(finishReason===undefined?{}:{finish_reason:finishReason})}],usage};
   } catch(e){
     if(signal.aborted)throw new DOMException("Generazione interrotta.", "AbortError");
     if(expired)throw timeout();

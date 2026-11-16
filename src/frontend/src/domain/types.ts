@@ -57,6 +57,8 @@ export interface EndpointProfile {
   headerTimeoutSeconds?: number;
   /** OpenAI-compatible Chat Completions output cap parameter, legacy max_tokens. */
   outputTokenParameter?: "max_tokens" | "max_completion_tokens";
+  /** JSON results via a forced function call for models tagged «tools» (auto, default) or never (off). */
+  structuredOutput?: "auto" | "off";
   /** Explicit SSE mode for Chat Completions. */
   streamMode?: "off" | "sse";
   /** SSE body deadline, independent of waiting for HTTP headers. 600–3600 s. */

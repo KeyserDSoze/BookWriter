@@ -12,6 +12,7 @@ import { lmStudioNativeProtocol, lmStudioNativeEndpoint, lmStudioNativeReasoning
   readLmStudioNativeStream, type LmStudioPhase, type AiTransportStats } from "./lmstudio-native";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
 import { localEndpointTimeoutHint } from "./local-endpoint-probe";
+import { SUBMIT_TOOL_NOTE, toolCallArguments, toolRequestFields, usesToolOutput } from "../domain/structured-output";
 
 export type ModelAnswer = {
   text: string;
@@ -88,6 +89,8 @@ export async function callModel(
   book: BookProject,
   signal: AbortSignal,
   options?: { maxOutputTokens?: number; onProgress?: (delta: AiStreamDelta) => void;
+    /** The reply is one JSON object: delivered via a forced function call when the model is tagged «tools». */
+    structuredJson?: boolean;
     onHeaders?: () => void; onPhase?: (phase:LmStudioPhase)=>void;
     onTransport?: (stats:AiTransportStats)=>void },
 ): Promise<ModelAnswer> {
@@ -109,6 +112,7 @@ export async function callModel(
   }
   const base = normalizeEndpoint(endpoint.baseUrl);
   const nativeUrl=protocol==="lmstudio_native"?lmStudioNativeEndpoint(base):undefined;
+  const structured = usesToolOutput(endpoint, assignment.modelId, options?.structuredJson, protocol === "lmstudio_native");
   const nativeReasoning=protocol==="lmstudio_native"?lmStudioNativeReasoning(effort):undefined;
   const authMode = endpointAuthMode(endpoint.authMode, base);
   if (authMode === "api_key" && !endpoint.secret)
@@ -135,7 +139,8 @@ export async function callModel(
         ...(nativeReasoning===undefined?{}:{reasoning:nativeReasoning}),
       }:{
         model: assignment.modelId,
-        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+        messages: [{ role: "system", content: structured ? system + SUBMIT_TOOL_NOTE : system }, { role: "user", content: prompt }],
+        ...(structured ? toolRequestFields() : {}),
         ...(options?.maxOutputTokens !== undefined ? { [outputField]: options.maxOutputTokens } : {}),
         ...(effort === undefined ? {} : { reasoning_effort: effort }),
         ...(streaming ? { stream: true, stream_options: { include_usage: true } } : {}),
@@ -168,6 +173,9 @@ export async function callModel(
     }
     const reason = friendlyApiError(response.status);
     // A rejected request may have been billed; never inspect provider body or retry.
+    if ((response.status === 400 || response.status === 422) && structured) {
+      throw new Error(`${reason} La richiesta usava le funzioni (tools) per consegnare il risultato: se il modello non le supporta, togli il tag «tools» dal modello o imposta «Output strutturato» su Disattivato per questo endpoint, poi riprova manualmente.`);
+    }
     if ((response.status === 400 || response.status === 422) && options?.maxOutputTokens !== undefined) {
       throw new Error(`${reason} Controlla anche il parametro limite output API nelle Impostazioni e la documentazione del provider prima di riprovare manualmente.`);
     }
@@ -200,6 +208,14 @@ export async function callModel(
   const message: unknown = (first as {message?: unknown}).message;
   if (!message || typeof message !== "object" || Array.isArray(message)) throw invalid();
   const content: unknown = (message as {content?: unknown}).content;
+  // A structured reply carries the result as the arguments of the forced function call.
+  const toolText = structured ? toolCallArguments(message) : undefined;
+  if (toolText !== undefined) return {
+    text: toolText.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
+    inputTokens: validTokenCount(data.usage?.prompt_tokens),
+    outputTokens: validTokenCount(data.usage?.completion_tokens),
+    cachedInputTokens: cachedTokensFromUsage(data.usage),
+  };
   if (content === null || content === undefined) throw new EmptyProviderContentError(
     endpoint.id, assignment.modelId, data.usage);
   const text = responseTextContent(content);

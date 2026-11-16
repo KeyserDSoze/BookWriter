@@ -1,5 +1,10 @@
 # BookWriter — istruzioni per agenti e sviluppatori
 
+## Motore «tools» per i risultati JSON — preparazione locale (dopo 0.26.1)
+
+- `domain/structured-output.ts`: `usesToolOutput` è vero solo per una chiamata OpenAI-compatibile (mai `lmstudio_native`) di un compito con `Work.json`/`LaunchInput.expectsJson`, a un modello che l'autore ha marcato «tools» (`declaredModelCapabilities`, mai dedotto dal nome) e con `EndpointProfile.structuredOutput !== "off"` (`auto|off`, default auto; nel profilo cloud, ZIP full e verifica del Save). Allora `callModel` aggiunge UNA funzione `submit_result` con `tool_choice` forzato e una nota al system; gli argomenti (`toolCallArguments`, nome atteso, stringa non vuota) diventano `ModelAnswer.text` e seguono la validazione invariata. **La funzione non viene mai eseguita**: la regola «niente tool calling» riguarda l'esecuzione di strumenti. Contenuto testuale senza chiamata è accettato.
+- Flaggano `json: true` solo i Work il cui output è UN oggetto JSON (outline, schede, memoria, riconciliazione, sinossi, revisori, giudice, analisi d'impatto); prosa, riscritture, merge e ricerche restano testo. Un nuovo Work JSON deve impostare il flag. Streaming: `delta.tool_calls[0].function.arguments` si accumula (`readChatCompletionStream`) ed è emesso come delta di testo per il pannello live. Un HTTP 400/422 con tools attivi non si ritenta (fatturazione) e il messaggio spiega come spegnerli.
+
 ## Limiti di token per modello — preparazione locale (dopo 0.24.0)
 
 - `EndpointProfile.modelTokenLimits?: Record<modelId, {inputTokens?, outputTokens?}>` (interi 256–10.000.000, scritti dall'autore in Impostazioni → endpoint → «Limiti di token per modello»; vuoto = nessun limite; `domain/model-token-limits.ts`). Validati a Save (`verifyEndpointSettings`), nel profilo cloud (segue l'autore) e nello ZIP full. Mai dedotti dal nome del modello.

@@ -133,6 +133,13 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
             <option value="max_completion_tokens">max_completion_tokens (modelli compatibili)</option>
           </select>
         </F>
+        <F label="Output strutturato (tools)">
+          <select className="field field-sm" value={endpoint.structuredOutput ?? "auto"}
+            onChange={e => onUpdate({ structuredOutput: e.target.value as "auto" | "off" })}>
+            <option value="auto">Automatico: funzioni solo per i modelli con tag tools</option>
+            <option value="off">Disattivato: sempre testo/JSON</option>
+          </select>
+        </F>
         <div className="min-w-0">
           <label className="mb-0.5 block text-xs font-semibold" htmlFor={`endpoint-reasoning-${endpoint.id}`}>Reasoning effort AI</label>
           <ReasoningSelect id={`endpoint-reasoning-${endpoint.id}`} hideAutomatic compact

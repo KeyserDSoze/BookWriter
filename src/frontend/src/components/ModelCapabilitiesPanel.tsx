@@ -68,8 +68,10 @@ export function ModelCapabilitiesPanel({ settings, updateSettings }: Props) {
     <h2 className="text-lg font-semibold">Ruoli dei modelli AI</h2>
     <p className="muted mt-1 text-sm">
       Assegna manualmente uno o più tag a ogni modello letto da /models.
-      I tag non sono verificati dal provider e non abilitano automaticamente API di voce,
-      embedding o tool calling. Il router Chat / scrittura usa ancora il modello predefinito
+      I tag non sono verificati dal provider. «tools» fa consegnare i risultati JSON (revisori, giudice,
+      piano, memoria, sinossi) come argomenti di una funzione forzata, mai eseguita; senza il tag, o con
+      «Output strutturato» disattivato sull'endpoint, resta il formato testuale. Voce ed embedding non sono usati
+      dalla scrittura. Il router Chat / scrittura usa ancora il modello predefinito
       e gli override delle attività.
     </p>
     {models.length === 0 ? <p className="muted mt-4 text-sm">Leggi /models o inserisci manualmente gli ID dei modelli per assegnare i ruoli.</p> : <>

@@ -388,6 +388,7 @@ const backupSchema = z.object({
       headerTimeoutSeconds: z.number().int().min(MIN_CHAT_HEADER_TIMEOUT_SECONDS)
         .max(MAX_CHAT_HEADER_TIMEOUT_SECONDS).optional(),
       outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
+      structuredOutput: z.enum(["auto", "off"]).optional(),
       streamMode: z.enum(["off","sse"]).optional(),
       streamTimeoutSeconds: z.number().int().min(600).max(3600).optional(),
       apiProtocol: z.enum(["openai","lmstudio_native"]).optional(),
@@ -452,7 +453,7 @@ type BackupData = {
   settings?: {
     theme: AppSettings["theme"];
     endpoints: Array<{ id: string; name: string; baseUrl: string; models: string[]; apiKey: string | null; headerTimeoutSeconds?: number;
-      outputTokenParameter?: "max_tokens" | "max_completion_tokens"; authMode?: "api_key" | "none";
+      outputTokenParameter?: "max_tokens" | "max_completion_tokens"; structuredOutput?: "auto" | "off"; authMode?: "api_key" | "none";
       streamMode?: "off" | "sse"; reasoningEffort?: "low" | "medium" | "high" | "xhigh";
       streamTimeoutSeconds?: number; apiProtocol?: "openai" | "lmstudio_native";
       modelCapabilities?: AppSettings["endpoints"][number]["modelCapabilities"];
@@ -577,6 +578,7 @@ async function snapshot(mode: BackupMode): Promise<BackupData> {
         modelTokenLimits: endpoint.modelTokenLimits,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
+        structuredOutput: endpoint.structuredOutput,
         streamMode: endpoint.streamMode,
         streamTimeoutSeconds: endpoint.streamTimeoutSeconds,
         apiProtocol: endpoint.apiProtocol,
@@ -768,6 +770,7 @@ async function importBackupInternal(
         modelTokenLimits: endpoint.modelTokenLimits,
         headerTimeoutSeconds: endpoint.headerTimeoutSeconds,
         outputTokenParameter: endpoint.outputTokenParameter,
+        structuredOutput: endpoint.structuredOutput,
         streamMode: endpoint.streamMode,
         streamTimeoutSeconds: endpoint.streamTimeoutSeconds,
         apiProtocol: endpoint.apiProtocol,

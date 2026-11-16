@@ -44,6 +44,7 @@ const endpointSchema = z.object({
   authMode: z.enum(["api_key", "none"]).optional(),
   headerTimeoutSeconds: z.number().finite().optional(),
   outputTokenParameter: z.enum(["max_tokens", "max_completion_tokens"]).optional(),
+  structuredOutput: z.enum(["auto", "off"]).optional(),
   streamMode: z.enum(["off", "sse"]).optional(),
   streamTimeoutSeconds: z.number().finite().optional(),
   apiProtocol: z.enum(["openai", "lmstudio_native"]).optional(),
@@ -156,7 +157,7 @@ function pick<T extends object>(source: T, keys: ReadonlyArray<keyof T>): Partia
 }
 const ENDPOINT_KEYS = [
   "id", "name", "baseUrl", "models", "modelCapabilities", "modelTokenLimits", "authMode", "headerTimeoutSeconds",
-  "outputTokenParameter", "streamMode", "streamTimeoutSeconds", "apiProtocol", "reasoningEffort",
+  "outputTokenParameter", "structuredOutput", "streamMode", "streamTimeoutSeconds", "apiProtocol", "reasoningEffort",
   "autoRetry", "autoRetryMax", "localAutoRetry",
 ] as const satisfies ReadonlyArray<keyof EndpointProfile>;
 

@@ -4,6 +4,7 @@ import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
 import { chatReasoningEffort, chatStreamMode, chatStreamTimeoutSeconds } from "../infrastructure/ai-stream";
 import { lmStudioNativeProtocol,lmStudioNativeEndpoint,lmStudioNativeReasoning } from "../infrastructure/lmstudio-native";
 import { assertModelCapabilitySettings } from "../domain/model-capabilities";
+import { structuredOutputMode } from "../domain/structured-output";
 import { assertModelTokenLimitSettings } from "../domain/model-token-limits";
 import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
 
@@ -33,6 +34,7 @@ export function verifyEndpointSettings(settings: AppSettings) {
     const baseUrl = normalizeEndpoint(profile.baseUrl);
     chatHeaderTimeoutSeconds(profile.headerTimeoutSeconds);
     chatOutputTokenParameter(profile.outputTokenParameter);
+    structuredOutputMode(profile.structuredOutput);
     chatReasoningEffort(profile.reasoningEffort);
     chatStreamMode(profile.streamMode);
     chatStreamTimeoutSeconds(profile.streamTimeoutSeconds);

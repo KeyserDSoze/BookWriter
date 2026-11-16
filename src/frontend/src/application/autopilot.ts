@@ -82,6 +82,8 @@ type Work = {
   noAuthorNotes?: boolean;
   /** Web research group of this task; null = never, absent = derived from the kind. */
   researchAgent?: ResearchAgent | null;
+  /** The reply is one JSON object: models with the tools role may deliver it as function-call arguments. */
+  json?: boolean;
   phase: Phase;
   kind: TaskKind;
   title: string;
@@ -335,7 +337,7 @@ function applyFullPlan(b: BookProject, parsed: z.infer<typeof chapterSchema>): v
 function outlineChapterListWork(book: BookProject, base: string, chapterRule: string,
   synopses: readonly unknown[]): Work {
   return {
-    phase: "outline", kind: "outline", title: "Elenco dei capitoli",
+    phase: "outline", kind: "outline", title: "Elenco dei capitoli", json: true,
     reason: "Prima l'elenco dei capitoli, poi le scene di ciascuno: una risposta piccola per volta, più facile da ripetere se va storta.",
     nextStep: "Scene del primo capitolo",
     prompt: `Elenca SOLO i capitoli del libro, con titolo e scopo narrativo di ciascuno (senza scene). Rispetta istruzioni e capitoli forniti dall'autore. ${chapterRule}${synopses.length ? "" : "Distribuisci archi, rivelazioni e payoff lungo tutto il libro. "}Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"chapters":[{"title":"...","purpose":"..."}]}. Niente Markdown o testo extra.\n\n${base}`,
@@ -360,7 +362,7 @@ function outlineChapterWork(book: BookProject, chapter: Chapter, base: string,
   const synopsis = synopses[chapter.number - 1]?.synopsis;
   const total = book.chapters.length;
   return {
-    phase: "outline", kind: "outline", title: `Scene del capitolo ${chapter.number}/${total}: ${chapter.title}`,
+    phase: "outline", kind: "outline", json: true, title: `Scene del capitolo ${chapter.number}/${total}: ${chapter.title}`,
     reason: "Pianificare le scene di un solo capitolo, coerenti con l'elenco dei capitoli e con quelli già pianificati.",
     nextStep: chapter.number === total
       ? (book.pauseAfterOutline ? "Pausa per l'approvazione del piano da parte dell'autore" : "Scrittura della prima scena")
@@ -398,7 +400,7 @@ function knowledgeGenerationWork(book: BookProject): Work {
   const scenesList = book.chapters.map(ch => `Capitolo ${ch.number} «${ch.title}»: ${ch.purpose}\n` +
     ch.scenes.map(s => `  - ${s.id}: ${s.title} — ${s.summary ?? s.objective}`).join("\n")).join("\n").slice(0, 30000);
   return {
-    phase: book.phase, kind: "outline", noAuthorNotes: true,
+    phase: book.phase, kind: "outline", noAuthorNotes: true, json: true,
     title: "Schede narrative, eventi e timeline",
     reason: "Costruire la memoria strutturata del libro: personaggi, luoghi, oggetti, fazioni, eventi e cronologia, collegati da ID stabili.",
     nextStep: written.length ? "Riprende il lavoro dal punto in cui si era fermato" : "Scrittura della prima scena",
@@ -465,7 +467,7 @@ const knowledgeActive = (book: BookProject) => !!book.knowledge && !book.knowled
  * be the complete memory and must be clearly smaller, otherwise the task fails instead of looping. */
 function memoryCompactionWork(book: BookProject): Work {
   return {
-    phase: book.phase, kind: "consolidate", noAuthorNotes: true,
+    phase: book.phase, kind: "consolidate", noAuthorNotes: true, json: true,
     title: "Compattazione della memoria narrativa",
     reason: "La memoria del libro è troppo grande per i prompt e per il contesto del modello: va riassunta senza perdere i fatti ancora utili.",
     nextStep: "Riprende il lavoro dal punto in cui si era fermato",
@@ -560,7 +562,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
       if (!book.chapters.length && (synopses.length || book.targetChapterCount || 0) > STAGED_OUTLINE_FROM)
         return outlineChapterListWork(book, base, chapterRule, synopses);
       return {
-        phase: "outline", kind: "outline", title: "Piano dei capitoli",
+        phase: "outline", kind: "outline", title: "Piano dei capitoli", json: true,
         reason: synopses.length
           ? "Trasformare la sinossi dell'autore in scene scrivibili e verificabili."
           : "Trasformare la visione in scene scrivibili e verificabili.",
@@ -599,7 +601,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
       const scene = targetScene(book);
       const withKnowledge = knowledgeActive(book);
       return {
-        phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon",
+        phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon", json: true,
         reason: "Aggiornare personaggi, luoghi, fazioni, oggetti, segreti e timeline dopo la scena.",
         nextStep: "Prossima scena o completamento del libro",
         prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE}${withKnowledge ? " " + KNOWLEDGE_DELTA_RULE + "\n\n" + knowledgeIndexText(book.knowledge!) : ""}\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
@@ -652,7 +654,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
           reviewSlot: { key: reviewKey(cycle.chapterId, cycle.round, cycle.reports.length),
             index: cycle.reports.length, expected: next.segmentCount * cycleRoles(book, cycle).length },
           researchAgent: reviewerResearchAgent(next.role),
-          phase: "chapterReview", kind: reviewerTask(next.role), title,
+          phase: "chapterReview", kind: reviewerTask(next.role), title, json: true,
           system: prompt.system,
           reason: "Una chat autonoma controlla solo la sua competenza, senza pareri degli altri agenti.",
           nextStep: "Prossimo revisore o giudizio critico della redazione",
@@ -693,7 +695,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
           if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
         };
         return {
-          phase: "chapterReview", kind: "chapterJudge", system: prompt.system,
+          phase: "chapterReview", kind: "chapterJudge", json: true, system: prompt.system,
           title: "Direttore editoriale: accettazione o rifiuto motivato dei rilievi" +
             (scope ? " (lotto " + (judgeBatchesOf(cycle).length + 1) + ", " + scope.findingIds.size + " rilievi)" : ""),
           reason: "Il direttore valuta criticamente tutti i rapporti previsti dal ciclo senza assumere che siano corretti.",
@@ -763,7 +765,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
         const segment = chapterSegments(chapter)[checkpoint.cursor]!;
         const withKnowledge = knowledgeActive(book);
         return {
-          phase: "chapterReview", kind: "consolidate",
+          phase: "chapterReview", kind: "consolidate", json: true,
           title: "Riconciliazione canone dopo remediation " + (checkpoint.cursor + 1) +
             "/" + checkpoint.segmentCount,
           reason: "Aggiornare timeline, segreti e personaggi dopo la modifica prima della nuova tornata di review.",
@@ -813,7 +815,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
         const segment = segments[index];
         if (!segment) throw new Error("Segmento di riassunto mancante.");
         return {
-          phase: "chapterReview", kind: "summarize",
+          phase: "chapterReview", kind: "summarize", json: true,
           title: "Sinossi del capitolo e del libro " + (index+1) + "/" + segments.length,
           reason: "Compattare il contesto per i revisori dei capitoli successivi senza perdere il canone verificato.",
           nextStep: "Prossima sinossi oppure congelamento e avanzamento al capitolo seguente",
@@ -877,7 +879,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
       if (change && rev.impactAnalysis === undefined) return changeAnalysisWork(book, change, base);
       if (rev.impactAnalysis === undefined) {
         return {
-          phase: "revision", kind: "revision", title: "Analisi d'impatto della correzione",
+          phase: "revision", kind: "revision", json: true, title: "Analisi d'impatto della correzione",
           reason: "Individuare le scene da cambiare e i rimandi narrativi da rivalidare.",
           nextStep: "Revisione retroattiva delle scene coinvolte",
           prompt: `L'autore ha impartito questa istruzione PRIORITARIA: "${rev.instruction}". Identifica gli ID delle scene canoniche coinvolte direttamente o indirettamente, senza inventare ID. Se nessuna scena già scritta va cambiata (l'istruzione riguarda solo il futuro), restituisci un elenco vuoto. Rispondi ESCLUSIVAMENTE JSON {"rationale":"...","affectedSceneIds":["scene:001:001"]}.\n\n${base}`,
@@ -909,7 +911,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number): Work | null {
         const changeContext = change ? changePromptContext(book, change) : "";
         const withKnowledge = knowledgeActive(book);
         return {
-          phase: "revision", kind: "consolidate", title: "Memoria narrativa dopo la revisione",
+          phase: "revision", kind: "consolidate", json: true, title: "Memoria narrativa dopo la revisione",
           reason: "Allineare personaggi, segreti, oggetti e cronologia alle scene riscritte.",
           nextStep: "Nuova redazione dei capitoli toccati e ripresa della scrittura",
           prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}` +
@@ -996,7 +998,7 @@ function sceneSummariesWork(book: BookProject, chapter: Chapter, stale: readonly
   const batch = summaryBatch(stale);
   const expected = batch.map(scene => ({ id: scene.id, text: scene.text }));
   return {
-    phase: book.phase, kind: "summarize", noAuthorNotes: true,
+    phase: book.phase, kind: "summarize", noAuthorNotes: true, json: true,
     title: `Riassunti delle scene: capitolo ${chapter.number} (${batch.length} di ${stale.length})`,
     reason: "Le scene nuove o cambiate hanno bisogno di un riassunto vero, non di un taglio del testo, prima della redazione.",
     nextStep: stale.length > batch.length ? "Altri riassunti delle scene" : "Redazione del capitolo",
@@ -1386,6 +1388,7 @@ export class AutopilotRunner {
         try {
           const launch = { book, settings, runId, guard, signal, kind: work.kind, title: work.title,
             systemPrompt, userPrompt, started, assignment, configuredEndpoint,
+            ...(work.json ? { expectsJson: true } : {}),
             ...(requestedEffort === undefined ? {} : { requestedEffort }) };
           let call: Promise<ModelAnswer>;
           if (pooled) {
