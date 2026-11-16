@@ -76,6 +76,11 @@ export function LiveTaskStream({ active, book }: { active: LiveAiTrace; book?: P
             "Header ricevuti: in attesa del primo evento SSE o del primo token."}
           {active.providerProgress !== undefined ? ` — ${Math.round(active.providerProgress * 100)}% (dal provider)` : ""}
         </p>
+        <p>Funzioni (tools) per consegnare il risultato: {active.toolsRequested === undefined ? "non ancora determinato"
+          : !active.toolsRequested ? "non usate (testo/JSON: modello senza tag tools, opzione disattivata o compito di testo)"
+          : active.toolsReplied === undefined ? "richieste a questo modello, in attesa della risposta"
+          : active.toolsReplied ? "richieste: il modello ha risposto con la funzione"
+          : "richieste, ma il modello ha risposto in testo"}.</p>
         <p className="muted">Eventi SSE ricevuti: {active.transportEvents} · Byte di rete ricevuti: {active.transportBytes}.
           {active.stage === "rifiutata" ? " Il testo non è stato applicato al libro." : ""}</p>
         <p>Output ricevuto: {active.textCharacters} caratteri.

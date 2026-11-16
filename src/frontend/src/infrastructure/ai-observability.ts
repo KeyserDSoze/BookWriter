@@ -168,6 +168,9 @@ export interface LiveAiTrace {
   transportEvents:number;
   providerPhase?:LmStudioPhase["phase"];
   providerProgress?:number;
+  /** Whether the request carried the forced function (tools), and how the reply came back. */
+  toolsRequested?:boolean;
+  toolsReplied?:boolean;
   endedAt?:number;
   error?:string;
 }
@@ -238,6 +241,11 @@ export function markAiTransport(activityId:string,values:AiTransportStats){
 }
 export function markNativePhase(activityId:string,value:LmStudioPhase){
   updateRequest(activityId,request=>({...request,providerPhase:value.phase,providerProgress:value.progress}));
+  notifyNow();
+}
+export function markAiTools(activityId:string,requested:boolean,replied?:boolean){
+  updateRequest(activityId,request=>({...request,toolsRequested:requested,
+    ...(replied===undefined?{}:{toolsReplied:replied})}));
   notifyNow();
 }
 export function addAiDelta(activityId:string,delta:AiStreamDelta){

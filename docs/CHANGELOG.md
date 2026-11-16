@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## 0.27.3 — 2026-11-16 — Si vede se il modello consegna il risultato con la funzione (tools)
+
+- **Verifica nei dettagli della richiesta.** In «Dettagli tecnici della richiesta» (riquadro live) la riga «Funzioni (tools) per consegnare il risultato» dice se le funzioni non sono state usate (modello senza tag tools, opzione disattivata o compito di testo), se sono state richieste e il modello ha risposto con la funzione, oppure se erano richieste ma il modello ha risposto in testo. Prima non si poteva distinguere: il reasoning mostra solo il pensiero del modello, che cita il prompt.
+- Il risultato di `callModel` porta `delivery` (`function` o `text`) solo per le richieste con funzione forzata.
+- Limiti: la riga compare nel riquadro live della richiesta in corso o appena finita, non nello storico salvato dei task.
+
 ## 0.27.2 — 2026-11-16 — Il direttore divide i rilievi anche per limite di output
 
 - **Lotti per limite di output.** Con un limite di token di output dichiarato per il modello del direttore, i rilievi sono divisi in lotti che lasciano metà dell'output al ragionamento (circa 200 token a decisione: con 8192 sono 20 rilievi a lotto). Prima i lotti dipendevano solo dal limite di input: un modello che ragiona poteva esaurire l'output a metà JSON con molti rilievi (es. 53) e la risposta veniva scartata come troncata. Gruppi indivisibili (divergenze, conoscenza) restano insieme; i lotti si fondono e il giudizio completo passa dalla validazione di sempre.

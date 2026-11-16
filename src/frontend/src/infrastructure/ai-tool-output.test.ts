@@ -97,6 +97,25 @@ describe("Output strutturato via tools", () => {
     expect(sent.tools[0]!.function.parameters).toEqual({ type: "object", required: ["reasoning"] });
   });
 
+  it("segnala se le funzioni sono richieste e come ha risposto il modello", async () => {
+    const { settings, book } = fixture(true);
+    const seen: boolean[] = [];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(toolMessage('{"a":1}'))));
+    const viaFunction = await callModel("chapterJudge", "S", "P", settings, book, new AbortController().signal,
+      { structuredJson: true, onTools: r => seen.push(r) });
+    expect(viaFunction.delivery).toBe("function");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ content: '{"a":1}' })));
+    const viaText = await callModel("chapterJudge", "S", "P", settings, book, new AbortController().signal,
+      { structuredJson: true, onTools: r => seen.push(r) });
+    expect(viaText.delivery).toBe("text");
+    const plain = fixture(false);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ content: "ok" })));
+    const untagged = await callModel("chapterJudge", "S", "P", plain.settings, plain.book,
+      new AbortController().signal, { structuredJson: true, onTools: r => seen.push(r) });
+    expect(untagged.delivery).toBeUndefined();
+    expect(seen).toEqual([true, true, false]);
+  });
+
   it("legge gli argomenti della funzione dallo streaming SSE e li mostra come testo", async () => {
     const { settings, book } = fixture(true);
     settings.endpoints[0]!.streamMode = "sse";

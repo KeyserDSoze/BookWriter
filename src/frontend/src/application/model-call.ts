@@ -2,7 +2,7 @@ import type { Activity, AppSettings, BookProject, EndpointProfile, TaskKind, Tas
 import { callModel, type ModelAnswer } from "../infrastructure/ai";
 import type { AiStreamDelta } from "../infrastructure/ai-stream";
 import type { AiTransportStats, LmStudioPhase } from "../infrastructure/lmstudio-native";
-import { addAiDelta, aiInspectionGeneration, currentTaskAi, finishLiveAi, markAiHeader, markAiTransport, markNativePhase,
+import { addAiDelta, aiInspectionGeneration, currentTaskAi, finishLiveAi, markAiHeader, markAiTools, markAiTransport, markNativePhase,
   pruneAiTraces, receiveAiResponse, saveAiTrace, startLiveAi,
 } from "../infrastructure/ai-observability";
 import { aiTracePolicy } from "../domain/ai-trace-policy";
@@ -77,6 +77,7 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
     onHeaders: () => markAiHeader(started.id),
     onProgress: (delta: AiStreamDelta) => addAiDelta(started.id, delta),
     onTransport: (stats: AiTransportStats) => markAiTransport(started.id, stats),
+    onTools: (requested: boolean) => markAiTools(started.id, requested),
     onPhase: (phase: LmStudioPhase) => markNativePhase(started.id, phase),
   });
   const retainReply=async(response?:string)=>{
@@ -97,6 +98,7 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   };
   const promise=provider.then(async answer=>{
     receiveAiResponse(started.id,answer.text);
+    if(answer.delivery!==undefined)markAiTools(started.id,true,answer.delivery==="function");
     await retainReply(answer.text);
     return answer;
   },async(error:unknown)=>{

@@ -24,6 +24,8 @@ export type ModelAnswer = {
   outputTokens?: number;
   /** Provider-reported cached share of inputTokens (OpenAI-style prompt_tokens_details). */
   cachedInputTokens?: number;
+  /** Only for a structured (tools) request: how the model delivered the result. */
+  delivery?: "function" | "text";
 };
 
 export function normalizeEndpoint(raw: string): string {
@@ -94,6 +96,7 @@ export async function callModel(
     /** The reply is one JSON object: delivered via a forced function call when the model is tagged «tools». */
     structuredJson?: StructuredJson;
     onHeaders?: () => void; onPhase?: (phase:LmStudioPhase)=>void;
+    onTools?: (requested: boolean) => void;
     onTransport?: (stats:AiTransportStats)=>void },
 ): Promise<ModelAnswer> {
   const assignment = routeFor(kind, settings, book);
@@ -123,6 +126,7 @@ export async function callModel(
   if (authMode === "api_key" && !apiKey)
     throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
   if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
+  try { options?.onTools?.(structured); } catch { /* observer only */ }
 
   let response: Response;
   try {
@@ -216,7 +220,7 @@ export async function callModel(
     text: toolText.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
     inputTokens: validTokenCount(data.usage?.prompt_tokens),
     outputTokens: validTokenCount(data.usage?.completion_tokens),
-    cachedInputTokens: cachedTokensFromUsage(data.usage),
+    cachedInputTokens: cachedTokensFromUsage(data.usage), delivery: "function",
   };
   if (structured && toolText === undefined && hasEmptyToolCall(message) &&
       (typeof content !== "string" || !content.trim())) throw new ProviderContentError(
@@ -233,6 +237,7 @@ export async function callModel(
     inputTokens: validTokenCount(data.usage?.prompt_tokens),
     outputTokens: validTokenCount(data.usage?.completion_tokens),
     cachedInputTokens: cachedTokensFromUsage(data.usage),
+    ...(structured ? { delivery: "text" as const } : {}),
   };
 }
 
