@@ -18,6 +18,7 @@ import {buildSharedKnowledgePack} from "./narrative-knowledge-sharing";
 import {buildSharedTransferPack} from "./narrative-transfer-sharing";
 import { describeEntities, describeEvents } from "./knowledge";
 import { estimateTextTokens } from "./model-token-limits";
+import { toolParameters, type ToolSchema } from "./structured-output";
 import { relevantKnowledge } from "./knowledge-index";
 import { EXTRA_READER_ROLES, isReaderRole, parseEditorialProfiles, profileSnapshotSchema, profileStamp, selectedWriter, writerInstructions,
   directorInstructions, maxEditorialRounds, writerRules, type WriterRule,
@@ -239,12 +240,13 @@ const findingSchema = z.object({
     }).optional(),
   }).optional(),
 });
-const reportSchema = z.object({
+const reportShape = {
   verdict: z.enum(["pass","issues"]),
   summary: z.string().min(8).max(1800),
   findings: z.array(findingSchema).max(12),
   memoryNote: z.string().max(850).default(""),
-}).superRefine((x, ctx) => {
+};
+const reportSchema = z.object(reportShape).superRefine((x, ctx) => {
   if ((x.verdict === "pass") !== (x.findings.length === 0))
     ctx.addIssue({ code: "custom", message: "Esito e rilievi incongruenti." });
 });
@@ -427,29 +429,93 @@ export function buildEditorialRecommendationDisagreements(
   };
 }
 
-const judgmentSchema = z.object({
+const decisionShape = {
+  findingId: z.string().min(1), action: z.enum(["accept","reject"]),
+  rationale: z.string().min(16).max(1600),
+  remediation: z.string().max(1600).default(""),
+  narrativeReview: narrativeReviewSchema.optional(),
+  knowledgeReview: knowledgeReviewSchema.optional(),
+  informationTransferReview: informationTransferReviewSchema.optional(),
+  conflictReview: z.object({
+    eventIdentity: z.enum(["same","different","unknown"]),
+    chronology: z.string().min(20).max(650),
+    geography: z.string().min(20).max(650),
+    edition: z.string().min(20).max(650),
+    independence: z.string().min(20).max(650),
+    conclusion: z.string().min(24).max(850),
+  }).optional(),
+};
+const judgmentShape = {
   reasoning: z.string().min(25).max(5000),
   ruleChecks: ruleChecksSchema.optional(),
   authorTransferCritique:authorTransferCritiqueSchema.optional(),
   recommendationReconciliations:z.array(recommendationReconciliationSchema)
     .max(MAX_RECOMMENDATION_GROUPS).optional(),
-  decisions: z.array(z.object({
-    findingId: z.string().min(1), action: z.enum(["accept","reject"]),
-    rationale: z.string().min(16).max(1600),
-    remediation: z.string().max(1600).default(""),
-    narrativeReview: narrativeReviewSchema.optional(),
-    knowledgeReview: knowledgeReviewSchema.optional(),
-    informationTransferReview: informationTransferReviewSchema.optional(),
-    conflictReview: z.object({
-      eventIdentity: z.enum(["same","different","unknown"]),
-      chronology: z.string().min(20).max(650),
-      geography: z.string().min(20).max(650),
-      edition: z.string().min(20).max(650),
-      independence: z.string().min(20).max(650),
-      conclusion: z.string().min(24).max(850),
-    }).optional(),
-  })).max(600),
-});
+  decisions: z.array(z.object(decisionShape)).max(600),
+};
+const judgmentSchema = z.object(judgmentShape);
+
+/** Every reviewer gets the same function (the role-specific fields are optional and explained), so a local
+ * server keeps reusing the cached prompt prefix across the twelve roles. */
+export const REVIEW_REPORT_TOOL: ToolSchema = toolParameters(
+  z.object({ ...reportShape, checklist: writerChecklistSchema.optional() }), {
+    verdict: "\"pass\" se non trovi problemi (findings vuoto), \"issues\" se c'è almeno un rilievo.",
+    summary: "Sintesi del controllo svolto (8-1800 caratteri).",
+    findings: "I rilievi, al massimo 12; vuoto se verdict è pass.",
+    "findings.sceneId": "ID della scena del segmento letto, esattamente come indicato.",
+    "findings.category": "Categoria breve del problema (2-80 caratteri).",
+    "findings.severity": "Gravità del problema.",
+    "findings.evidence": "Citazione LETTERALE di almeno 12 caratteri consecutivi copiata dal segmento SCENA DA LEGGERE, senza parafrasi né punti di sospensione.",
+    "findings.reason": "Perché è un problema (8-1500 caratteri).",
+    "findings.remediation": "Correzione concreta proposta (8-1800 caratteri).",
+    "findings.ruleId": "Solo rilettura dello scrittore: ID esatto della regola della checklist violata.",
+    "findings.historical": "Solo revisore storico: affermazione storica e fonti del dossier, come indicato nelle istruzioni.",
+    "findings.narrativeConflict": "Solo continuity, timeline, secrets, characterVoice: conflitto con un evento attestato mostrato nel contesto.",
+    "findings.priorSceneConflict": "Solo continuity, timeline, secrets, characterVoice: conflitto con una scena precedente non attestata mostrata, con i dati esatti del blocco.",
+    memoryNote: "Nota privata breve per le tornate successive (facoltativa, max 850 caratteri).",
+    checklist: "Solo rilettura dello scrittore con regole: una voce per OGNI regola, con l'ID esatto.",
+  });
+
+const JUDGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  reasoning: "Ragionamento critico complessivo (25-5000 caratteri): non dare per corretti i rapporti.",
+  decisions: "Una decisione per OGNI rilievo elencato in questa richiesta, nessuno escluso e nessuno in più.",
+  "decisions.findingId": "ID esatto del rilievo.",
+  "decisions.action": "accept se la correzione va applicata, reject se il rilievo non regge.",
+  "decisions.rationale": "Motivazione della decisione (16-1600 caratteri).",
+  "decisions.remediation": "Con accept: la correzione da applicare; con reject: stringa vuota.",
+  "decisions.narrativeReview": "Obbligatorio per i rilievi con narrativeConflict o priorSceneConflict.",
+  "decisions.knowledgeReview": "Obbligatorio per i conflitti di conoscenza (dimension knowledge).",
+  "decisions.informationTransferReview": "Obbligatorio per i conflitti di conoscenza quando ti sono mostrate piste di trasmissione: una valutazione per ogni candidateId.",
+  "decisions.conflictReview": "Obbligatorio per i rilievi storici con fonti divergenti (conflicting_excerpts).",
+  ruleChecks: "Solo quando richiesto: una voce per ogni regola obbligatoria dello scrittore.",
+  authorTransferCritique: "Solo se ti sono mostrate piste condivise dall'autore: una valutazione per ogni testimone.",
+  recommendationReconciliations: "Una voce per ogni gruppo di proposte divergenti mostrato, con gli ID esatti del gruppo.",
+};
+/** The director's function for the whole cycle: identical for every batch (cache-friendly), with the finding IDs
+ * as an enum and the optional reviews only when some finding of the cycle can need them. */
+export function judgeToolSchema(book: BookProject, cycle: ChapterEditorialCycle): ToolSchema {
+  const findings = allFindings(cycle);
+  const ids = findings.map(f => f.id);
+  const witnessed = findings.some(f => f.narrativeConflict || f.priorSceneConflict);
+  const knowledge = findings.some(f => f.narrativeConflict?.dimension === "knowledge" || f.priorSceneConflict?.dimension === "knowledge");
+  const historical = findings.some(f => f.historical?.assessment === "conflicting_excerpts");
+  const chapter = book.chapters.find(ch => ch.id === cycle.chapterId);
+  const groups = chapter ? buildEditorialRecommendationDisagreements(cycle, chapter).groups.length : 0;
+  const decision = z.object({
+    findingId: ids.length ? z.enum(ids as [string, ...string[]]) : decisionShape.findingId,
+    action: decisionShape.action, rationale: decisionShape.rationale, remediation: decisionShape.remediation,
+    ...(witnessed ? { narrativeReview: decisionShape.narrativeReview } : {}),
+    ...(knowledge ? { knowledgeReview: decisionShape.knowledgeReview, informationTransferReview: decisionShape.informationTransferReview } : {}),
+    ...(historical ? { conflictReview: decisionShape.conflictReview } : {}),
+  });
+  return toolParameters(z.object({
+    reasoning: judgmentShape.reasoning,
+    decisions: z.array(decision),
+    ...(mandatoryRulesToConfirm(cycle).length ? { ruleChecks: judgmentShape.ruleChecks } : {}),
+    ...(knowledge ? { authorTransferCritique: judgmentShape.authorTransferCritique } : {}),
+    ...(groups ? { recommendationReconciliations: judgmentShape.recommendationReconciliations } : {}),
+  }), JUDGE_DESCRIPTIONS);
+}
 export type EditorialDecision = z.infer<typeof judgmentSchema>["decisions"][number];
 export interface EditorialJudgment {
   reasoning: string; decisions: EditorialDecision[];

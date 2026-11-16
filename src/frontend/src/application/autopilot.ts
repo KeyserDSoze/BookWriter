@@ -8,6 +8,7 @@ import { ProviderResponseReadError } from "../infrastructure/ai-completion-respo
 import { keepObservedUsageOnRejectedReply, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
 import { assertScenePlausible } from "../domain/prose-sanity";
 import { applyMemoryResponse, assertCompactionShrinks, DELTA_REPLY_RULE, DELTA_REPLY_RULE_NO_SUMMARY,
+  MEMORY_DELTA_DESCRIPTIONS, MEMORY_FULL_DESCRIPTIONS, memoryDeltaToolShape,
   memoryNeedsCompaction, memorySchema } from "../domain/memory-delta";
 import { AUTO_RETRY_BACKOFF, DEFAULT_AUTO_RETRIES, endpointAutoRetry, isAutoRetryable, retryDelay } from "./auto-retry";
 import { correctiveRetryNote, ReplyRejectedError } from "./reply-rejected";
@@ -16,13 +17,13 @@ import { parseJsonReply } from "../domain/json-reply";
 import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, judgeBatchesOf, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
-import { JUDGE_RESULT_SCHEMA, REVIEW_REPORT_SCHEMA, type StructuredJson } from "../domain/structured-output";
+import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, judgeBatchesOf, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, judgeToolSchema, REVIEW_REPORT_TOOL, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
+import { SUBMIT_TOOL_NOTE, describeUnder, toolOutputAvailable, toolParameters, type ToolSchema } from "../domain/structured-output";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
-import { declaredModelTokenLimits } from "../domain/model-token-limits";
+import { declaredModelTokenLimits, estimateTextTokens } from "../domain/model-token-limits";
 import { AiBudgetStop } from "../domain/ai-budget";
 import { markAuthorNotesApplied, pendingAuthorNotes, taskAcceptsAuthorNotes, withAuthorNotes } from "../domain/author-interventions";
 import { formatAuthorSynopsis } from "../domain/book-start";
@@ -32,7 +33,8 @@ import { formatResearchResults, parseResearchRequest, researchAgentForKind, rese
   type ResearchAgent, type ResearchEntry, type ResearchRequest } from "../domain/web-research";
 import { persistResearchLog, runResearchQueries } from "./web-research";
 import { ManualReviewChanged, nextManualReviewStep, type ManualReviewAiStep } from "../domain/manual-review-flow";
-import { describeEntities, describeEvents, emptyKnowledge, KNOWLEDGE_REPLY_SHAPE, mergeKnowledgeReply, syncKnowledgeWithMemory,
+import { describeEntities, describeEvents, emptyKnowledge, KNOWLEDGE_REPLY_DESCRIPTIONS, KNOWLEDGE_REPLY_SHAPE, knowledgeReplySchema,
+  mergeKnowledgeReply, syncKnowledgeWithMemory,
   MEMORY_FOLDER, findEntity, type KnowledgeBase } from "../domain/knowledge";
 import { analyzeImpact, dependentEvents, relevantKnowledge, timelineEvents } from "../domain/knowledge-index";
 import { activeChange, changeAnalysisSchema, changeById, detectFactDrift, knownNames, replaceEntitySheet, replaceEventSheet,
@@ -68,6 +70,27 @@ const impactSchema = z.object({
   rationale: z.string(),
   affectedSceneIds: z.array(z.string()),
 });
+// Function parameters for models with the tools role: same schemas as the validators, fields explained.
+const OUTLINE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  chapters: "Capitoli del libro, in ordine.",
+  "chapters.title": "Titolo del capitolo.",
+  "chapters.purpose": "Scopo narrativo del capitolo (almeno 8 caratteri).",
+  "chapters.scenes": "Scene del capitolo («paragrafi» Narrarium), in ordine.",
+  "chapters.scenes.title": "Titolo della scena.",
+  "chapters.scenes.objective": "Obiettivo narrativo: conflitto, causa ed effetto, indizi e payoff (almeno 8 caratteri).",
+};
+const CHAPTER_PLAN_TOOL = toolParameters(chapterSchema, OUTLINE_DESCRIPTIONS);
+const EDITORIAL_SUMMARY_TOOL = toolParameters(editorialSummarySchema, {
+  chapterSummary: "Sinossi progressiva del capitolo fino a questo segmento (almeno 25 caratteri significativi, max 6000).",
+  bookSummary: "Sinossi progressiva del libro con quanto è stato realmente raccontato (almeno 25 caratteri significativi, max 9000).",
+});
+const IMPACT_TOOL = toolParameters(impactSchema, {
+  rationale: "Motivazione dell'analisi d'impatto.",
+  affectedSceneIds: "ID esatti delle scene canoniche coinvolte; vuoto se l'istruzione riguarda solo il futuro.",
+});
+const MEMORY_COMPACTION_TOOL = toolParameters(memorySchema, MEMORY_FULL_DESCRIPTIONS);
+const KNOWLEDGE_GENERATION_TOOL = toolParameters(
+  knowledgeReplySchema.required({ entities: true, events: true, timelines: true }), KNOWLEDGE_REPLY_DESCRIPTIONS);
 
 const PERSONAS = [
   "lettore appassionato del genere che ricerca originalità, tensione e ritmo",
@@ -84,7 +107,8 @@ type Work = {
   /** Web research group of this task; null = never, absent = derived from the kind. */
   researchAgent?: ResearchAgent | null;
   /** The reply is one JSON object: models with the tools role may deliver it as function-call arguments. */
-  json?: StructuredJson;
+  /** JSON schema of the reply: a model with the tools role delivers it as the arguments of a forced function. */
+  json?: ToolSchema;
   phase: Phase;
   kind: TaskKind;
   title: string;
@@ -168,6 +192,7 @@ async function launchReviewsAhead(
       const next = reviewSlotAt(book, cycle, index);
       if (!next) return;
       const prompt = reviewerPrompt(book, cycle, next.role, next.segment, next.segmentCount);
+      const researching = researchEnabledFor(book, reviewerResearchAgent(next.role) ?? undefined);
       const system = withResearchRule(prompt.system, book, reviewerResearchAgent(next.role) ?? undefined, 0);
       const kind = reviewerTask(next.role);
       const assignment = routeFor(kind, settings, book);
@@ -184,9 +209,13 @@ async function launchReviewsAhead(
         aiRequested: false,
         ...(requestedEffort === undefined ? {} : { requestedReasoningEffort: requestedEffort }),
       };
+      // The current reviewer's function may not apply here: a role that can research answers in text.
+      const shared: LaunchBase = { ...base };
+      delete shared.expectsJson;
       const launched = await launchModelCall({
-        ...base, kind, title, systemPrompt: system, userPrompt: prompt.prompt, started, assignment,
+        ...shared, kind, title, systemPrompt: system, userPrompt: prompt.prompt, started, assignment,
         configuredEndpoint: endpoint, signal: child.signal, persisted: false, live: false,
+        ...(researching ? {} : { expectsJson: REVIEW_REPORT_TOOL }),
         ...(requestedEffort === undefined ? {} : { requestedEffort }),
       });
       pool.add({ key, system, user: prompt.prompt, started, promise: launched.promise, abort: child });
@@ -311,6 +340,13 @@ const chapterListSchema = z.object({
 const chapterScenesSchema = z.object({
   scenes: z.array(z.object({ title: z.string().min(2), objective: z.string().min(8) })).min(1).max(50),
 });
+const CHAPTER_LIST_TOOL = toolParameters(chapterListSchema, {
+  ...OUTLINE_DESCRIPTIONS, "chapters.scenes": "Facoltativo: ometti le scene, si pianificano dopo capitolo per capitolo." });
+const CHAPTER_SCENES_TOOL = toolParameters(chapterScenesSchema, {
+  scenes: "Scene di questo capitolo («paragrafi» Narrarium), in ordine.",
+  "scenes.title": "Titolo della scena.",
+  "scenes.objective": "Obiettivo narrativo: conflitto, causa ed effetto, indizi e payoff (almeno 8 caratteri).",
+});
 const chapterIdFor = (index: number) => `chapter:${String(index + 1).padStart(3, "0")}`;
 const scenesFor = (chapterIndex: number, scenes: Array<{ title: string; objective: string }>): Scene[] =>
   scenes.map((scene, si): Scene => ({
@@ -338,7 +374,7 @@ function applyFullPlan(b: BookProject, parsed: z.infer<typeof chapterSchema>): v
 function outlineChapterListWork(book: BookProject, base: string, chapterRule: string,
   synopses: readonly unknown[]): Work {
   return {
-    phase: "outline", kind: "outline", title: "Elenco dei capitoli", json: true,
+    phase: "outline", kind: "outline", title: "Elenco dei capitoli", json: CHAPTER_LIST_TOOL,
     reason: "Prima l'elenco dei capitoli, poi le scene di ciascuno: una risposta piccola per volta, più facile da ripetere se va storta.",
     nextStep: "Scene del primo capitolo",
     prompt: `Elenca SOLO i capitoli del libro, con titolo e scopo narrativo di ciascuno (senza scene). Rispetta istruzioni e capitoli forniti dall'autore. ${chapterRule}${synopses.length ? "" : "Distribuisci archi, rivelazioni e payoff lungo tutto il libro. "}Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"chapters":[{"title":"...","purpose":"..."}]}. Niente Markdown o testo extra.\n\n${base}`,
@@ -363,7 +399,7 @@ function outlineChapterWork(book: BookProject, chapter: Chapter, base: string,
   const synopsis = synopses[chapter.number - 1]?.synopsis;
   const total = book.chapters.length;
   return {
-    phase: "outline", kind: "outline", json: true, title: `Scene del capitolo ${chapter.number}/${total}: ${chapter.title}`,
+    phase: "outline", kind: "outline", json: CHAPTER_SCENES_TOOL, title: `Scene del capitolo ${chapter.number}/${total}: ${chapter.title}`,
     reason: "Pianificare le scene di un solo capitolo, coerenti con l'elenco dei capitoli e con quelli già pianificati.",
     nextStep: chapter.number === total
       ? (book.pauseAfterOutline ? "Pausa per l'approvazione del piano da parte dell'autore" : "Scrittura della prima scena")
@@ -401,7 +437,7 @@ function knowledgeGenerationWork(book: BookProject): Work {
   const scenesList = book.chapters.map(ch => `Capitolo ${ch.number} «${ch.title}»: ${ch.purpose}\n` +
     ch.scenes.map(s => `  - ${s.id}: ${s.title} — ${s.summary ?? s.objective}`).join("\n")).join("\n").slice(0, 30000);
   return {
-    phase: book.phase, kind: "outline", noAuthorNotes: true, json: true,
+    phase: book.phase, kind: "outline", noAuthorNotes: true, json: KNOWLEDGE_GENERATION_TOOL,
     title: "Schede narrative, eventi e timeline",
     reason: "Costruire la memoria strutturata del libro: personaggi, luoghi, oggetti, fazioni, eventi e cronologia, collegati da ID stabili.",
     nextStep: written.length ? "Riprende il lavoro dal punto in cui si era fermato" : "Scrittura della prima scena",
@@ -463,12 +499,29 @@ function applyKnowledgeUpdate(b: BookProject, raw: unknown, reason: string,
 }
 const KNOWLEDGE_DELTA_RULE = "Knowledge base: aggiungi SEMPRE al JSON la chiave \"knowledge\":{\"entities\":[...],\"events\":[...]} nel formato " + KNOWLEDGE_REPLY_SHAPE + ", con le schede NUOVE e quelle ESISTENTI che questo testo cambia (stesso nome; solo i campi cambiati: riassunto, attributi, relazioni) e gli eventi accaduti; \"knowledge\":{} se nulla è cambiato. Aggiungi anche \"sceneEntities\":[nomi delle schede presenti nella scena]. Gli eventi accaduti nella scena omettono sceneIds (si collegano a questa scena). Non ripetere schede invariate.";
 const knowledgeActive = (book: BookProject) => !!book.knowledge && !book.knowledge.pending;
+/** Function parameters of a memory update: the delta fields, plus the sheets when the knowledge base is active. */
+function memoryUpdateTool(options: { sceneSummary: boolean; knowledge: boolean; sceneEntities: boolean;
+  sceneSummaryIds?: readonly string[] }): ToolSchema {
+  return toolParameters(z.object({
+    ...memoryDeltaToolShape(options.sceneSummary),
+    ...(options.knowledge ? { knowledge: knowledgeReplySchema } : {}),
+    ...(options.knowledge && options.sceneEntities ? { sceneEntities: knowledgeUpdateSchema.shape.sceneEntities } : {}),
+    ...(options.sceneSummaryIds?.length
+      ? { sceneSummaries: z.object(Object.fromEntries(options.sceneSummaryIds.map(id => [id, z.string()]))) } : {}),
+  }), {
+    ...MEMORY_DELTA_DESCRIPTIONS,
+    knowledge: "Schede ed eventi nuovi o cambiati da questo testo; {} se nulla è cambiato.",
+    ...describeUnder("knowledge", KNOWLEDGE_REPLY_DESCRIPTIONS),
+    sceneEntities: "Nomi delle schede presenti nella scena.",
+    sceneSummaries: "Per OGNI scena riscritta (ID scena → riassunto): 2-4 frasi fedeli su cosa accade, cosa cambia e come finisce.",
+  });
+}
 
 /** Shrinks canon memory so later prompts (and the model's context) can carry it. The reply must
  * be the complete memory and must be clearly smaller, otherwise the task fails instead of looping. */
 function memoryCompactionWork(book: BookProject): Work {
   return {
-    phase: book.phase, kind: "consolidate", noAuthorNotes: true, json: true,
+    phase: book.phase, kind: "consolidate", noAuthorNotes: true, json: MEMORY_COMPACTION_TOOL,
     title: "Compattazione della memoria narrativa",
     reason: "La memoria del libro è troppo grande per i prompt e per il contesto del modello: va riassunta senza perdere i fatti ancora utili.",
     nextStep: "Riprende il lavoro dal punto in cui si era fermato",
@@ -498,8 +551,15 @@ function declaredJudgeOutputBudget(settings: AppSettings, book: BookProject): nu
   const endpoint = settings.endpoints.find(e => e.id === route.endpointId);
   return endpoint ? declaredModelTokenLimits(endpoint, route.modelId).outputTokens : undefined;
 }
+/** Whether the director's verdict will travel as function arguments (and its definition with the prompt). */
+function judgeUsesTools(settings: AppSettings, book: BookProject): boolean {
+  const route = routeFor("chapterJudge", settings, book);
+  const endpoint = settings.endpoints.find(e => e.id === route.endpointId);
+  return !!endpoint && !researchEnabledFor(book, researchAgentForKind("chapterJudge")) &&
+    toolOutputAvailable(endpoint, route.modelId);
+}
 
-function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputTokens?: number): Work | null {
+function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputTokens?: number, judgeTools = false): Work | null {
   const planning = ["brainstorm", "validate", "audience", "adversarial", "outline"].includes(book.phase);
   // The structured sheets are built once the plan exists (new books, or on request).
   if (book.knowledge?.pending && book.chapters.length && !planning && book.phase !== "revision")
@@ -569,7 +629,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
       if (!book.chapters.length && (synopses.length || book.targetChapterCount || 0) > STAGED_OUTLINE_FROM)
         return outlineChapterListWork(book, base, chapterRule, synopses);
       return {
-        phase: "outline", kind: "outline", title: "Piano dei capitoli", json: true,
+        phase: "outline", kind: "outline", title: "Piano dei capitoli", json: CHAPTER_PLAN_TOOL,
         reason: synopses.length
           ? "Trasformare la sinossi dell'autore in scene scrivibili e verificabili."
           : "Trasformare la visione in scene scrivibili e verificabili.",
@@ -608,7 +668,8 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
       const scene = targetScene(book);
       const withKnowledge = knowledgeActive(book);
       return {
-        phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon", json: true,
+        phase: "consolidate", kind: "consolidate", title: "Consolidamento del canon",
+        json: memoryUpdateTool({ sceneSummary: true, knowledge: withKnowledge, sceneEntities: true }),
         reason: "Aggiornare personaggi, luoghi, fazioni, oggetti, segreti e timeline dopo la scena.",
         nextStep: "Prossima scena o completamento del libro",
         prompt: `Aggiorna lo stato canonico DOPO la scena appena completata. Mantieni i fatti precedenti ancora validi, correggi conoscenze, spostamenti, oggetti, segreti e cronologia. Non inventare fatti assenti dal testo. Tieni i segreti protetti nei metadati, non svelarli nel romanzo. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE}${withKnowledge ? " " + KNOWLEDGE_DELTA_RULE + "\n\n" + knowledgeIndexText(book.knowledge!) : ""}\n\nSCENA CANON:\n${scene?.text ?? "Nessuna scena"}\n\nCONTESTO:\n${base}`,
@@ -661,7 +722,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
           reviewSlot: { key: reviewKey(cycle.chapterId, cycle.round, cycle.reports.length),
             index: cycle.reports.length, expected: next.segmentCount * cycleRoles(book, cycle).length },
           researchAgent: reviewerResearchAgent(next.role),
-          phase: "chapterReview", kind: reviewerTask(next.role), title, json: REVIEW_REPORT_SCHEMA,
+          phase: "chapterReview", kind: reviewerTask(next.role), title, json: REVIEW_REPORT_TOOL,
           system: prompt.system,
           reason: "Una chat autonoma controlla solo la sua competenza, senza pareri degli altri agenti.",
           nextStep: "Prossimo revisore o giudizio critico della redazione",
@@ -690,8 +751,12 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         // segments, quote anchors and source stamps must still be current.
         assertEditorialReviewCoverage(book, cycle, true);
         const historicalSnapshot = captureHistoricalPromptDossier(book, cycle.chapterId, "adjudicate");
+        const judgeTool = judgeToolSchema(book, cycle);
+        // The function definition travels with every batch: leave room for it in the declared input limit.
+        const inputBudget = judgeInputTokens === undefined || !judgeTools ? judgeInputTokens
+          : judgeInputTokens - estimateTextTokens(SUBMIT_TOOL_NOTE, JSON.stringify(judgeTool));
         // With a declared input limit the director may judge in several smaller calls.
-        const scope = nextJudgmentScope(book, cycle, judgeInputTokens, judgeOutputTokens);
+        const scope = nextJudgmentScope(book, cycle, inputBudget, judgeOutputTokens);
         const prompt = adjudicationPrompt(book, cycle, scope);
         const finish = (current: NonNullable<typeof cycle>, judgment: NonNullable<typeof cycle.judgment>, b: BookProject) => {
           current.judgment = judgment;
@@ -702,7 +767,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
           if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
         };
         return {
-          phase: "chapterReview", kind: "chapterJudge", json: JUDGE_RESULT_SCHEMA, system: prompt.system,
+          phase: "chapterReview", kind: "chapterJudge", json: judgeTool, system: prompt.system,
           title: "Direttore editoriale: accettazione o rifiuto motivato dei rilievi" +
             (scope ? " (lotto " + (judgeBatchesOf(cycle).length + 1) + ", " + scope.findingIds.size + " rilievi)" : ""),
           reason: "Il direttore valuta criticamente tutti i rapporti previsti dal ciclo senza assumere che siano corretti.",
@@ -772,7 +837,8 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         const segment = chapterSegments(chapter)[checkpoint.cursor]!;
         const withKnowledge = knowledgeActive(book);
         return {
-          phase: "chapterReview", kind: "consolidate", json: true,
+          phase: "chapterReview", kind: "consolidate",
+          json: memoryUpdateTool({ sceneSummary: false, knowledge: withKnowledge, sceneEntities: true }),
           title: "Riconciliazione canone dopo remediation " + (checkpoint.cursor + 1) +
             "/" + checkpoint.segmentCount,
           reason: "Aggiornare timeline, segreti e personaggi dopo la modifica prima della nuova tornata di review.",
@@ -822,7 +888,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         const segment = segments[index];
         if (!segment) throw new Error("Segmento di riassunto mancante.");
         return {
-          phase: "chapterReview", kind: "summarize", json: true,
+          phase: "chapterReview", kind: "summarize", json: EDITORIAL_SUMMARY_TOOL,
           title: "Sinossi del capitolo e del libro " + (index+1) + "/" + segments.length,
           reason: "Compattare il contesto per i revisori dei capitoli successivi senza perdere il canone verificato.",
           nextStep: "Prossima sinossi oppure congelamento e avanzamento al capitolo seguente",
@@ -886,7 +952,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
       if (change && rev.impactAnalysis === undefined) return changeAnalysisWork(book, change, base);
       if (rev.impactAnalysis === undefined) {
         return {
-          phase: "revision", kind: "revision", json: true, title: "Analisi d'impatto della correzione",
+          phase: "revision", kind: "revision", json: IMPACT_TOOL, title: "Analisi d'impatto della correzione",
           reason: "Individuare le scene da cambiare e i rimandi narrativi da rivalidare.",
           nextStep: "Revisione retroattiva delle scene coinvolte",
           prompt: `L'autore ha impartito questa istruzione PRIORITARIA: "${rev.instruction}". Identifica gli ID delle scene canoniche coinvolte direttamente o indirettamente, senza inventare ID. Se nessuna scena già scritta va cambiata (l'istruzione riguarda solo il futuro), restituisci un elenco vuoto. Rispondi ESCLUSIVAMENTE JSON {"rationale":"...","affectedSceneIds":["scene:001:001"]}.\n\n${base}`,
@@ -918,7 +984,9 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         const changeContext = change ? changePromptContext(book, change) : "";
         const withKnowledge = knowledgeActive(book);
         return {
-          phase: "revision", kind: "consolidate", json: true, title: "Memoria narrativa dopo la revisione",
+          phase: "revision", kind: "consolidate", title: "Memoria narrativa dopo la revisione",
+          json: memoryUpdateTool({ sceneSummary: false, knowledge: withKnowledge, sceneEntities: false,
+            sceneSummaryIds: rewritten.map(scene => scene.id) }),
           reason: "Allineare personaggi, segreti, oggetti e cronologia alle scene riscritte.",
           nextStep: "Nuova redazione dei capitoli toccati e ripresa della scrittura",
           prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}` +
@@ -1005,7 +1073,9 @@ function sceneSummariesWork(book: BookProject, chapter: Chapter, stale: readonly
   const batch = summaryBatch(stale);
   const expected = batch.map(scene => ({ id: scene.id, text: scene.text }));
   return {
-    phase: book.phase, kind: "summarize", noAuthorNotes: true, json: true,
+    phase: book.phase, kind: "summarize", noAuthorNotes: true,
+    json: toolParameters(z.object({ sceneSummaries: z.object(Object.fromEntries(batch.map(scene => [scene.id, z.string()]))) }),
+      { sceneSummaries: "Un riassunto fedele per OGNI scena elencata (ID scena → riassunto): 2-4 frasi su cosa accade, cosa cambia e come finisce (20-800 caratteri)." }),
     title: `Riassunti delle scene: capitolo ${chapter.number} (${batch.length} di ${stale.length})`,
     reason: "Le scene nuove o cambiate hanno bisogno di un riassunto vero, non di un taglio del testo, prima della redazione.",
     nextStep: stale.length > batch.length ? "Altri riassunti delle scene" : "Redazione del capitolo",
@@ -1340,10 +1410,11 @@ export class AutopilotRunner {
         const planning = await loadSettings();
         const judgeInputTokens = declaredJudgeInputBudget(planning, book);
         const judgeOutputTokens = declaredJudgeOutputBudget(planning, book);
+        const judgeTools = judgeUsesTools(planning, book);
         if (manual) work = manualReviewWork(book, manual);
         else try {
           work = book.phase === "prose" && !book.editorialCycle && !book.revision &&
-            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book, judgeInputTokens, judgeOutputTokens);
+            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book, judgeInputTokens, judgeOutputTokens, judgeTools);
         } catch (error) {
           // The editorial board refuses oversized canon memory; compact it instead of stopping.
           if (error instanceof Error && !book.revision &&
@@ -1396,7 +1467,7 @@ export class AutopilotRunner {
         try {
           const launch = { book, settings, runId, guard, signal, kind: work.kind, title: work.title,
             systemPrompt, userPrompt, started, assignment, configuredEndpoint,
-            ...(work.json ? { expectsJson: work.json } : {}),
+            ...(work.json && !researchConfig ? { expectsJson: work.json } : {}),
             ...(requestedEffort === undefined ? {} : { requestedEffort }) };
           let call: Promise<ModelAnswer>;
           if (pooled) {

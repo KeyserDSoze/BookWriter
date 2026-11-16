@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { EndpointProfile } from "./types";
 import { declaredModelCapabilities } from "./model-capabilities";
 
@@ -16,52 +17,63 @@ export function structuredOutputMode(value: unknown): StructuredOutputMode {
  * arguments are the model's answer and go through the same validation as any text reply. */
 export const SUBMIT_TOOL_NAME = "submit_result";
 export const SUBMIT_TOOL_NOTE =
-  `\n\nConsegna il risultato chiamando la funzione ${SUBMIT_TOOL_NAME}: gli argomenti della funzione sono l'oggetto JSON COMPLETO richiesto, nel formato indicato sopra, con tutti i campi. Non chiamarla mai con argomenti vuoti e non scrivere altro testo.`;
+  `\n\nConsegna il risultato chiamando la funzione ${SUBMIT_TOOL_NAME}: i suoi parametri descrivono campo per campo l'oggetto richiesto. Dove il compito dice di rispondere con JSON, metti quell'oggetto COMPLETO negli argomenti della funzione, con tutti i campi obbligatori compilati. Non chiamarla mai con argomenti vuoti e non scrivere altro testo.`;
 
-/** `true`: any JSON object; an object: the JSON schema of the arguments (helps models that otherwise send `{}`). */
-export type StructuredJson = true | Record<string, unknown>;
+/** JSON schema of the submit function's arguments. */
+export type ToolSchema = Record<string, unknown>;
 
-const str = { type: "string" };
-/** The director's verdict: the fields every reply needs; the rest is validated after the call. */
-export const JUDGE_RESULT_SCHEMA: Record<string, unknown> = {
-  type: "object", additionalProperties: true, required: ["reasoning", "decisions"],
-  properties: {
-    reasoning: str,
-    decisions: { type: "array", items: { type: "object", additionalProperties: true,
-      required: ["findingId", "action", "rationale"],
-      properties: { findingId: str, action: { type: "string", enum: ["accept", "reject"] }, rationale: str, remediation: str } } },
-  },
-};
-/** A reviewer's report. */
-export const REVIEW_REPORT_SCHEMA: Record<string, unknown> = {
-  type: "object", additionalProperties: true, required: ["verdict", "summary", "findings"],
-  properties: {
-    verdict: { type: "string", enum: ["pass", "issues"] }, summary: str, memoryNote: str,
-    findings: { type: "array", items: { type: "object", additionalProperties: true,
-      required: ["sceneId", "category", "severity", "evidence", "reason", "remediation"],
-      properties: { sceneId: str, category: str, severity: { type: "string", enum: ["critical", "major", "minor"] },
-        evidence: str, reason: str, remediation: str } } },
-  },
-};
+// Limits and patterns stay with the validation after the call: in a constrained-decoding grammar they only add size.
+const DROPPED_KEYWORDS = new Set(["$schema", "propertyNames", "minLength", "maxLength", "maxItems", "maxProperties", "pattern", "format", "default"]);
 
-/** True only for an OpenAI-compatible call expecting one JSON object, to a model the author
- * explicitly tagged «tools». The role is never guessed from the model name. */
-export function usesToolOutput(
-  endpoint: EndpointProfile, modelId: string, expectsJson: boolean | undefined, nativeProtocol: boolean,
-): boolean {
-  if (!expectsJson || nativeProtocol) return false;
+/** The parameters of the submit function for a JSON task, derived from the Zod schema that validates the reply,
+ * so the two cannot drift. `descriptions` explain fields by dotted path (array items share the path: "decisions.findingId"). */
+export function toolParameters(schema: z.ZodType, descriptions: Readonly<Record<string, string>> = {}): ToolSchema {
+  const root = clean(z.toJSONSchema(schema, { io: "input", unrepresentable: "any" }), "", descriptions) as ToolSchema;
+  return descriptions[""] ? { ...root, description: descriptions[""] } : root;
+}
+function clean(node: unknown, path: string, descriptions: Readonly<Record<string, string>>): unknown {
+  if (Array.isArray(node)) return node.map(child => clean(child, path, descriptions));
+  if (!node || typeof node !== "object") return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (DROPPED_KEYWORDS.has(key) || (key === "additionalProperties" && value === false)) continue;
+    if (key === "properties" && value && typeof value === "object") {
+      out.properties = Object.fromEntries(Object.entries(value).map(([name, child]) => {
+        const at = path ? path + "." + name : name;
+        const cleaned = clean(child, at, descriptions) as Record<string, unknown>;
+        return [name, descriptions[at] ? { ...cleaned, description: descriptions[at] } : cleaned];
+      }));
+    } else out[key] = clean(value, path, descriptions);
+  }
+  return out;
+}
+/** The same descriptions under a parent field (e.g. the sheets nested in a memory update). */
+export function describeUnder(prefix: string, descriptions: Readonly<Record<string, string>>): Record<string, string> {
+  return Object.fromEntries(Object.entries(descriptions).map(([path, text]) => [path ? prefix + "." + path : prefix, text]));
+}
+
+/** A forced function call is only worth it when `{}` is not a valid answer. */
+export function hasRequiredFields(schema: ToolSchema | undefined): schema is ToolSchema {
+  const required = schema?.required;
+  return Array.isArray(required) && required.length > 0;
+}
+
+/** True for an OpenAI-compatible endpoint whose model the author explicitly tagged «tools», unless switched off.
+ * The role is never guessed from the model name. */
+export function toolOutputAvailable(endpoint: EndpointProfile, modelId: string): boolean {
+  if (endpoint.apiProtocol === "lmstudio_native") return false;
   if (structuredOutputMode(endpoint.structuredOutput) === "off") return false;
   return declaredModelCapabilities(endpoint, modelId).includes("tools");
 }
 
-export function toolRequestFields(schema?: Record<string, unknown>): { tools: unknown[]; tool_choice: unknown } {
+export function toolRequestFields(schema: ToolSchema): { tools: unknown[]; tool_choice: unknown } {
   return {
     tools: [{
       type: "function",
       function: {
         name: SUBMIT_TOOL_NAME,
-        description: "Consegna il risultato finale del compito come oggetto JSON completo.",
-        parameters: schema ?? { type: "object", additionalProperties: true },
+        description: "Consegna il risultato finale del compito: gli argomenti sono l'oggetto completo descritto dai parametri.",
+        parameters: schema,
       },
     }],
     tool_choice: { type: "function", function: { name: SUBMIT_TOOL_NAME } },

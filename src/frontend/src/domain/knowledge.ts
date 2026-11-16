@@ -179,6 +179,26 @@ export const knowledgeReplySchema = z.object({
     subjects: z.array(z.string().min(1).max(120)).max(12).optional() })).max(20).optional(),
 });
 export type KnowledgeReply = z.infer<typeof knowledgeReplySchema>;
+/** Field explanations for the submit function (tools), same meaning as KNOWLEDGE_REPLY_SHAPE. */
+export const KNOWLEDGE_REPLY_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  entities: "Schede di personaggi, luoghi, oggetti e fazioni: nuove o cambiate (per quelle esistenti usa lo stesso nome).",
+  "entities.name": "Nome esatto; per una scheda esistente riusa il suo nome.",
+  "entities.summary": "Funzione nella storia in 1-2 frasi.",
+  "entities.attributes": "Attributi utili alla storia: role, personality, speech, background…",
+  "entities.relationships": "Relazioni con altre schede.",
+  "entities.relationships.target": "Nome di un'altra scheda.",
+  events: "Eventi della storia.",
+  "events.storyOrder": "Posizione nella cronologia della storia (può differire dall'ordine del racconto: flashback e antefatti).",
+  "events.chapter": "Capitolo in cui l'evento è raccontato.",
+  "events.sceneIds": "ID esatti delle scene del piano in cui accade.",
+  "events.involves": "Nomi delle schede coinvolte.",
+  "events.causes": "Titoli degli eventi da cui dipende.",
+  "events.secret": "true se il lettore non deve ancora saperlo.",
+  "events.perspectives": "Chi sa cosa: knows, unaware, believes_false, conceals.",
+  "events.timelines": "Titoli delle timeline a cui appartiene.",
+  timelines: "Timeline: una sola globale ed eventuali archi.",
+  "timelines.subjects": "Nomi delle schede che la timeline segue (per un arco).",
+};
 
 function snapshotOf(entity: KnowledgeEntity): EntitySnapshot {
   // A deep copy: later in-place edits (relations) must never rewrite a stored version.

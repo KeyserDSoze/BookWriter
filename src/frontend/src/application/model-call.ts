@@ -12,7 +12,7 @@ import { preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
 import { assertPromptFitsLoadedContext, assertPromptWithinDeclaredInput } from "./context-guard";
 import { declaredModelTokenLimits, effectiveOutputTokens } from "../domain/model-token-limits";
 import type { WriterGuard } from "./writer-guard";
-import type { StructuredJson } from "../domain/structured-output";
+import { SUBMIT_TOOL_NOTE, hasRequiredFields, toolOutputAvailable, type ToolSchema } from "../domain/structured-output";
 
 export interface LaunchInput {
   book: BookProject; settings: AppSettings; runId: string; guard: WriterGuard; signal: AbortSignal;
@@ -21,8 +21,8 @@ export interface LaunchInput {
   assignment: { endpointId: string; modelId: string };
   configuredEndpoint?: EndpointProfile;
   requestedEffort?: TaskReasoning;
-  /** The reply is one JSON object: a model with the tools role may deliver it as function arguments. */
-  expectsJson?: StructuredJson;
+  /** JSON schema of the result: a model with the tools role delivers it as function arguments. */
+  expectsJson?: ToolSchema;
   /** The sequential path stores the attempt before the checks (an audit even if they reject it);
    * a parallel look-ahead stores it only once the request is certain to be sent. */
   persisted: boolean;
@@ -39,8 +39,12 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
   const inspectionGeneration=aiInspectionGeneration();
   const inspectionCurrent=()=>aiInspectionGeneration()===inspectionGeneration;
   await guard.assertActive(); // Do not charge credits without verified ownership.
+  // The function definition is sent with the prompt: it counts toward budget and declared input limits.
+  const toolText = i.configuredEndpoint && hasRequiredFields(i.expectsJson) &&
+    toolOutputAvailable(i.configuredEndpoint, assignment.modelId) ? SUBMIT_TOOL_NOTE + JSON.stringify(i.expectsJson) : "";
+  const sizedUserPrompt = i.userPrompt + toolText;
   const preflight = preflightBookAiBudget(
-    book, settings, await listActivities(book.id), i.kind, i.systemPrompt, i.userPrompt, i.runId,
+    book, settings, await listActivities(book.id), i.kind, i.systemPrompt, sizedUserPrompt, i.runId,
   );
   await guard.assertActive();
   if (signal.aborted) throw new DOMException("Interrotto prima della chiamata AI.", "AbortError");
@@ -48,9 +52,9 @@ export async function launchModelCall(i: LaunchInput): Promise<{ promise: Promis
     i.configuredEndpoint ? declaredModelTokenLimits(i.configuredEndpoint, assignment.modelId) : {},
     preflight?.reservedOutputTokens);
   if (i.configuredEndpoint) {
-    assertPromptWithinDeclaredInput(i.configuredEndpoint, assignment.modelId, i.title, i.systemPrompt, i.userPrompt);
+    assertPromptWithinDeclaredInput(i.configuredEndpoint, assignment.modelId, i.title, i.systemPrompt, sizedUserPrompt);
     await assertPromptFitsLoadedContext(i.configuredEndpoint, assignment.modelId, i.title,
-      i.systemPrompt, i.userPrompt, outputCap, signal);
+      i.systemPrompt, sizedUserPrompt, outputCap, signal);
   }
   // Store the author's validated price BEFORE the provider call.
   // The quote belongs to this attempt even if its output is rejected.

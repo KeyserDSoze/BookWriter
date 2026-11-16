@@ -45,6 +45,30 @@ function twoSceneBook(phase: "consolidate" | "prose") {
 }
 
 describe("Memoria narrativa a delta e compattazione", () => {
+  it("il consolidamento passa la funzione del risultato con i campi spiegati e quelli essenziali obbligatori", async () => {
+    const book = twoSceneBook("consolidate");
+    book.knowledge = syncKnowledgeWithMemory(emptyKnowledge(), book.memory, "2026-11-14T12:00:00.000Z");
+    await saveBook(book, false);
+    const runner = new AutopilotRunner();
+    const schemas: unknown[] = [];
+    modelCall.mockImplementation(async (_k: TaskKind, _s: string, _p: string, _settings: unknown, _book: unknown,
+      _signal: unknown, options?: { structuredJson?: unknown }) => {
+      schemas.push(options?.structuredJson);
+      runner.stopAfterCurrent();
+      return { text: JSON.stringify({ mode: "delta", sceneSummary: "Mara trova una lettera sul molo e la nasconde.",
+        currentState: "Mara ha la lettera e la tiene nascosta.", knowledge: {} }), endpointId: "openai", modelId: "test-model" };
+    });
+    await runner.run(book.id, async () => undefined);
+    const schema = schemas[0] as { required: string[]; properties: Record<string, { description?: string; properties?: Record<string, unknown> }> };
+    expect(schema.required).toEqual(expect.arrayContaining(["mode", "sceneSummary", "currentState", "knowledge"]));
+    expect(schema.properties.mode!.description).toContain("delta");
+    expect(schema.properties.characters!.description).toContain("Personaggi");
+    expect(Object.keys(schema.properties.knowledge!.properties!)).toEqual(["entities", "events", "timelines"]);
+    expect(schema.properties.sceneEntities).toBeDefined();
+    expect(JSON.stringify(schema)).not.toMatch(/maxLength|\$schema/);
+    expect((await getBook(book.id))!.memory.currentState).toBe("Mara ha la lettera e la tiene nascosta.");
+  });
+
   it("con le schede attive il consolidamento deve dire cosa cambia nelle schede, anche quelle esistenti", async () => {
     const book = twoSceneBook("consolidate");
     book.knowledge = syncKnowledgeWithMemory(emptyKnowledge(), book.memory, "2026-11-14T12:00:00.000Z");

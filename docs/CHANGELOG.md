@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## 0.28.0 — 2026-11-16 — Tools: ogni compito JSON ha la sua funzione con tutti i parametri spiegati
+
+- **Niente più funzione vuota.** Con un modello marcato «tools» ogni compito che restituisce JSON manda una funzione `submit_result` con i parametri completi: piano dei capitoli e delle scene, schede/eventi/timeline, consolidamento e riconciliazione della memoria, compattazione, riassunti delle scene, sinossi, analisi d'impatto, revisori e direttore. Prima molti compiti avevano uno schema senza campi e il modello rispondeva `{}` (verificato dal gateway: token di output pari al solo ragionamento).
+- **Dallo stesso schema che valida la risposta.** I parametri sono ricavati dagli schemi di validazione (mai scritti a mano), con tipi, valori ammessi, campi obbligatori e una descrizione in italiano per ogni campo; i limiti di lunghezza restano al controllo dopo la risposta. I campi essenziali sono obbligatori: per la memoria `mode`, `currentState`, `sceneSummary` dopo una scena e `knowledge` con le schede attive.
+- **Direttore e revisori.** Il direttore riceve gli ID dei rilievi come elenco chiuso, con la stessa funzione per tutti i lotti del capitolo; i dodici revisori condividono una sola funzione (i campi di ruolo sono facoltativi e spiegati), così la cache del server resta utile.
+- **Protezioni.** Senza schema o con uno schema senza campi obbligatori si usa il testo; un compito con la ricerca web attiva risponde in testo (deve poter chiedere `{"web_search":…}`); la definizione della funzione conta nei limiti di input dichiarati, nel preventivo e nei lotti del direttore.
+- Limiti: la funzione dei revisori aggiunge circa 1.300 token di input per chiamata; provato con fornitori simulati, non so se ogni server impone lo schema durante la generazione.
+
 ## 0.27.3 — 2026-11-16 — Si vede se il modello consegna il risultato con la funzione (tools)
 
 - **Verifica nei dettagli della richiesta.** In «Dettagli tecnici della richiesta» (riquadro live) la riga «Funzioni (tools) per consegnare il risultato» dice se le funzioni non sono state usate (modello senza tag tools, opzione disattivata o compito di testo), se sono state richieste e il modello ha risposto con la funzione, oppure se erano richieste ma il modello ha risposto in testo. Prima non si poteva distinguere: il reasoning mostra solo il pensiero del modello, che cita il prompt.

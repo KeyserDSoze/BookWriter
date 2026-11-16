@@ -32,9 +32,10 @@ function sse(items: string[]): Response {
     },
   }), { headers: { "content-type": "text/event-stream" } });
 }
-const call = (settings: AppSettings, book: ReturnType<typeof newBook>, structuredJson?: true | false) =>
+const SCHEMA = { type: "object", properties: { verdict: { type: "string" } }, required: ["verdict"] };
+const call = (settings: AppSettings, book: ReturnType<typeof newBook>, structured?: boolean) =>
   callModel("chapterJudge", "Sistema", "Prompt", settings, book, new AbortController().signal,
-    structuredJson ? { structuredJson: true as const } : {});
+    structured ? { structuredJson: SCHEMA } : {});
 
 describe("Output strutturato via tools", () => {
   it("invia una sola funzione forzata solo per un modello col tag tools e un compito JSON", async () => {
@@ -52,13 +53,16 @@ describe("Output strutturato via tools", () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it("senza tag tools, con il compito non JSON o con l'opzione disattivata resta il protocollo testuale", async () => {
-    for (const mode of ["no-tag", "no-json", "off"]) {
+  it("senza tag tools, senza schema, con uno schema senza campi obbligatori o con l'opzione disattivata resta il protocollo testuale", async () => {
+    for (const mode of ["no-tag", "no-json", "empty-schema", "off"]) {
       const { settings, book } = fixture(mode !== "no-tag");
       if (mode === "off") settings.endpoints[0]!.structuredOutput = "off";
       const request = vi.fn().mockResolvedValue(jsonResponse({ content: '{"a":1}' }));
       vi.stubGlobal("fetch", request);
-      const answer = await call(settings, book, mode === "no-json" ? false : true);
+      const answer = mode === "empty-schema"
+        ? await callModel("chapterJudge", "Sistema", "Prompt", settings, book, new AbortController().signal,
+          { structuredJson: { type: "object", additionalProperties: true } })
+        : await call(settings, book, mode !== "no-json");
       expect(answer.text).toBe('{"a":1}');
       expect(body(request)).not.toHaveProperty("tools");
       expect(body(request)).not.toHaveProperty("tool_choice");
@@ -102,16 +106,16 @@ describe("Output strutturato via tools", () => {
     const seen: boolean[] = [];
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(toolMessage('{"a":1}'))));
     const viaFunction = await callModel("chapterJudge", "S", "P", settings, book, new AbortController().signal,
-      { structuredJson: true, onTools: r => seen.push(r) });
+      { structuredJson: SCHEMA, onTools: r => seen.push(r) });
     expect(viaFunction.delivery).toBe("function");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ content: '{"a":1}' })));
     const viaText = await callModel("chapterJudge", "S", "P", settings, book, new AbortController().signal,
-      { structuredJson: true, onTools: r => seen.push(r) });
+      { structuredJson: SCHEMA, onTools: r => seen.push(r) });
     expect(viaText.delivery).toBe("text");
     const plain = fixture(false);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ content: "ok" })));
     const untagged = await callModel("chapterJudge", "S", "P", plain.settings, plain.book,
-      new AbortController().signal, { structuredJson: true, onTools: r => seen.push(r) });
+      new AbortController().signal, { structuredJson: SCHEMA, onTools: r => seen.push(r) });
     expect(untagged.delivery).toBeUndefined();
     expect(seen).toEqual([true, true, false]);
   });
@@ -129,7 +133,7 @@ describe("Output strutturato via tools", () => {
     ])));
     const seen: string[] = [];
     const answer = await callModel("chapterJudge", "S", "P", settings, book, new AbortController().signal,
-      { structuredJson: true, onProgress: d => { if (d.kind === "text") seen.push(d.text); } });
+      { structuredJson: SCHEMA, onProgress: d => { if (d.kind === "text") seen.push(d.text); } });
     expect(answer).toMatchObject({ text: '{"verdict":"freeze"}', inputTokens: 7, outputTokens: 2 });
     expect(seen.join("")).toBe('{"verdict":"freeze"}');
   });

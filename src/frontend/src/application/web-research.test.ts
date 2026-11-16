@@ -14,10 +14,11 @@ const answer = (text: string) => ({ text, endpointId: "openai", modelId: "synthe
 const request = (...queries: string[]) => JSON.stringify({ web_search: { queries, reason: "Dettaglio d'epoca da verificare." } });
 const found = JSON.stringify({ research_summary: "A Vienna nel 1923 i tram erano rossi e bianchi, gestiti dal comune.",
   sources: [{ title: "Storia dei tram di Vienna", url: "https://example.org/tram-wien", excerpt: "rossi e bianchi" }] });
-const calls: Array<{ kind: string; system: string; prompt: string }> = [];
+const calls: Array<{ kind: string; system: string; prompt: string; tools?: boolean }> = [];
 function script(handler: (kind: string, system: string, prompt: string, index: number) => string) {
-  modelCall.mockImplementation(async (kind: string, system: string, prompt: string) => {
-    calls.push({ kind, system, prompt });
+  modelCall.mockImplementation(async (kind: string, system: string, prompt: string, _settings: unknown, _book: unknown,
+    _signal: unknown, options?: { structuredJson?: unknown }) => {
+    calls.push({ kind, system, prompt, tools: options?.structuredJson !== undefined });
     return answer(handler(kind, system, prompt, calls.length));
   });
 }
@@ -131,6 +132,10 @@ describe("Ricerca web nel flusso autonomo", () => {
     expect(readers.every(c => !c.system.includes("STRUMENTO DI RICERCA WEB"))).toBe(true);
     expect(specialists.every(c => c.system.includes("STRUMENTO DI RICERCA WEB"))).toBe(true);
     expect(calls.find(c => c.kind === "chapterJudge")!.system).not.toContain("STRUMENTO DI RICERCA WEB");
+    // A role that can research answers in text ({"web_search":…}); the others get the result function.
+    expect(readers.every(c => c.tools)).toBe(true);
+    expect(specialists.every(c => !c.tools)).toBe(true);
+    expect(calls.find(c => c.kind === "chapterJudge")!.tools).toBe(true);
   });
   it("cambiare le impostazioni durante una chiamata non spreca la risposta: è applicata lo stesso", async () => {
     const book = writingBook(); await saveBook(book, false);

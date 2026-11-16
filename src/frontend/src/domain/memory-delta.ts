@@ -39,6 +39,34 @@ const deltaSchema = z.object({
   currentState: z.string().max(CURRENT_STATE_LIMIT).optional(),
 });
 
+/** Fields of a delta reply for the submit function: the validator's fields, with the essentials required. */
+export function memoryDeltaToolShape(withSceneSummary: boolean) {
+  return withSceneSummary
+    ? deltaSchema.required({ currentState: true, sceneSummary: true }).shape
+    : deltaSchema.omit({ sceneSummary: true }).required({ currentState: true }).shape;
+}
+export const MEMORY_DELTA_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  mode: "Sempre \"delta\": restituisci solo ciò che cambia rispetto alla memoria precedente.",
+  sceneSummary: "Riassunto fedele della scena in 2-4 frasi: eventi, cambiamenti e come finisce (20-800 caratteri).",
+  characters: `Personaggi nuovi o cambiati: nome → nuovo stato completo (max ${MEMORY_ENTRY_LIMIT} caratteri). {} se nessuno cambia.`,
+  locations: "Luoghi nuovi o cambiati: nome → nuovo stato completo. {} se nessuno cambia.",
+  factions: "Fazioni nuove o cambiate: nome → nuovo stato completo. {} se nessuna cambia.",
+  items: "Oggetti nuovi o cambiati: nome → stato completo (chi li possiede, dove sono). {} se nessuno cambia.",
+  secrets: "Segreti nuovi o cambiati: id → stato privato, chi lo sa e quando rivelarlo. {} se nessuno cambia.",
+  remove: "Voci da eliminare, per categoria. Ometti se non elimini nulla.",
+  timelineAdd: "Nuovi eventi da aggiungere alla cronologia, in ordine (3-400 caratteri ciascuno).",
+  currentState: `Stato attuale della storia dopo questo testo (max ${CURRENT_STATE_LIMIT} caratteri).`,
+};
+export const MEMORY_FULL_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  characters: "Tutti i personaggi ancora utili: nome → stato attuale.",
+  locations: "Tutti i luoghi ancora utili: nome → stato attuale.",
+  factions: "Tutte le fazioni ancora utili: nome → stato attuale.",
+  items: "Tutti gli oggetti ancora utili: nome → stato attuale.",
+  secrets: "Tutti i segreti ancora rilevanti: id → stato privato e quando rivelarlo.",
+  timeline: "Eventi essenziali della cronologia, in ordine.",
+  currentState: "Stato attuale della storia.",
+};
+
 export interface MemoryUpdate { memory: NarrativeMemory; sceneSummary?: string; mode: "delta" | "full" }
 
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

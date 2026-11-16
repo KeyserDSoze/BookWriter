@@ -12,8 +12,8 @@ import { lmStudioNativeProtocol, lmStudioNativeEndpoint, lmStudioNativeReasoning
   readLmStudioNativeStream, type LmStudioPhase, type AiTransportStats } from "./lmstudio-native";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
 import { localEndpointTimeoutHint } from "./local-endpoint-probe";
-import { SUBMIT_TOOL_NOTE, hasEmptyToolCall, toolCallArguments, toolRequestFields, usesToolOutput,
-  type StructuredJson } from "../domain/structured-output";
+import { SUBMIT_TOOL_NOTE, hasEmptyToolCall, hasRequiredFields, toolCallArguments, toolOutputAvailable, toolRequestFields,
+  type ToolSchema } from "../domain/structured-output";
 import { ProviderContentError } from "./ai-provider-error";
 
 export type ModelAnswer = {
@@ -93,8 +93,8 @@ export async function callModel(
   book: BookProject,
   signal: AbortSignal,
   options?: { maxOutputTokens?: number; onProgress?: (delta: AiStreamDelta) => void;
-    /** The reply is one JSON object: delivered via a forced function call when the model is tagged «tools». */
-    structuredJson?: StructuredJson;
+    /** The JSON schema of the result: delivered via a forced function call when the model is tagged «tools». */
+    structuredJson?: ToolSchema;
     onHeaders?: () => void; onPhase?: (phase:LmStudioPhase)=>void;
     onTools?: (requested: boolean) => void;
     onTransport?: (stats:AiTransportStats)=>void },
@@ -117,7 +117,10 @@ export async function callModel(
   }
   const base = normalizeEndpoint(endpoint.baseUrl);
   const nativeUrl=protocol==="lmstudio_native"?lmStudioNativeEndpoint(base):undefined;
-  const structured = usesToolOutput(endpoint, assignment.modelId, !!options?.structuredJson, protocol === "lmstudio_native");
+  // Tools only with a schema that rules out `{}`: an empty schema makes a model call the function with no arguments.
+  const toolSchema = protocol !== "lmstudio_native" && hasRequiredFields(options?.structuredJson) &&
+    toolOutputAvailable(endpoint, assignment.modelId) ? options!.structuredJson : undefined;
+  const structured = toolSchema !== undefined;
   const nativeReasoning=protocol==="lmstudio_native"?lmStudioNativeReasoning(effort):undefined;
   const authMode = endpointAuthMode(endpoint.authMode, base);
   if (authMode === "api_key" && !endpoint.secret)
@@ -146,7 +149,7 @@ export async function callModel(
       }:{
         model: assignment.modelId,
         messages: [{ role: "system", content: structured ? system + SUBMIT_TOOL_NOTE : system }, { role: "user", content: prompt }],
-        ...(structured ? toolRequestFields(typeof options?.structuredJson === "object" ? options.structuredJson : undefined) : {}),
+        ...(toolSchema ? toolRequestFields(toolSchema) : {}),
         ...(options?.maxOutputTokens !== undefined ? { [outputField]: options.maxOutputTokens } : {}),
         ...(effort === undefined ? {} : { reasoning_effort: effort }),
         ...(streaming ? { stream: true, stream_options: { include_usage: true } } : {}),

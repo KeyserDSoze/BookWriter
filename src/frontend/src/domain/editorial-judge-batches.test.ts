@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { newBook, type BookProject } from "./types";
 import {
   EDITORIAL_ROLES, adjudicationPrompt, allFindings, chapterSegments, createEditorialCycle,
-  judgeBatchesOf, judgeFindingsPerOutput, nextJudgmentScope, recordJudgeBatch, validateJudgment, validateReport,
+  judgeBatchesOf, judgeFindingsPerOutput, judgeToolSchema, nextJudgmentScope, recordJudgeBatch, validateJudgment, validateReport,
   type ChapterEditorialCycle,
 } from "./editorial-board";
 import { estimateTextTokens } from "./model-token-limits";
@@ -91,6 +91,18 @@ describe("Direttore editoriale a lotti con limite di input", () => {
     expect(() => validateJudgment(cycle, reply(all.slice(0, 3)), chapter, book, scope)).toThrow();
     expect(() => validateJudgment(cycle, reply(all.slice(0, 1)), chapter, book, scope)).toThrow(/non ha valutato/);
     expect(() => validateJudgment(cycle, reply(all.slice(0, 2)), chapter, book, scope)).not.toThrow();
+  });
+  it("la funzione del direttore elenca gli ID esatti dei rilievi ed è la stessa per tutti i lotti", () => {
+    const { book, cycle } = fixture();
+    const schema = judgeToolSchema(book, cycle) as {
+      required: string[]; properties: { decisions: { description: string; items: { required: string[]; properties: Record<string, { enum?: string[] }> } } } };
+    expect(schema.required).toEqual(["reasoning", "decisions"]);
+    expect(schema.properties.decisions.description).toContain("OGNI rilievo");
+    expect(schema.properties.decisions.items.required).toEqual(["findingId", "action", "rationale"]);
+    expect(schema.properties.decisions.items.properties.findingId!.enum).toEqual(allFindings(cycle).map(f => f.id));
+    // No finding of this cycle needs the optional structured reviews.
+    expect(schema.properties.decisions.items.properties.narrativeReview).toBeUndefined();
+    expect(judgeToolSchema(book, cycle)).toEqual(schema);
   });
   it("dichiara l'impossibilità quando nemmeno un gruppo indivisibile entra nel limite, senza troncare", () => {
     const { book, cycle } = fixture();
