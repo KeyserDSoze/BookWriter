@@ -56,9 +56,9 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
         <input className="field field-sm" value={endpoint.models.join(", ")} placeholder="es. model-a, model-b"
           onChange={e => onUpdate({ models: e.target.value.split(",").map(x => x.trim()).filter(Boolean) })} />
       </F>
-      <div className="flex items-end gap-2">
-        <Button variant="outline" onClick={onDiscover}><RefreshCw size={16} /> Leggi /models</Button>
-        {onRemove && <Button variant="destructive" onClick={onRemove}>Rimuovi</Button>}
+      <div className="flex flex-wrap items-center gap-2 sm:mt-[18px] sm:self-start">
+        <Button variant="outline" size="sm" className="h-[34px] min-h-[34px] max-sm:h-11 max-sm:min-h-11" onClick={onDiscover}><RefreshCw size={16} /> Leggi /models</Button>
+        {onRemove && <Button variant="destructive" size="sm" className="h-[34px] min-h-[34px] max-sm:h-11 max-sm:min-h-11" onClick={onRemove}>Rimuovi</Button>}
       </div>
       {endpoint.models.length > 0 && <ul className="flex flex-wrap gap-1.5 sm:col-span-2 lg:col-span-4" aria-label={`Modelli di ${endpoint.name}`}>
         {endpoint.models.map(model => {

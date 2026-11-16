@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchModelDetails } from "./ai";
-import { tokenLimitsFromDetails, withDetectedTokenLimits } from "../domain/model-token-limits";
+import { capabilityTagsFromDetails, tokenLimitsFromDetails, withDetectedCapabilities, withDetectedTokenLimits } from "../domain/model-token-limits";
 import type { EndpointProfile } from "../domain/types";
 
 const url = "https://proxy.example.test/v1";
@@ -29,14 +29,34 @@ describe("Limiti di token letti da /models/details", () => {
     expect(tokenLimitsFromDetails(null)).toEqual({});
     expect(tokenLimitsFromDetails({ data: "x" })).toEqual({});
   });
-  it("compila solo i campi mancanti e non sovrascrive mai i valori scritti a mano", () => {
+  it("una lettura esplicita aggiorna i valori dichiarati dal provider e lascia quelli che non dichiara", () => {
     const endpoint = { id: "e", name: "E", baseUrl: url, secret: null, models: ["a", "c"],
-      modelTokenLimits: { a: { inputTokens: 20000 } } } as unknown as EndpointProfile;
+      modelTokenLimits: { a: { inputTokens: 20000, outputTokens: 1000 }, c: { inputTokens: 5000 } } } as unknown as EndpointProfile;
     const { limits, filled } = withDetectedTokenLimits(endpoint, ["a", "c"], tokenLimitsFromDetails(details));
     expect(filled).toBe(2);
-    expect(limits).toEqual({ a: { inputTokens: 20000, outputTokens: 4096 }, c: { outputTokens: 2048 } });
+    expect(limits).toEqual({ a: { inputTokens: 28672, outputTokens: 4096 }, c: { inputTokens: 5000, outputTokens: 2048 } });
     expect(withDetectedTokenLimits({ ...endpoint, modelTokenLimits: limits } as EndpointProfile, ["a", "c"],
       tokenLimitsFromDetails(details)).filled).toBe(0);
+  });
+  it("con i valori reali di llmproxy (131072 / 8192) ricava input 122880 e output 8192", () => {
+    const real = { data: [{ id: "muse-glimmer-30b", type: "chat", context_window: 131072, max_output_tokens: 8192,
+      capabilities: { streaming: true, tools: true, vision: true, reasoning: true } }] };
+    expect(tokenLimitsFromDetails(real)["muse-glimmer-30b"]).toEqual({ inputTokens: 122880, outputTokens: 8192 });
+    expect(capabilityTagsFromDetails(real)["muse-glimmer-30b"]).toEqual(["chat", "tools"]);
+  });
+  it("aggiunge i ruoli dichiarati dal provider senza mai toglierne e senza dedurli dal nome", () => {
+    const endpoint = { id: "e", name: "E", baseUrl: url, secret: null, models: ["m", "emb", "x"],
+      modelCapabilities: { m: ["voice"] } } as unknown as EndpointProfile;
+    const payload = { data: [
+      { id: "m", type: "chat", capabilities: { tools: true } }, { id: "emb", type: "embedding" },
+      { id: "x", type: "chat", capabilities: { tools: false } }, { id: "voice-model", type: "audio" },
+    ] };
+    const { tags, added } = withDetectedCapabilities(endpoint, ["m", "emb", "x"], capabilityTagsFromDetails(payload));
+    expect(added).toBe(3);
+    expect(tags).toEqual({ m: ["chat", "tools", "voice"], emb: ["embedding"], x: ["chat"] });
+    expect(capabilityTagsFromDetails(payload)["voice-model"]).toBeUndefined();
+    expect(withDetectedCapabilities({ ...endpoint, modelCapabilities: tags } as EndpointProfile, ["m", "emb", "x"],
+      capabilityTagsFromDetails(payload)).added).toBe(0);
   });
   it("legge /models/details con la stessa sicurezza del catalogo e, se fallisce, restituisce undefined", async () => {
     const request = vi.fn().mockResolvedValue(new Response(JSON.stringify(details),

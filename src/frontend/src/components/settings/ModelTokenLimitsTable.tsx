@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { EndpointProfile } from "../../domain/types";
 import { MAX_MODEL_TOKENS, MIN_MODEL_TOKENS, declaredModelTokenLimits, isModelTokenCount, withModelTokenLimits } from "../../domain/model-token-limits";
 
@@ -10,6 +10,8 @@ export function ModelTokenLimitsTable({ endpoint, models, onChange }: {
   onChange: (next: EndpointProfile["modelTokenLimits"]) => void;
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Any committed change (typed, read from /models/details, imported) shows the saved value again.
+  useEffect(() => setDrafts({}), [endpoint.modelTokenLimits]);
   if (!models.length) return <p className="muted text-xs">Aggiungi o leggi i modelli dell'endpoint per impostarne i limiti.</p>;
 
   function edit(model: string, field: Field, text: string) {
@@ -34,7 +36,8 @@ export function ModelTokenLimitsTable({ endpoint, models, onChange }: {
           <td className="py-1 pr-2 font-mono break-all">{model}</td>
           {([["inputTokens", "Token di input massimi"], ["outputTokens", "Token di output massimi"]] as const).map(([field, label]) => {
             const draft = drafts[`${model}\n${field}`];
-            const value = draft ?? (saved[field] === undefined ? "" : String(saved[field]));
+            const stored = saved[field] === undefined ? "" : String(saved[field]);
+            const value = draft !== undefined && draft.trim() !== "" && !isModelTokenCount(Number(draft)) ? draft : stored;
             const invalid = value.trim() !== "" && !isModelTokenCount(Number(value));
             return <td key={field} className="px-1 py-1">
               <input className="field field-sm w-28" type="number" inputMode="numeric" min={MIN_MODEL_TOKENS} max={MAX_MODEL_TOKENS} step={256}

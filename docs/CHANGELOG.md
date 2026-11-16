@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## 0.26.1 — 2026-11-16 — «Leggi /models» aggiorna limiti e ruoli dichiarati dal provider
+
+- **I limiti di token si aggiornano.** Una lettura esplicita di «Leggi /models» fa vincere i valori dichiarati da `/models/details` (per esempio `context_window` 131072 e `max_output_tokens` 8192 danno input 122880 e output 8192) anche dove c'erano valori vecchi; un campo `null` lascia quello scritto a mano. Prima venivano compilati solo i campi vuoti. La tabella dei limiti mostra sempre il valore salvato (una bozza solo finché il numero non è valido), quindi non resta a video un valore superato.
+- **Ruoli dichiarati dal provider.** Gli stessi dettagli aggiungono i tag del modello: `type: chat` dà «chat», `capabilities.tools: true` aggiunge «tools», `type: embedding` dà «embedding». Mai dedotti dal nome; un tag già scelto resta e nessuno viene tolto.
+- **Bottoni dell'endpoint in linea.** «Leggi /models» e «Rimuovi» sono sulla stessa riga, compatti e allineati alla riga dei campi.
+- Limiti: provato con fornitori simulati, non con llmproxy reale; l'allineamento grafico non ha un test pixel per pixel.
+
 ## 0.26.0 — 2026-11-16 — Modelli del libro ereditati o propri, cambio di gruppo e streaming con ragionamenti lunghi
 
 - **Modelli e redazione: ereditarietà esplicita.** Un libro senza scelte proprie mostra la tabella chiusa con il messaggio «Questo libro eredita modelli e thinking dalle Impostazioni globali» (e il modello predefinito) e il pulsante «Crea le impostazioni di questo libro». Con scelte proprie la tabella è aperta, ogni attività è marcata «del libro» o «eredita» e «Eredita tutto dalle Impostazioni» (con conferma) riporta il libro ai valori globali. Il testo del router globale spiega la differenza fra i due posti.
