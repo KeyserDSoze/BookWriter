@@ -1,5 +1,6 @@
 import { MAX_CHAT_COMPLETION_BYTES, ProviderResponseReadError } from "./ai-completion-response";
 import type { AiStreamDelta, StreamCompletion } from "./ai-stream";
+import { MAX_STREAM_TRANSPORT_BYTES } from "./ai-stream";
 
 export type LmStudioPhase = {
   phase: "model_loading"|"prompt_processing"|"reasoning"|"message";
@@ -156,7 +157,7 @@ export async function readLmStudioNativeStream(
       if(packet.done)break;
       armIdleTimer();
       bytes+=packet.value.byteLength;
-      if(bytes>MAX_CHAT_COMPLETION_BYTES)fail();
+      if(bytes>MAX_STREAM_TRANSPORT_BYTES)fail();
       emit(()=>onTransport?.({bytes,events}));
       consume(decoder.decode(packet.value,{stream:true}));
     }

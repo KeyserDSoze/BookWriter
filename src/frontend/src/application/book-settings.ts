@@ -1,6 +1,52 @@
-import type { TaskKind, TaskReasoning } from "../domain/types";
+import { TASK_KINDS, type BookProject, type TaskKind, type TaskReasoning } from "../domain/types";
 import { validateTaskReasoning } from "../domain/task-reasoning";
 import { BookRevisionConflict, getBook, saveBook } from "../infrastructure/db";
+
+/** One locked, revision-checked write of a per-book setting (same fencing as every manual edit). */
+async function mutateBookSettings(bookId: string, expectedUpdatedAt: string, apply: (book: BookProject) => void): Promise<void> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks?.request)
+    throw new Error("Web Locks non disponibile: modifica modello bloccata per evitare scritture concorrenti.");
+  await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {
+    if (!lock)
+      throw new Error("Un'altra scheda sta scrivendo questo libro: riprova quando l'autopilot è fermo.");
+    const stored = await getBook(bookId);
+    if (!stored || stored.updatedAt !== expectedUpdatedAt) throw new BookRevisionConflict();
+    if (stored.status === "running") throw new Error("Metti prima in pausa l'autopilot e ricarica il libro.");
+    const next = structuredClone(stored);
+    apply(next);
+    await saveBook(next, true, expectedUpdatedAt);
+  });
+}
+
+function assertTaskKinds(kinds: readonly TaskKind[]): void {
+  if (!kinds.length || kinds.some(kind => !TASK_KINDS.includes(kind))) throw new Error("Attività non valide.");
+}
+
+/** Same endpoint and model for several tasks in a single write. */
+export async function setBookModelRoutes(
+  bookId: string, expectedUpdatedAt: string, kinds: readonly TaskKind[], endpointId: string, modelId: string,
+): Promise<void> {
+  assertTaskKinds(kinds);
+  if (!endpointId) throw new Error("Scegli un endpoint.");
+  await mutateBookSettings(bookId, expectedUpdatedAt, book => {
+    book.modelRoutes = { ...book.modelRoutes, ...Object.fromEntries(kinds.map(kind => [kind, { endpointId, modelId }])) };
+  });
+}
+
+/** Back to the global router (and global thinking) for these tasks. */
+export async function inheritBookModelSettings(
+  bookId: string, expectedUpdatedAt: string, kinds: readonly TaskKind[],
+): Promise<void> {
+  assertTaskKinds(kinds);
+  await mutateBookSettings(bookId, expectedUpdatedAt, book => {
+    const routes = { ...book.modelRoutes };
+    const efforts = { ...book.taskReasoningEfforts };
+    for (const kind of kinds) { delete routes[kind]; delete efforts[kind]; }
+    book.modelRoutes = Object.keys(routes).length ? routes : undefined;
+    book.taskReasoningEfforts = Object.keys(efforts).length ? efforts : undefined;
+  });
+}
 
 /**
  * Manual per-book model routing must never save a stale whole-book snapshot.

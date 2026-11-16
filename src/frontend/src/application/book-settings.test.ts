@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newBook } from "../domain/types";
 import { BookRevisionConflict, getBook, getDb, saveBook } from "../infrastructure/db";
 import { getOutbox } from "../infrastructure/outbox";
-import { updateBookModelRoute,updateBookTaskReasoning } from "./book-settings"; 
+import { inheritBookModelSettings, setBookModelRoutes, updateBookModelRoute,updateBookTaskReasoning } from "./book-settings"; 
 
 
 const locksUnavailable = new Set<string>();
@@ -56,6 +56,45 @@ describe("Reasoning per libro: CAS, writer lock e isolamento del canone",()=>{
     updated.status="running";await saveBook(updated,false);
     await expect(updateBookTaskReasoning(book.id,updated.updatedAt,"brainstorm","low"))
       .rejects.toThrow(/Metti prima in pausa/);
+  });
+});
+describe("Modelli del libro: cambio di gruppo ed ereditarietà", () => {
+  it("imposta endpoint e modello su più attività con una sola scrittura e preserva le altre", async () => {
+    const book = newBook("Trama", "Romanzo", "", "");
+    book.modelRoutes = { research: { endpointId: "r", modelId: "web" } };
+    await saveBook(book, false);
+    await setBookModelRoutes(book.id, book.updatedAt, ["prose", "chapterJudge"], "llm", "muse");
+    expect((await getBook(book.id))?.modelRoutes).toEqual({
+      research: { endpointId: "r", modelId: "web" },
+      prose: { endpointId: "llm", modelId: "muse" }, chapterJudge: { endpointId: "llm", modelId: "muse" },
+    });
+    await expect(setBookModelRoutes(book.id, book.updatedAt, [], "llm", "m")).rejects.toThrow(/Attività non valide/);
+    await expect(setBookModelRoutes(book.id, book.updatedAt, ["inventata" as "prose"], "llm", "m")).rejects.toThrow(/Attività non valide/);
+  });
+  it("fa ereditare dalle Impostazioni: toglie route e thinking solo delle attività indicate e pulisce i campi vuoti", async () => {
+    const book = newBook("Trama", "Romanzo", "", "");
+    book.modelRoutes = { prose: { endpointId: "a", modelId: "x" }, research: { endpointId: "r", modelId: "web" } };
+    book.taskReasoningEfforts = { prose: "high", continuity: "low" };
+    await saveBook(book, false);
+    await inheritBookModelSettings(book.id, book.updatedAt, ["prose"]);
+    const first = (await getBook(book.id))!;
+    expect(first.modelRoutes).toEqual({ research: { endpointId: "r", modelId: "web" } });
+    expect(first.taskReasoningEfforts).toEqual({ continuity: "low" });
+    await inheritBookModelSettings(book.id, first.updatedAt, ["continuity", "research"]);
+    const second = (await getBook(book.id))!;
+    expect(second.modelRoutes).toBeUndefined();
+    expect(second.taskReasoningEfforts).toBeUndefined();
+  });
+  it("usa lo stesso fencing: lock occupato, libro in corso e revisione stale", async () => {
+    const book = newBook("Trama", "Romanzo", "", "");
+    await saveBook(book, false);
+    locksUnavailable.add("bookwriter:writer:" + book.id);
+    await expect(inheritBookModelSettings(book.id, book.updatedAt, ["prose"])).rejects.toThrow(/Un'altra scheda/);
+    locksUnavailable.clear();
+    await expect(setBookModelRoutes(book.id, "2000-01-01T00:00:00.000Z", ["prose"], "e", "m")).rejects.toBeInstanceOf(BookRevisionConflict);
+    const running = (await getBook(book.id))!;
+    running.status = "running"; await saveBook(running, false);
+    await expect(setBookModelRoutes(book.id, running.updatedAt, ["prose"], "e", "m")).rejects.toThrow(/Metti prima in pausa/);
   });
 });
 describe("Override modello: fencing manuale e CAS IndexedDB", () => {

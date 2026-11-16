@@ -120,6 +120,26 @@ describe("SSE Chat Completions e controllo reasoning",()=>{
     await expect(readChatCompletionStream(big,new AbortController().signal))
       .rejects.toThrow(/Stream AI|Il provider ha terminato/);
   });
+  it("un ragionamento lungo (molti byte di buste SSE, poco testo) non supera il limite della risposta",async()=>{
+    const envelope=(delta:string)=>'data: {"id":"chatcmpl-0123456789abcdef","object":"chat.completion.chunk","created":1763250000,"model":"muse-glimmer-30b","system_fingerprint":"fp_0123456789","choices":[{"index":0,"delta":{"reasoning_content":"'+delta+'"},"finish_reason":null}]}\n\n';
+    const chunks=Array.from({length:9000},()=>envelope(" ok"));
+    expect(chunks.join("").length).toBeGreaterThan(2_000_000);
+    const result=await readChatCompletionStream(sse([...chunks,
+      'data: {"choices":[{"index":0,"delta":{"content":"Risposta finale"}}]}\n\n','data: [DONE]\n\n']),
+      new AbortController().signal);
+    expect(result.choices[0]!.message.content).toBe("Risposta finale");
+  });
+  it("una connessione caduta a metà stream non è presentata come SSE non supportato",async()=>{
+    const encoder=new TextEncoder();
+    const broken=new Response(new ReadableStream<Uint8Array>({
+      start(controller){
+        controller.enqueue(encoder.encode('data: {"choices":[{"index":0,"delta":{"reasoning_content":"penso"}}]}\n\n'));
+        controller.error(new TypeError("network error"));
+      },
+    }),{headers:{"content-type":"text/event-stream"}});
+    await expect(readChatCompletionStream(broken,new AbortController().signal))
+      .rejects.toThrow(/Connessione con il provider interrotta/);
+  });
   it("valida effort e stream prima della rete, non assume compatibilità",async()=>{
     const {settings,book}=fixture(),fetcher=vi.fn();
     vi.stubGlobal("fetch",fetcher);

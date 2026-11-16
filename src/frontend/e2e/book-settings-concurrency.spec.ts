@@ -31,6 +31,8 @@ async function bookState(page: Page) {
 async function openSettings(page: Page) {
   await page.getByRole("button", { name: "Modelli e redazione" }).click();
   await expect(page.getByRole("heading", { name: /Modelli e redazione:/ })).toBeVisible();
+  const create = page.getByRole("button", { name: "Crea le impostazioni di questo libro" });
+  if (await create.isVisible()) await create.click();
 }
 
 test("due schede: override modello stale rifiutato, writer attivo protetto, retry dopo rilascio", async ({ page }) => {

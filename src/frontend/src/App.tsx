@@ -68,7 +68,7 @@ import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
 import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
 import { drainGitHubOutbox } from "./application/auto-sync";
-import { updateBookEditorialConcurrency, updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
+import { inheritBookModelSettings, setBookModelRoutes, updateBookEditorialConcurrency, updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
 import packageInfo from "../package.json";
@@ -672,6 +672,30 @@ export default function App() {
         "Elenco modelli non disponibile: inserisci manualmente il nome.");
     }
   }
+  async function updateBookRoutes(kinds: TaskKind[], endpointId: string, modelId: string) {
+    if (!current) return;
+    const { id, updatedAt } = current;
+    try {
+      await setBookModelRoutes(id, updatedAt, kinds, endpointId, modelId);
+      await refresh();
+      setNotice(`Modello aggiornato per ${kinds.length} attività di questo libro.`);
+    } catch (error) {
+      await refresh();
+      setNotice(error instanceof Error ? error.message : "Modelli del libro non aggiornati.");
+    }
+  }
+  async function inheritBookModels(kinds: TaskKind[]) {
+    if (!current) return;
+    const { id, updatedAt } = current;
+    try {
+      await inheritBookModelSettings(id, updatedAt, kinds);
+      await refresh();
+      setNotice(`${kinds.length} attività ora ereditano modello e thinking dalle Impostazioni globali.`);
+    } catch (error) {
+      await refresh();
+      setNotice(error instanceof Error ? error.message : "Eredità non applicata.");
+    }
+  }
   async function updateBookRoute(task: TaskKind, endpointId: string, modelId: string) {
     if (!current) return;
     // The UI may hold an older snapshot than IndexedDB after another tab
@@ -915,9 +939,11 @@ export default function App() {
               count: item.id === "ricerca" ? (current.webResearch?.enabled ? "attiva" : "spenta")
                 : item.id === "redazione" && current.editorialProfiles ? "personalizzata" : undefined }))}/>
           <div role="tabpanel" id={"panel-book-" + tab} aria-labelledby={"tab-book-" + tab} className="min-w-0">
-            {tab === "modelli" && <BookOverrideTable book={current} settings={settings} labels={LABELS} resets={bookModelResets}
+            {tab === "modelli" && <BookOverrideTable key={current.id} book={current} settings={settings} labels={LABELS} resets={bookModelResets}
               onRoute={(kind, endpointId, modelId) => void updateBookRoute(kind, endpointId, modelId)}
               onReasoning={(kind, value) => void updateBookReasoning(kind, value)}
+              onBulkRoute={(kinds, endpointId, modelId) => void updateBookRoutes(kinds, endpointId, modelId)}
+              onInherit={kinds => void inheritBookModels(kinds)}
               onEditorialMode={mode => void updateBookEditorial(mode)}
               onConcurrency={value => void updateBookConcurrency(value)} />}
             {tab === "redazione" && <EditorialProfilesPanel key={current.id} book={current} onRefresh={refresh}/>}

@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## 0.26.0 — 2026-11-16 — Modelli del libro ereditati o propri, cambio di gruppo e streaming con ragionamenti lunghi
+
+- **Modelli e redazione: ereditarietà esplicita.** Un libro senza scelte proprie mostra la tabella chiusa con il messaggio «Questo libro eredita modelli e thinking dalle Impostazioni globali» (e il modello predefinito) e il pulsante «Crea le impostazioni di questo libro». Con scelte proprie la tabella è aperta, ogni attività è marcata «del libro» o «eredita» e «Eredita tutto dalle Impostazioni» (con conferma) riporta il libro ai valori globali. Il testo del router globale spiega la differenza fra i due posti.
+- **Cambio di gruppo.** Le attività si selezionano con una casella (o tutte insieme); una barra applica lo stesso endpoint e modello alle selezionate con una sola scrittura, oppure le fa ereditare dalle Impostazioni (tolgono anche il thinking del libro). Stesso fencing di prima: autopilot fermo, lock di scrittura, controllo della revisione.
+- **Streaming: niente più stop falso sui ragionamenti lunghi.** Il limite di 2 MB valeva sui byte grezzi dello stream, che contengono la busta JSON di ogni delta (circa 300 byte anche per una parola): un modello che ragiona a lungo (migliaia di eventi) veniva interrotto con «Stream AI non valido» e il proxy vedeva una cancellazione dal client dopo un 200. Ora il limite sui byte grezzi è di sicurezza (256 MB), il testo della risposta resta limitato a 2 MB e il ragionamento si conta senza accumularlo. Un limite superato ha un messaggio proprio; una connessione caduta a metà stream non è più presentata come «SSE non supportato». Vale anche per il protocollo nativo di LM Studio.
+- Limiti: il thinking resta per riga (l'azione di gruppo cambia endpoint e modello); un modello in loop di ragionamento si ferma comunque per inattività o per il tetto di sicurezza; provato con fornitori simulati.
+
 ## 0.25.0 — 2026-11-16 — Limiti di token per modello e direttore a lotti
 
 - **Limiti di token per modello.** In Impostazioni → endpoint → «Limiti di token per modello (input e output)» si scrivono i token massimi che ogni modello accetta in input e può produrre in output (vuoto = nessun limite). Valgono per qualunque endpoint, sono validati al salvataggio e seguono l'autore nel profilo cloud e nello ZIP completo. Un prompt stimato sopra il limite di input non viene inviato (messaggio chiaro, nessun costo); la risposta è limitata ai token di output dichiarati.

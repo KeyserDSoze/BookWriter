@@ -27,6 +27,17 @@ const timeout = () => new ProviderResponseReadError(
 );
 /** Hard ceiling even if the provider keeps trickling bytes (e.g. an endless loop). */
 export const CHAT_STREAM_TOTAL_CAP_MS = 4 * 60 * 60 * 1000;
+/** Raw SSE bytes include the JSON envelope of every delta (~300 bytes for a few characters), so a long
+ * reasoning phase is far larger than its text. Memory is not at stake (events are consumed as they arrive);
+ * the answer itself stays limited by MAX_CHAT_COMPLETION_BYTES. */
+export const MAX_STREAM_TRANSPORT_BYTES = 256_000_000;
+export const MAX_STREAM_REASONING_CHARS = 16_000_000;
+const tooLarge = () => new ProviderResponseReadError(
+  "Lo stream AI ha superato il limite di sicurezza di dimensione (probabile ciclo di ragionamento). Nessun testo applicato: il provider potrebbe avere consumato token. Abbassa il thinking o cambia modello."
+);
+const connectionLost = () => new ProviderResponseReadError(
+  "Connessione con il provider interrotta durante lo streaming AI. Nessun testo applicato: il provider potrebbe avere consumato token. Riprova; se capita sempre controlla proxy, timeout e rete."
+);
 
 export function chatReasoningEffort(value: unknown): "low" | "medium" | "high" | "xhigh" | undefined {
   if (value === undefined) return undefined;
@@ -62,7 +73,7 @@ export async function readChatCompletionStream(
   if (!reader) throw invalid();
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let text = "";
-  let reasoning = "";
+  let reasoningChars = 0;
   let usage:StreamCompletion["usage"];
   let finishReason:string|undefined;
   let pending = "";
@@ -124,8 +135,8 @@ export async function readChatCompletionStream(
         const reason=d.reasoning_content??d.reasoning;
         if(reason!==undefined && reason!==null){
           if(typeof reason!=="string")throw invalid();
-          reasoning+=reason;
-          if(reasoning.length>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+          reasoningChars+=reason.length;
+          if(reasoningChars>MAX_STREAM_REASONING_CHARS)throw tooLarge();
           try{onDelta?.({kind:"reasoning",text:reason});}catch{/* observer only */ }
         }
       }
@@ -146,12 +157,15 @@ export async function readChatCompletionStream(
   };
   try {
     while(!done) {
-      const chunk=await Promise.race([reader.read(),cancelled]);
+      const chunk=await Promise.race([reader.read(),cancelled]).catch((error:unknown)=>{
+        if(error instanceof ProviderResponseReadError || (error instanceof DOMException && error.name==="AbortError"))throw error;
+        throw connectionLost();
+      });
       if(signal.aborted)throw new DOMException("Generazione interrotta.", "AbortError");
       if(chunk.done)break;
       armIdleTimer();
       bytes+=chunk.value.byteLength;
-      if(bytes>MAX_CHAT_COMPLETION_BYTES)throw invalid();
+      if(bytes>MAX_STREAM_TRANSPORT_BYTES)throw tooLarge();
       try{onTransport?.({bytes,events});}catch{/* observer only */}
       consume(decoder.decode(chunk.value,{stream:true}));
     }
@@ -162,7 +176,7 @@ export async function readChatCompletionStream(
     }
     if(!text.trim())throw new ProviderResponseReadError(finishReason==="length"
       ? "Il modello ha esaurito il limite di lunghezza o di contesto prima di scrivere la risposta (di solito per il reasoning). Nessun output applicato: aumenta il contesto in LM Studio o abbassa il thinking."
-      : reasoning
+      : reasoningChars>0
       ? "Il provider ha terminato dopo il reasoning ma senza testo finale: nessun output applicato."
       : "Il provider ha terminato senza generare una risposta testuale: nessun output applicato.");
     completed=true;

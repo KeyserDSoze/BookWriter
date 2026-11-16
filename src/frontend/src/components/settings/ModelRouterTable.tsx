@@ -141,7 +141,7 @@ export function ModelRouterTable({ settings, setSettings, labels, notify, onReco
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <div>
         <h2 className="text-lg font-semibold">Router dei modelli</h2>
-        <p className="muted text-xs">Una riga per attività. Lascia «Predefinito» per usare il modello predefinito; seleziona più righe per cambiare modello o thinking in un colpo solo.</p>
+        <p className="muted text-xs">Una riga per attività. Lascia «Predefinito» per usare il modello predefinito; seleziona più righe per cambiare modello o thinking in un colpo solo. Valgono per tutti i libri; un libro può averne di propri in Modelli e redazione, altrimenti li eredita da qui.</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={onRecommendedThinking}>Applica thinking consigliato</Button>
