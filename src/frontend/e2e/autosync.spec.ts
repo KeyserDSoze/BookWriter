@@ -100,7 +100,7 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   await expect(page.getByText(/È un blocco di scrittura, non una fase del libro/)).toBeVisible();
   await page.getByRole("button", { name: "Sincronizza su GitHub" }).click();
   await expect.poll(() => commits).toBe(1);
-  const toggle = page.getByRole("checkbox", { name: /Sincronizzazione automatica ai checkpoint/ });
+  const toggle = page.getByRole("checkbox", { name: /Sincronizzazione automatica dopo ogni compito/ });
   // Enabling performs async permission checks; do not require the controlled input
   // to be checked synchronously before the state commit has completed.
   await toggle.click();
@@ -110,7 +110,7 @@ test("autosync opt-in dopo commit manuale salva e recupera la coda su desktop/mo
   expect(remoteFiles.get(".bookwriter/sync.json")).toContain("operationId");
   await page.reload();
   await nav.getByRole("button", { name: "Archivio" }).click();
-  await expect(page.getByRole("checkbox", { name: /Sincronizzazione automatica ai checkpoint/ })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /Sincronizzazione automatica dopo ogni compito/ })).toBeChecked();
 
   // A second device already owns the lease: the runner must refuse to spend AI credits.
   const snapshot = JSON.parse(remoteFiles.get(".bookwriter/project.json")!) as { id: string };

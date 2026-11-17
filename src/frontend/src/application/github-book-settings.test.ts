@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newBook } from "../domain/types";
+import { createEditorialCycle } from "../domain/editorial-board";
 import { BookRevisionConflict, getBook, getDb, saveBook } from "../infrastructure/db";
 import { getOutbox } from "../infrastructure/outbox";
 import { connectBookRemote, setBookAutoSync } from "./github-book-settings";
@@ -102,20 +103,22 @@ describe("Impostazioni GitHub manuali: writer lock + outbox lock + CAS", () => {
     expect(await getOutbox(source.id)).toEqual(queued);
   });
 
-  it("non abilita autosync dopo un nuovo ciclo di review o con una scena fusa", async () => {
+  it("abilita autosync anche a metà lavoro, ma non con una scena fusa in attesa di conferma", async () => {
     const source = connected();
     source.editorialReviewSceneIds = ["s1"];
     await saveBook(source, false);
     await expect(setBookAutoSync(source.id, source.updatedAt, true, false))
       .rejects.toThrow(/Conferma prima tutte le scene fuse/);
-    const updated = (await getBook(source.id))!;
-    updated.editorialReviewSceneIds = [];
-    updated.chapters[0]!.scenes[0]!.status = "draft";
-    await saveBook(updated, false);
-    await expect(setBookAutoSync(source.id, updated.updatedAt, true, false))
-      .rejects.toThrow(/Completa e congela/);
     expect(await getOutbox(source.id)).toBeUndefined();
     expect((await getBook(source.id))?.remote?.autoSync).toBe(false);
+    const updated = (await getBook(source.id))!;
+    updated.editorialReviewSceneIds = [];
+    updated.chapters[0]!.scenes[0]!.status = "draft"; // chapter not frozen, still being written
+    updated.editorialCycle = createEditorialCycle(updated.chapters[0]!.id);
+    await saveBook(updated, false);
+    await setBookAutoSync(source.id, updated.updatedAt, true, false);
+    expect((await getBook(source.id))?.remote?.autoSync).toBe(true);
+    expect((await getOutbox(source.id))?.state).toBe("pending"); // the whole book is queued at once
   });
 
   it("rifiuta libro running, API assente e lock writer o outbox occupati senza mutazioni", async () => {

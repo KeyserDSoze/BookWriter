@@ -5,10 +5,10 @@
 ## Prima attivazione
 
 1. Collega una repository GitHub privata per libro da **Archivio**. Salva un PAT fine-grained con permesso `Contents: read/write` solo sulle repository necessarie.
-2. Con autopilot in pausa, premi **Sincronizza su GitHub**. Deve apparire un commit SHA valido.
-3. Attiva **Sincronizzazione automatica ai checkpoint**. Il consenso è per singolo libro, non globale.
-4. Dopo un outline, una review di scena, un consolidamento o una revisione il sistema scrive in IndexedDB e inserisce un'operazione nella coda `outbox`. Il browser prova a inviarla mentre la pagina è aperta.
-5. Controlla lo stato in Dashboard o Archivio: **in coda**, **invio in corso**, **sincronizzato**, **bloccato**.
+2. Con autopilot in pausa, premi **Sincronizza su GitHub** (anche a metà lavoro: non serve congelare i capitoli). Deve apparire un commit SHA valido e la dimensione dell'invio.
+3. Attiva **Sincronizzazione automatica dopo ogni compito**. Il consenso è per singolo libro, non globale.
+4. Dopo ogni compito riuscito o tua modifica il sistema scrive in IndexedDB e inserisce un'operazione nella coda `outbox`. Il browser la invia mentre la pagina è aperta, a distanza di almeno due minuti dal salvataggio precedente e subito quando l'autopilot si ferma. «Salva ora su GitHub» la invia a richiesta.
+5. Controlla lo stato nella barra di stato, in Dashboard o in Archivio: **in coda**, **invio in corso**, **salvato**, **bloccato**.
 
 ## Scrittura simultanea e recupero lease
 

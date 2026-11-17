@@ -1,4 +1,5 @@
 import type { BookProject, SyncOutboxItem } from "../domain/types";
+import { githubPublicationBlocker } from "../domain/github-publication";
 import { getDb } from "./db";
 
 // All outbox writes happen within an IndexedDB readwrite transaction owned by the caller.
@@ -6,9 +7,7 @@ export async function enqueueCheckpoint(
   book: BookProject,
   store: { get: (key: string) => Promise<unknown>; put: (value: SyncOutboxItem, key: string) => Promise<unknown> },
 ): Promise<void> {
-  if (!book.remote?.autoSync || book.editorialCycle || book.phase === "revision" ||
-      book.editorialReviewSceneIds?.length || book.chapters.some(ch =>
-        !ch.frozenAt && ch.scenes.some(scene => scene.status !== "planned"))) return;
+  if (!book.remote?.autoSync || githubPublicationBlocker(book)) return;
   const previous = await store.get(book.id) as SyncOutboxItem | undefined;
   const next: SyncOutboxItem = previous ? {
     ...previous,
@@ -35,14 +34,15 @@ export async function listOutbox(): Promise<SyncOutboxItem[]> {
   return await (await getDb()).getAll("outbox") as SyncOutboxItem[];
 }
 
-export async function markAttempt(item: SyncOutboxItem): Promise<boolean> {
+/** `force`: the author asked to save now, so a back-off delay is ignored (a blocked item never is). */
+export async function markAttempt(item: SyncOutboxItem, force = false): Promise<boolean> {
   const db = await getDb();
   const tx = db.transaction("outbox", "readwrite");
   const store = tx.objectStore("outbox");
   const actual = await store.get(item.bookId) as SyncOutboxItem | undefined;
   if (!actual || actual.operationId !== item.operationId ||
       actual.state === "blocked" ||
-      (actual.retryAfter && Date.parse(actual.retryAfter) > Date.now())) {
+      (!force && actual.retryAfter && Date.parse(actual.retryAfter) > Date.now())) {
     await tx.done;
     return false;
   }
@@ -75,6 +75,22 @@ export async function acknowledgeOutbox(
   await tx.done;
 }
 
+/** The attempt did not reach GitHub through no fault of the remote (the book changed under it):
+ * give the attempt back, without counting it as a failure, and try again shortly. */
+export async function deferAttempt(bookId: string, operationId: string, delayMs: number): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction("outbox", "readwrite");
+  const store = tx.objectStore("outbox");
+  const entry = await store.get(bookId) as SyncOutboxItem | undefined;
+  if (entry?.operationId === operationId && entry.state === "syncing") {
+    entry.state = "pending";
+    entry.attempts = Math.max(0, entry.attempts - 1);
+    entry.retryAfter = new Date(Date.now() + delayMs).toISOString();
+    await store.put(entry, bookId);
+  }
+  await tx.done;
+}
+
 export async function recordSyncFailure(
   bookId: string, operationId: string, error: string, blocked: boolean,
 ): Promise<void> {
@@ -92,6 +108,25 @@ export async function recordSyncFailure(
     await store.put(entry, bookId);
   }
   await tx.done;
+}
+
+/** Queue a save of the current book if there is something GitHub does not have yet (or force a fresh
+ * one). Same transaction as the read, so it cannot race a task that is being committed. */
+export type EnqueueResult = "queued" | "already_saved" | "not_linked" | "autosync_off" | "first_push_needed" | "blocked";
+export async function enqueueIfUnsaved(bookId: string): Promise<EnqueueResult> {
+  const db = await getDb();
+  const tx = db.transaction(["books", "outbox"], "readwrite");
+  const book = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+  const outbox = tx.objectStore("outbox");
+  let result: EnqueueResult;
+  if (!book?.remote) result = "not_linked";
+  else if (!book.remote.autoSync) result = "autosync_off";
+  else if (!book.remote.lastSyncedCommit) result = "first_push_needed";
+  else if (githubPublicationBlocker(book)) result = "blocked";
+  else if (book.remote.lastSyncedLocalUpdatedAt === book.updatedAt && !await outbox.get(bookId)) result = "already_saved";
+  else { await enqueueCheckpoint(book, outbox); result = "queued"; }
+  await tx.done;
+  return result;
 }
 
 export async function retryBlockedSync(bookId: string): Promise<void> {

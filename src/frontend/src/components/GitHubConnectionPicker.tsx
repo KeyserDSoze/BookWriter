@@ -74,7 +74,7 @@ export function GitHubConnectionPicker({ book, token, request, onRefresh, onSele
       setDestination({ ...result, kind: "available" });
       onConnected();
       setMessage(`Libro collegato a ${result.remote.owner}/${result.remote.repository}. Il manoscritto non è ancora stato pubblicato.` +
-        (githubPublicationBlocker(book) ? " Il lavoro locale è conservato; completa la verifica editoriale prima della pubblicazione." : " Quando vuoi, usa Sincronizza."));
+        (githubPublicationBlocker(book) ? " Il lavoro locale è conservato; conferma prima nel Lettore le scene fuse." : " Quando vuoi, usa Sincronizza: salva il libro così com'è, anche a metà lavoro."));
     }
   }
 

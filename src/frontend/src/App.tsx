@@ -3,7 +3,7 @@ import {
   BookOpen, BrainCircuit, Globe2,
   FileText, ListChecks, MessageSquareText, Moon, Pause, Play, Plus,
   Settings2, StopCircle, Sun, LayoutDashboard, Users, Download, Upload, ShieldCheck, FileArchive, Wallet, Library, ClipboardCheck,
-  SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
+  SlidersHorizontal, PanelLeftClose, PanelLeftOpen, CloudUpload,
 } from "lucide-react";
 import { Tabs } from "./components/ui/primitives";
 import { ReviewsPage } from "./components/review/ReviewsPage";
@@ -69,7 +69,8 @@ import { ModelCapabilitiesPanel } from "./components/ModelCapabilitiesPanel";
 import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
 import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
-import { drainGitHubOutbox } from "./application/auto-sync";
+import { drainGitHubOutbox, saveToGitHubNow } from "./application/auto-sync";
+import { useGitHubSave } from "./application/use-github-save";
 import { inheritBookModelSettings, setBookModelRoutes, updateBookEditorialConcurrency, updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
 import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
@@ -390,6 +391,7 @@ export default function App() {
   }
   const runningActivity = current?.status === "running" ? activities.find(x => x.status === "running") : undefined;
   const runningHere = !!current && runnerBookId === current.id;
+  const githubSave = useGitHubSave(current, refresh);
   useWakeLock(runningHere && current?.status === "running");
   const pwa = usePwaInstall();
   const nextStep = useMemo(() => current ? describeNextAutopilotStep(current) : undefined, [current]);
@@ -485,6 +487,8 @@ export default function App() {
         setRunnerBookId(null);
         setStopAfterRequested(false);
         if (runPromise.current === promise) runPromise.current = null;
+        // The run is over (paused, finished or failed): send the book as it is now, without waiting.
+        void saveToGitHubNow(bookId).then(refresh).catch(() => undefined);
         if (gracefulStop && (await getBook(bookId).catch(() => undefined))?.status === "paused")
           setNotice("Autopilot in pausa: il task in corso è stato completato e salvato. Puoi intervenire o riprendere.");
       });
@@ -918,6 +922,7 @@ export default function App() {
           <p className="muted truncate text-xs">{runningActivity ? `Ora: ${runningActivity.title}` : `Prossimo: ${nextStep?.headline ?? phaseText[current.phase]}`}</p>
           <p className="muted hidden text-xs sm:block">{!progressInfo?.scenes ? "Piano non ancora creato" :
             `${progressInfo.canonScenes}/${progressInfo.scenes} scene canoniche (${Math.round(progressInfo.canonScenes / progressInfo.scenes * 100)}%) · ${progressInfo.frozenChapters}/${progressInfo.chapters} capitoli congelati`}</p>
+          {githubSave.active && <p className="muted text-xs" data-testid="github-save-line">{githubSave.label}{githubSave.message ? " · " + githubSave.message : ""}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {current.status === "running" ? runningHere ? <>
@@ -927,6 +932,8 @@ export default function App() {
                 <StopCircle size={17}/> {stopAfterRequested ? "Si ferma a fine task" : "Ferma a fine task"}</Button>
             </> : <span className="muted self-center text-xs">In esecuzione in un'altra scheda</span>
             : current.status !== "completed" || current.revision ? <Button disabled={pendingFused > 0} onClick={execute}><Play size={17} /> {current.status === "paused" || current.status === "error" ? "Riprendi" : "Autopilot"}</Button> : null}
+          {githubSave.active && githubSave.unsaved && <Button variant="outline" disabled={githubSave.saving || !!githubSave.blocker} onClick={() => void githubSave.saveNow()}
+            title="Salva il libro su GitHub adesso, anche mentre l'autopilot lavora"><CloudUpload size={17}/> {githubSave.saving ? "Salvataggio…" : "Salva su GitHub"}</Button>}
           <Button variant="outline" onClick={openIntervention}><MessageSquareText size={17}/> Intervieni</Button>
           {(pendingReview > 0 || reviewRunning || page === "reviews") && <Button variant={reviewRunning ? "secondary" : "outline"} onClick={() => setPage("reviews")}
             aria-label={reviewRunning ? "Revisioni: review in corso" : `Revisioni: ${pendingReview} da rivedere`}>
@@ -1048,7 +1055,7 @@ export default function App() {
             </div>
           </Section>
           <Section title="Sincronizzazione e checkpoint">
-            <SyncStatusSummary book={current} openArchive={() => setPage("export")}/>
+            <SyncStatusSummary book={current} openArchive={() => setPage("export")} onSaved={refresh}/>
           </Section>
         </div>
         </div>

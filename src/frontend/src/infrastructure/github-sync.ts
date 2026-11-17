@@ -14,6 +14,8 @@ import { sanitizeAuthorInterventions } from "../domain/author-interventions";
 import { sanitizeBookStart } from "../domain/book-start";
 import { bookFormatVersion, migrateBook } from "../domain/book-format";
 import { aiTracePolicy } from "../domain/ai-trace-policy";
+import { githubPublicationBlocker } from "../domain/github-publication";
+import { LocalBookChanged } from "./sync-errors";
 import {
   CONVERSATIONS_BUDGET_BYTES, CONVERSATIONS_MAX_FILES, isConversationPath, projectConversations,
 } from "../domain/conversation-export";
@@ -499,7 +501,10 @@ export interface PushResult {
   sourceRevision: string;
   operationId: string;
   recovered?: boolean;
+  /** Size of what was sent (JSON of the tree entries) against the 12 MiB limit of one operation. */
+  bytes?: number;
 }
+export const PUSH_LIMIT_BYTES = MAX_BYTES;
 
 /**
  * After the GitHub SHA is confirmed, persist its ACK and the durable queue
@@ -692,11 +697,8 @@ export async function pushGitHubBook(
   const token = await tokenFromVault();
   const current = await getBook(bookId);
   if (!current?.remote) throw new Error("Collega prima una repository a questo libro.");
-  if (current.editorialReviewSceneIds?.length)
+  if (githubPublicationBlocker(current))
     throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
-  if (current.editorialCycle || current.phase === "revision" ||
-      current.chapters.some(ch => !ch.frozenAt && ch.scenes.some(s => s.status !== "planned")))
-    throw new Error("Sincronizzazione bloccata: un capitolo non è ancora congelato dalla redazione.");
   if (current.status === "running" && !options.automatic)
     throw new Error("Metti in pausa l'autopilot prima della sincronizzazione GitHub.");
   if (options.automatic && !current.remote.autoSync)
@@ -808,9 +810,9 @@ export async function pushGitHubBook(
   if (await headSha(token, remote) !== head)
     throw new RemoteConflict("GitHub è cambiato durante la preparazione; ripeti la verifica.");
   const verifiedLocal = await getBook(bookId);
-  if (!verifiedLocal || verifiedLocal.updatedAt !== current.updatedAt ||
-      verifiedLocal.editorialReviewSceneIds?.length)
-    throw new RemoteConflict("Il libro locale è cambiato o attende conferma editoriale: push annullato.");
+  if (!verifiedLocal || verifiedLocal.updatedAt !== current.updatedAt) throw new LocalBookChanged();
+  if (githubPublicationBlocker(verifiedLocal))
+    throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
   const tree = await request<{ sha?: string }>(
     token, apiPath(remote, "/git/trees"),
     { method: "POST", body: { base_tree: baseTree, tree: treeEntries } },
@@ -858,7 +860,7 @@ export async function pushGitHubBook(
       operationId, current.remote.lastSyncedCommit,
     );
     return {
-      commit: commit.sha, paths: treeEntries.length,
+      commit: commit.sha, paths: treeEntries.length, bytes: size,
       repository: remote.owner + "/" + remote.repository,
       sourceRevision: current.updatedAt, operationId, recovered: true,
     };
@@ -875,7 +877,7 @@ export async function pushGitHubBook(
     operationId, current.remote.lastSyncedCommit,
   );
   return {
-    commit: commit.sha, paths: treeEntries.length,
+    commit: commit.sha, paths: treeEntries.length, bytes: size,
     repository: remote.owner + "/" + remote.repository,
     sourceRevision: current.updatedAt, operationId,
   };

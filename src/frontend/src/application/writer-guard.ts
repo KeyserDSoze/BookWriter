@@ -1,6 +1,6 @@
 import { getBook } from "../infrastructure/db";
 import {
-  acquireWriterLease, assertWriterLease, LEASE_RENEW_MS,
+  acquireWriterLease, assertWriterLease, LEASE_RENEW_MS, LeaseRenewalMissed,
   releaseWriterLease, renewWriterLease, RemoteWriterLost,
   type WriterLeaseHandle,
 } from "../infrastructure/github-lease";
@@ -57,6 +57,9 @@ export async function withWriterGuard<T>(
       renewing = (async () => {
         try { lease = await renewWriterLease(lease!); }
         catch (error) {
+          // Accepted by GitHub but not visible yet while the lease is still ours and valid: keep
+          // working with the old expiry and try again at the next beat. It never counts as renewed.
+          if (error instanceof LeaseRenewalMissed) { lease = error.current; return; }
           problem = error instanceof Error ? error : new RemoteWriterLost();
           controller.abort(); // Abort the in-flight AI request if possible.
         }

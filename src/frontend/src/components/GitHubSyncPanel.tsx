@@ -10,13 +10,13 @@ import { pushManualGitHubBook } from "../application/manual-github-push";
 import { reconcileSuspendedManualPush } from "../application/manual-push-reconciliation";
 import { getManualPushIntent, type ManualPushIntent } from "../infrastructure/manual-push-intent";
 import { getOutbox, retryBlockedSync } from "../infrastructure/outbox";
-import { drainGitHubOutbox } from "../application/auto-sync";
+import { drainGitHubOutbox, saveToGitHubNow } from "../application/auto-sync";
 import {
   inspectWriterLease, isLeaseFromThisBrowser, isLeaseRecoverable, recoverExpiredWriterLease,
   type WriterLeaseStatus,
 } from "../infrastructure/github-lease";
 import {
-  importGitHubBook, inspectRepository, validateRemote,
+  importGitHubBook, inspectRepository, PUSH_LIMIT_BYTES, validateRemote,
   type RepoInfo,
 } from "../infrastructure/github-sync";
 
@@ -242,14 +242,27 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       await onRefresh();
       refreshLeaseStatus();
       return "Libro collegato a " + repo.fullName + " (" + target.branch + "). " +
-        (githubPublicationBlocker(book) ? "Il lavoro locale è conservato; completa la verifica editoriale prima della pubblicazione." : "Salva un checkpoint con Sincronizza.");
+        (githubPublicationBlocker(book) ? "Il lavoro locale è conservato; conferma prima nel Lettore le scene fuse." :
+          "Per salvare il libro, anche a metà lavoro, usa «Sincronizza su GitHub».");
     });
   }
 
   async function push(): Promise<void> {
     return doWork(async () => {
       if (!book) throw new Error("Nessun libro selezionato.");
-      if (book.remote?.autoSync) throw new Error("Con autosync attivo, usa il controllo della coda invece della sincronizzazione manuale.");
+      if (book.remote?.autoSync) {
+        // Automatic saving is on: «save now» goes through the same queue (also while the autopilot works).
+        const outcome = await saveToGitHubNow(book.id);
+        setOutbox(await getOutbox(book.id));
+        await onRefresh();
+        if (outcome === "already_saved") return "GitHub ha già l'ultima versione del libro.";
+        if (outcome === "blocked") throw new Error(githubPublicationBlocker(book) ?? "Salvataggio bloccato.");
+        if (outcome !== "attempted") throw new Error("Il salvataggio automatico non è pronto: esegui prima «Sincronizza su GitHub».");
+        const left = await getOutbox(book.id);
+        return left?.lastError ? "Il salvataggio non è riuscito: " + left.lastError :
+          left ? "Salvataggio in corso: il libro è cambiato nel frattempo, la versione più recente parte tra pochi secondi." :
+          "Libro salvato su GitHub.";
+      }
       let consent = publicConsent;
       if (book.remote && !consent) {
         const inspected = await inspectRepository(book.remote);
@@ -261,9 +274,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       // together: never acknowledge a potentially newer queue item here.
       setOutbox(await getOutbox(book.id));
       await onRefresh();
+      const size = result.bytes ? " · " + (result.bytes / 1024 / 1024).toFixed(1) + " MiB su " + PUSH_LIMIT_BYTES / 1024 / 1024 : "";
       return (result.recovered ? "Commit GitHub recuperato e confermato: " : "Sincronizzato ") +
         result.repository + " · commit " + result.commit.slice(0, 12) +
-        " · " + result.paths + " file. Nessun force push.";
+        " · " + result.paths + " file" + size + ". Nessun force push. Per salvare da solo dopo ogni compito, " +
+        "attiva «Sincronizzazione automatica dopo ogni compito» qui sotto.";
     });
   }
 
@@ -309,13 +324,10 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       if (!book?.remote) throw new Error("Collega prima il libro a GitHub.");
       // Keep the revision actually displayed at the moment of the click.
       const { id, updatedAt } = book;
-      if (enabled && book.editorialReviewSceneIds?.length)
-        throw new Error("Conferma prima tutte le scene fuse nel Lettore, poi riattiva autosync.");
-      if (enabled && (book.editorialCycle || book.chapters.some(ch =>
-        !ch.frozenAt && ch.scenes.some(s => s.status !== "planned"))))
-        throw new Error("Completa e congela tutti i capitoli in review prima di riattivare autosync.");
+      if (enabled && githubPublicationBlocker(book))
+        throw new Error("Conferma prima tutte le scene fuse nel Lettore, poi attiva il salvataggio automatico.");
       if (enabled && !book.remote.lastSyncedCommit)
-        throw new Error("Esegui prima una sincronizzazione manuale del libro.");
+        throw new Error("Esegui prima il primo salvataggio su GitHub con «Salva su GitHub».");
       if (enabled && !navigator.locks?.request)
         throw new Error("Questo browser non supporta Web Locks: autosync disabilitato per evitare scritture concorrenti tra schede.");
       let allowPublicSync = book.remote.allowPublicSync ?? false;
@@ -336,9 +348,9 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       }
       await onRefresh();
       setOutbox(await getOutbox(id));
-      if (enabled) void drainGitHubOutbox();
-      return enabled ? "Autosync attivato: checkpoint principali in coda e tentativi mentre la pagina è aperta." :
-        "Autosync disattivato. I dati locali e le richieste pendenti restano conservati.";
+      if (enabled) void drainGitHubOutbox({ force: true });
+      return enabled ? "Salvataggio automatico attivato: il libro, anche a metà lavoro, viene salvato su GitHub dopo i compiti e quando l'autopilot si ferma, finché la pagina è aperta." :
+        "Salvataggio automatico disattivato. I dati locali e le richieste pendenti restano conservati.";
     });
   }
   async function retryNow(): Promise<void> {
@@ -346,7 +358,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       if (!book) throw new Error("Libro non selezionato.");
       await retryBlockedSync(book.id);
       setOutbox(await getOutbox(book.id));
-      void drainGitHubOutbox();
+      void drainGitHubOutbox({ force: true });
       return "Nuovo tentativo richiesto. Se il branch è cambiato, occorre prima risolvere il conflitto.";
     });
   }
@@ -425,7 +437,8 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <p><b>Repository:</b> {connected.owner}/{connected.repository} · {connected.branch}</p>
         <p className="muted">Ultimo commit: {connected.lastSyncedCommit?.slice(0, 12) ?? "Mai sincronizzato"}</p>
-        <p className="muted">Stato: {dirty ? "Modifiche locali da sincronizzare" : "Checkpoint locale sincronizzato"}</p>
+        <p className="muted">Stato: {dirty ? "Modifiche locali da sincronizzare" : "GitHub ha l'ultima versione del libro"}
+          {connected.lastSyncAt && <> · ultimo salvataggio {new Date(connected.lastSyncAt).toLocaleString("it-IT")}</>}</p>
       </div>}
       {manualIntent && <div className="rounded-lg border border-amber-400/50 p-3 text-sm">
         <p className="font-semibold">Tentativo manuale GitHub sospeso</p>
@@ -461,11 +474,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <label className="flex items-center gap-3">
           <input type="checkbox" className="size-5 accent-emerald-600"
-            checked={!!connected.autoSync} disabled={busy || (!connected.autoSync && (!!book?.editorialReviewSceneIds?.length || !!book?.editorialCycle))}
+            checked={!!connected.autoSync} disabled={busy || (!connected.autoSync && !!book?.editorialReviewSceneIds?.length)}
             onChange={e => void toggleAutoSync(e.target.checked)}/>
-          <span className="font-semibold">Sincronizzazione automatica ai checkpoint</span>
+          <span className="font-semibold">Sincronizzazione automatica dopo ogni compito</span>
         </label>
-        <p className="muted mt-2 text-xs">Opt-in: dopo il primo commit manuale, scrive automaticamente i checkpoint confermati. La scheda deve restare aperta. Un lease GitHub riduce le sessioni AI concorrenti, ma non sostituisce un coordinatore transazionale perfetto.</p>
+        <p className="muted mt-2 text-xs">Dopo il primo salvataggio, il libro viene salvato su GitHub così com'è (anche a metà lavoro: capitoli non ancora congelati, revisioni, mondo, registro dei compiti) dopo i compiti dell'autopilot, a distanza di almeno due minuti l'uno dall'altro, e subito quando l'autopilot si ferma o finisce. Così su un altro PC lo riprendi uguale a quello che hai qui. La scheda deve restare aperta. Un lease GitHub riduce le sessioni AI concorrenti, ma non sostituisce un coordinatore transazionale perfetto.</p>
         {outbox && <div role="status" className="mt-2 space-y-1 text-xs">
           <p><b>Coda:</b> {outbox.state === "blocked" ? "Bloccata" : outbox.state === "syncing" ? "Invio GitHub in corso" : "In attesa di GitHub"}</p>
           <p>Operazioni accumulate: {outbox.revision} · tentativi: {outbox.attempts}</p>
@@ -477,13 +490,11 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
         {!outbox && <p className="muted mt-2 text-xs">{dirty ? "Modifiche locali: nessuna operazione remota in esecuzione" : "Nessuna modifica in attesa"}</p>}
       </div>}
       {!!book?.editorialReviewSceneIds?.length && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">
-        {book.editorialReviewSceneIds.length} scene fuse attendono conferma nel Lettore: push e riattivazione autosync bloccati.
+        {book.editorialReviewSceneIds.length} scene fuse attendono conferma nel Lettore: il salvataggio su GitHub resta fermo finché non le confermi.
       </p>}
-      {connected && publicationBlocker && !book?.editorialReviewSceneIds?.length &&
-        <p role="status" className="text-sm text-amber-700 dark:text-amber-300">{publicationBlocker}</p>}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!settings.githubToken || !connected || !book || busy || book.status === "running" || !!connected.autoSync || !!publicationBlocker}
-          onClick={() => void push()}><Cloud size={17}/> Sincronizza su GitHub</Button>
+        <Button disabled={!settings.githubToken || !connected || !book || busy || (book.status === "running" && !connected.autoSync) || !!publicationBlocker}
+          onClick={() => void push()}><Cloud size={17}/> {connected?.autoSync ? "Salva ora su GitHub" : "Sincronizza su GitHub"}</Button>
       </div>
       {message && <p role="status" className="rounded-lg border border-amber-500/40 p-3 text-sm">{message}</p>}
       <p className="muted text-xs">

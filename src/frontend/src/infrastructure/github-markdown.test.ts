@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { syntheticNarrarium } from "../domain/__fixtures__/narrarium";
 import { knowledgeBook } from "../domain/__fixtures__/knowledge";
+import { createEditorialCycle } from "../domain/editorial-board";
 import { newBook, DEFAULT_SETTINGS } from "../domain/types";
 import { projectBook, projectLegacyBook } from "../domain/narrarium";
 import { gitBlobSha, markdownIdentity } from "./github-markdown";
@@ -88,8 +89,44 @@ describe("GitHub Markdown portabile, senza strumenti esterni", () => {
     expect(await getBook(local.id)).toEqual(before);
     expect((await listBooks()).length).toBe(2);
     await expect(importGitHubBook(remote)).rejects.toThrow(/già presente/);
-    await expect(pushGitHubBook(imported.id)).rejects.toThrow(/congelato/);
-    expect(api.calls.every(c => c.startsWith("GET "))).toBe(true);
+    expect(api.calls.every(c => c.startsWith("GET "))).toBe(true); // reading never writes
+  });
+
+  it("un libro a metà lavoro si salva e si riapre identico su un altro PC (capitolo non congelato, ciclo editoriale, mondo, compiti)", async () => {
+    const book = knowledgeBook();
+    book.title = "Le sparizioni"; book.remote = { ...remote, autoSync: true };
+    book.phase = "chapterReview"; book.status = "running"; // saved from a PC whose autopilot is working
+    const chapter = book.chapters[1]!;
+    chapter.frozenAt = undefined; chapter.summary = undefined; chapter.bookSummaryAtFreeze = undefined;
+    chapter.scenes[1] = { ...chapter.scenes[1]!, status: "draft", summary: undefined };
+    chapter.scenes.push({ id: "scene:002:003", number: 3, title: "Il tram", objective: "Seguire Markus", text: "", status: "planned" });
+    book.editorialCycle = createEditorialCycle(chapter.id);
+    book.memory.currentState = "Elena sospetta del Consiglio, ma tace.";
+    await saveBook(book, false);
+    const task = { id: crypto.randomUUID(), bookId: book.id, runId: crypto.randomUUID(), phase: "prose" as const,
+      title: "Scrittura della scena", reason: "Test", nextStep: "Rileggere", status: "succeeded" as const,
+      createdAt: "2026-11-17T09:00:00.000Z", output: "Elena capisce che la firma era del Consiglio cittadino." };
+    await saveActivity(task);
+    const api = await repository({});
+    // The save of the queue worker, while the autopilot is still running.
+    const result = await pushGitHubBook(book.id, false, { automatic: true });
+    expect(result.bytes).toBeGreaterThan(0);
+    expect(api.files()["chapters/002-l-informatore/chapter.md"]).toContain('canon: "draft"');
+    expect(api.files()["chapters/002-l-informatore/003-il-tram.md"]).toContain('canon: "planned"');
+
+    // The other PC: nothing of this book is there yet.
+    const db = await getDb();
+    await Promise.all(["books", "activities", "outbox"].map(store => db.clear(store)));
+    const opened = await importGitHubBook(remote);
+    expect(opened.id).toBe(book.id);
+    expect(opened.status).toBe("paused"); // it was running elsewhere: never silently running here
+    expect(opened.chapters.map(c => c.frozenAt !== undefined)).toEqual([true, false]);
+    expect(opened.chapters[1]!.scenes.map(s => [s.id, s.status, s.text])).toEqual(chapter.scenes.map(s => [s.id, s.status, s.text]));
+    expect(opened.editorialCycle).toEqual(book.editorialCycle);
+    expect(opened.memory).toEqual(book.memory);
+    expect(opened.knowledge).toEqual(book.knowledge);
+    expect(opened.phase).toBe("chapterReview");
+    expect((await db.getAll("activities")).map(a => a.id)).toEqual([task.id]);
   });
 
   it("l'identità non dipende dal titolo, ma distingue repository e ramo", async () => {

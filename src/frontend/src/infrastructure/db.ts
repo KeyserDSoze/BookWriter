@@ -245,10 +245,9 @@ export async function saveBookAndActivity(
       }
     }
   }
-  // Keep a durable sync request in the same transaction as the narrative result.
-  // Do not create a GitHub commit for every intermediate AI planning operation.
-  if (activity.status === "succeeded" &&
-      ["outline", "chapterReview"].includes(activity.phase) && !book.editorialCycle) {
+  // Keep a durable sync request in the same transaction as the narrative result: every task that
+  // succeeded asks for a GitHub save (one queue item per book, the worker spaces the pushes out).
+  if (activity.status === "succeeded") {
     await enqueueCheckpoint(book, tx.objectStore("outbox"));
   }
   await tx.done;

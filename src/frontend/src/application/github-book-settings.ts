@@ -1,6 +1,7 @@
 import type { BookProject, GitHubRemote } from "../domain/types";
 import { BookRevisionConflict, getBook, saveBook } from "../infrastructure/db";
 import { validateRemote } from "../infrastructure/github-sync";
+import { githubPublicationBlocker } from "../domain/github-publication";
 
 /**
  * Manual GitHub settings must not replace a book currently being written by AI,
@@ -60,11 +61,8 @@ export async function setBookAutoSync(
   await editGitHubSettings(bookId, expectedUpdatedAt, book => {
     if (!book.remote) throw new Error("Collega prima il libro a GitHub.");
     if (enabled) {
-      if (book.editorialReviewSceneIds?.length)
-        throw new Error("Conferma prima tutte le scene fuse nel Lettore, poi riattiva autosync.");
-      if (book.editorialCycle || book.chapters.some(ch =>
-          !ch.frozenAt && ch.scenes.some(s => s.status !== "planned")))
-        throw new Error("Completa e congela tutti i capitoli in review prima di riattivare autosync.");
+      if (githubPublicationBlocker(book))
+        throw new Error("Conferma prima tutte le scene fuse nel Lettore, poi attiva il salvataggio automatico.");
       if (!book.remote.lastSyncedCommit)
         throw new Error("Esegui prima una sincronizzazione manuale del libro.");
     }
@@ -72,8 +70,7 @@ export async function setBookAutoSync(
       ...book.remote, autoSync: enabled,
       allowPublicSync: enabled && allowPublicSync,
     };
-    // Disabling preserves existing outbox requests; enabling queues a fresh
-    // checkpoint only when it is editorially safe, as in the existing flow.
+    // Disabling preserves existing outbox requests; enabling queues a fresh save of the whole book.
     return { queueSync: enabled };
   });
 }

@@ -1,14 +1,14 @@
 import type { BookProject } from "./types";
 
-/** Presentation of the existing editorial publication gates. Connecting a
- * repository is NOT publication and must not imply that these gates passed. */
+/** Why the book cannot be saved to GitHub right now. Connecting a repository is NOT saving.
+ *
+ * Since 0.30.0 a work in progress is saved like a finished one: every scene and chapter
+ * carries its own `canon: planned|draft|canon` label in the repository, and the full
+ * state (review cycle, memory, task log) travels in `.bookwriter/`, so a second PC can
+ * continue exactly where this one stopped. The only remaining stop is a merged scene that
+ * waits for the author's confirmation: until it is confirmed it must not leave the device. */
 export function githubPublicationBlocker(book: BookProject): string | undefined {
   if (book.editorialReviewSceneIds?.length)
-    return "Conferma nel Lettore tutte le scene fuse prima di pubblicare su GitHub. Il testo locale è conservato.";
-  if (book.phase === "revision")
-    return "Completa la revisione in corso prima di pubblicare su GitHub. Il testo locale è conservato.";
-  if (book.editorialCycle || book.chapters.some(chapter =>
-    !chapter.frozenAt && chapter.scenes.some(scene => scene.status !== "planned")))
-    return "Completa la redazione del capitolo in corso prima di pubblicare su GitHub: il capitolo non è ancora congelato. Il collegamento è pronto e il lavoro locale è conservato.";
+    return "Conferma nel Lettore tutte le scene fuse prima di salvare su GitHub. Il testo locale è conservato.";
   return undefined;
 }

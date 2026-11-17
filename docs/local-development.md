@@ -59,7 +59,7 @@ La base Vite è **`/`**, perché `https://ghostwriting.ws` è il dominio persona
 
 Vedi `docs/github-sync.md`. Serve una repository GitHub con un commit iniziale (può contenere README), un PAT fine-grained con permesso `Contents: read/write` limitato a quella repository e un libro locale.
 
-In **Archivio**, salva il PAT, verifica repository e branch, collega il libro e premi **Sincronizza su GitHub** (primo commit manuale con autopilot in pausa). Successivamente puoi attivare **Sincronizzazione automatica ai checkpoint**. I progressi vengono accodati in IndexedDB e inviati mentre il tab rimane attivo. Il PAT e le API key non vengono committati.
+In **Archivio**, salva il PAT, verifica repository e branch, collega il libro e premi **Sincronizza su GitHub** (primo commit manuale con autopilot in pausa). Successivamente puoi attivare **Sincronizzazione automatica dopo ogni compito**. Il libro, anche a metà lavoro, viene accodato in IndexedDB e inviato mentre il tab rimane attivo. Il PAT e le API key non vengono committati.
 
 Per aprire da altro browser puoi inserire manualmente il PAT autorizzato, configurare il repository in Archivio e importare il libro; **dalla 0.14.0** basta accedere con Google o Microsoft ([guida](cloud-profile-sync.md)). L'import rifiuta gli ID locali già presenti per prevenire sovrascritture; un libro presente e senza modifiche locali si aggiorna con «Aggiorna da GitHub».
 

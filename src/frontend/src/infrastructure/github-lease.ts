@@ -54,6 +54,19 @@ export class RemoteWriterLost extends Error {
     super(detail); this.name = "RemoteWriterLost";
   }
 }
+/** The renewal was accepted by GitHub but the branch never showed our commit, while the lease is
+ * still OURS and valid for a good while: nothing was extended, nothing is claimed as renewed, but
+ * the work need not stop yet. The next heartbeat tries again; the carried handle keeps the OLD
+ * expiry, so the guard still gives up well before another device could take over (expiry + 60 s). */
+export class LeaseRenewalMissed extends RemoteWriterLost {
+  constructor(public readonly current: WriterLeaseHandle, detail: string) {
+    super(detail); this.name = "LeaseRenewalMissed";
+  }
+}
+/** Read-after-write lag of GitHub is real but short: a few more READS (never another write). Tests shorten it. */
+export const leaseTuning = { readbackDelaysMs: [600, 1500, 3000] };
+/** A missed renewal is tolerated only while at least this much validity is left on the lease. */
+const MISSED_RENEWAL_MIN_VALIDITY_MS = 50_000;
 
 function branch(bookId: string): string {
   if (!z.string().uuid().safeParse(bookId).success) throw new Error("ID libro non valido per il lease.");
@@ -354,12 +367,44 @@ export async function renewWriterLease(current: WriterLeaseHandle): Promise<Writ
   // GitHub may still point to the old, unextended lease or to another commit.
   // Reuse the same two GETs already performed by assertWriterLease, with a
   // stricter check of the committed ref before allowing more AI work.
-  const confirmed = await inspectWriterLease(current.remote, current.bookId);
-  if (!confirmed || confirmed.headSha !== commit ||
-      confirmed.sessionId !== current.sessionId || !active(confirmed))
-    throw new RemoteWriterLost("Rinnovo del lease GitHub non confermato: scrittura sospesa." +
-      (writeError ? " " + writeError.message : " Il ramo non punta al commit richiesto. Verifica lo stato del blocco in Archivio."));
-  return handle(current.remote, confirmed);
+  const isOurs = (status: WriterLeaseStatus | null): boolean =>
+    !!status && status.headSha === commit && status.sessionId === current.sessionId && active(status);
+  let confirmed = await inspectWriterLease(current.remote, current.bookId);
+  let reads = 1;
+  if (!writeError) {
+    // The PATCH was accepted: if the branch still shows something else it is either a lagging read of
+    // GitHub (our session, an older commit: read again, a write is never repeated) or another session.
+    for (const delay of leaseTuning.readbackDelaysMs) {
+      if (isOurs(confirmed) || (confirmed && confirmed.sessionId !== current.sessionId)) break;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      confirmed = await inspectWriterLease(current.remote, current.bookId);
+      reads++;
+    }
+  }
+  if (!isOurs(confirmed)) {
+    const detail = "Rinnovo del lease GitHub non confermato: scrittura sospesa. " +
+      (writeError ? writeError.message : describeUnconfirmedRenewal(confirmed, current, commit, reads) +
+        " Verifica lo stato del blocco in Archivio.");
+    if (!writeError && confirmed && confirmed.sessionId === current.sessionId && active(confirmed) &&
+        Date.parse(confirmed.expiresAt) - Date.now() > MISSED_RENEWAL_MIN_VALIDITY_MS)
+      throw new LeaseRenewalMissed(handle(current.remote, confirmed), detail);
+    throw new RemoteWriterLost(detail);
+  }
+  return handle(current.remote, confirmed!);
+}
+
+/** What the readback actually found, so the author (and a bug report) can tell a real second writer
+ * from a lagging read. Only identifiers shortened to a few characters, never a credential. */
+function describeUnconfirmedRenewal(found: WriterLeaseStatus | null, current: WriterLeaseHandle, commit: string, reads: number): string {
+  const time = (iso: string) => new Date(iso).toLocaleTimeString("it-IT");
+  if (!found) return "Il ramo del blocco non esiste più.";
+  if (found.sessionId !== current.sessionId)
+    return `Il blocco è passato a un'altra sessione (${found.sessionId.slice(0, 8)}, rinnovato alle ${time(found.renewedAt)}): ` +
+      "un altro browser o dispositivo sta scrivendo questo libro.";
+  if (found.state !== "active") return "Il blocco risulta rilasciato.";
+  if (Date.parse(found.expiresAt) <= Date.now()) return "Il blocco risulta scaduto.";
+  return `GitHub ha accettato il rinnovo ma il ramo mostra ancora il commit precedente (${found.headSha.slice(0, 7)} invece di ${commit.slice(0, 7)}) ` +
+    `dopo ${reads} letture; il blocco è ancora tuo fino alle ${time(found.expiresAt)}.`;
 }
 
 /** Release is best-effort; never force a lock branch backwards. */

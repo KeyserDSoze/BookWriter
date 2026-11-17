@@ -130,7 +130,7 @@ test("due tab: collegamento stale e toggle autosync protetti da writer/outbox lo
     await gotoArchive(second);
     const id = (await bookSnapshot(page)).id;
     const checkbox = (tab: Page) => tab.getByRole("checkbox", {
-      name: /Sincronizzazione automatica ai checkpoint/,
+      name: /Sincronizzazione automatica dopo ogni compito/,
     });
 
     // Simulate an offline tab: enabling only queues IndexedDB work and cannot

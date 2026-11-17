@@ -98,8 +98,10 @@ test("repository vuota già collegata e libro in redazione: ricontrolla subito i
   expect(api.postInitializationLeaseReads()).toBeGreaterThan(0);
   await expect(page.getByText(/GitHub ha rifiutato la lettura.*HTTP 409/)).toHaveCount(0);
   await expect(page.getByText(/Repository vuota: al collegamento/)).toHaveCount(0);
-  await expect(page.getByText(/Completa la redazione.*prima di pubblicare/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sincronizza su GitHub", exact: true })).toBeDisabled();
+  // A work in progress is saved like a finished one: nothing asks to complete or freeze the chapter first.
+  await expect(page.getByText(/Completa la redazione.*prima di pubblicare/)).toHaveCount(0);
+  await expect(page.getByText(/Quando vuoi, usa Sincronizza: salva il libro così com'è, anche a metà lavoro/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sincronizza su GitHub", exact: true })).toBeEnabled();
   await expect(page.getByText(/manoscritto non è ancora stato pubblicato: usa Sincronizza/)).toHaveCount(0);
   const after = await page.evaluate(async () => {
     const { getDb } = await import("/src/infrastructure/db.ts");
