@@ -6,7 +6,7 @@ import { saveSettings } from "./db";
 import { rememberWriterSession } from "./writer-sessions";
 import {
   acquireWriterLease, assertWriterLease, inspectWriterLease, isLeaseFromThisBrowser,
-  LeaseRenewalMissed, leaseTuning,
+  LeaseGitHubUnavailable, LeaseRenewalMissed, leaseTuning,
   recoverExpiredWriterLease, LEASE_TAKEOVER_GRACE_MS,
   releaseWriterLease, renewWriterLease,
   RemoteWriterBusy, RemoteWriterLost,
@@ -36,6 +36,8 @@ function githubServer(resetHeader:()=>string|null=()=>
   const previousHeads = new Map<string, string>();
   let staleConfigured = 0, staleKey: string | undefined, staleLeft = 0;
   let foreignAfterPatch = false;
+  // GitHub that does not answer (network) or fails with a 5xx for a given kind of request, a given number of times.
+  const injected: Array<{ match: (method: string, path: string) => boolean; left: number; mode: "http500" | "network" }> = [];
   let createFailure: "none" | "http422" | "network_before" | "network_after" = "none";
   let treeFailure = false;
   let counter = 1;
@@ -50,6 +52,12 @@ function githubServer(resetHeader:()=>string|null=()=>
     calls.push({ path, method, body, token: new Headers(init?.headers).get("Authorization") ?? "" });
     expect(url.origin).toBe("https://api.github.com");
     expect(init?.redirect).toBe("error");
+    const hit = injected.find(rule => rule.left > 0 && rule.match(method, path));
+    if (hit) {
+      hit.left--;
+      if (hit.mode === "network") throw new TypeError("simulated network failure");
+      return reply({ message: "Server Error" }, 500);
+    }
     if (method === "GET" && path === "/git/ref/heads/main")
       return reply({ object: { sha: MAIN } });
     if (method === "GET" && path.startsWith(refPath)) {
@@ -131,6 +139,10 @@ function githubServer(resetHeader:()=>string|null=()=>
     /** After the next accepted write, the next `n` reads of the lock branch still show the previous commit. */
     staleReads(n: number) { staleConfigured = n; staleLeft = 0; },
     foreignWriteAfterNextPatch() { foreignAfterPatch = true; },
+    failRequests(match: (method: string, path: string) => boolean, times: number, mode: "http500" | "network" = "http500") {
+      injected.push({ match, left: times, mode });
+    },
+    clearFailures() { injected.length = 0; },
     setExpiry(bookId: string, expiresAt: string) {
       const id = lockRefs.get("bookwriter-lock/" + bookId)!;
       const commit = commits.get(id)!;
@@ -148,6 +160,7 @@ function githubServer(resetHeader:()=>string|null=()=>
 }
 beforeEach(async () => {
   leaseTuning.readbackDelaysMs = [1, 1, 1]; // the real waits (0.6 s, 1.5 s, 3 s) are not needed against a mock
+  leaseTuning.unavailableRetryDelaysMs = [1, 1];
   const settings = structuredClone(DEFAULT_SETTINGS);
   settings.githubToken = await encryptLocal(TOKEN);
   await saveSettings(settings);
@@ -334,6 +347,91 @@ describe("Lease distribuito GitHub (branch fast-forward only)", () => {
       expect(error).toBeInstanceOf(RemoteWriterLost);
       expect(error).not.toBeInstanceOf(LeaseRenewalMissed);
       expect((error as Error).message).toMatch(/Rinnovo del lease GitHub non confermato/);
+    });
+  });
+
+  describe("GitHub che non risponde o risponde 500 mentre si lavora", () => {
+    const commitPosts = (method: string, path: string) => method === "POST" && path === "/git/commits";
+    const lockReads = (method: string, path: string) => method === "GET" && path.startsWith("/git/ref/heads/bookwriter-lock/");
+    const patches = (server: ReturnType<typeof githubServer>) => server.calls.filter(call => call.method === "PATCH").length;
+
+    it("un 500 passeggero sul commit del rinnovo si ripete (nessun ramo toccato) e il rinnovo riesce", async () => {
+      const server = githubServer();
+      const first = await acquireWriterLease(remote, crypto.randomUUID(), crypto.randomUUID());
+      const before = patches(server);
+      server.failRequests(commitPosts, 1);
+      const renewed = await renewWriterLease(first);
+      expect(renewed.headSha).not.toBe(first.headSha);
+      expect(patches(server) - before).toBe(1); // the branch is updated once
+    });
+
+    it.each(["http500", "network"] as const)("se GitHub resta indisponibile (%s) il rinnovo non è dato per riuscito ma il lavoro non si ferma: nessuna scrittura sul ramo", async mode => {
+      const server = githubServer();
+      const bookId = crypto.randomUUID();
+      const first = await acquireWriterLease(remote, bookId, crypto.randomUUID());
+      const before = patches(server);
+      server.failRequests(commitPosts, 99, mode);
+      const error = await renewWriterLease(first).catch(e => e as unknown);
+      expect(error).toBeInstanceOf(LeaseRenewalMissed);
+      const missed = error as LeaseRenewalMissed;
+      expect(missed.message).toMatch(/GitHub non risponde/);
+      expect(missed.message).toMatch(/Nulla è stato scritto/);
+      expect(missed.current).toEqual(first); // same handle, same old expiry: nothing claimed as renewed
+      expect(patches(server)).toBe(before);
+      server.clearFailures(); // GitHub is back: the next beat renews normally
+      const next = await renewWriterLease(missed.current);
+      expect(next.headSha).not.toBe(first.headSha);
+      expect(patches(server) - before).toBe(1);
+    });
+
+    it("con il blocco vicino alla scadenza un GitHub che non risponde ferma il lavoro", async () => {
+      const server = githubServer();
+      const first = await acquireWriterLease(remote, crypto.randomUUID(), crypto.randomUUID());
+      server.failRequests(commitPosts, 99);
+      const nearExpiry = { ...first, expiresAt: new Date(Date.now() + 30_000).toISOString() };
+      const error = await renewWriterLease(nearExpiry).catch(e => e as unknown);
+      expect(error).toBeInstanceOf(LeaseGitHubUnavailable);
+      expect(error).not.toBeInstanceOf(LeaseRenewalMissed);
+      expect((error as Error).message).toMatch(/HTTP 500/);
+    });
+
+    it("un rifiuto vero (409/422) o un clock sbagliato non vengono mai tollerati", async () => {
+      const server = githubServer();
+      const first = await acquireWriterLease(remote, crypto.randomUUID(), crypto.randomUUID());
+      server.failNextPatch("http409");
+      const error = await renewWriterLease(first).catch(e => e as unknown);
+      expect(error).toBeInstanceOf(RemoteWriterLost);
+      expect(error).not.toBeInstanceOf(LeaseRenewalMissed);
+    });
+
+    it("il controllo dopo la chiamata AI non butta via il risultato per un 500 passeggero", async () => {
+      const server = githubServer();
+      const first = await acquireWriterLease(remote, crypto.randomUUID(), crypto.randomUUID());
+      server.failRequests(lockReads, 1);
+      const verified = await assertWriterLease(first);
+      expect(verified.sessionId).toBe(first.sessionId);
+    });
+
+    it("…e se GitHub resta giù lo accetta solo finché il blocco già confermato è valido; poi no", async () => {
+      const server = githubServer();
+      const first = await acquireWriterLease(remote, crypto.randomUUID(), crypto.randomUUID());
+      server.failRequests(lockReads, 99, "network");
+      expect(await assertWriterLease(first)).toEqual(first); // ours and valid for ~2 minutes: nobody can have taken over
+      const nearExpiry = { ...first, expiresAt: new Date(Date.now() + 30_000).toISOString() };
+      await expect(assertWriterLease(nearExpiry)).rejects.toBeInstanceOf(LeaseGitHubUnavailable);
+      const expired = { ...first, expiresAt: new Date(Date.now() - 1_000).toISOString() };
+      await expect(assertWriterLease(expired)).rejects.toBeInstanceOf(RemoteWriterLost);
+    });
+
+    it("un blocco passato a un altro non è mai confuso con un GitHub che non risponde", async () => {
+      const server = githubServer();
+      const bookId = crypto.randomUUID();
+      const first = await acquireWriterLease(remote, bookId, crypto.randomUUID());
+      server.setExpiry(bookId, new Date(Date.now() - 200_000).toISOString());
+      const other = crypto.randomUUID();
+      await recoverExpiredWriterLease(remote, bookId); // human recovery: the lease is released
+      await acquireWriterLease(remote, bookId, other);
+      await expect(assertWriterLease(first)).rejects.toBeInstanceOf(RemoteWriterLost);
     });
   });
 

@@ -54,6 +54,12 @@ export class RemoteWriterLost extends Error {
     super(detail); this.name = "RemoteWriterLost";
   }
 }
+/** GitHub did not answer (network, timeout) or answered with a server error (5xx). Unlike a refusal
+ * (409/422) it says nothing about WHO holds the lock: a request that failed this way has changed
+ * nothing we know of, so while our last confirmed lease is still valid the work may go on. */
+export class LeaseGitHubUnavailable extends RemoteWriterLost {
+  constructor(detail: string) { super(detail); this.name = "LeaseGitHubUnavailable"; }
+}
 /** The renewal was accepted by GitHub but the branch never showed our commit, while the lease is
  * still OURS and valid for a good while: nothing was extended, nothing is claimed as renewed, but
  * the work need not stop yet. The next heartbeat tries again; the carried handle keeps the OLD
@@ -64,9 +70,27 @@ export class LeaseRenewalMissed extends RemoteWriterLost {
   }
 }
 /** Read-after-write lag of GitHub is real but short: a few more READS (never another write). Tests shorten it. */
-export const leaseTuning = { readbackDelaysMs: [600, 1500, 3000] };
-/** A missed renewal is tolerated only while at least this much validity is left on the lease. */
+export const leaseTuning = {
+  readbackDelaysMs: [600, 1500, 3000],
+  /** Pauses before trying a request again after GitHub did not answer or failed with a 5xx. */
+  unavailableRetryDelaysMs: [600, 1500],
+};
+/** A missed renewal (or an unreachable GitHub) is tolerated only while at least this much validity is
+ * left on the lease: another device may take over only at expiry + 60 s, so the margin stays >= 110 s. */
 const MISSED_RENEWAL_MIN_VALIDITY_MS = 50_000;
+
+/** Repeats a step that failed because GitHub was unavailable. Only for steps that change no ref:
+ * reads, and the creation of trees and commits nobody points to yet. NEVER for the branch update. */
+async function retryUnavailable<T>(step: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await step(); }
+    catch (error) {
+      const delay = leaseTuning.unavailableRetryDelaysMs[attempt];
+      if (!(error instanceof LeaseGitHubUnavailable) || delay === undefined) throw error;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
 
 function branch(bookId: string): string {
   if (!z.string().uuid().safeParse(bookId).success) throw new Error("ID libro non valido per il lease.");
@@ -119,7 +143,7 @@ function responseError(status: number, method: string, path: string): Error {
       "che la repository sia inizializzata e che il PAT e le regole GitHub consentano di creare e aggiornare i rami bookwriter-lock/. Nessuna scrittura forzata.");
   if (status === 404) return new Error("Repository GitHub o branch non disponibile per il lease (HTTP 404).");
   if (status >= 500)
-    return new RemoteWriterLost(`GitHub non ha confermato la ${operation(method, path)} (HTTP ${status}). Scrittura bloccata; verifica di nuovo lo stato in Archivio.`);
+    return new LeaseGitHubUnavailable(`GitHub non ha confermato la ${operation(method, path)} (HTTP ${status}). Scrittura bloccata; verifica di nuovo lo stato in Archivio.`);
   return new Error("Verifica GitHub lease fallita (HTTP " + status + ").");
 }
 async function api<T>(secret: string, path: string,
@@ -143,7 +167,7 @@ async function api<T>(secret: string, path: string,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new RemoteWriterLost("GitHub non raggiungibile o tempo di verifica scaduto: scrittura bloccata.");
+    throw new LeaseGitHubUnavailable("GitHub non raggiungibile o tempo di verifica scaduto: scrittura bloccata.");
   } finally {
     clearTimeout(deadline);
   }
@@ -333,7 +357,16 @@ export async function acquireWriterLease(
 
 /** Fencing check before AND after every expensive model call. */
 export async function assertWriterLease(current: WriterLeaseHandle): Promise<WriterLeaseHandle> {
-  const latest = await inspectWriterLease(current.remote, current.bookId);
+  let latest: WriterLeaseStatus | null;
+  try {
+    latest = await retryUnavailable(() => inspectWriterLease(current.remote, current.bookId));
+  } catch (error) {
+    // GitHub cannot be reached: nobody can have taken the lock over while OUR last confirmed lease is
+    // still valid for long enough (a takeover needs expiry + 60 s). Past that margin: fail closed.
+    if (error instanceof LeaseGitHubUnavailable &&
+        Date.parse(current.expiresAt) - Date.now() > MISSED_RENEWAL_MIN_VALIDITY_MS) return current;
+    throw error;
+  }
   if (!latest || latest.sessionId !== current.sessionId || !active(latest))
     throw new RemoteWriterLost();
   return handle(current.remote, latest);
@@ -341,18 +374,32 @@ export async function assertWriterLease(current: WriterLeaseHandle): Promise<Wri
 
 export async function renewWriterLease(current: WriterLeaseHandle): Promise<WriterLeaseHandle> {
   const secret = await token();
-  const sha = await getRef(secret, current.remote, current.bookId);
-  if (!sha) throw new RemoteWriterLost();
-  const previous = await leaseAt(secret, current.remote, current.bookId, sha);
-  if (previous.sessionId !== current.sessionId || !active(previous))
-    throw new RemoteWriterLost();
-  const now = new Date().toISOString();
-  const updated: LeasePayload = {
-    schemaVersion: 1, bookId: previous.bookId, sessionId: previous.sessionId,
-    acquiredAt: previous.acquiredAt, state: "active", renewedAt: now,
-    expiresAt: new Date(Date.now() + LEASE_TTL_MS).toISOString(),
-  };
-  const commit = await writeLease(secret, current.remote, current.bookId, sha, updated);
+  const validityLeft = () => Date.parse(current.expiresAt) - Date.now();
+  const time = (iso: string) => new Date(iso).toLocaleTimeString("it-IT");
+  let sha: string | null, previous: WriterLeaseStatus, commit: string;
+  try {
+    sha = await retryUnavailable(() => getRef(secret, current.remote, current.bookId));
+    if (!sha) throw new RemoteWriterLost();
+    const parent = sha;
+    previous = await retryUnavailable(() => leaseAt(secret, current.remote, current.bookId, parent));
+    if (previous.sessionId !== current.sessionId || !active(previous))
+      throw new RemoteWriterLost();
+    const now = new Date().toISOString();
+    const updated: LeasePayload = {
+      schemaVersion: 1, bookId: previous.bookId, sessionId: previous.sessionId,
+      acquiredAt: previous.acquiredAt, state: "active", renewedAt: now,
+      expiresAt: new Date(Date.now() + LEASE_TTL_MS).toISOString(),
+    };
+    commit = await retryUnavailable(() => writeLease(secret, current.remote, current.bookId, parent, updated));
+  } catch (error) {
+    // GitHub did not answer (or failed with a 5xx) BEFORE the branch was touched: nothing changed, the lease
+    // is still ours until the expiry we last confirmed. Not a renewal, but no reason to stop yet.
+    if (error instanceof LeaseGitHubUnavailable && validityLeft() > MISSED_RENEWAL_MIN_VALIDITY_MS)
+      throw new LeaseRenewalMissed(current, "Rinnovo del lease GitHub non confermato: GitHub non risponde (" +
+        error.message.replace(/ Scrittura bloccata.*$/, "") + "). Nulla è stato scritto: il blocco resta tuo fino alle " +
+        time(current.expiresAt) + " e il rinnovo viene ritentato al prossimo battito.");
+    throw error;
+  }
   let writeError: RemoteWriterLost | undefined;
   try {
     await api(secret, patchPath(current.remote, current.bookId), "PATCH", { sha: commit, force: false });
@@ -363,34 +410,51 @@ export async function renewWriterLease(current: WriterLeaseHandle): Promise<Writ
     if (!(error instanceof RemoteWriterLost)) throw error;
     writeError = error;
   }
+  // 409/422: GitHub REFUSED the update (the branch moved under us): never tolerated. Network or 5xx: it may
+  // or may not have been applied, which only a read can tell.
+  const refused = !!writeError && !(writeError instanceof LeaseGitHubUnavailable);
   // The previous owner/session alone is insufficient evidence of renewal:
   // GitHub may still point to the old, unextended lease or to another commit.
   // Reuse the same two GETs already performed by assertWriterLease, with a
   // stricter check of the committed ref before allowing more AI work.
-  const isOurs = (status: WriterLeaseStatus | null): boolean =>
+  const isOurs = (status: WriterLeaseStatus | null | undefined): boolean =>
     !!status && status.headSha === commit && status.sessionId === current.sessionId && active(status);
-  let confirmed = await inspectWriterLease(current.remote, current.bookId);
+  // undefined = the branch could not be read at all (GitHub unavailable)
+  let confirmed: WriterLeaseStatus | null | undefined;
+  const readBack = async () => {
+    try { confirmed = await inspectWriterLease(current.remote, current.bookId); }
+    catch (error) {
+      if (error instanceof LeaseGitHubUnavailable) confirmed = undefined; else throw error;
+    }
+  };
+  await readBack();
   let reads = 1;
-  if (!writeError) {
-    // The PATCH was accepted: if the branch still shows something else it is either a lagging read of
-    // GitHub (our session, an older commit: read again, a write is never repeated) or another session.
+  if (!refused) {
+    // The PATCH was accepted (or its outcome is unknown): if the branch still shows something else it is
+    // either a lagging read of GitHub (our session, an older commit: read again, a write is never
+    // repeated) or another session.
     for (const delay of leaseTuning.readbackDelaysMs) {
       if (isOurs(confirmed) || (confirmed && confirmed.sessionId !== current.sessionId)) break;
       await new Promise(resolve => setTimeout(resolve, delay));
-      confirmed = await inspectWriterLease(current.remote, current.bookId);
+      await readBack();
       reads++;
     }
   }
-  if (!isOurs(confirmed)) {
-    const detail = "Rinnovo del lease GitHub non confermato: scrittura sospesa. " +
-      (writeError ? writeError.message : describeUnconfirmedRenewal(confirmed, current, commit, reads) +
-        " Verifica lo stato del blocco in Archivio.");
-    if (!writeError && confirmed && confirmed.sessionId === current.sessionId && active(confirmed) &&
-        Date.parse(confirmed.expiresAt) - Date.now() > MISSED_RENEWAL_MIN_VALIDITY_MS)
-      throw new LeaseRenewalMissed(handle(current.remote, confirmed), detail);
-    throw new RemoteWriterLost(detail);
-  }
-  return handle(current.remote, confirmed!);
+  if (isOurs(confirmed)) return handle(current.remote, confirmed!);
+
+  const detail = "Rinnovo del lease GitHub non confermato: scrittura sospesa. " +
+    (writeError ? writeError.message + " " : "") +
+    (confirmed === undefined ? "GitHub non risponde alla rilettura del blocco."
+      : refused ? "" : describeUnconfirmedRenewal(confirmed, current, commit, reads)) +
+    " Verifica lo stato del blocco in Archivio.";
+  // Still ours and valid for a good while (read back, or unreadable but our last confirmed lease says so):
+  // no renewal is claimed and the old expiry stays, but the work goes on until the next beat.
+  const ownAndValid = confirmed === undefined ? validityLeft() > MISSED_RENEWAL_MIN_VALIDITY_MS
+    : !!confirmed && confirmed.sessionId === current.sessionId && active(confirmed) &&
+      Date.parse(confirmed.expiresAt) - Date.now() > MISSED_RENEWAL_MIN_VALIDITY_MS;
+  if (!refused && ownAndValid)
+    throw new LeaseRenewalMissed(confirmed ? handle(current.remote, confirmed) : current, detail);
+  throw new RemoteWriterLost(detail);
 }
 
 /** What the readback actually found, so the author (and a bug report) can tell a real second writer

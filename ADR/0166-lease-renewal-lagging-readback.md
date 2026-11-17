@@ -1,6 +1,6 @@
-# ADR 0166 — Rinnovo del blocco: lettura in ritardo e perdita davvero avvenuta
+# ADR 0166 — Rinnovo del blocco: lettura in ritardo, GitHub che non risponde e perdita davvero avvenuta
 
-- Stato: accettato, preparazione locale
+- Stato: accettato (0.30.0; esteso in 0.30.1, vedi «Estensione»)
 - Data: 2026-11-17
 - Versione preparata: 0.30.0
 - Integra ADR 0007 (writer lease), 0076 (rinnovo attestato dal commit esatto) e 0164.
@@ -20,6 +20,17 @@ Con un solo caso sporadico non si può dire quale dei due sia accaduto; il codic
 2. **Un rinnovo non confermato non è un rinnovo riuscito, ma può non fermare il lavoro.** Se dopo le riletture il blocco è ancora della nostra sessione, `active` e con più di 50 secondi di validità, `renewWriterLease` lancia `LeaseRenewalMissed` (sottoclasse di `RemoteWriterLost`) con l'handle del blocco com'è (scadenza **vecchia**: nulla è dato per esteso). `withWriterGuard` lo tollera, tiene quell'handle e riprova al battito successivo (25 s). Le verifiche prima e dopo ogni chiamata AI (`assertWriterLease`) restano identiche. Con meno di 50 secondi di validità, o per qualunque altro esito, è `RemoteWriterLost` e il lavoro si ferma come prima. Un altro dispositivo può subentrare solo a scadenza + 60 s: con questa soglia ne restano almeno 110 s di margine.
 3. **Il messaggio dice cosa è stato letto** (senza credenziali, solo identificativi accorciati): «il blocco è passato a un'altra sessione (xxxxxxxx, rinnovato alle HH:MM:SS)…», «il ramo mostra ancora il commit precedente (abc1234 invece di def5678) dopo N letture; il blocco è ancora tuo fino alle HH:MM», «rilasciato», «scaduto», «il ramo non esiste più». Gli errori del PATCH (409/422/rete) restano come prima: nessuna tolleranza, nessuna rilettura ripetuta.
 
+## Estensione 0.30.1 — GitHub che non risponde o risponde 5xx
+
+Poche ore dopo la 0.30.0 lo stesso meccanismo ha abbattuto il compito del direttore (una richiesta lunga) con «GitHub non ha confermato la creazione del commit del blocco di scrittura (HTTP 500)». Un 5xx o una rete assente erano trattati come perdita del blocco, ma non dicono **chi** lo tiene: dicono solo che quella richiesta è fallita.
+
+4. **`LeaseGitHubUnavailable`** (sottoclasse di `RemoteWriterLost`) per rete/timeout e per ogni 5xx. I rifiuti veri (409/422), il clock sbagliato e il blocco passato ad altri restano `RemoteWriterLost` semplici, mai tollerati.
+5. **Riprove solo dove non si tocca il ramo** (`retryUnavailable`, 0,6 s e 1,5 s): le letture e la creazione di tree e commit che nessun ramo ancora indica (al peggio un oggetto orfano). Mai per il `PATCH` del ramo.
+6. **Rinnovo.** Se GitHub resta indisponibile *prima* del `PATCH`, oppure il `PATCH` ha esito ignoto (rete/5xx) e la rilettura mostra ancora il blocco nostro o non riesce, e restano più di 50 secondi di validità (letti dal ramo, oppure dall'ultimo blocco confermato se il ramo non si legge): `LeaseRenewalMissed` con l'handle **invariato** (scadenza vecchia, nessun rinnovo dichiarato); il lavoro prosegue e si riprova al battito dopo. Con meno validità si ferma. Ne segue una tolleranza di circa un minuto di indisponibilità di GitHub, con almeno 110 s di margine prima che un altro dispositivo possa subentrare (scadenza + 60 s).
+7. **Controllo prima/dopo la chiamata AI** (`assertWriterLease`): con GitHub irraggiungibile dopo le riprove, passa con l'handle già confermato **solo** finché ha più di 50 s di validità (nessun altro può aver preso un blocco non scaduto); altrimenti fallisce chiuso. Così un 500 passeggero non butta più via una risposta AI già pagata.
+
+Limite: non è provato che i 500 non dipendano anche dal carico di scritture dello stesso repository (salvataggio dopo ogni compito, ADR 0165, più battito del blocco); le riprove e la tolleranza li assorbono, ma se si ripetono va rivista la spaziatura dei salvataggi.
+
 ## Cosa non cambia
 
 Fast-forward `force:false`, conferma esatta del commit quando la lettura è coerente, controllo del clock, TTL 120 s, battito 25 s, margine di 60 s, recupero esplicito, sostituzione immediata del proprio blocco (ADR 0164).
@@ -32,4 +43,6 @@ Fast-forward `force:false`, conferma esatta del commit quando la lettura è coer
 
 ## Verifiche
 
-Vitest: lettura in ritardo risolta rileggendo (un solo PATCH), lettura che resta indietro con blocco valido (`LeaseRenewalMissed`, handle con scadenza vecchia, battito successivo riuscito), altra sessione (nessuna attesa, messaggio, `assertWriterLease` fallisce), blocco vicino alla scadenza (perdita); guardia: il rinnovo mancato non abortisce il lavoro e il battito dopo lo conferma, un blocco perso abortisce la richiesta in corso. Verificato che togliendo la tolleranza o le riletture i test falliscono.
+Vitest (0.30.1): 500 passeggero sul commit del rinnovo ripetuto con un solo `PATCH`; indisponibilità persistente (500 e rete) ⇒ `LeaseRenewalMissed` con handle invariato e nessuna scrittura sul ramo, poi rinnovo riuscito al ritorno di GitHub; blocco vicino alla scadenza ⇒ si ferma; rifiuto 409 mai tollerato; controllo dopo la chiamata AI tollerato solo con validità residua e mai per un blocco passato ad altri. Togliendo la tolleranza, le riprove o la tolleranza del controllo i test falliscono.
+
+Vitest (0.30.0): lettura in ritardo risolta rileggendo (un solo PATCH), lettura che resta indietro con blocco valido (`LeaseRenewalMissed`, handle con scadenza vecchia, battito successivo riuscito), altra sessione (nessuna attesa, messaggio, `assertWriterLease` fallisce), blocco vicino alla scadenza (perdita); guardia: il rinnovo mancato non abortisce il lavoro e il battito dopo lo conferma, un blocco perso abortisce la richiesta in corso. Verificato che togliendo la tolleranza o le riletture i test falliscono.

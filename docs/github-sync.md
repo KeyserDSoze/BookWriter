@@ -56,6 +56,8 @@ Il lock è liberato alla fine di una sessione o quando premi Pausa; se il browse
 
 **Rinnovo con lettura in ritardo (0.30.0).** Dopo un rinnovo accettato, se la lettura del ramo non mostra subito il nuovo commit ma il blocco è ancora della tua sessione, si rilegge per qualche secondo (mai una seconda scrittura) e, se serve, il lavoro continua con la vecchia scadenza fino al battito successivo, purché restino più di 50 secondi di validità. Un blocco passato a un'altra sessione ferma tutto subito, e il messaggio lo dice. [ADR 0166](../ADR/0166-lease-renewal-lagging-readback.md).
 
+**GitHub che non risponde (0.30.1).** Un errore 500 o una rete assente non dimostrano che il blocco sia passato ad altri: le letture e la creazione dei commit di rinnovo si ripetono, e se GitHub resta giù ma il tuo blocco è ancora valido per più di 50 secondi il lavoro continua (rinnovo ritentato al battito dopo; il controllo dopo la chiamata AI accetta l'ultimo blocco confermato finché è valido). Un rifiuto vero (409/422), un blocco di un'altra sessione o un blocco quasi scaduto fermano il lavoro.
+
 Se GitHub non risponde o il lease cambia, la chiamata AI viene interrotta quando possibile e il risultato non viene canonizzato. Questo non significa che eventuali token già consumati dall'API vengano rimborsati.
 
 **Importante:** il lease non è ancora un blocco transazionale perfetto per le modifiche manuali, e l'orologio locale può differire fra dispositivi. Il canon Git continua a usare controllo SHA e `force:false` per impedire sovrascritture; le divergenze non sono fuse automaticamente.

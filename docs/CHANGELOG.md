@@ -1,5 +1,11 @@
 # Changelog — BookWriter
 
+## 0.30.1 — 2026-11-17 — Un errore 500 passeggero di GitHub non abbatte più il compito in corso (ADR 0166)
+
+- **Il problema.** Durante la richiesta lunga del direttore è comparso «GitHub non ha confermato la creazione del commit del blocco di scrittura (HTTP 500)» e il compito è fallito (con la richiesta AI persa e forse addebitata). Un errore 500 o una rete assente dicevano «blocco perso» anche se non dimostrano nulla su chi tiene il blocco.
+- **Ora.** Il browser ripete subito le letture e la creazione dei commit di rinnovo (mai l'aggiornamento del ramo). Se GitHub resta indisponibile ma il tuo blocco è ancora valido per più di 50 secondi, il lavoro continua e il rinnovo si riprova al battito dopo (circa un minuto di tolleranza, con almeno 110 secondi di margine prima che un altro dispositivo possa subentrare). Anche il controllo dopo la chiamata AI non butta più via una risposta già pagata per un 500 passeggero, finché il blocco già confermato è valido. Un blocco passato a un'altra sessione, un rifiuto vero di GitHub o un orologio sbagliato fermano tutto subito, come prima.
+- **Limite.** Non è provato che i 500 non dipendano anche dal carico di scritture sul repository (salvataggio dopo ogni compito più battito del blocco): se si ripetono va rivista la distanza fra i salvataggi. Provato con GitHub simulato. [ADR 0166](../ADR/0166-lease-renewal-lagging-readback.md).
+
 ## 0.30.0 — 2026-11-17 — Il libro si salva su GitHub com'è, anche a metà lavoro, dopo ogni compito (ADR 0165)
 
 - **Niente più «completa la redazione prima di pubblicare».** Capitolo non congelato, revisione in corso, mondo, memoria e registro dei compiti si salvano su GitHub così come sono: le scene e i capitoli portano `canon: planned|draft|canon`, quindi sul repository si distingue il lavoro in corso dal canone. Si può collegare, salvare e attivare il salvataggio automatico in qualunque momento. L'unico caso che non parte è una scena fusa dall'AI che non hai ancora confermato nel Lettore.
