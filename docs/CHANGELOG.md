@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## 0.29.0 — 2026-11-17 — Dopo un F5 l'autopilot riprende da solo e il blocco della pagina scomparsa non ti ferma più (ADR 0164)
+
+- **Il blocco lasciato dal tuo stesso browser non ti blocca più.** Ricaricando la pagina mentre l'autopilot scriveva su un libro collegato a GitHub, «Riprendi» diceva «già in scrittura da un altro dispositivo» per circa tre minuti e poi serviva un recupero manuale: il blocco della pagina scomparsa non poteva essere rilasciato. Ora il browser ricorda le sessioni che ha aperto e, mentre tiene il lock di scrittura del libro, sostituisce subito il proprio blocco con il solito commit fast-forward. Il blocco di un altro dispositivo non si tocca: restano scadenza, margine e conferma. L'Archivio dice quando il blocco è di questo browser.
+- **Ripresa automatica dopo un ricaricamento.** Se ricarichi (F5, scheda ripristinata dopo un crash) mentre l'autopilot lavorava da meno di 15 minuti, riparte dall'ultimo checkpoint e un avviso lo spiega; la chiamata AI in corso è persa e può essere stata addebitata. Non riparte aprendo l'app da un link o da una scheda nuova. Si spegne in **Impostazioni → Questo dispositivo** (per browser, non per libro).
+- **Lavoro a pagina chiusa: non possibile dal browser.** Né un worker né il service worker né l'app installata lo permettono; nella stessa pagina di impostazioni e nell'ADR 0164 c'è cosa può e non può fare l'autopilot in secondo piano e perché non si è scelto un worker. Un processo fuori dal browser richiederebbe una decisione a parte su chiavi AI e PAT.
+- Limiti: il primo F5 dopo l'aggiornamento non riconosce un blocco lasciato dalla versione precedente (attesa come prima, una volta); un profilo del browser clonato userebbe lo stesso riconoscimento; provato con GitHub simulato. [Guida](autopilot.md).
+
 ## 0.28.0 — 2026-11-16 — Tools: ogni compito JSON ha la sua funzione con tutti i parametri spiegati
 
 - **Niente più funzione vuota.** Con un modello marcato «tools» ogni compito che restituisce JSON manda una funzione `submit_result` con i parametri completi: piano dei capitoli e delle scene, schede/eventi/timeline, consolidamento e riconciliazione della memoria, compattazione, riassunti delle scene, sinossi, analisi d'impatto, revisori e direttore. Prima molti compiti avevano uno schema senza campi e il modello rispondeva `{}` (verificato dal gateway: token di output pari al solo ragionamento).

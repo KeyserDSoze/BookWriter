@@ -46,6 +46,8 @@ Se il libro è collegato a GitHub, prima di avviare l'autopilot BookWriter crea 
 
 Il lock è liberato alla fine di una sessione o quando premi Pausa; se il browser si arresta bruscamente, resta visibile in Archivio fino alla scadenza. Il recupero è **manuale**, disponibile soltanto dopo un ulteriore margine di 60 secondi e una conferma esplicita. Non usare takeover prima di verificare che l'altro dispositivo non stia ancora lavorando.
 
+**Pagina ricaricata o chiusa nello stesso browser (0.29.0).** Il browser ricorda le sessioni di scrittura che ha aperto per ogni libro (dato locale, non va su GitHub). Se il blocco attivo è di una di quelle sessioni e chi riparte tiene il lock di scrittura del libro, quella pagina non c'è più: il blocco viene sostituito subito con il solito commit fast-forward, senza attendere scadenza e margine. Un blocco di un altro dispositivo non si sostituisce mai così. [ADR 0164](../ADR/0164-resume-after-reload-and-own-lease-takeover.md).
+
 Se GitHub non risponde o il lease cambia, la chiamata AI viene interrotta quando possibile e il risultato non viene canonizzato. Questo non significa che eventuali token già consumati dall'API vengano rimborsati.
 
 **Importante:** il lease non è ancora un blocco transazionale perfetto per le modifiche manuali, e l'orologio locale può differire fra dispositivi. Il canon Git continua a usare controllo SHA e `force:false` per impedire sovrascritture; le divergenze non sono fuse automaticamente.

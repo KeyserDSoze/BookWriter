@@ -76,6 +76,9 @@ test("aprire una seconda tab non interrompe l'autopilot attivo e recupera dopo l
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.writerLock))
     .toBe("held");
 
+  // This test is about recovery itself: a reload must leave the book paused, not resume it.
+  await page.evaluate(() => localStorage.setItem("bookwriter.ui.autoResume", "false"));
+
   const second = await page.context().newPage();
   try {
     await second.goto("/");

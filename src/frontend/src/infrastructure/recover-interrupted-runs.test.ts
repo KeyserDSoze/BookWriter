@@ -85,6 +85,26 @@ describe("Ripresa di esecuzioni interrotte, protetta da Web Locks", () => {
     expect(await getBook(active.id)).toEqual(after); // Recovery is idempotent.
   });
 
+  it("restituisce solo i libri che erano davvero in esecuzione, con l'ultimo segno di vita", async () => {
+    const running = runningBook("In esecuzione");
+    running.updatedAt = "2026-11-17T10:00:00.000Z";
+    const paused = newBook("Una storia", "Già in pausa", "", "");
+    paused.status = "paused";
+    const locked = runningBook("Altra scheda al lavoro");
+    const lostCall = activity(running.id);
+    lostCall.createdAt = "2026-11-17T10:04:00.000Z";
+    const pausedCall = activity(paused.id); // a stale «running» activity of a book that was paused
+    await saveBook(running, false); await saveBook(paused, false); await saveBook(locked, false);
+    await saveActivity(lostCall); await saveActivity(pausedCall);
+    lockedBooks.add("bookwriter:writer:" + locked.id);
+    const recovered = await recoverInterruptedRuns();
+    expect(recovered).toEqual([{ bookId: running.id, title: "In esecuzione", lastActivityAt: "2026-11-17T10:04:00.000Z" }]);
+    expect((await getBook(locked.id))?.status).toBe("running");
+    expect((await getBook(paused.id))?.status).toBe("paused");
+    expect((await storedActivity(pausedCall.id)).status).toBe("cancelled");
+    expect(await recoverInterruptedRuns()).toEqual([]); // idempotent: nothing left to resume
+  });
+
   it("non cancella attività in esecuzione in assenza di Web Locks", async () => {
     const book = runningBook("Browser non supportato");
     const task = activity(book.id);

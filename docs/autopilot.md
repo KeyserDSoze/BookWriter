@@ -40,6 +40,12 @@ Questo controllo protegge la concorrenza **locale**; non sostituisce il writer l
 - Sul PC puoi usare altre finestre: la risposta del modello continua ad arrivare. Evita sospensione del PC e il risparmio memoria del browser per questa scheda. Se la scheda viene chiusa o scartata, il libro risulta in pausa e riprende dal checkpoint.
 - Su smartphone, con app in secondo piano o schermo spento, il sistema sospende la pagina: tieni l'app aperta in primo piano. Un modello su localhost (LM Studio) non è raggiungibile dal telefono.
 
+## Ricaricamento della pagina (ADR 0164)
+
+- **F5 mentre lavora.** La chiamata AI in corso va persa (può essere addebitata); quello già salvato resta. Al ricaricamento il libro è recuperato «In pausa» e, se era al lavoro da meno di 15 minuti, **riprende da solo dall'ultimo checkpoint** e un avviso lo dice. Succede solo dopo un ricaricamento (F5, scheda ripristinata dopo un crash), mai aprendo l'app da un link o da una scheda nuova. Si spegne in Impostazioni → Questo dispositivo (valido per il browser, non per il libro).
+- **Libro collegato a GitHub.** Il blocco di scrittura lasciato da una pagina di *questo* browser si sostituisce subito alla ripresa (si tiene il lock del libro, quindi quella pagina non c'è più); non serve più aspettare i tre minuti né il recupero manuale. Il blocco di un altro dispositivo resta com'era: scadenza, margine di sicurezza e conferma esplicita.
+- **Non è lavoro a pagina chiusa.** Né un worker né l'installazione come app lo rendono possibile: vedi la sezione precedente e l'ADR per le alternative valutate.
+
 ## State machine
 
 `idle -> planning -> running -> pause-requested -> paused -> running`

@@ -4,6 +4,7 @@ import {
   releaseWriterLease, renewWriterLease, RemoteWriterLost,
   type WriterLeaseHandle,
 } from "../infrastructure/github-lease";
+import { rememberWriterSession } from "../infrastructure/writer-sessions";
 
 export interface WriterGuard {
   /** Revalidate ownership against GitHub; required before and after AI calls. */
@@ -43,7 +44,14 @@ export async function withWriterGuard<T>(
     let problem: Error | undefined;
     let renewing: Promise<void> | undefined;
 
-    if (remote) lease = await acquireWriterLease(remote, bookId, sessionId);
+    // Remembered BEFORE acquiring, so a page lost right after the lease was written is
+    // still recognised as ours at the next start (best effort: without it we only wait).
+    if (remote) {
+      await rememberWriterSession(bookId, sessionId).catch(() => undefined);
+      // We hold this browser's writer lock: a lease left by an earlier page of this browser is
+      // taken over at once instead of blocking the book until it expires.
+      lease = await acquireWriterLease(remote, bookId, sessionId, false, { writerLockHeld: true });
+    }
     const heartbeat = async () => {
       if (!lease || signal.aborted || problem || renewing) return;
       renewing = (async () => {

@@ -34,6 +34,8 @@ import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSub
 import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
 import { adoptLegacyAiTraces, clearAiTraces, currentLiveAi, pruneAiTraces, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
 import { AiTraceSettings } from "./components/settings/AiTraceSettings";
+import { AutoResumeSettings } from "./components/settings/AutoResumeSettings";
+import { autoResumeEnabled, pageLoadKind, pickAutoResume } from "./application/auto-resume";
 import { aiTracePolicy, describeAiTraceRetention } from "./domain/ai-trace-policy";
 import { confirmEditorialScene } from "./application/editorial-review";
 import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type GitHubRemote, type TaskKind, type TaskReasoning } from "./domain/types";
@@ -95,6 +97,7 @@ const navigation: ReadonlyArray<{ id: Page; label: string; icon: typeof BookOpen
 ];
 const SETTINGS_TABS = [
   { id: "modelli", label: "Modelli AI" }, { id: "cloud", label: "Account e cloud" }, { id: "conversazioni", label: "Conversazioni AI" },
+  { id: "dispositivo", label: "Questo dispositivo" },
 ] as const;
 const BOOK_SETTINGS_TABS = [
   { id: "modelli", label: "Modelli" }, { id: "redazione", label: "Redazione" }, { id: "ricerca", label: "Ricerca web" },
@@ -262,13 +265,23 @@ export default function App() {
     const timer = window.setTimeout(() => cloud.tick(), 4_000);
     return () => window.clearTimeout(timer);
   }, [cloud, books]);
+  const startRunnerRef = useRef<(bookId: string) => void>(() => undefined);
+  const autoResumed = useRef(false);
   useEffect(() => {
     void (async () => {
       try {
-        await recoverInterruptedRuns();
+        const interrupted = await recoverInterruptedRuns();
         await refresh();
         adoptSaved(await loadSettings());
         setReady(true);
+        // A reload (F5, restored tab) of a page that was running: continue from the last checkpoint.
+        const resume = autoResumed.current ? undefined
+          : pickAutoResume({ enabled: autoResumeEnabled(), loadKind: pageLoadKind(), runs: interrupted, now: Date.now() });
+        if (resume) {
+          autoResumed.current = true;
+          setNotice(`«${resume.title}» stava lavorando prima del ricaricamento ed è ripreso da solo dall'ultimo checkpoint. La chiamata AI che era in corso è andata persa e potrebbe essere stata addebitata. Puoi disattivare la ripresa automatica in Impostazioni → Questo dispositivo.`);
+          startRunnerRef.current(resume.bookId);
+        }
       } catch { setNotice("Impossibile aprire IndexedDB: verifica la modalità privacy del browser."); }
     })();
   }, [refresh]);
@@ -477,6 +490,7 @@ export default function App() {
       });
     runPromise.current = promise;
   }
+  startRunnerRef.current = startRunner;
   function execute() {
     if (!current) return;
     setNotice("");
@@ -1179,6 +1193,9 @@ export default function App() {
           <p className="muted flex items-start gap-2 text-sm"><Users size={18} className="shrink-0" /> Il PAT resta cifrato nel browser. Sincronizzazione manuale, autosync e lease del writer sono in Archivio.</p>
         </Section>
         </>}
+        {tab === "dispositivo" && <Section title="Ripresa dopo un ricaricamento" description="Valgono solo per questo browser: non fanno parte del libro e non si sincronizzano.">
+          <AutoResumeSettings />
+        </Section>}
         {tab === "conversazioni" && <Section title="Richieste e risposte dell'AI" description="Il testo in arrivo dal modello si vede sempre. Qui scegli per quanto tempo restano consultabili richiesta e risposta di ogni task: contengono prompt, testo del romanzo e possibili segreti.">
           <AiTraceSettings settings={settings} onChange={patch => changeAiTracePreference(patch)}
             onClear={async () => {

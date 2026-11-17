@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newBook } from "../domain/types";
 import { getDb, saveBook } from "../infrastructure/db";
+import { isOwnWriterSession } from "../infrastructure/writer-sessions";
 
 const lease = vi.hoisted(() => ({
   acquire: vi.fn(), verify: vi.fn(), renew: vi.fn(), release: vi.fn(),
@@ -40,6 +41,22 @@ describe("Writer guard applicativa", () => {
     await expect(withWriterGuard(book.id, crypto.randomUUID(), new AbortController(), action))
       .rejects.toThrow("Altro dispositivo");
     expect(action).not.toHaveBeenCalled();
+  });
+
+  it("ricorda la sessione prima di acquisire e dichiara di tenere il lock del libro", async () => {
+    const book = newBook("Idea", "Libro di prova", "", "");
+    book.remote = { owner: "test-owner", repository: "book-repo", branch: "main" };
+    await saveBook(book, false);
+    const sessionId = crypto.randomUUID();
+    const handle = { bookId: book.id, sessionId, remote: book.remote, expiresAt: new Date(Date.now() + 100_000).toISOString(), headSha: "a".repeat(40) };
+    lease.acquire.mockImplementation(async () => {
+      // At the moment of acquiring, the session is already remembered as ours.
+      expect(await isOwnWriterSession(book.id, sessionId)).toBe(true);
+      return handle;
+    });
+    lease.verify.mockResolvedValue(handle);
+    await withWriterGuard(book.id, sessionId, new AbortController(), async guard => { await guard.assertActive(); });
+    expect(lease.acquire).toHaveBeenCalledWith(book.remote, book.id, sessionId, false, { writerLockHeld: true });
   });
 
   it("ricontrolla il possesso prima e dopo una chiamata AI", async () => {

@@ -3,8 +3,9 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, newBook } from "../domain/types";
 import { encryptLocal } from "./crypto";
 import { saveSettings } from "./db";
+import { rememberWriterSession } from "./writer-sessions";
 import {
-  acquireWriterLease, assertWriterLease, inspectWriterLease,
+  acquireWriterLease, assertWriterLease, inspectWriterLease, isLeaseFromThisBrowser,
   recoverExpiredWriterLease, LEASE_TAKEOVER_GRACE_MS,
   releaseWriterLease, renewWriterLease,
   RemoteWriterBusy, RemoteWriterLost,
@@ -181,6 +182,65 @@ describe("Lease distribuito GitHub (branch fast-forward only)", () => {
     const bodies = JSON.stringify(server.calls.filter(c => c.method === "POST").map(c => c.body));
     expect(bodies).not.toContain(TOKEN);
     expect(bodies).not.toContain("headSha");
+  });
+
+  describe("blocco lasciato da una pagina ricaricata o chiusa", () => {
+    it("lo stesso browser, che tiene il lock del libro, lo sostituisce subito con un commit fast-forward", async () => {
+      const server = githubServer();
+      const bookId = crypto.randomUUID();
+      const before = crypto.randomUUID(), after = crypto.randomUUID();
+      await rememberWriterSession(bookId, before);
+      const dead = await acquireWriterLease(remote, bookId, before, false, { writerLockHeld: true });
+      // F5: the page is gone, nobody released the lease, it is still valid for two minutes.
+      expect((await inspectWriterLease(remote, bookId))?.state).toBe("active");
+      expect(await isLeaseFromThisBrowser({ bookId, sessionId: before })).toBe(true);
+      const patches = server.calls.filter(call => call.method === "PATCH").length;
+      const fresh = await acquireWriterLease(remote, bookId, after, false, { writerLockHeld: true });
+      expect(fresh.sessionId).toBe(after);
+      expect((await inspectWriterLease(remote, bookId))).toMatchObject({ sessionId: after, state: "active" });
+      const written = server.calls.filter(call => call.method === "PATCH");
+      expect(written).toHaveLength(patches + 1);
+      expect(written.every(call => (call.body as Record<string, unknown>).force === false)).toBe(true);
+      // The page that was lost can no longer renew or confirm anything: fencing is intact.
+      await expect(renewWriterLease(dead)).rejects.toBeInstanceOf(RemoteWriterLost);
+      await expect(assertWriterLease(dead)).rejects.toBeInstanceOf(RemoteWriterLost);
+    });
+    it("senza il lock del libro nessuna sostituzione immediata, nemmeno per una sessione ricordata", async () => {
+      const server = githubServer();
+      const bookId = crypto.randomUUID();
+      const before = crypto.randomUUID();
+      await rememberWriterSession(bookId, before);
+      await acquireWriterLease(remote, bookId, before);
+      const patches = server.calls.filter(call => call.method === "PATCH").length;
+      await expect(acquireWriterLease(remote, bookId, crypto.randomUUID())).rejects.toBeInstanceOf(RemoteWriterBusy);
+      await expect(acquireWriterLease(remote, bookId, crypto.randomUUID(), false, { writerLockHeld: false })).rejects.toBeInstanceOf(RemoteWriterBusy);
+      expect(server.calls.filter(call => call.method === "PATCH")).toHaveLength(patches);
+    });
+    it("il blocco di un altro dispositivo non si sostituisce mai, anche se si tiene il lock locale", async () => {
+      const server = githubServer();
+      const bookId = crypto.randomUUID();
+      const foreign = crypto.randomUUID();
+      await acquireWriterLease(remote, bookId, foreign); // another device: never remembered for this book
+      const other = crypto.randomUUID();
+      const error = await acquireWriterLease(remote, bookId, other, false, { writerLockHeld: true }).catch(e => e as unknown);
+      expect(error).toBeInstanceOf(RemoteWriterBusy);
+      expect((error as RemoteWriterBusy).canTakeover).toBe(false);
+      expect((await inspectWriterLease(remote, bookId))?.sessionId).not.toBe(other);
+      expect(server.calls.filter(call => call.method === "PATCH")).toHaveLength(0);
+      // The same session remembered for ANOTHER book does not make this book's lease ours.
+      await rememberWriterSession(crypto.randomUUID(), foreign);
+      await expect(acquireWriterLease(remote, bookId, crypto.randomUUID(), false, { writerLockHeld: true })).rejects.toBeInstanceOf(RemoteWriterBusy);
+      expect(server.calls.filter(call => call.method === "PATCH")).toHaveLength(0);
+    });
+    it("un blocco già rilasciato o ricordato in modo parziale non cambia le regole: ricordare è solo un indizio, non un permesso", async () => {
+      githubServer();
+      const bookId = crypto.randomUUID();
+      expect(await isLeaseFromThisBrowser({ bookId, sessionId: crypto.randomUUID() })).toBe(false);
+      for (let i = 0; i < 12; i++) await rememberWriterSession(bookId, crypto.randomUUID());
+      const last = crypto.randomUUID();
+      await rememberWriterSession(bookId, last);
+      expect(await isLeaseFromThisBrowser({ bookId, sessionId: last })).toBe(true);
+    });
   });
 
   it.each(["http409", "network_before"] as const)(

@@ -3,6 +3,7 @@ import type { GitHubRemote } from "../domain/types";
 import { decryptLocal } from "./crypto";
 import { loadSettings } from "./db";
 import { validateRemote } from "./github-sync";
+import { isOwnWriterSession } from "./writer-sessions";
 
 /**
  * A GitHub branch acts as an optimistic, fast-forward-only compare-and-swap.
@@ -242,21 +243,39 @@ function handle(remote: GitHubRemote, state: WriterLeaseStatus): WriterLeaseHand
   };
 }
 
+/** True when the lease was left by a session this browser opened for the book. Only meaningful
+ * to someone who holds the book's writer Web Lock: then that page is gone. */
+export async function isLeaseFromThisBrowser(status: Pick<WriterLeaseStatus, "bookId" | "sessionId">): Promise<boolean> {
+  return isOwnWriterSession(status.bookId, status.sessionId);
+}
+
+export interface AcquireOptions {
+  /** The caller holds this book's writer Web Lock (shared by every tab of this browser).
+   * A lease left by an earlier session of THIS browser is then taken over at once, with the
+   * same fast-forward-only commit, instead of waiting for its expiry plus the grace period.
+   * A lease of any other device is never taken over this way. */
+  writerLockHeld?: boolean;
+}
+
 /**
- * Acquisition never steals a live lease. A stale lease requires explicit
- * recovery from a human (allowTakeover), after a 60s clock-skew grace period.
+ * Acquisition never steals a live lease of another device. A stale lease requires explicit
+ * recovery from a human (allowTakeover), after a 60s clock-skew grace period. The only
+ * exception is a lease our own browser left behind (reload, closed tab) while the caller
+ * holds the writer Web Lock: nothing else of this browser can still be writing.
  */
 export async function acquireWriterLease(
   remote: GitHubRemote, bookId: string, sessionId: string,
-  allowTakeover = false,
+  allowTakeover = false, options: AcquireOptions = {},
 ): Promise<WriterLeaseHandle> {
   if (!z.string().uuid().safeParse(sessionId).success) throw new Error("ID sessione lease non valido.");
   const secret = await token();
   const oldSha = await getRef(secret, remote, bookId);
   const old = oldSha ? await leaseAt(secret, remote, bookId, oldSha) : null;
   if (old?.sessionId === sessionId && active(old)) return handle(remote, old);
-  if (old && !canTakeover(old)) throw new RemoteWriterBusy(old, false);
-  if (old?.state === "active" && !allowTakeover) throw new RemoteWriterBusy(old, true);
+  const leftByThisBrowser = !!old && old.state === "active" && options.writerLockHeld === true &&
+    await isOwnWriterSession(bookId, old.sessionId);
+  if (old && !leftByThisBrowser && !canTakeover(old)) throw new RemoteWriterBusy(old, false);
+  if (old?.state === "active" && !allowTakeover && !leftByThisBrowser) throw new RemoteWriterBusy(old, true);
 
   let parent = oldSha;
   if (!parent) {

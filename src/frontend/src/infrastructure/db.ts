@@ -260,11 +260,20 @@ export async function listActivities(bookId: string): Promise<Activity[]> {
   return items.filter(item => item.bookId === bookId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export async function recoverInterruptedRuns(): Promise<void> {
+/** A book whose runner was lost (page reloaded or closed) and that recovery has just paused. */
+export interface InterruptedRun {
+  bookId: string; title: string;
+  /** Last sign of life: the book's last commit or the start of the call that was lost. */
+  lastActivityAt: string;
+}
+
+/** Pauses what a lost page left «running». Returns only the books that really were running,
+ * so the app can offer (or, for a reload, perform) the resumption. */
+export async function recoverInterruptedRuns(): Promise<InterruptedRun[]> {
   // Every new tab calls this on mount. A still-running tab owns this exact
   // Web Lock for the whole AI session: never mark its work as interrupted.
   const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
-  if (!locks?.request) return; // Fail closed; we cannot prove the writer stopped.
+  if (!locks?.request) return []; // Fail closed; we cannot prove the writer stopped.
 
   const db = await getDb();
   const books = (await db.getAll("books")) as BookProject[];
@@ -276,6 +285,7 @@ export async function recoverInterruptedRuns(): Promise<void> {
     if (activity.status === "running") candidates.add(activity.bookId);
   }
 
+  const recovered: InterruptedRun[] = [];
   for (const bookId of candidates) {
     await locks.request("bookwriter:writer:" + bookId, { ifAvailable: true }, async lock => {
       if (!lock) return; // A different tab is still writing this book.
@@ -284,7 +294,10 @@ export async function recoverInterruptedRuns(): Promise<void> {
       const tx = db.transaction(["books", "activities"], "readwrite");
       const bookStore = tx.objectStore("books");
       const book = await bookStore.get(bookId) as BookProject | undefined;
+      let wasRunning = false;
+      let lastActivityAt = book?.updatedAt ?? "";
       if (book?.status === "running") {
+        wasRunning = true;
         book.status = "paused";
         book.previousError = "La pagina è stata interrotta. Riprendi dall'ultimo checkpoint.";
         await bookStore.put(book, bookId);
@@ -294,6 +307,7 @@ export async function recoverInterruptedRuns(): Promise<void> {
       while (cursor) {
         const activity = cursor.value as Activity;
         if (activity.bookId === bookId && activity.status === "running") {
+          if (Date.parse(activity.createdAt) > Date.parse(lastActivityAt || "0")) lastActivityAt = activity.createdAt;
           activity.status = "cancelled";
           activity.error = "Browser interrotto prima della conclusione: attività non confermata.";
           activity.endedAt = new Date().toISOString();
@@ -302,6 +316,8 @@ export async function recoverInterruptedRuns(): Promise<void> {
         cursor = await cursor.continue();
       }
       await tx.done;
+      if (wasRunning && book && lastActivityAt) recovered.push({ bookId, title: book.title, lastActivityAt });
     });
   }
+  return recovered;
 }

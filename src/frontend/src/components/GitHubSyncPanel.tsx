@@ -12,7 +12,7 @@ import { getManualPushIntent, type ManualPushIntent } from "../infrastructure/ma
 import { getOutbox, retryBlockedSync } from "../infrastructure/outbox";
 import { drainGitHubOutbox } from "../application/auto-sync";
 import {
-  inspectWriterLease, isLeaseRecoverable, recoverExpiredWriterLease,
+  inspectWriterLease, isLeaseFromThisBrowser, isLeaseRecoverable, recoverExpiredWriterLease,
   type WriterLeaseStatus,
 } from "../infrastructure/github-lease";
 import {
@@ -62,6 +62,7 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
   const [outbox, setOutbox] = useState<SyncOutboxItem | undefined>();
   const [manualIntent, setManualIntent] = useState<ManualPushIntent | undefined>();
   const [writerLease, setWriterLease] = useState<WriterLeaseStatus | null>(null);
+  const [leaseFromThisBrowser, setLeaseFromThisBrowser] = useState(false);
   const [leaseCheckError, setLeaseCheckError] = useState("");
   const [leaseCheckState, setLeaseCheckState] = useState<"checking" | "checked" | "error">("checking");
 
@@ -134,15 +135,18 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
       // Pending and failed reads must never be presented as verified lease
       // status. Ignore older responses from overlapping periodic checks.
       setLeaseCheckState("checking");
-      void inspectWriterLease(book.remote, book.id).then(value => {
+      void inspectWriterLease(book.remote, book.id).then(async value => {
+        const own = value ? await isLeaseFromThisBrowser(value) : false;
         if (mounted && requestId === requestSequence) {
           setWriterLease(value);
+          setLeaseFromThisBrowser(own);
           setLeaseCheckError("");
           setLeaseCheckState("checked");
         }
       }).catch(error => {
         if (mounted && requestId === requestSequence) {
           setWriterLease(null);
+          setLeaseFromThisBrowser(false);
           setLeaseCheckError("Impossibile verificare il lock GitHub; non presumere che il libro sia libero. " +
             (error instanceof Error ? error.message : "Riprova la verifica prima di riprendere."));
           setLeaseCheckState("error");
@@ -445,13 +449,14 @@ export function GitHubSyncPanel({ book, settings, onSaveSettings, onRefresh, onS
             isLeaseRecoverable(writerLease) ? "Scaduto: recupero manuale possibile" :
             Date.parse(writerLease.expiresAt) <= Date.now() ? "Scaduto, in attesa del margine di sicurezza" : "Scrittura in uso"}</p>
           <p className="muted text-xs">Sessione: {writerLease.sessionId.slice(0, 8)} · Scadenza: {new Date(writerLease.expiresAt).toLocaleString("it-IT")}</p>
+          {writerLease.state === "active" && leaseFromThisBrowser && <p className="text-xs text-emerald-700 dark:text-emerald-300">Lasciato da una pagina di questo browser (ricaricata o chiusa): se non c'è un'altra scheda al lavoro, alla prossima ripresa viene sostituito subito, senza aspettare la scadenza.</p>}
           {isLeaseRecoverable(writerLease) &&
             <Button variant="outline" size="sm" disabled={busy || book?.status === "running"} onClick={() => void recoverWriter()}>
               Recupera lease scaduto
             </Button>}
         </div>}
         {leaseCheckState === "error" && leaseCheckError && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">{leaseCheckError}</p>}
-        <p className="muted mt-2 text-xs">È un blocco di scrittura, non una fase del libro. Evita che due dispositivi scrivano insieme. Un rifiuto GitHub non prova da solo che ci sia un altro browser attivo. Se la pagina si chiude, il blocco può restare attivo per due minuti; il recupero richiede un altro minuto di sicurezza e una conferma.</p>
+        <p className="muted mt-2 text-xs">È un blocco di scrittura, non una fase del libro. Evita che due dispositivi scrivano insieme. Un rifiuto GitHub non prova da solo che ci sia un altro browser attivo. Se si chiude o si ricarica una pagina di questo browser, alla ripresa il suo blocco viene sostituito subito. Se invece si chiude un altro dispositivo, il blocco può restare attivo per due minuti; il recupero richiede un altro minuto di sicurezza e una conferma.</p>
       </div>}
       {connected && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700">
         <label className="flex items-center gap-3">
