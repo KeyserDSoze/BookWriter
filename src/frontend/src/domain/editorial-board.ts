@@ -1977,9 +1977,10 @@ export function beginNextRound(cycle: ChapterEditorialCycle): void {
   cycle.reports = []; cycle.judgment = undefined; cycle.repairCursor = 0;
   const limit = Math.min(MAX_EDITORIAL_ROUNDS, maxEditorialRounds(cycle.profileSettings));
   cycle.stage = cycle.round > limit ? "blocked" : "review";
-  if (cycle.stage === "blocked")
+  if (cycle.stage === "blocked") {
     cycle.blockedReason = ({ 1: "Un ciclo non ha", 2: "Due cicli non hanno" } as Record<number, string>)[limit] ?? "Tre cicli non hanno";
     cycle.blockedReason += " risolto i problemi: serve una decisione umana.";
+  }
 }
 /** Applied after the director's verdict: a rejected or violated mandatory rule stops the board. */
 export function blockOnMandatoryRules(cycle: ChapterEditorialCycle): boolean {

@@ -1,5 +1,9 @@
 # Changelog — BookWriter
 
+## 0.30.2 — 2026-11-18 — Messaggio di blocco della redazione scritto solo a blocco avvenuto
+
+- Dopo l'ultimo giro della redazione, il testo «… non hanno risolto i problemi: serve una decisione umana.» veniva aggiunto anche quando il ciclo non era bloccato (parentesi mancanti nel codice): ora si scrive solo a blocco avvenuto. Il blocco in sé non cambia: dopo il numero massimo di giri il capitolo resta in pausa finché l'autore dà un'istruzione nel pannello Redazione e preme «Riparti con i nuovi vincoli».
+
 ## 0.30.1 — 2026-11-17 — Un errore 500 passeggero di GitHub non abbatte più il compito in corso (ADR 0166)
 
 - **Il problema.** Durante la richiesta lunga del direttore è comparso «GitHub non ha confermato la creazione del commit del blocco di scrittura (HTTP 500)» e il compito è fallito (con la richiesta AI persa e forse addebitata). Un errore 500 o una rete assente dicevano «blocco perso» anche se non dimostrano nulla su chi tiene il blocco.
