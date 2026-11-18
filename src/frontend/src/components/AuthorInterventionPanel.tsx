@@ -30,7 +30,7 @@ export function interventionScopeBlocker(book: BookProject, scope: AuthorInterve
   if (scope !== "rewrite") return completed ? "Il libro è completato: usa «Rivedi anche il già scritto»." : undefined;
   if (book.editorialReviewSceneIds?.length) return "Conferma prima le scene fuse nella pagina Libro.";
   const stage = book.editorialCycle?.stage;
-  if (stage === "blocked") return "Redazione bloccata: rispondi nel pannello Redazione più in basso.";
+  if (stage === "blocked") return "Redazione bloccata: decidi nella pagina Revisioni (elenco dei rilievi con la proposta del direttore).";
   if (book.editorialCycle && !["review", "adjudicate", "summary"].includes(stage ?? ""))
     return "La redazione sta applicando correzioni: attendi la fine di questa fase.";
   if (!book.chapters.length) return "Non c'è ancora un piano o un testo da riscrivere.";

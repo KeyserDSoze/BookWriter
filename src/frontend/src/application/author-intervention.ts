@@ -60,7 +60,7 @@ export async function recordAuthorIntervention(
         throw new Error("Conferma le scene fuse nel Lettore prima di richiedere altre revisioni AI.");
       const stage = book.editorialCycle?.stage;
       if (book.editorialCycle && stage === "blocked")
-        throw new Error("La redazione del capitolo è bloccata: indica come risolverla nel pannello Redazione con «Riparti con i nuovi vincoli».");
+        throw new Error("La redazione del capitolo è bloccata: decidi nella pagina Revisioni (o con «Riparti con i nuovi vincoli» nel pannello Redazione).");
       if (book.editorialCycle && !REWRITABLE_REVIEW_STAGES.has(stage ?? ""))
         throw new Error("La redazione del capitolo sta applicando correzioni: attendi la fine di questa fase oppure registra un intervento «Da ora in poi».");
       if (!book.chapters.length)

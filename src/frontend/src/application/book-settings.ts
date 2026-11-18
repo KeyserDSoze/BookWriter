@@ -19,6 +19,13 @@ async function mutateBookSettings(bookId: string, expectedUpdatedAt: string, app
   });
 }
 
+/** Delegate the decision on a blocked chapter to the director (opt-in, per book). */
+export async function updateDirectorDecidesWhenBlocked(bookId: string, expectedUpdatedAt: string, enabled: boolean): Promise<void> {
+  await mutateBookSettings(bookId, expectedUpdatedAt, book => {
+    if (enabled) book.directorDecidesWhenBlocked = true; else delete book.directorDecidesWhenBlocked;
+  });
+}
+
 function assertTaskKinds(kinds: readonly TaskKind[]): void {
   if (!kinds.length || kinds.some(kind => !TASK_KINDS.includes(kind))) throw new Error("Attività non valide.");
 }

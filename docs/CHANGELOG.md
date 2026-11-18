@@ -1,5 +1,14 @@
 # Changelog — BookWriter
 
+## 0.31.0 — 2026-11-18 — Redazione bloccata: revisione dei rilievi stile pull request e delega al direttore
+
+- **Pagina Revisioni:** quando la redazione di un capitolo è bloccata compare «Redazione in attesa di te» con i rilievi dell'ultima tornata, uno alla volta: citazione, motivo e proposta del revisore, trattamento e motivo del direttore. Per ogni rilievo scegli «Accetto la proposta del direttore», «Accetta così com'è» oppure una tua indicazione (nota senza limite nella bozza). «Accetto tutte le proposte del direttore», nota generale, avanzamento n/m. Pulsante rapido dalla Dashboard, badge «!» nel menu e «Revisioni · decidi» nella barra di stato.
+- **Bozza sul dispositivo:** salvata in automatico e con «Salva bozza» in IndexedDB (`meta`), mai in ZIP, GitHub o profilo cloud.
+- **Azioni finali:** «Applica e rifai la tornata» (le decisioni diventano un'unica indicazione compatta) oppure «Chiudi il capitolo così (congela)», senza altra verifica, registrata su ciclo, capitolo e log.
+- **Delega al direttore:** casella «Il direttore decide da solo a fine cicli» (Revisioni e Modelli e redazione → Redazione). Finite le tornate, il direttore chiude il capitolo senza chiamate AI e l'autopilot prosegue; con una regola obbligatoria respinta e verdetto freeze il libro non si ferma più.
+- **Limite dichiarato:** i vincoli del libro (letti da tutti i revisori) hanno un tetto di 8.000 caratteri uniti; un testo che non entra non viene applicato né troncato (la bozza resta intera). `reopenChapterReview` lo controlla.
+- **Limiti:** la chiusura forzata salta la verifica finale: è una decisione registrata, non una verifica.
+
 ## 0.30.2 — 2026-11-18 — Messaggio di blocco della redazione scritto solo a blocco avvenuto
 
 - Dopo l'ultimo giro della redazione, il testo «… non hanno risolto i problemi: serve una decisione umana.» veniva aggiunto anche quando il ciclo non era bloccato (parentesi mancanti nel codice): ora si scrive solo a blocco avvenuto. Il blocco in sé non cambia: dopo il numero massimo di giri il capitolo resta in pausa finché l'autore dà un'istruzione nel pannello Redazione e preme «Riparti con i nuovi vincoli».

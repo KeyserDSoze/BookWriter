@@ -546,6 +546,8 @@ export interface ChapterEditorialCycle {
   runningChapterSummary?: string; runningBookSummary?: string;
   priorRounds: EditorialRound[];
   blockedReason?: string;
+  /** The block was lifted without a clean verification round: the summary gates are skipped, the decision is recorded. */
+  forcedClose?: { at: string; by: "author" | "director"; note: string };
   /** Reviewers of this cycle when the book uses the light board; absent = all twelve. Fixed at the first report. */
   roles?: EditorialRole[];
   /** Immutable author template snapshot for this cycle, never another reviewer's conversation. */
@@ -1975,6 +1977,7 @@ export function beginNextRound(cycle: ChapterEditorialCycle): void {
   cycle.priorRounds.push(archiveEditorialRound(cycle));
   cycle.round++;
   cycle.reports = []; cycle.judgment = undefined; cycle.repairCursor = 0;
+  delete cycle.forcedClose;
   const limit = Math.min(MAX_EDITORIAL_ROUNDS, maxEditorialRounds(cycle.profileSettings));
   cycle.stage = cycle.round > limit ? "blocked" : "review";
   if (cycle.stage === "blocked") {
@@ -1995,4 +1998,22 @@ export function blockOnMandatoryRules(cycle: ChapterEditorialCycle): boolean {
     "Decidi tu: riparti con un'indicazione oppure rendi la regola consultiva in Modelli e redazione.",
   ].filter(Boolean).join(" ");
   return true;
+}
+/** Lift a block WITHOUT another verification round: the chapter goes to the synopsis/freeze
+ * step with the decision recorded on the cycle. The summary gates (12×N coverage, freeze
+ * judgment integrity) are skipped only for a cycle carrying `forcedClose`. Never silent:
+ * the caller records who decided and why. */
+export function forceCloseCycle(
+  cycle: ChapterEditorialCycle, by: "author" | "director", note: string, now: string,
+): void {
+  if (cycle.stage !== "blocked") throw new Error("La redazione non è bloccata: niente da chiudere.");
+  cycle.forcedClose = { at: now, by, note };
+  cycle.stage = "summary";
+  cycle.summaryCursor = 0;
+  delete cycle.runningChapterSummary; delete cycle.runningBookSummary;
+  delete cycle.blockedReason;
+}
+/** True when a block comes from the round limit (no judgment left on the cycle), not from a mandatory rule. */
+export function blockedByRoundLimit(cycle: ChapterEditorialCycle): boolean {
+  return cycle.stage === "blocked" && !cycle.judgment;
 }

@@ -135,6 +135,9 @@ const archivedCycleSchema = z.object({
   reports: z.array(archivedReportSchema).max(MAX_EDITORIAL_REPORTS),
   judgment: archivedJudgmentSchema.optional(),
   priorRounds: z.array(archivedRoundSchema).max(3),
+  forcedClose: z.object({
+    at: z.string().datetime(), by: z.enum(["author", "director"]), note: z.string().max(20_000),
+  }).strict().optional(),
 }).passthrough().superRefine(refineProfileSnapshot);
 const editorialRecoveryArchiveSchema = z.object({
   chapterId: zId,
@@ -148,6 +151,10 @@ const chapterSchema = z.object({
   purpose: z.string().max(20_000), scenes: z.array(sceneSchema).max(200),
   continuityRecheck: continuityRecheckSchema.optional(),
   editorialMode: z.literal("light").optional(),
+  forcedFreeze: z.object({
+    at: z.string().datetime(), by: z.enum(["author", "director"]),
+    note: z.string().max(20_000), frozenAt: z.string().datetime(),
+  }).strict().optional(),
   // Each reopening (Rivaluta, tracked change, edit) archives up to three more rounds.
   editorialRounds: z.array(archivedRoundSchema).max(MAX_ARCHIVED_ROUNDS).optional(),
   lastContinuityReview: continuityAuditSchema.optional(),
@@ -311,6 +318,7 @@ const bookSchema = z.object({
   knowledge: knowledgeBaseSchema.optional(),
   changeOperations: z.array(changeOperationSchema).max(MAX_CHANGE_OPERATIONS).optional(),
   changeMode: z.enum(["auto", "confirm"]).optional(),
+  directorDecidesWhenBlocked: z.boolean().optional(),
   webResearch: webResearchSettingsSchema.optional(),
   webResearchLog: researchLogSchema.optional(),
   edits: z.array(bookEditSchema).max(MAX_EDITS).optional(),

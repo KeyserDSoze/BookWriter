@@ -371,8 +371,8 @@ function RoundDetails({ round, reports, judgment, chapter, roles, profileSetting
 }
 
 export function EditorialBoardPanel({
-  book, onRefresh,
-}: { book: BookProject; onRefresh: () => Promise<void> }) {
+  book, onRefresh, onOpenBlockedReview,
+}: { book: BookProject; onRefresh: () => Promise<void>; onOpenBlockedReview?: () => void }) {
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -477,6 +477,10 @@ export function EditorialBoardPanel({
         <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
           <ShieldAlert size={18} className="shrink-0"/> {cycle.blockedReason}
         </p>
+        {onOpenBlockedReview && <div className="space-y-1">
+          <Button onClick={onOpenBlockedReview}>Esamina i rilievi e decidi (pagina intera)</Button>
+          <p className="muted text-xs">Elenco dei rilievi con la proposta del direttore, bozze salvate e la scelta di chiudere il capitolo.</p>
+        </div>}
         <label className="block text-sm font-semibold">
           Istruzione dell'autore per una nuova tornata
           <textarea className="field mt-1 min-h-24" value={instruction}

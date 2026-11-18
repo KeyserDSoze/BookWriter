@@ -56,7 +56,7 @@ describe("Descrizione del prossimo passo dell'autopilot", () => {
     expect(review.acceptsAuthorNotes).toBe(false);
     book.editorialCycle.stage = "blocked";
     book.editorialCycle.blockedReason = "Tre tornate senza consenso.";
-    expect(describeNextAutopilotStep(book).blocked).toBe("Tre tornate senza consenso.");
+    expect(describeNextAutopilotStep(book).blocked).toBe("Tre tornate senza consenso. Decidi nella pagina Revisioni.");
   });
 
   it("descrive revisione, completamento e scene fuse da confermare senza lanciare eccezioni", () => {

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Tabs } from "./components/ui/primitives";
 import { ReviewsPage } from "./components/review/ReviewsPage";
+import { DirectorDecidesToggle } from "./components/review/BlockedReviewPanel";
 import { findScene, pendingElements, type EditTarget } from "./domain/book-edits";
 import { activeManualReview } from "./domain/manual-review";
 import { LibraryPage } from "./components/LibraryPage";
@@ -399,6 +400,7 @@ export default function App() {
   const pendingFused = current?.editorialReviewSceneIds?.length ?? 0;
   const pendingReview = useMemo(() => current ? pendingElements(current).filter(p => p.state === "modified_unreviewed" || p.state === "review_failed").length : 0, [current]);
   const reviewRunning = !!current && !!activeManualReview(current);
+  const blockedReview = current?.editorialCycle?.stage === "blocked";
   const [worldFocus, setWorldFocus] = useState<WorldFocus>();
   const [reviewPreselect, setReviewPreselect] = useState<EditTarget[]>();
   function openReviews(targets?: EditTarget[]) { setReviewPreselect(targets?.length ? targets : undefined); setPage("reviews"); }
@@ -845,6 +847,7 @@ export default function App() {
   const bookPage = page !== "library" && page !== "settings";
   const navBadge = (id: Page) =>
     id === "reviews" && reviewRunning || id === "dashboard" && current?.status === "running" ? <span aria-hidden className="nav-dot"/>
+    : id === "reviews" && blockedReview ? <span aria-hidden className="nav-count">!</span>
     : id === "reviews" && pendingReview > 0 ? <span aria-hidden className="nav-count">{pendingReview}</span> : null;
   const sideItem = (item: typeof navigation[number]) => <button key={item.id} type="button" aria-label={item.label}
     data-tip={navCollapsed ? item.label : undefined}
@@ -935,9 +938,9 @@ export default function App() {
           {githubSave.active && githubSave.unsaved && <Button variant="outline" disabled={githubSave.saving || !!githubSave.blocker} onClick={() => void githubSave.saveNow()}
             title="Salva il libro su GitHub adesso, anche mentre l'autopilot lavora"><CloudUpload size={17}/> {githubSave.saving ? "Salvataggio…" : "Salva su GitHub"}</Button>}
           <Button variant="outline" onClick={openIntervention}><MessageSquareText size={17}/> Intervieni</Button>
-          {(pendingReview > 0 || reviewRunning || page === "reviews") && <Button variant={reviewRunning ? "secondary" : "outline"} onClick={() => setPage("reviews")}
-            aria-label={reviewRunning ? "Revisioni: review in corso" : `Revisioni: ${pendingReview} da rivedere`}>
-            <ClipboardCheck size={17}/> Revisioni{reviewRunning ? " · in corso" : <span className="rounded-full bg-amber-500/20 px-1.5 text-amber-800 dark:text-amber-300"><span className="text-xs">{pendingReview}</span></span>}</Button>}
+          {(pendingReview > 0 || reviewRunning || blockedReview || page === "reviews") && <Button variant={reviewRunning || blockedReview ? "secondary" : "outline"} onClick={() => setPage("reviews")}
+            aria-label={blockedReview ? "Revisioni: redazione in attesa di te" : reviewRunning ? "Revisioni: review in corso" : `Revisioni: ${pendingReview} da rivedere`}>
+            <ClipboardCheck size={17}/> Revisioni{blockedReview ? " · decidi" : reviewRunning ? " · in corso" : <span className="rounded-full bg-amber-500/20 px-1.5 text-amber-800 dark:text-amber-300"><span className="text-xs">{pendingReview}</span></span>}</Button>}
           <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setPage("activities")}><ListChecks size={17} /> Log</Button>
           {pendingFused > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({pendingFused})</Button>}
         </div>
@@ -970,7 +973,10 @@ export default function App() {
               onInherit={kinds => void inheritBookModels(kinds)}
               onEditorialMode={mode => void updateBookEditorial(mode)}
               onConcurrency={value => void updateBookConcurrency(value)} />}
-            {tab === "redazione" && <EditorialProfilesPanel key={current.id} book={current} onRefresh={refresh}/>}
+            {tab === "redazione" && <div className="min-w-0 space-y-4">
+              <section className="panel p-3 sm:p-4" aria-label="Decisione a fine cicli"><DirectorDecidesToggle book={current} onRefresh={refresh}/></section>
+              <EditorialProfilesPanel key={current.id} book={current} onRefresh={refresh}/>
+            </div>}
             {tab === "ricerca" && <WebResearchPanel key={"research-" + current.id} book={current} settings={settings} onRefresh={refresh}
               onRoute={(endpointId, modelId) => void updateBookRoute("research", endpointId, modelId)}/>}
           </div>
@@ -1037,7 +1043,7 @@ export default function App() {
           {current.ideas && <Section title="Idee long / mid / short term"><div className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6">{current.ideas}</div></Section>}
         </div>
         <div className="space-y-4">
-          <EditorialBoardPanel book={current} onRefresh={refresh}/>
+          <EditorialBoardPanel book={current} onRefresh={refresh} onOpenBlockedReview={() => setPage("reviews")}/>
           <Section title="Memoria narrativa" description="Dettagli completi nella pagina Mondo.">
             <div className="grid grid-cols-2 gap-2 text-sm">
               {[

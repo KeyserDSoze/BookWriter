@@ -157,6 +157,8 @@ export interface Chapter {
   /** Rolling, public book synopsis at this chapter freeze: supports safe rewind. */
   bookSummaryAtFreeze?: string;
   frozenAt?: string;
+  /** The chapter was closed without a clean verification round (author or director decision). Valid only while `frozenAt` equals `forcedFreeze.frozenAt`. */
+  forcedFreeze?: { at: string; by: "author" | "director"; note: string; frozenAt: string };
   /** Frozen by the reduced ("light") editorial board. Absent = full twelve-role board. */
   editorialMode?: "light";
   editorialRounds?: EditorialRound[];
@@ -284,6 +286,8 @@ export interface BookProject {
   changeOperations?: NarrativeChangeOperation[];
   /** "auto" (default) rewrites dependent scenes at once; "confirm" pauses on the plan. */
   changeMode?: "auto" | "confirm";
+  /** Opt-in: when a chapter's editorial rounds run out the director closes it by itself instead of waiting for the author. */
+  directorDecidesWhenBlocked?: boolean;
   /** Opt-in web research the autopilot may request (absent = never). */
   webResearch?: WebResearchSettings;
   /** Queries already run, their sources and the task that asked (bounded). */

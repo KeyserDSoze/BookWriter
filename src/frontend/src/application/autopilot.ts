@@ -17,7 +17,7 @@ import { parseJsonReply } from "../domain/json-reply";
 import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../infrastructure/db";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, judgeBatchesOf, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, judgeToolSchema, REVIEW_REPORT_TOOL, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, blockedByRoundLimit, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, forceCloseCycle, judgeBatchesOf, mandatoryRuleRejections, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, judgeToolSchema, REVIEW_REPORT_TOOL, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
 import { SUBMIT_TOOL_NOTE, describeUnder, toolOutputAvailable, toolParameters, type ToolSchema } from "../domain/structured-output";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
@@ -763,8 +763,12 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
           current.stage = current.judgment.verdict === "freeze" ? "summary" : "repair";
           current.repairCursor = 0;
           current.summaryCursor = 0;
-          // A rejected MANDATORY writer rule never freezes or repairs silently.
-          if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
+          // A rejected MANDATORY writer rule never freezes or repairs silently, unless the author
+          // delegated the decision: then the director goes on and the cycle records that it did.
+          if (b.directorDecidesWhenBlocked === true && mandatoryRuleRejections(current).length) {
+            current.forcedClose = { at: new Date().toISOString(), by: "director",
+              note: "Regola obbligatoria dello scrittore non soddisfatta: il direttore ha proseguito per delega dell'autore." };
+          } else if (blockOnMandatoryRules(current)) { b.status = "paused"; b.previousError = current.blockedReason; }
         };
         return {
           phase: "chapterReview", kind: "chapterJudge", json: judgeTool, system: prompt.system,
@@ -870,7 +874,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
                 if (scene.status === "draft") scene.status = "canon";
               }
               beginNextRound(current.cycle);
-              if (current.cycle.stage === "blocked") {
+              if (current.cycle.stage === "blocked" && b.directorDecidesWhenBlocked !== true) {
                 b.status = "paused";
                 b.previousError = current.cycle.blockedReason;
               }
@@ -879,10 +883,13 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         };
       }
       if (cycle.stage === "summary") {
-        assertEditorialReviewCoverage(book, cycle, true);
-        // Restored/imported freeze verdicts cannot skip the judge's complete
-        // 1:1 decision matrix, rejected findings or independent live critiques.
-        assertSavedEditorialFreezeJudgmentIntegrity(book, cycle);
+        // A cycle closed by an explicit author/director decision has no verification round to re-check.
+        if (!cycle.forcedClose) {
+          assertEditorialReviewCoverage(book, cycle, true);
+          // Restored/imported freeze verdicts cannot skip the judge's complete
+          // 1:1 decision matrix, rejected findings or independent live critiques.
+          assertSavedEditorialFreezeJudgmentIntegrity(book, cycle);
+        }
         const segments = chapterSegments(chapter);
         const index = cycle.summaryCursor!;
         const segment = segments[index];
@@ -910,10 +917,12 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             if (!ch) throw new Error("Sessione di sintesi non valida: capitolo assente.");
             const data = editorialSummarySchema.parse(parseJson(text));
-            assertEditorialReviewCoverage(b, current, true);
-            // Check once more on the exact book revision being committed;
-            // a judge/scene/summary cursor could change during the AI call.
-            assertSavedEditorialFreezeJudgmentIntegrity(b, current);
+            if (!current.forcedClose) {
+              assertEditorialReviewCoverage(b, current, true);
+              // Check once more on the exact book revision being committed;
+              // a judge/scene/summary cursor could change during the AI call.
+              assertSavedEditorialFreezeJudgmentIntegrity(b, current);
+            }
             current.runningChapterSummary = data.chapterSummary;
             current.runningBookSummary = data.bookSummary;
             current.summaryCursor = current.summaryCursor! + 1;
@@ -926,11 +935,12 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
               // A style-only edit reopens one chapter: later frozen chapters keep the full synopsis.
               if (!b.chapters.some(other => other.number > ch.number && other.frozenAt)) b.bookSummary = data.bookSummary;
               ch.frozenAt = freezeTime;
+              if (current.forcedClose) ch.forcedFreeze = { ...current.forcedClose, frozenAt: freezeTime }; else delete ch.forcedFreeze;
               // The new validation covers the current text: older «modified after review» marks are settled.
               delete ch.summaryStale; delete ch.reviewStale;
               settleChapterEdits(b, ch);
               if (current.profileSettings ? current.profileMode === "light" : !!current.roles) ch.editorialMode = "light"; else delete ch.editorialMode;
-              ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, archiveEditorialRound(current)];
+              ch.editorialRounds = [...(ch.editorialRounds ?? []), ...current.priorRounds, ...(current.judgment ? [archiveEditorialRound(current)] : [])];
               b.editorialCycle = undefined;
               b.currentSceneId = undefined;
               b.phase = "prose";
@@ -1400,6 +1410,28 @@ export class AutopilotRunner {
               nextStep: change ? "Nuova redazione dei capitoli toccati, poi la modifica risulterà completata." : "L'istruzione resta un vincolo permanente per i prossimi task.",
               status: "succeeded", aiRequested: false, createdAt: now, endedAt: now,
               summary: shortSummary((change ? "Modifica senza altre riscritture: " : "Nessuna scena riscritta per: ") + instruction),
+            }, expected);
+          } catch (error) { if (error instanceof BookRevisionConflict) continue; throw error; }
+          await onUpdate();
+          continue;
+        }
+        // Delegated by the author: when the rounds run out the director closes the chapter itself
+        // (no AI call). The decision is recorded on the cycle, the chapter and the activity log.
+        if (book.directorDecidesWhenBlocked === true && book.editorialCycle && blockedByRoundLimit(book.editorialCycle)) {
+          const expected = book.updatedAt;
+          const chapterNumber = book.chapters.find(ch => ch.id === book.editorialCycle!.chapterId)?.number;
+          const now = new Date().toISOString();
+          const note = "Le tornate previste sono finite con rilievi ancora aperti: per delega dell'autore il direttore chiude il capitolo " +
+            (chapterNumber ?? "") + " con l'esito dell'ultima tornata, senza un'altra verifica.";
+          forceCloseCycle(book.editorialCycle, "director", note, now);
+          book.previousError = undefined;
+          try {
+            await saveBookAndActivity(book, {
+              id: crypto.randomUUID(), bookId, runId, phase: "chapterReview",
+              title: "Il direttore chiude il capitolo " + (chapterNumber ?? ""),
+              reason: "Il libro è impostato perché il direttore decida da solo quando i cicli di revisione sono finiti.",
+              nextStep: "Sinossi del capitolo e congelamento, poi il capitolo successivo.",
+              status: "succeeded", aiRequested: false, createdAt: now, endedAt: now, summary: shortSummary(note),
             }, expected);
           } catch (error) { if (error instanceof BookRevisionConflict) continue; throw error; }
           await onUpdate();

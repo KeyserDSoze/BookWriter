@@ -12,6 +12,7 @@ import { skipElementReview } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge, EmptyState, Segmented, StatTile } from "../ui/primitives";
 import { DiffView, readableSnapshot } from "../edit/EditKit";
+import { BlockedReviewPanel } from "./BlockedReviewPanel";
 
 const keyOf = (t: EditTarget) => t.kind + "|" + t.id;
 const SEVERITY = { critical: { label: "Critico", tone: "rose" }, major: { label: "Importante", tone: "amber" }, minor: { label: "Minore", tone: "sky" } } as const;
@@ -287,6 +288,7 @@ export function ReviewsPage({ book, runningHere, onStart, onRefresh, onOpen, pre
     document.getElementById("review-actions")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   return <div className="min-w-0 space-y-4">
+    {book.editorialCycle?.stage === "blocked" && <BlockedReviewPanel book={book} onRefresh={onRefresh} onStart={onStart}/>}
     <section className="panel space-y-3 p-3 sm:p-4" aria-label="Modifiche e review">
       <div className="min-w-0"><h2 className="flex items-center gap-2 text-lg font-semibold"><ListChecks size={20} className="text-emerald-600 dark:text-emerald-300"/> Modifiche e review</h2>
         <p className="muted text-sm">Salvare non è validare: ogni modifica, tua o dell'AI, resta «da rivedere» finché non scegli tu cosa controllare, quando e come. Nessuna review parte da sola.</p></div>

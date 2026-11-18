@@ -40,7 +40,7 @@ function assertChangeAllowed(book: BookProject): void {
   if (book.editorialReviewSceneIds?.length) throw new Error("Conferma le scene fuse nel Lettore prima di chiedere altre modifiche.");
   const stage = book.editorialCycle?.stage;
   if (book.editorialCycle && stage === "blocked")
-    throw new Error("La redazione del capitolo è bloccata: risolvila nel pannello Redazione prima di altre modifiche.");
+    throw new Error("La redazione del capitolo è bloccata: risolvila nella pagina Revisioni prima di altre modifiche.");
   if (book.editorialCycle && !REWRITABLE_REVIEW_STAGES.has(stage ?? ""))
     throw new Error("La redazione sta applicando correzioni: attendi la fine di questa fase.");
   if (!book.chapters.length) throw new Error("Non c'è ancora un piano del libro.");

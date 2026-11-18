@@ -202,10 +202,14 @@ export function describeNextAutopilotStep(book: BookProject): AutopilotStepView 
           return view(`Aggiornamento della memoria dopo le correzioni del ${where}.`, {
             acceptsAuthorNotes: true, chapterNumber: chapter.number });
         case "summary":
-          return view(`Sinossi e congelamento del ${where}.`, { chapterNumber: chapter.number });
+          return view(cycle.forcedClose
+            ? `Sinossi e congelamento del ${where}, chiuso senza altra verifica (${cycle.forcedClose.by === "author" ? "decisione dell'autore" : "decisione del direttore"}).`
+            : `Sinossi e congelamento del ${where}.`, { chapterNumber: chapter.number });
         case "blocked":
+          if (book.directorDecidesWhenBlocked === true && !cycle.judgment)
+            return view(`Il direttore chiude da solo il ${where}: le tornate previste sono finite.`, { chapterNumber: chapter.number });
           return view(`Redazione del ${where} bloccata.`, { chapterNumber: chapter.number,
-            blocked: cycle.blockedReason ?? "Servono le tue indicazioni nel pannello Redazione." });
+            blocked: (cycle.blockedReason ?? "Servono le tue indicazioni.") + " Decidi nella pagina Revisioni." });
       }
       return view(`Redazione del ${where}.`, { chapterNumber: chapter.number });
     }

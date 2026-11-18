@@ -1,6 +1,7 @@
 import type { Activity, BookProject } from "../domain/types";
 import { acceptedRepairs, archiveEditorialRound, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertSavedEditorialJudgmentIntegrity, createEditorialCycle, repairPrompt } from "../domain/editorial-board";
 import { synopsisBeforeChapter } from "../domain/editorial-summary";
+import { AUTHOR_CONSTRAINTS_LIMIT } from "../domain/blocked-review";
 import { markDownstreamContinuity } from "../domain/cross-chapter-continuity";
 import { getBook, getDb } from "../infrastructure/db";
 
@@ -40,7 +41,13 @@ export async function reopenChapterReview(bookId: string, chapterId: string, ins
             ...(previous.judgment ? [archiveEditorialRound(previous)] : [])];
         }
       }
-      if (instruction.trim()) book.authorConstraints.push(instruction.trim());
+      if (instruction.trim()) {
+        // Every reviewer reads the constraints: a longer total would make all their prompts fail.
+        const total = [...(book.authorConstraints ?? []), instruction.trim()].join("\n").length;
+        if (total > AUTHOR_CONSTRAINTS_LIMIT)
+          throw new Error("I vincoli del libro superano " + AUTHOR_CONSTRAINTS_LIMIT + " caratteri (" + total + "): li leggono tutti i revisori. Accorcia la nota.");
+        book.authorConstraints.push(instruction.trim());
+      }
       if (book.remote) book.remote.autoSync = false;
       const dependentCount = markDownstreamContinuity(book, target, "author_reopen",
         target.scenes.map(scene => scene.id));
@@ -111,6 +118,9 @@ export function editorialRecoveryProblem(book: BookProject): string | undefined 
       if (cycle.repairCursor === 0)
         assertEditorialReviewCoverage(book, cycle, true);
       repairPrompt(book, cycle, nextSceneId);
+    } else if (cycle.stage === "summary" && cycle.forcedClose) {
+      // Closed by an explicit author/director decision: there is no verification round to re-check.
+      return;
     } else {
       assertEditorialReviewCoverage(book, cycle, cycle.stage !== "review");
       if (cycle.stage === "summary")
