@@ -1,7 +1,8 @@
 # Changelog — BookWriter
 
-## Non rilasciato — 2026-11-19 — Retry a due livelli e prima tranche server
+## 0.32.0 — 2026-11-19 — Motore condiviso, retry a due livelli e prima tranche del server personale
 
+- Versione 0.32.0: il motore condiviso (`src/engine`) è la base sia del browser sia del server. Il server personale è **sperimentale**: non è un prodotto completo né un servizio installabile.
 - ADR 0167/0168 e piani F02/F03, seguiti dalla richiesta di implementazione: [stato reale e prova da sorgente](personal-server-development.md).
 - Previsti motore unico Node.js/TypeScript e browser, server Windows/Linux, pairing sulla porta amministrativa locale 24105, token revocabili, file per libro, repliche dei client, connessione nel profilo cloud, tunnel isolato e aggiornamenti firmati.
 - **Chiarimento dell'autore recepito:** il server gestirà direttamente anche PAT, lease e salvataggi GitHub dopo i compiti, senza browser aperti; invariati nel progetto SHA/ACK, `force:false`, limiti e distanza automatica di due minuti.
