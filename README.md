@@ -4,6 +4,8 @@
 
 > Stato: **prima applicazione local-first e in evoluzione**. Le funzionalità descritte sono obiettivi di prodotto, non ancora un'applicazione pronta per la produzione.
 
+La pagina **Impostazioni → Server personale** contiene ora la guida di preparazione in italiano, inglese e spagnolo, link ufficiali, copia dei comandi e download locale degli script PowerShell/Bash. Sono assistenti source-only, non installer firmati.
+
 ## In sviluppo: retry a due livelli e server personale opzionale
 
 **Prima tranche sperimentale, frontend dalla 0.32.0:** retry long-term configurabili e durevoli, host **Node.js/TypeScript** con lo stesso motore del browser, archivio file, vault, admin **24105**, API **24106**, pairing e primi comandi/repliche client. Il server usa anche PAT, lease e salvataggi GitHub. La modalità locale resta indipendente.

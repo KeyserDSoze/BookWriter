@@ -10,6 +10,7 @@ import {
   setPersonalServerBookPat, syncPersonalServer, type PendingServerPairing, type ServerConfigurationReview,
 } from "../../infrastructure/personal-server-client";
 import { Button } from "../ui/button";
+import { PersonalServerSetupGuide } from "./PersonalServerSetupGuide";
 import { REPLICA_AUTO_UPDATE_PREF, replicaFeed, setReplicaAutoUpdate } from "../../application/personal-server-feed";
 import { readPref } from "../../application/ui-prefs";
 import {
@@ -157,7 +158,7 @@ export function PersonalServerPanel({ settings, settingsDirty, book, onChanged, 
       <Button type="button" disabled={busy} onClick={() => execute(async () => {
         const count = await syncPersonalServer(); await onChanged(); setNotice(`${count} repliche confermate dal server. Nessuna chiamata AI avviata.`);
       })}>Sincronizza dal server</Button>
-      <p className="muted text-sm">Questa prima tranche crea libri sul server e scarica repliche. Trasferimenti GitHub, ritorno al locale e tutte le funzioni editoriali remote non sono ancora completi. Non è attivo un inoltro globale di tutte le richieste.</p>
+      <p className="muted text-sm">Questa tranche crea libri, trasferisce al server anche libri già su GitHub e permette di riportarli qui. Alcune funzioni editoriali e il catalogo remoto completo non sono ancora disponibili.</p>
       {pendingCreation && <section className="space-y-2" aria-label="Creazione sul server da confermare">
         <p>Creazione di «{pendingCreation.input.title}» da confermare. Si può reinviare soltanto la stessa richiesta: non crea un duplicato e non avvia AI.</p>
         <Button type="button" variant="outline" disabled={busy} onClick={() => execute(() => finishCreation(resumePersonalServerCreation))}>Riprendi creazione sul server</Button>
@@ -258,10 +259,6 @@ export function PersonalServerPanel({ settings, settingsDirty, book, onChanged, 
         })}>Revoca PAT delegato</Button>}
       </div>
     </section>}
-    <section className="panel space-y-2 p-4">
-      <h2 className="text-lg font-semibold">Installazione e aggiornamenti</h2>
-      <p>Linux / Windows: pacchetti firmati non ancora disponibili. Nessun download o aggiornamento viene simulato.</p>
-      <p className="muted text-sm">Avvio da sorgente: consulta <code>docs/personal-server-development.md</code>. Il pannello amministrativo usa 24105; il tunnel deve esporre solo l’API 24106. Non modificare tunnel di altre applicazioni.</p>
-    </section>
+    <PersonalServerSetupGuide/>
   </div>;
 }

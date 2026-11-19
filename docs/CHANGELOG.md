@@ -1,5 +1,9 @@
 # Changelog — BookWriter
 
+## 0.34.3 — 2026-11-19 — Guida server integrata e multilingua
+
+- **Server personale:** la pagina Impostazioni ora contiene una guida in italiano, inglese e spagnolo con link visibili a Node.js, Git, repository, ZIP del sorgente e documentazione. Comandi separati Windows PowerShell/Linux Bash, copia e download locale di script source-only. Sono script preparatori da ispezionare, non installer/updater firmati; il browser non li esegue e non espone il pannello admin tramite rete.
+
 ## 0.34.2 — 2026-11-19 — Ripresa corretta delle remediation editoriali su più scene
 
 - Corretto il gate della remediation: quando il capitolo ha più scene da correggere, il controllo rivalida soltanto la citazione narrativa della **prossima scena**. Le citazioni delle scene già riscritte non devono tornare al testo originario e non bloccano più la ripresa; il testo e il giudizio già salvati restano intatti.

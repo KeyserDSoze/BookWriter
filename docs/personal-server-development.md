@@ -46,6 +46,16 @@ src/engine/src/
 - **Nuovo libro server:** titolo, idea, stile e pubblico si inseriscono direttamente. Puoi riusare i profili dei lettori/scrittori/direttore, preferenze di redazione, rotte, reasoning e limiti del budget di un libro, con un nuovo periodo di conteggio. Le istruzioni dei profili si copiano come scritte; il template non preleva capitoli, memoria, sinossi, credenziali o consensi. Non avvia l'AI. Una risposta persa lascia la creazione in attesa; «Riprendi creazione sul server» ritenta solo lo stesso identificativo e payload, con lo stesso client verificato.
 - **Libro affidato:** conserva le configurazioni nel libro, con revoca dei consensi ereditati. La modifica dei profili e degli override **dopo** la creazione o l'affidamento non è ancora esposta da remoto. Un endpoint o modello citato dal libro deve comunque essere configurato sul server; il confronto non certifica che un modello/chiave funzioni.
 
+## Guida integrata nell’app
+
+In **Impostazioni → Server personale → Scarica il sorgente e prepara il server** ci sono:
+- selezione della lingua fra italiano, inglese e spagnolo;
+- comandi distinti per Windows PowerShell e Linux Bash;
+- link diretti al repository, allo ZIP del sorgente, alla documentazione completa, a Node 22+ e Git 2.32+;
+- copia dei comandi e download locale di uno script `.ps1`/`.sh` da ispezionare prima dell'uso.
+
+Il pulsante scarica solo un assistente **source-only**, non un installer né un updater. Non esegue comandi dal browser, non contiene token e non firma l'applicazione. Dopo la preparazione l'autore avvia ancora manualmente `node dist/server.mjs --data-root ...` e apre il pannello loopback 24105.
+
 ## Come provarlo su Linux
 
 Prerequisiti: Node 22, dipendenze di sviluppo del progetto installabili dal lockfile esistente, `flock`, filesystem locale e directory privata. Non usare NFS/SMB o una cartella sincronizzata.

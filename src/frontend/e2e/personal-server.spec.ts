@@ -329,3 +329,38 @@ test("aggiornamento automatico: un evento SSE autenticato aggiorna la replica, s
   await expect(page.getByText(/spento su questo dispositivo/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
+
+test("guida installazione server: lingue, link verificabili e script locale senza esecuzione", async ({ page }) => {
+  await page.goto("/impostazioni?tab=server");
+  const guide = page.getByRole("region", { name: "Guida installazione server personale" });
+  await expect(guide).toBeVisible();
+  await expect(guide.getByRole("heading", { name: /Scarica il sorgente e prepara il server|Download the source and prepare the server|Descarga el código y prepara el servidor/ })).toBeVisible();
+  await expect(guide.getByRole("link", { name: "GitHub", exact: true })).toHaveAttribute("href", "https://github.com/KeyserDSoze/BookWriter");
+  await expect(guide.getByRole("link", { name: /Scarica il sorgente ZIP|Download source ZIP|Descargar ZIP del código/ })).toHaveAttribute("href", /KeyserDSoze\/BookWriter\/archive\/refs\/heads\/main\.zip/);
+  await expect(guide.getByRole("link", { name: /Guida completa|Full guide|Guía completa/ })).toHaveAttribute("href", /personal-server-development\.md/);
+  await guide.getByLabel(/Lingua guida|Guide language|Idioma de la guía/).selectOption("en");
+  await expect(guide.getByRole("heading", { name: "Download the source and prepare the server" })).toBeVisible();
+  await guide.getByLabel("Operating system").selectOption("windows");
+  await expect(guide.locator("pre")).toContainText("Set-Location");
+  const download = page.waitForEvent("download");
+  await guide.getByRole("button", { name: "Download preparation script" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe("bookwriter-server-setup.ps1");
+  const path = await file.path();
+  expect(path).toBeTruthy();
+  const text = await (await import("node:fs/promises")).readFile(path!, "utf8");
+  expect(text).toContain("git clone"); expect(text).toContain("npm ci --no-audit --no-fund"); expect(text).toContain("inspect before running");
+  expect(text).not.toContain("apikey"); expect(text).not.toContain("--force");
+  await guide.getByLabel("Operating system").selectOption("linux");
+  const linuxDownload = page.waitForEvent("download");
+  await guide.getByRole("button", { name: "Download preparation script" }).click();
+  const linuxFile = await linuxDownload;
+  expect(linuxFile.suggestedFilename()).toBe("bookwriter-server-setup.sh");
+  const linuxPath = await linuxFile.path();
+  const linuxText = await (await import("node:fs/promises")).readFile(linuxPath!, "utf8");
+  expect(linuxText).toContain("#!/usr/bin/env bash"); expect(linuxText).toContain("flock (util-linux)"); expect(linuxText).toContain("Git 2.32+");
+  await guide.getByLabel("Guide language").selectOption("es");
+  await expect(guide.getByRole("heading", { name: "Descarga el código y prepara el servidor" })).toBeVisible();
+  await expect(guide.getByRole("button", { name: "Descargar script de preparación" })).toBeEnabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
