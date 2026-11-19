@@ -6,13 +6,13 @@
 
 ## In sviluppo: retry a due livelli e server personale opzionale
 
-**Preparazione locale non rilasciata:** retry long-term configurabili e durevoli, host **Node.js/TypeScript** che riusa il runner del browser, archivio file, vault, admin **24105**, API **24106**, pairing e primi comandi/repliche client. Il server usa anche PAT, lease e salvataggi GitHub. La modalità locale resta indipendente.
+**Prima tranche sperimentale, frontend dalla 0.32.0:** retry long-term configurabili e durevoli, host **Node.js/TypeScript** con lo stesso motore del browser, archivio file, vault, admin **24105**, API **24106**, pairing e primi comandi/repliche client. Il server usa anche PAT, lease e salvataggi GitHub. La modalità locale resta indipendente.
 
 **Non è ancora la feature completa:** trasferimenti di autorità, tutti i comandi editoriali, connessioni cloud/multi-PAT, riallineamento automatico, installer, tunnel guidato e updater firmato restano da completare. Nessun installer/download è pubblicato. [Stato reale e prova da sorgente](docs/personal-server-development.md).
 
 [Progetto e flussi](docs/personal-server.md) · [Motore e protocollo](docs/personal-server-protocol.md) · [ADR 0167](ADR/0167-optional-personal-server-and-shared-engine.md) · [Piano in otto tranche e accettazione F02](features/F02-personal-server.md).
 
-**Implementazione locale in preparazione per entrambi gli ambienti:** retry **short-term** ravvicinati e retry **long-term** dopo una pausa configurabile in minuti, con stato persistente, annullamento e budget della stessa sessione. Non ancora rilasciata: [specifica](docs/retry-policy.md), [ADR 0168](ADR/0168-short-and-long-term-retry.md), [F03](features/F03-two-level-retry.md).
+**Stesso retry nei due ambienti:** **short-term** ravvicinato e **long-term** dopo una pausa configurabile in minuti, con stato persistente, annullamento e budget della stessa sessione. [Specifica e limiti](docs/retry-policy.md) · [ADR 0168](ADR/0168-short-and-long-term-retry.md) · [F03](features/F03-two-level-retry.md).
 
 ## Funzionalità disponibili
 

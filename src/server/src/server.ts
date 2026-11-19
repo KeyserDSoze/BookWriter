@@ -3,7 +3,8 @@ import { generateKeyPairSync, createPrivateKey, createHash, sign } from "node:cr
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import {
-  z, serverScopeSchema, cloudSettingsSchema, normalizeServerUrl, SERVER_API_VERSION, handoffRequestSchema, handoffResolveSchema,
+  z, serverScopeSchema, cloudSettingsSchema, normalizeServerUrl, SERVER_API_VERSION,
+  handoffRequestSchema, handoffResolveSchema, serverBookCreationInputSchema,
   installHostRuntime, type HostBookRecord, type BookProject,
   readGitHubExecutionAuthority, subscribeLiveAi, currentLiveAi,
 } from "@engine/index";
@@ -28,13 +29,10 @@ const installationSchema = z.object({
 }).strict();
 const uuid = z.string().uuid();
 const secretText = z.string().min(1).max(4096);
-const createSchema = z.object({
-  commandId: uuid, title: z.string().min(1).max(300), brief: z.string().min(1).max(100_000),
-  writingStyle: z.string().max(8000), audience: z.string().max(8000),
-}).strict();
+const createSchema = z.strictObject({ commandId: uuid, ...serverBookCreationInputSchema.shape });
 const provisionSchema = z.object({
   consent: z.literal(true), settings: cloudSettingsSchema,
-  endpointKeys: z.record(z.string().max(100), secretText).refine(v => Object.keys(v).length <= 50),
+  endpointKeys: z.record(z.string().max(100), secretText.nullable()).refine(v => Object.keys(v).length <= 50),
   bookId: uuid.optional(), githubToken: z.string().min(1).max(600).nullable().optional(),
 }).strict();
 
@@ -102,12 +100,22 @@ export async function startPersonalServer(options: ServerOptions) {
   // The installed runtime is the only global host; no fake browser database.
   const host = await createRuntime(store, vault, {
     serverId: installation.serverId,
-    assertAuthority: async book => {
+    assertAuthority: async (book, signal) => {
       if (!book.remote) return;
-      const remote = await readGitHubExecutionAuthority(book.remote);
+      if (!book.remote.lastSyncedCommit)
+        throw new Error("Effettua e conferma il primo salvataggio GitHub prima di avviare AI.");
+      const remote = await readGitHubExecutionAuthority(book.remote, signal);
       if (remote.bookId !== book.id || remote.authority.serverId !== installation.serverId ||
           remote.authority.epoch !== book.executionAuthority?.epoch)
         throw new Error("Autorità GitHub non confermata: il server non avvia richieste AI.");
+      if (remote.head !== book.remote.lastSyncedCommit) {
+        // Our autosync may have acknowledged its commit while the proof was being read.
+        const latest = (await store.read(book.id))?.book;
+        if (latest?.executionAuthority?.serverId !== installation.serverId ||
+            latest.executionAuthority.epoch !== remote.authority.epoch || latest.remote?.lastSyncedCommit !== remote.head ||
+            latest.remote.owner !== book.remote.owner || latest.remote.repository !== book.remote.repository || latest.remote.branch !== book.remote.branch)
+          throw new Error("La baseline GitHub è cambiata o non è confermata: nessuna nuova richiesta AI.");
+      }
     },
   });
   const controller = new Controller(store, host.runtime, installation.serverId, client => auth.isCurrent(client));
@@ -190,6 +198,12 @@ export async function startPersonalServer(options: ServerOptions) {
         auth.authenticate(header(req, "apikey"), scope);
         if (!auth.isCurrent(client)) throw new ApiError(401, "revoked", "Token revocato.");
       };
+      const configurationRevision = () => {
+        const expected = /^"config:(\d+)"$/.exec(header(req, "if-match") ?? "");
+        if (!expected || !Number.isSafeInteger(Number(expected[1])))
+          throw new ApiError(412, "revision", "Versione delle impostazioni richiesta.");
+        return Number(expected[1]);
+      };
       if (url.pathname === "/api/v1/session" && req.method === "GET") {
         json(res, 200, { clientId: client.id, label: client.label, scopes: client.scopes }); return;
       }
@@ -230,9 +244,12 @@ export async function startPersonalServer(options: ServerOptions) {
         const id = uuid.parse(bookRoute[1]);
         if (bookRoute[2] === "snapshot" && req.method === "GET" && !bookRoute[3]) {
           requireScope("read"); const record = await getRecord(id);
+          // The local revocation epoch stays on the server. Keep the v1 snapshot
+          // readable by older clients with a strict retry schedule schema.
+          const { settingsEpoch: _local, ...retry } = record.retrySchedule ?? {};
           requireScope("read"); res.setHeader("ETag", bookEtag(record));
           json(res, 200, { book: record.book, activities: record.activities, revision: record.revision,
-            nextSequence: (record.watermarks?.[client.id] ?? 0) + 1, retrySchedule: record.retrySchedule ?? null,
+            nextSequence: (record.watermarks?.[client.id] ?? 0) + 1, retrySchedule: record.retrySchedule ? retry : null,
             hasManualPushIntent: !!record.manualPushIntent }); return;
         }
         if (bookRoute[2] === "commands" && req.method === "POST" && !bookRoute[3]) {
@@ -261,11 +278,20 @@ export async function startPersonalServer(options: ServerOptions) {
       }
       if (url.pathname === "/api/v1/settings" && req.method === "POST") {
         requireScope("write");
+        const expected = configurationRevision();
         const body = provisionSchema.parse(await readBody(req, 1024 * 1024));
         requireScope("write");
-        const expected = /^"config:(\d+)"$/.exec(header(req, "if-match") ?? "");
-        if (!expected) throw new ApiError(412, "revision", "Versione delle impostazioni richiesta.");
-        json(res, 200, await controller.configure(() => host.provision(body, Number(expected[1]), installation.allowedAiBases))); return;
+        json(res, 200, await controller.configure(() => host.provision(body, expected, installation.allowedAiBases, () => requireScope("write")))); return;
+      }
+      const patRoute = /^\/api\/v1\/books\/([a-f0-9-]+)\/github-credential$/.exec(url.pathname);
+      if (patRoute && req.method === "POST") {
+        requireScope("write");
+        const expected = configurationRevision();
+        const id = uuid.parse(patRoute[1]);
+        const { githubToken } = z.strictObject({ consent: z.literal(true), githubToken: z.string().trim().min(1).max(600).nullable() })
+          .parse(await readBody(req, 4096));
+        requireScope("write");
+        json(res, 200, await controller.configure(() => host.setBookPat(id, githubToken, expected, () => requireScope("write")))); return;
       }
       if (url.pathname === "/api/v1/events" && req.method === "GET") {
         requireScope("read");

@@ -210,7 +210,7 @@ export const hostContract: ContractCase[] = [
     const plan = makeRetrySchedule({ bookId: book.id, runId, endpointId: "openai", modelId: "mock",
       bookStamp: retryStamp(narrativeStateJson(book)), taskKey: retryStamp("brainstorm:contratto"),
       policy: settings.endpoints[0]!.longTermRetry!, authorizedPolicies: { openai: settings.endpoints[0]!.longTermRetry! },
-      cyclesUsed: 0, now: Date.now() })!;
+      cyclesUsed: 0, settingsEpoch: (await host.loadRetrySettings()).epoch, now: Date.now() })!;
     const attempt = activityOf(book, "failed", runId);
     await t.rejects(saveFailedRetry(book, attempt, "token-vecchio", plan), () => true);
     t.equal((await host.listActivities(book.id)).length, 0, "a refused save leaves neither wait nor log");

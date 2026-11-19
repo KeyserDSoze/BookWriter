@@ -37,8 +37,8 @@ export interface TraceStore {
 export interface RunAdmission {
   /** Further exclusive locks held for the whole run, in order. */
   locks?(book: BookProject): string[];
-  /** Fails when this host may not write the book (a replica in the browser, an expired authority on the server). */
-  assert?(book: BookProject): Promise<void>;
+  /** Additional admission for AI: for a server-owned GitHub book the published authority must be current. */
+  assert?(book: BookProject, signal?: AbortSignal): Promise<void>;
   /** False for a book that this host only mirrors; the engine then leaves it alone instead of failing. */
   owns?(book: BookProject): boolean;
 }
@@ -57,6 +57,11 @@ export interface HostRuntime {
   listBooks(): Promise<BookProject[]>;
   listBookIds(): Promise<string[]>;
   loadSettings(): Promise<AppSettings>;
+  /** Read policy and revocation epoch together. For the final request fence,
+   * include the book and its plan in that same read. */
+  loadRetrySettings(bookId?: string): Promise<{
+    settings: AppSettings; epoch: string | null; book?: BookProject; plan?: RetrySchedule;
+  }>;
   saveSettings(settings: AppSettings, isCurrent?: () => boolean): Promise<void>;
   saveBook(book: BookProject, queueSync: boolean, expectedUpdatedAt?: string): Promise<void>;
   saveActivity(activity: Activity): Promise<void>;

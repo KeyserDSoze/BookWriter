@@ -1,15 +1,20 @@
 import "fake-indexeddb/auto";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { generateKeyPairSync, createHash, sign } from "node:crypto";
-import { newBook } from "@engine/domain/types";
+import { DEFAULT_SETTINGS, newBook } from "@engine/domain/types";
 import { BOOK_FORMAT_VERSION } from "@engine/domain/book-format";
-import { getDb, getBook, saveBook, saveActivity, recoverInterruptedRuns } from "../infrastructure/db";
+import { getDb, getBook, saveBook, saveActivity, saveSettings, recoverInterruptedRuns } from "../infrastructure/db";
+import { encryptLocal } from "../infrastructure/crypto";
+import { projectSettings } from "@engine/domain/cloud-profile";
+import { host } from "@engine/core/host";
 import {
   probePersonalServer, connectPersonalServer, syncServerBook, personalServerConnection,
   disconnectPersonalServer, sendServerCommand, reconcileServerCommand, SERVER_CONNECTION_KEY, replicaKey,
+  createPersonalServerBook, pendingPersonalServerCreation, resumePersonalServerCreation,
+  personalServerConfiguration, provisionPersonalServer, setPersonalServerBookPat,
 } from "../infrastructure/personal-server-client";
 import { withWriterGuard } from "@engine/application/writer-guard";
-import { serverCommandDigestInput, type ServerCommandEnvelope, type ServerCommandReceipt } from "@engine/domain/personal-server";
+import { serverBookConfigFromBook, serverCommandDigestInput, type ServerCommandEnvelope, type ServerCommandReceipt } from "@engine/domain/personal-server";
 import { serverCommandJournalKey, readServerCommandJournal } from "../infrastructure/personal-server-command-journal";
 
 const keys = generateKeyPairSync("ed25519");
@@ -23,7 +28,7 @@ let onApi: ((url: URL, init: RequestInit) => Response | undefined | Promise<Resp
 const answer = (data: unknown, headers = {}) => new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", ...headers } });
 beforeEach(async () => {
   const db = await getDb();
-  for (const store of ["books", "activities", "outbox", "meta"]) await db.clear(store);
+  for (const store of ["books", "activities", "outbox", "meta", "settings"]) await db.clear(store);
   requests = [];
   clientId = crypto.randomUUID(); revision = 1; nextSequence = 1; onApi = undefined;
   remote = newBook("Sintetico", "Replica", "Chiaro", "Adulti");
@@ -82,6 +87,10 @@ describe("Replica del server: identità, fencing e isolamento", () => {
     await expect(saveBook(remote, true, remote.updatedAt)).rejects.toThrow("replica");
     await expect(saveActivity({ id: crypto.randomUUID(), bookId: remote.id, runId: crypto.randomUUID(), phase: "brainstorm",
       title: "Non consentito", status: "running", reason: "", nextStep: "", createdAt: new Date().toISOString() })).rejects.toThrow("replica");
+    await expect(host().transaction(remote.id, record => {
+      record.activities.push({ id: crypto.randomUUID(), bookId: remote.id, runId: crypto.randomUUID(), phase: "brainstorm",
+        title: "Non consentito", status: "succeeded", reason: "", nextStep: "", createdAt: new Date().toISOString() });
+    }, { activities: true })).rejects.toThrow("replica");
     const action = vi.fn();
     await expect(withWriterGuard(remote.id, crypto.randomUUID(), new AbortController(), action)).rejects.toThrow("replica");
     expect(action).not.toHaveBeenCalled();
@@ -103,6 +112,81 @@ describe("Replica del server: identità, fencing e isolamento", () => {
     await disconnectPersonalServer();
     expect(await (await getDb()).get("meta", SERVER_CONNECTION_KEY)).toBeUndefined();
     expect((await getBook(remote.id))?.executionAuthority?.serverId).toBe(serverId);
+  });
+});
+
+describe("Creazione e impostazioni riviste prima dell'invio", () => {
+  it("dopo un ACK perso reinvia la stessa creazione con il solo template e la conclude insieme alla replica", async () => {
+    await connect();
+    const source = newBook("PREMESSA_NON_DA_COPIARE", "Sorgente", "Stile", "Adulti");
+    source.memory.secrets["RISERVATO"] = "Testo da non copiare";
+    source.authorConstraints = ["VINCOLO_NON_DA_COPIARE"];
+    source.editorialProfiles = { schemaVersion: 1, writers: [], readers: [{ id: "lettore", name: "Lettore personale",
+      instructions: "Controlla il ritmo del dialogo.", enabled: true, role: "readerGenre" }] };
+    source.modelRoutes = { audience: { endpointId: "openai", modelId: "custom" } };
+    source.aiBudget = { enabled: true, enabledAt: "2000-01-01T00:00:00.000Z", limitEur: 20, maxOutputTokens: 256 };
+    const bodies: string[] = [];
+    onApi = async (url, init) => {
+      if (url.pathname === "/api/v1/books" && init.method === "POST") {
+        bodies.push(String(init.body));
+        expect((await pendingPersonalServerCreation())?.commandId).toBe(JSON.parse(bodies[0]!).commandId);
+        if (bodies.length === 1) throw new TypeError("Risposta sintetica persa");
+        return answer({ bookId: remote.id });
+      }
+    };
+    const input = { title: "Nuovo", brief: "Idea nuova", writingStyle: "Chiaro", audience: "Adulti", bookConfig: serverBookConfigFromBook(source) };
+    await expect(createPersonalServerBook(input)).rejects.toThrow("non confermata");
+    await expect(createPersonalServerBook(input)).rejects.toThrow("Esiste già una creazione");
+    expect(await pendingPersonalServerCreation()).not.toBeUndefined();
+    expect((await resumePersonalServerCreation()).id).toBe(remote.id);
+    expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
+    expect(JSON.parse(bodies[0]!).bookConfig).toMatchObject({ editorialProfiles: source.editorialProfiles, modelRoutes: source.modelRoutes });
+    expect(bodies[0]).not.toMatch(/PREMESSA_NON_DA_COPIARE|VINCOLO_NON_DA_COPIARE|RISERVATO|enabledAt|executionAuthority/);
+    expect(await pendingPersonalServerCreation()).toBeUndefined();
+  });
+
+  it("rifiuta il cambio di client nel riprendere una creazione", async () => {
+    await connect();
+    const input = { title: "Nuovo", brief: "Idea", writingStyle: "Chiaro", audience: "Adulti" };
+    onApi = (url, init) => {
+      if (url.pathname === "/api/v1/books" && init.method === "POST") throw new TypeError("Risposta sintetica persa");
+      return undefined;
+    };
+    await expect(createPersonalServerBook(input)).rejects.toThrow();
+    clientId = crypto.randomUUID(); await connect();
+    await expect(resumePersonalServerCreation()).rejects.toThrow("stesso server e client");
+    expect(requests.filter(r => r.url.endsWith("/api/v1/books"))).toHaveLength(1);
+  });
+
+  it("usa la revisione mostrata, non scrive bozze e la delega PAT non riscrive il router", async () => {
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    settings.githubToken = await encryptLocal("PAT sintetico");
+    settings.endpoints[0]!.secret = await encryptLocal("Chiave sintetica");
+    await saveSettings(settings);
+    await connect();
+    const writes: unknown[] = [];
+    let remoteRevision = 3;
+    onApi = (url, init) => {
+      if (url.pathname === "/api/v1/settings" && init.method === "GET")
+        return answer({ revision: remoteRevision, settings: projectSettings(settings), endpointKeys: [], githubBooks: [] }, { ETag: `"config:${remoteRevision}"` });
+      if (init.method === "POST") {
+        writes.push(JSON.parse(String(init.body)));
+        if (new Headers(init.headers).get("If-Match") !== `"config:${remoteRevision}"`)
+          return new Response("{}", { status: 412 });
+        return answer({ revision: ++remoteRevision });
+      }
+    };
+    const compared = await personalServerConfiguration();
+    const draft = { ...settings, defaultRoute: { ...settings.defaultRoute, modelId: "non salvato" } };
+    await expect(provisionPersonalServer(compared, draft, {})).rejects.toThrow("salvate sono cambiate");
+    expect(writes).toHaveLength(0);
+    remoteRevision++;
+    await expect(provisionPersonalServer(compared, settings, { openai: "delegate" })).rejects.toMatchObject({ status: 412 });
+    expect(requests.filter(r => r.url.endsWith("/settings")), "no new GET to silently replace the reviewed ETag").toHaveLength(2);
+    const fresh = await personalServerConfiguration();
+    await setPersonalServerBookPat(fresh, remote.id, "delegate", settings.githubToken);
+    expect(writes[1]).toEqual({ consent: true, githubToken: "PAT sintetico" });
+    expect(requests.at(-1)?.url).toContain(`/books/${remote.id}/github-credential`);
   });
 });
 

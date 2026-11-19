@@ -5,11 +5,12 @@ import {
   drainGitHubOutbox, saveToGitHubNow, pushManualGitHubBook,
   validateRemote, inspectRepository, inspectGitHubDestination, githubPublicationBlocker,
   type HostRuntime, type HostBookRecord, type BookProject, type Activity, type ServerCommandEnvelope,
+  type ServerBookCreationInput,
 } from "@engine/index";
 import { FileBookStore } from "./files";
 import type { Client } from "./auth";
 import { ApiError } from "./errors";
-import { HandoffService } from "./handoff";
+import { HandoffService, isOriginReceipt } from "./handoff";
 
 const BUSY_LOCK = "Un'altra operazione sta usando il blocco: riprova più tardi.";
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -82,7 +83,10 @@ export class Controller {
       }
       if (record.runAuthorization && record.runAuthorization.state !== "stopped") record.runAuthorization.state = "uncertain";
       for (const receipt of Object.values(record.commands)) if (receipt.state === "accepted") receipt.state = "uncertain";
-      if (record.retrySchedule?.state === "claimed" || interrupted) delete record.retrySchedule;
+      if (record.retrySchedule && (record.retrySchedule.state === "claimed" || interrupted)) {
+        delete record.retrySchedule;
+        record.book.previousError = "Ripartenza long-term interrotta: controlla l'attività prima di riprendere. Nessuna nuova richiesta automatica.";
+      }
     });
   }
   startScheduler(): void {
@@ -118,7 +122,7 @@ export class Controller {
     // run() installs its AbortController synchronously: pause must also work
     // while the guard is still checking ownership, before the first task.
     entry.promise = runner.run(id, async () => {
-      void drainGitHubOutbox().catch(() => undefined);
+      if (!this.shuttingDown) void this.track(drainGitHubOutbox(), this.effects).catch(() => undefined);
     }, options).catch(() => undefined).then(async () => {
       await this.store.transaction(id, record => {
         if (record.runAuthorization && record.runAuthorization.runId === options.runId) record.runAuthorization.state = "stopped";
@@ -128,7 +132,7 @@ export class Controller {
       if (this.runners.get(id) === entry) this.runners.delete(id);
     });
   }
-  async create(client: Client, commandId: string, input: { title: string; brief: string; writingStyle: string; audience: string }): Promise<string> {
+  async create(client: Client, commandId: string, input: ServerBookCreationInput): Promise<string> {
     if (!client.scopes.includes("write")) throw new ApiError(403, "scope", "Permesso di scrittura richiesto.");
     const id = creationId(this.serverId, commandId);
     return this.track(this.store.serial("$create:" + id, async () => {
@@ -142,6 +146,12 @@ export class Controller {
         return id;
       }
       const book = newBook(input.brief, input.title, input.writingStyle, input.audience);
+      if (input.bookConfig) {
+        const { aiBudget, ...editorial } = structuredClone(input.bookConfig);
+        Object.assign(book, editorial);
+        // The new book does not inherit the original book's metering period.
+        if (aiBudget) book.aiBudget = { ...aiBudget, enabledAt: book.createdAt };
+      }
       book.id = id; book.status = "paused";
       book.executionAuthority = { kind: "server", serverId: this.serverId, epoch: randomUUID() };
       await this.store.create({ version: 1, revision: 1, book, activities: [], watermarks: {},
@@ -179,6 +189,8 @@ export class Controller {
       const last = record.watermarks?.[client.id] ?? 0;
       if (envelope.sequence !== last + 1) throw new ApiError(409, "sequence", "Sequenza del comando non attuale: riconcilia lo stato.");
       const cmd = envelope.command;
+      if (cmd.type === "start" && record.retrySchedule)
+        throw new ApiError(409, "retry_pending", "Usa «Riprova ora» per conservare la sessione, oppure annulla prima l'attesa.");
       if (["start", "retry_now"].includes(cmd.type) &&
           (this.shuttingDown || this.runners.size >= 2 || this.runners.has(id) ||
             ["requested", "started"].includes(record.runAuthorization?.state ?? "")))
@@ -193,7 +205,6 @@ export class Controller {
           throw new ApiError(409, "retry", "Il retry non è più in attesa.");
         const runId = cmd.type === "retry_now" ? record.retrySchedule!.runId : randomUUID();
         record.runAuthorization = { commandId: envelope.commandId, runId, state: "requested" };
-        if (cmd.type === "start") delete record.retrySchedule;
         receipt.result = { runId }; effect = true; receipt.state = "accepted";
       } else if (cmd.type === "pause" || cmd.type === "stop_after_task" || cmd.type === "save_github" || cmd.type === "connect_github") {
         if (cmd.type === "pause" || cmd.type === "stop_after_task") {
@@ -252,7 +263,8 @@ export class Controller {
     // Sequence watermarks survive compaction; an evicted command is never replayed.
     const receipts = Object.entries(record.commands);
     if (receipts.length < 2000) return;
-    for (const [key, receipt] of receipts.slice(0, 1000)) if (receipt.state === "completed") delete record.commands[key];
+    const compactable = receipts.filter(([, receipt]) => receipt.state === "completed" && !isOriginReceipt(receipt, record.book.id));
+    for (const [key] of compactable.slice(0, 1000)) delete record.commands[key];
     if (Object.keys(record.commands).length >= 2000)
       throw new ApiError(409, "receipts", "Ricevute incerte da riconciliare prima di nuovi comandi.");
   }
@@ -301,7 +313,7 @@ export class Controller {
             throw new Error("Autorizzazione del run non attuale.");
           authorization.state = "started"; return authorization.runId;
         });
-        this.launch(id, cmd.type === "start" ? { runId } : { generation: cmd.generation, force: true });
+        this.launch(id, cmd.type === "start" ? { runId } : { generation: cmd.generation, force: true, runId });
         result = { runId };
       } else if (cmd.type === "pause") {
         this.runners.get(id)?.runner.stop();
@@ -352,8 +364,10 @@ export class Controller {
   }
   /** Waits for currently admitted work; unlike close(), does not request a stop. */
   async waitForIdle(): Promise<void> {
-    await Promise.allSettled([...this.operations, ...this.effects]);
-    await Promise.allSettled([...this.runners.values()].map(r => r.promise));
+    // Operations and runners can enqueue effects (including an outbox pass) while settling.
+    while (this.operations.size || this.effects.size || this.runners.size) {
+      await Promise.allSettled([...this.operations, ...this.effects, ...[...this.runners.values()].map(r => r.promise)]);
+    }
   }
   async close(): Promise<void> {
     this.shuttingDown = true;

@@ -37,7 +37,11 @@ export class Vault {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       key = randomBytes(32);
-      await fs.writeFile(file, process.platform === "win32" ? await dpapi(key, true) : key, { flag: "wx", mode: 0o600 });
+      await fs.writeFile(file, process.platform === "win32" ? await dpapi(key, true) : key, { flag: "wx", mode: 0o600, flush: true });
+      if (process.platform !== "win32") {
+        const handle = await fs.open(directory, "r");
+        try { await handle.sync(); } finally { await handle.close(); }
+      }
     }
     if (key.length !== 32) throw new Error("Chiave server corrotta: nessuna rigenerazione automatica.");
     return new Vault(key);

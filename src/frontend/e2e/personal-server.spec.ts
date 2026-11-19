@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { generateKeyPairSync, sign, createHash, randomUUID } from "node:crypto";
-import { newBook } from "@engine/domain/types";
+import { DEFAULT_SETTINGS, newBook } from "@engine/domain/types";
+import { projectSettings } from "@engine/domain/cloud-profile";
 import { BOOK_FORMAT_VERSION } from "@engine/domain/book-format";
 
 test("connessione firmata, token cifrato e replica server senza fallback locale", async ({ page }) => {
@@ -94,6 +95,90 @@ test("retry long-term: consenso, minuti e limite illimitato esplicito persistono
   await expect(page.getByRole("checkbox", { name: /Long-term retry:/ }).first()).toBeChecked();
   await expect(page.getByLabel("Minuti fra i cicli long-term", { exact: true }).first()).toHaveValue("7");
   await expect(page.getByRole("combobox", { name: "Ripartenze long-term", exact: true }).first()).toHaveValue("unlimited");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
+
+test("il server confronta la configurazione; un nuovo libro usa il template esplicito e recupera un ACK perso", async ({ page }) => {
+  const keys = generateKeyPairSync("ed25519");
+  const publicKey = keys.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+  const serverId = randomUUID(), clientId = randomUUID(), epoch = randomUUID();
+  const token = "synthetic-server-config-" + "q".repeat(40);
+  const source = newBook("PREMESSA_RISERVATA_SYNTH", "Template locale", "Chiaro", "Adulti");
+  source.memory.secrets["RISERVATO_SYNTH"] = "Non inviare al server durante la creazione";
+  source.editorialProfiles = { schemaVersion: 1, writers: [], readers: [{ id: "lettore", name: "Lettore personale",
+    instructions: "Controlla il ritmo prima di tutto.", enabled: true, role: "readerGenre" }] };
+  source.modelRoutes = { audience: { endpointId: "openai", modelId: "custom-reader-model" } };
+  const replica = newBook("Premessa del nuovo libro", "Copia configurata", "Dialoghi brevi", "Giovani adulti");
+  replica.executionAuthority = { kind: "server", serverId, epoch }; replica.status = "paused";
+  let configurationRevision = 1;
+  let publicSettings = { ...projectSettings(DEFAULT_SETTINGS), defaultRoute: { endpointId: "openai", modelId: "altra-configurazione" } };
+  const creations: string[] = [];
+  let providerCalls = 0;
+  page.on("request", request => { if (request.url().includes("/chat/completions")) providerCalls++; });
+  await page.route("http://127.0.0.1:24106/**", async route => {
+    const request = route.request(), url = new URL(request.url());
+    const headers = { "Access-Control-Allow-Origin": "http://127.0.0.1:5173",
+      "Access-Control-Allow-Headers": "apikey,content-type,if-match", "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Expose-Headers": "ETag" };
+    if (request.method() === "OPTIONS") { await route.fulfill({ status: 204, headers }); return; }
+    if (url.pathname === "/api/v1/info") {
+      const nonce = url.searchParams.get("nonce")!;
+      await route.fulfill({ headers, json: { apiVersion: 1, serverVersion: "0.1.0", engineVersion: "0.32.0", bookFormatVersion: BOOK_FORMAT_VERSION,
+        serverId, publicKey, fingerprint: createHash("sha256").update(Buffer.from(publicKey, "base64")).digest("hex"),
+        nonce, signature: sign(null, Buffer.from(nonce + "\n" + serverId + "\n" + publicKey), keys.privateKey).toString("base64") } });
+      return;
+    }
+    expect(request.headers().apikey).toBe(token);
+    if (url.pathname === "/api/v1/session") {
+      await route.fulfill({ headers, json: { clientId, label: "Test", scopes: ["read", "write", "run"] } });
+    } else if (url.pathname === "/api/v1/settings") {
+      if (request.method() === "POST") {
+        expect(request.headers()["if-match"]).toBe('"config:1"');
+        expect(request.postDataJSON().endpointKeys).toEqual({});
+        publicSettings = request.postDataJSON().settings;
+        await route.fulfill({ headers, json: { revision: ++configurationRevision } });
+      } else {
+        await route.fulfill({ headers: { ...headers, ETag: `"config:${configurationRevision}"` },
+          json: { revision: configurationRevision, settings: publicSettings, endpointKeys: [], githubBooks: [] } });
+      }
+    } else if (url.pathname === "/api/v1/books" && request.method() === "POST") {
+      const body = request.postDataJSON(); creations.push(request.postData()!);
+      replica.editorialProfiles = body.bookConfig.editorialProfiles;
+      replica.modelRoutes = body.bookConfig.modelRoutes;
+      if (creations.length === 1) { await route.abort("failed"); return; }
+      await route.fulfill({ headers, status: 201, json: { bookId: replica.id } });
+    } else if (url.pathname.endsWith("/snapshot")) {
+      await route.fulfill({ headers: { ...headers, ETag: `"${epoch}:1"` }, json: { book: replica,
+        activities: [], revision: 1, nextSequence: 1, retrySchedule: null, hasManualPushIntent: false } });
+    } else await route.fulfill({ status: 404, headers, json: {} });
+  });
+  page.on("dialog", dialog => dialog.accept());
+  await page.goto("/");
+  await page.evaluate(async book => { const { saveBook } = await import("/src/infrastructure/db.ts"); await saveBook(book, false); }, source);
+  await page.goto(`/impostazioni?tab=server&book=${source.id}`);
+  await page.getByLabel("Libro attivo", { exact: true }).selectOption(source.id);
+  await page.getByRole("textbox", { name: "URL del server" }).fill("http://127.0.0.1:24106");
+  await page.getByLabel("Token BookWriter (header apikey)", { exact: true }).fill(token);
+  await page.getByRole("button", { name: "Verifica server", exact: true }).click();
+  await expect(page.getByText(/Identità firmata ricevuta/)).toBeVisible();
+  await page.getByRole("button", { name: "Collega server", exact: true }).click();
+  await expect(page.getByText(/diversa dalle impostazioni salvate qui/)).toBeVisible();
+  await page.getByRole("button", { name: "Aggiorna configurazione sul server" }).click();
+  await expect(page.getByText(/coincide con le impostazioni salvate qui/)).toBeVisible();
+  await page.getByLabel("Titolo del nuovo libro server").fill(replica.title);
+  await page.getByLabel("Idea del nuovo libro server").fill(replica.brief);
+  await page.getByLabel("Stile di scrittura", { exact: true }).fill(replica.writingStyle);
+  await page.getByLabel("Pubblico", { exact: true }).fill(replica.audience);
+  await page.getByRole("checkbox", { name: /Usa le impostazioni editoriali, i modelli e il budget di «Template locale»/ }).check();
+  await page.getByRole("button", { name: "Crea libro sul server", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Creazione sul server da confermare" })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Riprendi creazione sul server", exact: true }).click();
+  await expect(page.getByText(/Libro creato e replica confermata/)).toBeVisible();
+  expect(creations).toHaveLength(2); expect(creations[1]).toBe(creations[0]);
+  expect(creations[0]).not.toMatch(/PREMESSA_RISERVATA_SYNTH|RISERVATO_SYNTH|executionAuthority/);
+  expect(JSON.parse(creations[0]!).bookConfig.editorialProfiles).toEqual(source.editorialProfiles);
+  expect(providerCalls).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 

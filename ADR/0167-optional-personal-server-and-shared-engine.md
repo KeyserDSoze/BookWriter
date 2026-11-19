@@ -1,8 +1,8 @@
 # ADR 0167 — Server personale opzionale e motore editoriale condiviso
 
-- Stato: **architettura richiesta; implementazione sperimentale parziale iniziata**, non rilasciata.
+- Stato: **implementazione sperimentale parziale**; frontend dalla 0.32.0, nessuna distribuzione binaria del server.
 - Data: 2026-11-19.
-- Nessuna versione applicativa o release server assegnata.
+- Le 0.32.0 e 0.32.1 del frontend non sono una release del server. I limiti dei percorsi effettivamente collaudati sono nel [runbook da sorgente](../docs/personal-server-development.md).
 - Integra ADR 0005–0009 (GitHub, outbox, lease, conflitti, merge), 0125 (commit CAS), 0153–0154 (cloud e conversazioni), 0162–0164 (editing, formato, ripresa) e 0165–0166 (salvataggio continuo e rinnovo del lease).
 - Specifica operativa: [Server personale](../docs/personal-server.md).
 - Contratto tecnico: [Motore e protocollo](../docs/personal-server-protocol.md).

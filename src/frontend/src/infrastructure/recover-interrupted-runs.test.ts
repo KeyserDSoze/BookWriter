@@ -1,6 +1,9 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newBook, type Activity, type BookProject } from "@engine/domain/types";
+import { makeRetrySchedule, retryStamp } from "@engine/core/retry-policy";
+import { narrativeStateJson } from "@engine/core/narrative-state";
+import { getRetrySchedule, retryScheduleKey } from "@engine/infrastructure/retry-schedule";
 import {
   getBook, getDb, recoverInterruptedRuns, saveActivity, saveBook,
 } from "./db";
@@ -35,6 +38,7 @@ beforeEach(async () => {
   const db = await getDb();
   await db.clear("books");
   await db.clear("activities");
+  await db.clear("meta");
   lockedBooks.clear();
   request.mockClear();
   vi.stubGlobal("navigator", { locks: { request } });
@@ -116,6 +120,26 @@ describe("Ripresa di esecuzioni interrotte, protetta da Web Locks", () => {
     expect(await getBook(book.id)).toEqual(book);
     expect(await storedActivity(task.id)).toEqual(task);
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("un claim interrotto (richiesta iniziata: %s) non entra nella ripresa automatica", async attempted => {
+    const book = runningBook("Ripartenza interrotta"), task = activity(book.id);
+    if (!attempted) book.status = "paused";
+    await saveBook(book, false);
+    const policy = { enabled: true, intervalMinutes: 1, maxCycles: 3 };
+    const plan = makeRetrySchedule({ bookId: book.id, runId: task.runId, endpointId: "openai", modelId: "m",
+      taskKey: retryStamp("task"), bookStamp: retryStamp(narrativeStateJson(book)), cyclesUsed: 0,
+      policy, authorizedPolicies: { openai: policy }, now: Date.now() })!;
+    await (await getDb()).put("meta", { ...plan, state: "claimed" }, retryScheduleKey(book.id));
+    if (attempted) await saveActivity({ ...task, aiRequested: true });
+    lockedBooks.add("bookwriter:writer:" + book.id);
+    expect(await recoverInterruptedRuns()).toEqual([]);
+    expect((await getRetrySchedule(book.id))?.state).toBe("claimed");
+    lockedBooks.clear();
+    expect(await recoverInterruptedRuns()).toEqual([]);
+    expect(await getRetrySchedule(book.id)).toBeUndefined();
+    expect(await getBook(book.id)).toMatchObject({ status: "paused", previousError: expect.stringContaining("Nessuna nuova richiesta automatica") });
+    if (attempted) expect(await storedActivity(task.id)).toMatchObject({ status: "cancelled", aiRequested: true, runId: plan.runId });
   });
 
   it("ricontrolla i dati dopo aver ottenuto il lock anziché applicare uno snapshot obsoleto", async () => {

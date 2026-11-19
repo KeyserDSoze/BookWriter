@@ -119,11 +119,14 @@ API pubblica su loopback 24106 dietro HTTPS; pannello 24105 separato. URL di bas
 | Pairing | `POST /api/v1/pairings`, lettura esito del tentativo | Codice breve, nonce/segreto del tentativo; approvazione solo nel pannello locale. |
 | Sessione/capacità | `GET /api/v1/session` | Token richiesto, scope e compatibilità verificati. |
 | Libreria | `GET /api/v1/books?cursor=…` | Paginazione stabile, metadati autorizzati, inclusi marker di rimozione. |
+| Creazione | `POST /api/v1/books` | Identificativo idempotente e template facoltativo a schema chiuso; niente stato ereditato né consensi. Il browser conserva l'intento fino alla replica confermata; eventuale reinvio è manuale e identico. |
 | Snapshot e attività | `GET /api/v1/books/:id/snapshot`, `/activities?cursor=…` | Revisione/epoca, schema e dimensioni verificati; nessun segreto di connessione. |
 | Adozione/trasferimento | `POST /api/v1/handoffs`, `GET /api/v1/handoffs/:id` | Protocollo preparazione/conferma, ripetibile per ID, non import eseguibile generico. |
 | Payload grandi | `POST /api/v1/books/:id/payloads` | Staging tipizzato, autorizzato e bounded, digest e riferimento opaco; non un percorso di filesystem. |
 | Comando | `POST /api/v1/books/:id/commands` | `apikey`, `If-Match`, `commandId`, sequenza e payload validato. |
 | Esito comando | `GET /api/v1/books/:id/commands/:commandId`, `POST …/:commandId/resolve` | La lettura recupera l'ACK perso senza ripetere AI. `resolve` non esegue mai: restituisce la ricevuta esistente oppure registra un rifiuto durevole dell'identità e della sequenza esatte, solo su scelta esplicita del client originale. |
+| Configurazione AI | `GET/POST /api/v1/settings` | Lettura senza valori di credenziali, scrittura esplicita con `If-Match` della revisione mostrata. Chiavi assenti = mantieni a parità di endpoint; `null` = rimuovi. |
+| Credenziale GitHub | `POST /api/v1/books/:id/github-credential` | Stesso `If-Match` della configurazione, solo PAT di quel libro o `null`; non modifica endpoint o router. |
 | Eventi | `GET /api/v1/events` tramite `fetch` streaming | Header `apikey`, cursore, eventi autorizzati e heartbeat. |
 | Impostazioni/credenziali | endpoint dedicati versionati | Scrittura con scope e CAS; chiavi mai restituite nelle normali letture. |
 | Versioni/aggiornamento | `GET /api/v1/updates`, `POST /api/v1/updates` | Lettura autenticata; mutazione con scope update e releaseId ufficiale. |
@@ -197,7 +200,7 @@ Al riavvio: lock OS, validazione file e versione, riconciliazione dei comandi/pu
 
 [ADR 0168](../ADR/0168-short-and-long-term-retry.md) aggiunge al motore comune la [politica a due livelli](retry-policy.md): gruppo di tentativi ravvicinati, poi attesa configurabile in minuti e nuovo gruppo sullo stesso task. `retrySchedule` e autorizzazione del run si salvano nel contenitore per libro con generazione/CAS; la replica li mostra ma non li esegue.
 
-La pausa programmata rilascia lock/lease e chiude i look-ahead; il risveglio rivalida tutto e mantiene il **runId logico originario**, senza azzerare il budget per sessione. Stato `claimed` dopo crash richiede riconciliazione prima di nuove POST. Intervalli mancati non si recuperano a raffica e i timer non sostituiscono writer guard, contesto o consensi. Questa politica riguarda i task AI, non i retry specifici di GitHub, lease e updater.
+La pausa programmata rilascia lock/lease; il risveglio rivalida i dati e mantiene il **runId logico originario**, senza azzerare il budget per sessione. La revisione operativa della configurazione AI è salvata nello stesso commit delle impostazioni; ripristinare i valori precedenti non riabilita un consenso revocato. Stato `claimed` dopo crash non si riavvia automaticamente: occorre controllare il tentativo e il suo eventuale addebito. Intervalli mancati non si recuperano a raffica e i timer non sostituiscono writer guard, contesto o consensi. Questa politica riguarda i task AI, non i retry specifici di GitHub, lease e updater.
 
 ## 7. Distribuzione e aggiornamento
 

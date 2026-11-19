@@ -1,5 +1,9 @@
 import type { EndpointProfile } from "../domain/types";
 import { PromptExceedsContextError } from "./context-guard";
+import { ProviderHeaderTimeoutError } from "../infrastructure/ai-header-timeout";
+import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
+import { EmptyProviderContentError, MalformedProviderContentError, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
+import { ReplyRejectedError } from "./reply-rejected";
 
 export const DEFAULT_AUTO_RETRIES = 2;
 export const MAX_AUTO_RETRIES = 5;
@@ -15,12 +19,21 @@ export function endpointAutoRetry(endpoint: EndpointProfile | undefined): { enab
   return { enabled, max };
 }
 
-/** Pointless to repeat: the same request would fail the same way (credentials, setup, oversized prompt). */
-const NEVER_RETRY = /HTTP (400|401|403|404|422)\b|Seleziona il modello|non configurato|non valido|chiave API|API key|credenzial|autenticazione|vault|decifr|cifratur|autorità|ownership|replica|Web Locks|lease|IndexedDB|spazio|disco|quota|checkpoint|storage/i;
+const TRANSIENT_PROVIDER = /HTTP (408|429|5\d\d)\b|Impossibile contattare l'endpoint AI/i;
+/** The model hit its own length/context ceiling: the same request ends the same way and is billed again. */
+const DETERMINISTIC_LIMIT = /troppo grande|superato il limite|esaurito il limite|limite di lunghezza|Risposta troncata/i;
+/** Fail closed: only known transient provider/transport failures and corrective rejections repeat.
+ * A new, unclassified error (storage, CAS, authority, lease, budget, setup, editorial block) is never
+ * permission to spend again. */
 export function isAutoRetryable(error: unknown): boolean {
-  if (error instanceof PromptExceedsContextError) return false;
-  if (error instanceof Error && /QuotaExceeded|TransactionInactive|ConstraintError|DataError|InvalidStateError/.test(error.name)) return false;
-  return !(error instanceof Error && NEVER_RETRY.test(error.message));
+  if (error instanceof DOMException && error.name === "AbortError") return false;
+  if (error instanceof PromptExceedsContextError || error instanceof TruncatedProviderContentError) return false;
+  if (error instanceof ReplyRejectedError || error instanceof ProviderHeaderTimeoutError) return true;
+  if (!(error instanceof Error)) return false;
+  if (DETERMINISTIC_LIMIT.test(error.message)) return false;
+  if (error instanceof ProviderResponseReadError || error instanceof EmptyProviderContentError ||
+      error instanceof MalformedProviderContentError) return true;
+  return TRANSIENT_PROVIDER.test(error.message);
 }
 
 /** Wait that ends early (without throwing) when the session is aborted. */

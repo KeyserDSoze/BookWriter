@@ -46,7 +46,8 @@ import { memoryValue, settleChapterEdits } from "../domain/book-edits";
 import { narrativeStateJson } from "../core/narrative-state";
 export { narrativeStateJson } from "../core/narrative-state";
 import { makeRetrySchedule, readLongTermRetry, restrictRetryPolicy, retryStamp, type LongTermRetryPolicy, type RetrySchedule } from "../core/retry-policy";
-import { assertRetryClaim, claimRetrySchedule, clearRetrySchedule, saveFailedRetry, RetryScheduleNotReady } from "../infrastructure/retry-schedule";
+import { host } from "../core/host";
+import { assertRetryClaim, claimRetrySchedule, clearRetrySchedule, getRetrySchedule, saveFailedRetry, RetryScheduleNotReady, RetrySchedulePending } from "../infrastructure/retry-schedule";
 
 const chapterSchema = z.object({
   chapters: z.array(z.object({
@@ -1308,6 +1309,7 @@ export class AutopilotRunner {
     let cyclesUsed = 0;
     let longScope = "";
     let authorizedPolicies: Record<string, LongTermRetryPolicy> = {};
+    let authorizedEpoch: string | null = null;
     let sessionStarted = false;
     try {
       await withWriterGuard(bookId, runId, controller, async originalGuard => {
@@ -1317,10 +1319,13 @@ export class AutopilotRunner {
         cyclesUsed = resumed.cyclesUsed + 1;
         longScope = resumed.taskKey;
         authorizedPolicies = resumed.authorizedPolicies;
+        authorizedEpoch = resumed.settingsEpoch ?? null;
         resumePending = true;
       } else {
-        await clearRetrySchedule(bookId);
-        authorizedPolicies = Object.fromEntries((await loadSettings()).endpoints.map(e => [e.id, readLongTermRetry(e.longTermRetry)]));
+        if (await getRetrySchedule(bookId)) throw new RetrySchedulePending();
+        const { settings, epoch } = await host().loadRetrySettings();
+        authorizedEpoch = epoch;
+        authorizedPolicies = Object.fromEntries(settings.endpoints.map(e => [e.id, readLongTermRetry(e.longTermRetry)]));
       }
       const guard = {
         failure: () => originalGuard.failure(),
@@ -1478,7 +1483,7 @@ export class AutopilotRunner {
           if (!await commit(book, true)) continue;
           await onUpdate(); break;
         }
-        const settings = await loadSettings();
+        const { settings, epoch: attemptEpoch } = await host().loadRetrySettings();
         const retryKey = work.phase + ":" + work.title;
         if (retryScope !== retryKey) { retryScope = retryKey; retries = 0; rejectedReplyReason = ""; }
         for (const key of [...research.keys()]) if (key !== retryKey) research.delete(key);
@@ -1657,14 +1662,15 @@ export class AutopilotRunner {
             if (error instanceof ReplyRejectedError) rejectedReplyReason = error.message;
           }
           if (!willRetry && !aborted && !leaseFailure && !budgetStop && started.aiRequested === true &&
-              retryable && !this.stopAfter && !signal.aborted) {
+              retryable && !this.stopAfter && !signal.aborted && attemptEpoch === authorizedEpoch) {
             const policy = restrictRetryPolicy(authorizedPolicies[assignment.endpointId] ?? readLongTermRetry(undefined),
               readLongTermRetry(configuredEndpoint?.longTermRetry));
             if (policy.enabled && (policy.maxCycles === null || cyclesUsed < policy.maxCycles)) await pool.drain();
             const current = await getBook(bookId);
             if (current?.status === "running" && narrativeStateJson(current) === narrativeBefore) {
               const plan = makeRetrySchedule({ bookId, runId, endpointId: assignment.endpointId, modelId: assignment.modelId,
-                taskKey: taskStamp, bookStamp: retryStamp(narrativeStateJson(current)), policy, authorizedPolicies, cyclesUsed, now: Date.now() });
+                taskKey: taskStamp, bookStamp: retryStamp(narrativeStateJson(current)), policy, authorizedPolicies, cyclesUsed,
+                settingsEpoch: authorizedEpoch, now: Date.now() });
               if (plan) {
                 if (signal.aborted || this.stopAfter) {
                   aborted = true;
@@ -1711,7 +1717,7 @@ export class AutopilotRunner {
       // A timer wake-up is not a provider attempt or a writer failure. Revoked
       // waits are invalidated by the claim transaction without producing an
       // endless stream of synthetic activities on each scheduler tick.
-      if (!sessionStarted && error instanceof RetryScheduleNotReady) throw error;
+      if (!sessionStarted && (error instanceof RetryScheduleNotReady || error instanceof RetrySchedulePending)) throw error;
       // Acquisition errors happen before any task is started and must not change
       // another tab's running status. Once started, preserve a readable error.
       const message = (error instanceof Error ? error.message : "Lock remoto non disponibile.")

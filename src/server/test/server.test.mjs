@@ -9,6 +9,7 @@ import {
   lockDataRoot, FileBookStore, Vault, createRuntime, newBook, DEFAULT_SETTINGS, startPersonalServer,
   AutopilotRunner, makeRetrySchedule, retryStamp, narrativeStateJson, publicAddress, currentStamp,
   pushManualGitHubBook, claimRetrySchedule, getRetrySchedule, saveFailedRetry,
+  bookEtag, isBuiltInOutboundOrigin,
 } from "../dist/testing.mjs";
 
 async function temporary(action) {
@@ -175,12 +176,82 @@ test("pairing requires local approval, is single-use, bounded and survives resta
   await assert.rejects(auth.requestPairing(limited.code, nonce, "Late"));
 }));
 
+test("startup reuses a durable bootstrap after interrupted initialization, and rotation preserves receipt identity", async () => temporary(async root => {
+  const { Auth } = await import("../dist/testing.mjs");
+  const store = new FileBookStore(root), vault = await Vault.open(root);
+  const bootstrap = "A".repeat(43);
+  await fs.writeFile(join(root, "private", "admin-bootstrap.txt"), bootstrap + "\n", { mode: 0o600 });
+  const auth = await Auth.open(store, vault);
+  assert.ok((await auth.login(bootstrap)).csrf);
+  const first = await auth.issue("Test", ["read", "write"]);
+  const original = auth.authenticate(first.token);
+  const rotated = await auth.issue("Test", ["read", "write"], first.clientId);
+  assert.equal(first.clientId, rotated.clientId);
+  assert.equal(auth.isCurrent(original), false);
+  assert.throws(() => auth.authenticate(first.token), e => e.status === 401);
+  assert.equal((await Auth.open(store, vault)).authenticate(rotated.token).id, original.id);
+}));
+
+test("revoked tokens do not permanently exhaust the client registry", async () => temporary(async root => {
+  const { Auth } = await import("../dist/testing.mjs");
+  const store = new FileBookStore(root), vault = await Vault.open(root);
+  const auth = await Auth.open(store, vault);
+  const clients = [];
+  for (let i = 0; i < 100; i++) clients.push(await auth.issue(`Fixture ${i}`, ["read"]));
+  await assert.rejects(auth.issue("Full", ["read"]), e => e.code === "client_limit");
+  await auth.revoke(clients[0].clientId);
+  const renewed = await auth.issue("Replacement", ["read"]);
+  assert.equal(auth.list().clients.length, 100);
+  assert.throws(() => auth.authenticate(clients[0].token), e => e.status === 401);
+  assert.equal(auth.authenticate(renewed.token).id, renewed.clientId);
+}));
+
 test("network classification rejects metadata, private, mapped and transition addresses", () => {
   for (const address of ["127.0.0.1", "10.0.0.1", "169.254.169.254", "172.16.0.1", "192.168.1.2",
     "100.64.0.1", "::1", "::ffff:127.0.0.1", "2002:0a00:1::", "2001:db8::1"])
     assert.equal(publicAddress(address), false, address);
   assert.equal(publicAddress("8.8.8.8"), true); assert.equal(publicAddress("2606:4700:4700::1111"), true);
 });
+
+test("the web research adapter permits exactly the two supported Wikipedia origins", () => {
+  for (const origin of ["https://it.wikipedia.org", "https://en.wikipedia.org", "https://api.github.com"])
+    assert.equal(isBuiltInOutboundOrigin(new URL(origin)), true);
+  for (const origin of ["http://en.wikipedia.org", "https://en.wikipedia.org.example.test", "https://en.wikipedia.org:8443"])
+    assert.equal(isBuiltInOutboundOrigin(new URL(origin)), false);
+});
+
+test("configuration protects revisions, clears key material and never exposes delegated secrets", async () => temporary(async root => {
+  const store = new FileBookStore(root), vault = await Vault.open(root);
+  const book = newBook("Storia sintetica", "Impostazioni", "Chiaro", "Adulti"), serverId = randomUUID();
+  book.executionAuthority = { kind: "server", serverId, epoch: randomUUID() };
+  await store.create(recordOf(book));
+  const host = await createRuntime(store, vault, { serverId });
+  const baseUrl = "http://127.0.0.1:1234/v1";
+  const settings = { defaultRoute: { endpointId: "openai", modelId: "custom" }, taskRoutes: {},
+    endpoints: [{ id: "openai", name: "Server sintetico", baseUrl, models: ["custom"], authMode: "api_key" }] };
+  try {
+    await host.provision({ settings, endpointKeys: { openai: "chiave-sintetica" } }, 0, [baseUrl]);
+    assert.deepEqual(host.configuration().endpointKeys, ["openai"]);
+    await assert.rejects(host.provision({ settings, endpointKeys: { openai: null } }, 0, [baseUrl]), e => e.status === 412);
+    await assert.rejects(host.provision({ settings, endpointKeys: { unknown: "sintetica" } }, 1, [baseUrl]), e => e.status === 422);
+    assert.equal(host.configuration().revision, 1);
+    await host.provision({ settings, endpointKeys: {} }, 1, [baseUrl]);
+    assert.deepEqual(host.configuration().endpointKeys, ["openai"], "unchanged URL retains the key");
+    await host.setBookPat(book.id, "pat-sintetico", 2, () => undefined);
+    assert.deepEqual(host.configuration().githubBooks, [book.id]);
+    await host.setBookPat(book.id, null, 3, () => undefined);
+    assert.deepEqual(host.configuration().githubBooks, []);
+    assert.deepEqual(host.configuration().settings, settings);
+    assert.deepEqual(host.configuration().endpointKeys, ["openai"], "PAT operations never change AI settings or keys");
+    await host.provision({ settings, endpointKeys: { openai: null } }, 4, [baseUrl]);
+    assert.equal((await host.runtime.loadSettings()).endpoints[0].secret, null);
+    await host.provision({ settings, endpointKeys: { openai: "seconda-chiave" } }, 5, [baseUrl]);
+    await host.provision({ settings: { ...settings, endpoints: [{ ...settings.endpoints[0], authMode: "none" }] }, endpointKeys: {} }, 6, [baseUrl]);
+    assert.equal((await host.runtime.loadSettings()).endpoints[0].secret, null, "no-auth clears an existing stored key");
+    assert.deepEqual(host.configuration().endpointKeys, []);
+    assert.doesNotMatch(JSON.stringify(host.configuration()), /pat-sintetico|chiave-sintetica|seconda-chiave/);
+  } finally { host.dispose(); }
+}));
 
 test("file retry schedule and failed attempt are atomic, restartable and claimed only once", async () => temporary(async root => {
   const store = new FileBookStore(root), vault = await Vault.open(root);
@@ -194,7 +265,7 @@ test("file retry schedule and failed attempt are atomic, restartable and claimed
   const plan = makeRetrySchedule({ bookId: book.id, runId, endpointId: "openai", modelId: "mock",
     bookStamp: retryStamp(narrativeStateJson(book)), taskKey: retryStamp("brainstorm:synthetic"),
     policy: settings.endpoints[0].longTermRetry, authorizedPolicies: { openai: settings.endpoints[0].longTermRetry },
-    cyclesUsed: 0, now: Date.now() });
+    cyclesUsed: 0, settingsEpoch: (await host.runtime.loadRetrySettings()).epoch, now: Date.now() });
   const now = new Date().toISOString();
   const attempt = { id: randomUUID(), bookId: book.id, runId, phase: "brainstorm", title: "Task sintetico",
     reason: "Test", nextStep: "Attesa", status: "failed", aiRequested: true, createdAt: now, endedAt: now };
@@ -260,6 +331,136 @@ test("Node manual GitHub save uses delegated PAT and recovers a lost PATCH ACK w
     assert.equal(published.includes("retrySchedule"), false);
     assert.equal((await fs.readFile(join(root, "private", "settings.json"), "utf8")).includes("github_pat_synthetic_server_only"), false);
   } finally { globalThis.fetch = originalFetch; host.dispose(); }
+}));
+
+test("production authority: first explicit publish, scoped PAT through a run, and advanced HEAD blocks AI", async () => temporary(async root => {
+  const service = await startPersonalServer({ root, apiPort: 0, adminPort: 0 });
+  const native = globalThis.fetch;
+  const secret = "synthetic-github-delegation", aiKey = "synthetic-ai-delegation";
+  const clientToken = await service.auth.issue("Autorità test", ["read", "write", "run"]);
+  const client = service.auth.authenticate(clientToken.token);
+  const api = `http://127.0.0.1:${service.apiPort}`;
+  const send = async (id, command) => {
+    const record = await service.store.read(id);
+    return service.controller.command(id, client, bookEtag(record), {
+      commandId: randomUUID(), sequence: (record.watermarks[client.id] ?? 0) + 1, command,
+    });
+  };
+  const branch = "heads/main", baseTree = "b".repeat(40), base = "a".repeat(40);
+  const refs = new Map([[branch, base]]), trees = new Map([[baseTree, new Map()]]);
+  const commits = new Map([[base, { tree: { sha: baseTree }, parents: [], message: "initial" }]]);
+  let serial = 1, posts = 0, writes = 0, bookId, fakeFailure;
+  const sha = () => (serial++).toString(16).padStart(40, "0");
+  const response = (data, status = 200) => Response.json(data, { status,
+    headers: { "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 1800) } });
+  globalThis.fetch = async (raw, init = {}) => {
+    const url = new URL(String(raw)), method = init.method ?? "GET", headers = new Headers(init.headers);
+    const body = init.body ? JSON.parse(init.body) : undefined;
+    try {
+      if (url.origin === "https://api.openai.com" && url.pathname === "/v1/chat/completions") {
+        posts++;
+        assert.equal(headers.get("authorization"), "Bearer " + aiKey);
+        assert.equal(body.model, "custom-reader-model");
+        assert.ok(body.messages[1].content.includes("Controlla il ritmo prima di tutto"));
+        assert.ok(!body.messages[1].content.includes("SEGRETO_NARRATIVO_SINTETICO"));
+        await send(bookId, { type: "stop_after_task" });
+        return response({ choices: [{ message: { content: "Osservazioni sintetiche del lettore." } }], usage: { prompt_tokens: 17, completion_tokens: 4 } });
+      }
+      assert.equal(url.origin, "https://api.github.com");
+      assert.equal(headers.get("authorization"), "Bearer " + secret);
+      const path = url.pathname.replace(/^\/repos\/synthetic\/review$/, "").replace(/^\/repos\/synthetic\/review\//, "/");
+      if (!path) return response({ private: true, default_branch: "main", permissions: { push: true } });
+      if (path.startsWith("/git/ref/")) {
+        const head = refs.get(path.slice("/git/ref/".length));
+        return head ? response({ object: { sha: head } }) : response({}, 404);
+      }
+      if (path.startsWith("/contents/")) {
+        const commit = commits.get(url.searchParams.get("ref"));
+        const contents = commit && trees.get(commit.tree.sha)?.get(path.slice("/contents/".length));
+        return contents === undefined ? response({}, 404) : response({ type: "file", encoding: "base64", content: Buffer.from(contents).toString("base64") });
+      }
+      if (path === "/git/trees" && method === "POST") {
+        const key = sha();
+        const files = new Map(trees.get(body.base_tree));
+        for (const entry of body.tree) {
+          if (entry.sha === null) files.delete(entry.path);
+          else files.set(entry.path, entry.content);
+        }
+        trees.set(key, files);
+        return response({ sha: key }, 201);
+      }
+      if (path === "/git/commits" && method === "POST") {
+        const key = sha();
+        commits.set(key, { message: body.message, tree: { sha: body.tree }, parents: body.parents.map(sha => ({ sha })) });
+        return response({ sha: key }, 201);
+      }
+      if (path.startsWith("/git/commits/") && method === "GET") return response(commits.get(path.split("/").at(-1)));
+      if (path === "/git/refs" && method === "POST") {
+        refs.set(body.ref.replace(/^refs\//, ""), body.sha);
+        return response({ object: { sha: body.sha } }, 201);
+      }
+      if (path.startsWith("/git/refs/") && method === "PATCH") {
+        const key = path.slice("/git/refs/".length);
+        assert.equal(body.force, false);
+        assert.equal(commits.get(body.sha).parents[0].sha, refs.get(key));
+        refs.set(key, body.sha);
+        if (key === branch && ++writes === 1) throw new TypeError("synthetic lost PATCH response");
+        return response({ object: { sha: body.sha } });
+      }
+      assert.fail(`Unexpected synthetic path: ${path}`);
+    } catch (e) {
+      if (!(e instanceof TypeError && e.message === "synthetic lost PATCH response")) fakeFailure = e;
+      throw e;
+    }
+  };
+  try {
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    settings.defaultRoute.modelId = "default-model";
+    settings.endpoints[0].secret = await service.runtime.encrypt(aiKey);
+    await service.runtime.saveSettings(settings);
+    bookId = await service.controller.create(client, randomUUID(), { title: "Libro sintetico", brief: "Un viaggio in treno.",
+      writingStyle: "Chiaro", audience: "Adulti", bookConfig: { modelRoutes: { audience: { endpointId: "openai", modelId: "custom-reader-model" } },
+        editorialProfiles: { schemaVersion: 1, writers: [], readers: [{ id: "lettore", role: "readerGenre", enabled: true,
+          name: "Lettore personale", instructions: "Controlla il ritmo prima di tutto" }] } } });
+    const credentials = await native(`${api}/api/v1/books/${bookId}/github-credential`, { method: "POST",
+      headers: { apikey: clientToken.token, "Content-Type": "application/json", "If-Match": '"config:1"' },
+      body: JSON.stringify({ consent: true, githubToken: secret }) });
+    assert.equal(credentials.status, 200);
+    assert.equal((await service.runtime.loadSettings()).githubToken, null, "PAT never available outside book scope");
+    await send(bookId, { type: "connect_github", owner: "synthetic", repository: "review", branch: "main", consentPublic: false });
+    await service.controller.waitForIdle();
+    assert.ok((await service.store.read(bookId)).book.remote);
+    await send(bookId, { type: "start" });
+    await service.controller.waitForIdle();
+    assert.equal(posts, 0, "an unpublished authority cannot run");
+    assert.equal(refs.size, 1, "no lease before first publication");
+    await send(bookId, { type: "save_github", consentPublic: false });
+    await service.controller.waitForIdle();
+    const published = await service.store.read(bookId);
+    assert.equal(writes, 1);
+    assert.equal(published.book.remote.lastSyncedCommit, refs.get(branch));
+    assert.equal(published.manualPushIntent, undefined);
+    assert.deepEqual(JSON.parse(trees.get(commits.get(refs.get(branch)).tree.sha).get(".bookwriter/project.json")).executionAuthority,
+      published.book.executionAuthority);
+    await service.store.transaction(bookId, record => {
+      record.book.phase = "audience";
+      record.book.memory.secrets["SEGRETO_NARRATIVO_SINTETICO"] = "Non inviare ai lettori";
+    });
+    await send(bookId, { type: "start" });
+    await service.controller.waitForIdle();
+    assert.equal(posts, 1);
+    const state = await service.store.read(bookId);
+    assert.equal(state.book.phase, "adversarial");
+    assert.equal(state.activities.filter(a => a.aiRequested && a.status === "succeeded").length, 1);
+    const external = sha();
+    commits.set(external, commits.get(refs.get(branch)));
+    refs.set(branch, external);
+    await send(bookId, { type: "start" });
+    await service.controller.waitForIdle();
+    assert.equal(posts, 1, "unchanged authority marker is not a proof of current baseline");
+    assert.match((await service.store.read(bookId)).activities.at(-1).error, /baseline GitHub/);
+    assert.equal(fakeFailure, undefined);
+  } finally { globalThis.fetch = native; await service.close(); }
 }));
 
 test("restart marks requested commands and in-flight AI as uncertain, with no replay or invented usage", async () => temporary(async root => {

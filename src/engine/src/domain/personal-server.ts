@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { bookSchema } from "./book-schema";
+import { cloudSettingsSchema } from "./cloud-profile";
+import type { BookProject } from "./types";
 
 export const SERVER_API_VERSION = 1;
 export const SERVER_SCOPES = ["read", "write", "run", "update"] as const;
@@ -25,6 +28,55 @@ export const serverConnectionSchema = z.object({
   token: z.object({ iv: z.string().max(128), data: z.string().max(4096) }).strict(),
 }).strict();
 export type ServerConnection = z.infer<typeof serverConnectionSchema>;
+
+/** Public configuration only. Secrets are represented by the IDs for which this server
+ * keeps an encrypted credential, never by ciphertext or plaintext. */
+export const serverConfigurationSchema = z.object({
+  revision: z.number().int().nonnegative(), settings: cloudSettingsSchema,
+  endpointKeys: z.array(z.string().min(1).max(300)).max(100),
+  githubBooks: z.array(z.string().uuid()).max(200),
+}).strict();
+export type ServerConfiguration = z.infer<typeof serverConfigurationSchema>;
+
+/** A configuration-only template for a NEW server book. It deliberately excludes prose,
+ * memory, knowledge, worldbuilding, web-research consent, chapter synopses, repository and
+ * author constraints. Those either travel through a supervised handoff or stay on this device. */
+export const serverBookConfigSchema = z.strictObject({
+  startMode: z.literal("idea").optional(),
+  targetChapterCount: bookSchema.shape.targetChapterCount,
+  pauseAfterOutline: bookSchema.shape.pauseAfterOutline,
+  editorialMode: bookSchema.shape.editorialMode,
+  editorialConcurrency: bookSchema.shape.editorialConcurrency,
+  editorialProfiles: bookSchema.shape.editorialProfiles,
+  changeMode: bookSchema.shape.changeMode,
+  directorDecidesWhenBlocked: bookSchema.shape.directorDecidesWhenBlocked,
+  aiBudget: bookSchema.shape.aiBudget.unwrap().omit({ enabledAt: true }).strict().optional(),
+  modelRoutes: cloudSettingsSchema.shape.taskRoutes.optional(),
+  taskReasoningEfforts: cloudSettingsSchema.shape.taskReasoningEfforts,
+});
+export type ServerBookConfig = z.infer<typeof serverBookConfigSchema>;
+
+export const serverBookCreationInputSchema = z.object({
+  title: z.string().min(1).max(300), brief: z.string().min(1).max(100_000),
+  writingStyle: z.string().max(8000), audience: z.string().max(8000),
+  bookConfig: serverBookConfigSchema.optional(),
+}).strict();
+export type ServerBookCreationInput = z.infer<typeof serverBookCreationInputSchema>;
+
+/** Copy per-book configuration, never the manuscript, private narrative state or consent. */
+export function serverBookConfigFromBook(book: BookProject): ServerBookConfig {
+  const budget = book.aiBudget;
+  return serverBookConfigSchema.parse({
+    startMode: book.startMode === "idea" ? "idea" : undefined,
+    targetChapterCount: book.startMode !== "synopsis" ? book.targetChapterCount : undefined,
+    pauseAfterOutline: book.pauseAfterOutline,
+    editorialMode: book.editorialMode, editorialConcurrency: book.editorialConcurrency, editorialProfiles: book.editorialProfiles,
+    changeMode: book.changeMode, directorDecidesWhenBlocked: book.directorDecidesWhenBlocked,
+    aiBudget: budget && { enabled: budget.enabled, limitEur: budget.limitEur, maxOutputTokens: budget.maxOutputTokens,
+      sessionLimitEur: budget.sessionLimitEur },
+    modelRoutes: book.modelRoutes, taskReasoningEfforts: book.taskReasoningEfforts,
+  });
+}
 
 const id = z.string().min(1).max(300);
 /** Finite protocol, not arbitrary patches or serialised closures. */

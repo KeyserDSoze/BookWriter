@@ -15,6 +15,8 @@ Lo stesso motore TypeScript gira nel browser o in un server personale Node su Li
 
 I contratti `src/server/test/controller-lifecycle.test.mjs` coprono anche ammissione concorrente, ordine avvio/pausa, revoca prima dell'attivazione, spegnimento con operazioni pendenti, configurazione esclusiva ed edit autore durante AI. Sono prove sintetiche del ciclo operativo, non una certificazione di tutte le tranche.
 
+**Review (0.32.1):** primo push e run GitHub verificati con un provider sintetico e il gate di autorità di produzione; ricevute di origine escluse dalla potatura; confronto revisione della configurazione, delega/revoca separata del PAT, template editoriale e recupero idempotente della creazione. Gli override sono leggibili dal runner ma non ancora modificabili dall'editor remoto. I punti di T6–T8 restano aperti.
+
 ## Requisiti tracciati
 
 | ID | Requisito | Tranche |

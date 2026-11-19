@@ -1,5 +1,14 @@
 # Changelog — BookWriter
 
+## 0.32.1 — 2026-11-19 — Revisione della tranche sperimentale del server personale
+
+- Versione 0.32.1 (`package.json` e `package-lock.json` generati da npm, cambia solo la versione root). Il server resta **sperimentale**, da sorgente: nessuna distribuzione binaria.
+- **GitHub:** il primo salvataggio esplicito pubblica il marker di autorità senza scavalcare i controlli sulla destinazione. Prima di ogni fase critica del run, il server verifica marker e SHA confermata con il PAT di quel libro. Il recupero di un ACK non ripete il PATCH.
+- **Trasferimento e replica:** le ricevute di origine sopravvivono alla potatura dei comandi; se un libro esiste ma la prova manca, il client non può annullare il trasferimento e sbloccarlo. Anche le scritture di attività sono vietate sulle repliche. Le bozze di fusione non concluse bloccano l'affidamento.
+- **Accesso:** il pairing ricontrolla l'identità già confermata. Rigenerare un token invalida quello precedente senza cambiare l'identità necessaria per recuperare gli intenti. Il bootstrap privato è riutilizzabile se il primo avvio si interrompe prima di scrivere lo stato di autorizzazione.
+- **Configurazione:** confronto esplicito prima dell'invio, revisione verificata, rimozione delle chiavi AI e delega/revoca del PAT per libro senza sovrascrivere il router. Un nuovo libro può usare un template esplicito con profili editoriali, override e budget, senza ereditare il manoscritto, la memoria o i consensi. Se si perde la risposta, si riprende la stessa creazione, non se ne apre un'altra.
+- **Retry:** «Riprova ora» sul server conserva la sessione e libera l'autorizzazione al termine. Un avvio ordinario non cancella l'attesa; cambiare la configurazione del provider revoca le attese già autorizzate. Un claim interrotto non passa alla ripresa automatica generica. La classificazione degli errori ripetibili è ora a lista chiusa: ciò che non è riconosciuto come transitorio non spende di nuovo. Le revisioni anticipate sospese vengono chiuse tutte anche se una scrittura fallisce.
+
 ## 0.32.0 — 2026-11-19 — Motore condiviso, retry a due livelli e prima tranche del server personale
 
 - Versione 0.32.0: il motore condiviso (`src/engine`) è la base sia del browser sia del server. Il server personale è **sperimentale**: non è un prodotto completo né un servizio installabile.
@@ -14,7 +23,7 @@
 - **Adozione di un libro locale (senza GitHub), a senso unico:** blocco atomico del libro locale prima dell'invio, ricevuta durevole e idempotente sul server, consensi del libro revocati come in un import, verifica della ricezione e annullamento possibile solo con rifiuto durevole del server. Il modulo di revoca dei consensi è condiviso con l'import ZIP.
 - **Motore condiviso fisico (`src/engine`):** dominio, runner, trasporti e protocolli GitHub non vivono più in `src/frontend` con una facciata: frontend e server importano gli stessi file (`@engine/*`). Il motore parla solo con la porta `HostRuntime` (transazione per libro, lock, cifratura, tracce) ed è compilato senza tipi DOM; ACK, coda, intento manuale, retry e guardia di scrittura sono una sola logica sopra `host.transaction`, senza più rami IndexedDB duplicati. Il browser ha il suo host (`host/browser-host.ts`), il server il suo. Un contratto di 14 casi gira su entrambi gli host. Verificato con `tsc` del solo motore, test di confine degli import, suite Vitest/smoke/server ed e2e desktop/mobile.
 - **Non completo:** cloud multi-PAT, handoff dei libri collegati a GitHub e restituzione al locale, intero catalogo remoto, installer, tunnel guidato e updater firmato non sono rilasciati/ultimati. Nessuna chiave di firma o distribuzione inventata.
-- Nessuna release frontend, pubblicazione del server, commit, push o deploy da questa preparazione.
+- Frontend pubblicato su Pages; nessuna distribuzione binaria del server.
 
 ## 0.31.0 — 2026-11-18 — Redazione bloccata: revisione dei rilievi stile pull request e delega al direttore
 

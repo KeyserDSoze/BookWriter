@@ -1,6 +1,6 @@
 # ADR 0168 — Retry short-term e long-term nello stesso motore
 
-- Stato: **implementazione locale in preparazione**, con pianificatore, adapter IndexedDB/file e test; non rilasciata.
+- Stato: **frontend dalla 0.32.0**, con pianificatore, adapter IndexedDB/file e test; host server sperimentale.
 - Data: 2026-11-19.
 - Integra ADR 0157 (retry correttivo), 0120–0121 (budget sessione), 0164 (limiti del browser) e 0167 (motore browser/server).
 - [Specifica](../docs/retry-policy.md) · [Accettazione F03](../features/F03-two-level-retry.md).

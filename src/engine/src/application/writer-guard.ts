@@ -38,18 +38,18 @@ export async function withWriterGuard<T>(
 ): Promise<T> {
   const h = host();
   const signal = controller.signal;
-  // A book this host does not own is refused before anything else, with the reason that matters.
-  const known = await h.getBook(bookId);
-  if (!known) throw new BookNotFound();
-  await h.admission?.assert?.(known);
+  // Refuse a replica before trying to lock. Remote admission is different: it must
+  // run inside the lock and the book scope, where the server can load the delegated PAT.
+  if (!await h.getBookForMutation(bookId)) throw new BookNotFound();
   return h.withBookScope(bookId, () => withExclusiveLock("bookwriter:writer:" + bookId, { busy: BUSY, unsupported: NO_LOCKS }, async () => {
     cancelled(signal);
     // Read again under the lock: the book may have changed while we waited for it.
-    const book = await h.getBook(bookId);
+    const book = await h.getBookForMutation(bookId);
     if (!book) throw new BookNotFound();
-    await h.admission?.assert?.(book);
     const extra = h.admission?.locks?.(book) ?? [];
     return holdingAll(extra, "Un'altra operazione sta usando il blocco: riprova più tardi.", async () => {
+      await h.admission?.assert?.(book, signal);
+      cancelled(signal);
       const remote = book.remote;
       const epoch = book.executionAuthority?.epoch;
       let lease: WriterLeaseHandle | undefined;
@@ -82,12 +82,12 @@ export async function withWriterGuard<T>(
       const guard: WriterGuard = {
         failure: () => problem,
         assertActive: async () => {
-          const latest = await h.getBook(bookId);
-          if (!latest) throw new Error("Libro non trovato.");
-          await h.admission?.assert?.(latest);
-          if (latest.executionAuthority?.epoch !== epoch) throw new Error("Autorità del libro cambiata.");
           if (problem) throw problem;
           cancelled(signal);
+          const latest = await h.getBookForMutation(bookId);
+          if (!latest) throw new BookNotFound();
+          if (latest.executionAuthority?.epoch !== epoch) throw new Error("Autorità del libro cambiata.");
+          await h.admission?.assert?.(latest, signal);
           if (renewing) await renewing;
           if (problem) throw problem;
           if (lease) {

@@ -65,7 +65,7 @@ export async function beginPersonalServerHandoff(bookId: string, expectedUpdated
     return locks.request("bookwriter:github-outbox", { ifAvailable: true }, async outbox => {
       if (!outbox) throw new Error("Un salvataggio GitHub è in corso: riprova fra poco.");
       const db = await getDb();
-      const tx = db.transaction(["books", "activities", "outbox", "meta"], "readwrite");
+      const tx = db.transaction(["books", "activities", "mergeDrafts", "outbox", "meta"], "readwrite");
       void tx.done.catch(() => undefined);
       try {
         const meta = tx.objectStore("meta");
@@ -81,6 +81,9 @@ export async function beginPersonalServerHandoff(bookId: string, expectedUpdated
         const activities = (await tx.objectStore("activities").getAll() as Activity[]).filter(a => a.bookId === bookId);
         if (activities.some(activity => activity.status === "running"))
           throw new Error("Un tentativo AI risulta ancora in corso: attendi o ripristina il libro prima di affidarlo.");
+        const drafts = await tx.objectStore("mergeDrafts").getAll() as Array<{ bookId: string; status: string }>;
+        if (drafts.some(draft => draft.bookId === bookId && draft.status === "proposed"))
+          throw new Error("Concludi le bozze di fusione in sospeso prima di affidare il libro: non si trasferiscono al server.");
         if (await tx.objectStore("outbox").get(bookId) || await meta.get("manual-github-push:" + bookId) ||
             await meta.get("retry-schedule:v1:" + bookId))
           throw new Error("Ci sono salvataggi o attese di retry locali: concludili o annullali prima del trasferimento.");

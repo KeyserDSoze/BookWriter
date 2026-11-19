@@ -1268,7 +1268,7 @@ export default function App() {
         {tab === "dispositivo" && <Section title="Ripresa dopo un ricaricamento" description="Valgono solo per questo browser: non fanno parte del libro e non si sincronizzano.">
           <AutoResumeSettings />
         </Section>}
-        {tab === "server" && <PersonalServerPanel settings={settings} book={current} onChanged={refresh}
+        {tab === "server" && <PersonalServerPanel settings={settings} settingsDirty={settingsDirty} book={current} onChanged={refresh}
           onCreated={id => { creatingNewBook.current = false; setSelectedId(id); }}/>}
         {tab === "conversazioni" && <Section title="Richieste e risposte dell'AI" description="Il testo in arrivo dal modello si vede sempre. Qui scegli per quanto tempo restano consultabili richiesta e risposta di ogni task: contengono prompt, testo del romanzo e possibili segreti.">
           <AiTraceSettings settings={settings} onChange={patch => changeAiTracePreference(patch)}

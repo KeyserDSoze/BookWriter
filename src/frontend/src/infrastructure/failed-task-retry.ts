@@ -1,6 +1,7 @@
 import type { Activity, AppSettings, BookProject } from "@engine/domain/types";
 import { getDb } from "./db";
 import { markCloudProfileDirty } from "./cloud/cloud-dirty";
+import { rotateRetrySettingsEpoch } from "./retry-settings-epoch";
 
 /** Change only the failed task's endpoint policy, not unsaved React settings.
  * Validate task ownership and write the cloud dirty marker in the same commit. */
@@ -21,6 +22,7 @@ export async function enableFailedTaskRetries(bookId: string, activityId: string
     ? { ...endpoint, autoRetry: true, autoRetryMax: max } : endpoint) };
   try {
     await tx.objectStore("settings").put(next, "global");
+    await rotateRetrySettingsEpoch(tx.objectStore("meta"), saved, next);
     await markCloudProfileDirty(tx.objectStore("meta"), saved, next);
     await tx.done;
   } catch (error) {

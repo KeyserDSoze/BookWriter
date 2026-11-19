@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import {
   FileBookStore, Vault, createRuntime, Controller, bookEtag, DEFAULT_SETTINGS, currentStamp, withExclusiveLock,
+  makeRetrySchedule, retryStamp, narrativeStateJson,
 } from "../dist/testing.mjs";
 
 function deferred() {
@@ -54,6 +55,35 @@ async function provider(host, action) {
     server.closeAllConnections(); await new Promise(done => server.close(done));
   } };
 }
+
+test("retry_now preserves the accepted run id and releases the authorization", async () => {
+  await fixture(async ({ host, store, controller, create, send }) => {
+    const id = await create();
+    const http = await provider(host, res => {
+      res.writeHead(503, { "Content-Type": "application/json" }); res.end("{}");
+    });
+    try {
+      const { settings } = await host.runtime.loadRetrySettings();
+      const policy = { enabled: true, intervalMinutes: 5, maxCycles: 1 };
+      settings.endpoints[0].longTermRetry = policy;
+      await host.runtime.saveSettings(settings);
+      const runId = randomUUID(), { epoch } = await host.runtime.loadRetrySettings();
+      const plan = await store.transaction(id, record => {
+        record.retrySchedule = makeRetrySchedule({ bookId: id, runId, endpointId: "openai", modelId: "synthetic",
+          taskKey: retryStamp("brainstorm:Brainstorming iniziale"), bookStamp: retryStamp(narrativeStateJson(record.book)),
+          policy, authorizedPolicies: { openai: policy }, cyclesUsed: 0, settingsEpoch: epoch, now: Date.now() });
+        return record.retrySchedule;
+      });
+      await assert.rejects(send(id, { type: "start" }), error => error.code === "retry_pending");
+      assert.deepEqual((await store.read(id)).retrySchedule, plan);
+      assert.equal((await send(id, { type: "retry_now", generation: plan.generation })).result.runId, runId);
+      await controller.waitForIdle();
+      assert.equal((await store.read(id)).runAuthorization.state, "stopped");
+      assert.notEqual((await send(id, { type: "start" })).result.runId, runId);
+      await controller.waitForIdle();
+    } finally { await http.close(); }
+  });
+});
 
 test("pause during ownership checks aborts the admitted run; duplicate start cannot restart it", { timeout: 10_000 }, async () => {
   const entered = deferred(), release = deferred();

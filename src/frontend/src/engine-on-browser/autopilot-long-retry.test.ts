@@ -10,6 +10,7 @@ import { getBook, getDb, listActivities, saveBook, saveSettings } from "../infra
 import { assertRetryClaim, claimRetrySchedule, clearRetrySchedule, getRetrySchedule, retryScheduleKey } from "@engine/infrastructure/retry-schedule";
 import { retryIsDue, retryScheduleSchema, restrictRetryPolicy, readLongTermRetry } from "@engine/core/retry-policy";
 
+const TRANSIENT = "Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.";
 let settings: AppSettings;
 beforeEach(async () => {
   call.mockReset(); guard.mockReset();
@@ -27,7 +28,7 @@ afterEach(() => { vi.restoreAllMocks(); AUTO_RETRY_BACKOFF.baseMs = 5000; });
 async function bookAndFailure() {
   const book = newBook("Una storia interamente sintetica.", "Retry", "Chiaro", "Adulti");
   await saveBook(book, false);
-  call.mockRejectedValue(new Error("Rete temporaneamente assente."));
+  call.mockRejectedValue(new Error(TRANSIENT));
   const runner = new AutopilotRunner();
   await runner.run(book.id, async () => undefined);
   return { book, runner, plan: (await getRetrySchedule(book.id))! };
@@ -44,6 +45,14 @@ describe("Attesa long-term durevole", () => {
     await expect(runner.run(book.id, async () => undefined, { generation: plan.generation })).rejects.toThrow("non ancora dovuta");
     expect(call).toHaveBeenCalledTimes(3);
     expect((await getRetrySchedule(book.id))?.generation).toBe(plan.generation);
+  });
+  it("Riprendi ordinario non cancella l'attesa, né cambia runId o consuma richieste", async () => {
+    const { book, runner, plan } = await bookAndFailure();
+    const before = await listActivities(book.id);
+    await expect(runner.run(book.id, async () => undefined)).rejects.toThrow("già pianificata");
+    expect(await getRetrySchedule(book.id)).toEqual(plan);
+    expect(await listActivities(book.id)).toEqual(before);
+    expect(call).toHaveBeenCalledTimes(3);
   });
   it("tre gruppi differiti, non quattro, tutti con il runId originario", async () => {
     const { book, runner, plan } = await bookAndFailure();
@@ -102,6 +111,24 @@ describe("Attesa long-term durevole", () => {
     settings.endpoints[0]!.longTermRetry!.enabled = false; await saveSettings(settings);
     await expect(again.runner.run(again.book.id, async () => undefined, { generation: again.plan.generation, force: true })).rejects.toThrow();
     expect(call).toHaveBeenCalledTimes(6);
+  });
+  it("spegnere e riattivare la stessa politica non riabilita le attese anteriori", async () => {
+    const { book, runner, plan } = await bookAndFailure();
+    const disabled = structuredClone(settings);
+    disabled.endpoints[0]!.longTermRetry!.enabled = false;
+    await saveSettings(disabled);
+    await saveSettings(settings);
+    await expect(runner.run(book.id, async () => undefined, { generation: plan.generation, force: true })).rejects.toThrow("non più autorizzata");
+    expect(await getRetrySchedule(book.id)).toBeUndefined();
+    expect(call).toHaveBeenCalledTimes(3);
+  });
+  it("cambiare l'URL del provider dopo il claim impedisce la richiesta sullo stesso endpoint ID", async () => {
+    const { book, plan } = await bookAndFailure();
+    const claimed = await claimRetrySchedule(book.id, plan.generation, true);
+    settings.endpoints[0]!.baseUrl = "https://example.test/v1";
+    await saveSettings(settings);
+    await expect(assertRetryClaim(claimed)).rejects.toMatchObject({ name: "AbortError" });
+    expect(call).toHaveBeenCalledTimes(3);
   });
   it("un ACK GitHub operativo non invalida l'attesa; nessun recupero a raffica dopo sleep", async () => {
     const { book, runner, plan } = await bookAndFailure();

@@ -1,6 +1,6 @@
 # Retry short-term e long-term — progetto comune a browser e server
 
-> **Implementazione locale in preparazione, non ancora rilasciata.** `engine/retry-policy`, adapter IndexedDB/file e runner condividono pianificazione e claim; le impostazioni e il pannello di attesa sono operativi nel sorgente. Test sintetici su gruppi, runId, budget, crash/claim, revoca e isolamento delle repliche. Restano i gate completi e le prove Windows del progetto server. [ADR 0168](../ADR/0168-short-and-long-term-retry.md) · [F03](../features/F03-two-level-retry.md) · [Stato server](personal-server-development.md).
+> **Frontend dalla 0.32.0 (revisione in 0.32.1); host server sperimentale da sorgente.** [ADR 0168](../ADR/0168-short-and-long-term-retry.md) e [F03](../features/F03-two-level-retry.md) descrivono anche i criteri non ancora soddisfatti. La [review della tranche](personal-server-development.md) corregge un avvio ordinario che poteva cancellare l'attesa, il recupero dei claim interrotti e la revoca al cambio di configurazione.
 
 ## Comportamento richiesto
 
@@ -28,6 +28,8 @@ Il long-term è spento di default, anche per i profili legacy. Attivarlo richied
 
 L'autorizzazione del run fotografa la politica long-term consentita: una modifica/importazione delle impostazioni non aumenta i tentativi, non accorcia l'attesa e non abilita il long-term di un run già avviato senza riconferma. Disabilitare o revocare la ripartenza, invece, ha effetto anche sui piani pendenti.
 
+Nel sorgente revisionato, cambiare un endpoint (URL, chiave, opzioni o politica) o le rotte/effort globali cambia anche l'epoca di configurazione dell'host. È un ID casuale salvato con le impostazioni, non l'impronta di una credenziale. Tornare ai valori precedenti non riabilita il vecchio piano. I piani precedenti alla review, privi di questa epoca, non possono avviare richieste automaticamente.
+
 Durante l'attesa mostrare:
 
 > «In attesa di retry long-term · ripartenza 2 di 3 · non prima delle 14:35».
@@ -40,6 +42,7 @@ La pausa programmata non è né un task in esecuzione né una pausa richiesta da
 
 La classificazione deve essere **condivisa e tipizzata**, non una regex nuova e divergente tra frontend e backend. Il nuovo livello non deve allargare implicitamente gli errori ammessi dallo short-term.
 
+- **Implementazione (dalla 0.32.1):** `isAutoRetryable` in `engine/application/auto-retry.ts` è a lista chiusa, con test a tabella. Ripetono solo HTTP 408/429/5xx, contatto impossibile con l'endpoint, header scaduti, lettura/stream interrotti, risposta vuota o malformata e risposte scartate dal validatore. Non ripetono abort, prompt oltre contesto, risposte troncate o oltre il limite di sicurezza, HTTP 400/401/403/404/422 e qualunque errore non riconosciuto (storage, CAS, autorità, lease, budget, configurazione). Un errore nuovo resta quindi fermo finché non viene classificato esplicitamente.
 - Candidati: guasti temporanei del trasporto/provider già ammessi, rate limit o sovraccarico e risposte scartate che la politica correttiva consente già di rifare. I gate di validazione rimangono identici; aspettare non rende valida una citazione falsa.
 - Mai automatici: stop/abort dell'autore, autorizzazioni o configurazioni da correggere, prompt oltre contesto, budget insufficiente/incerto, ownership persa, conflitti CAS/autorità, storage/quota e checkpoint invalidi, decisioni editoriali o consensi umani mancanti.
 - Un timeout può essere addebitato: se il precedente tentativo è terminato localmente e la politica autorizza consapevolmente nuovi tentativi, l'eventuale costo ignoto resta segnalato. Con budget attivo e usage insufficiente il preflight blocca comunque: nessun intervallo temporale aggira il blocco.
@@ -85,7 +88,7 @@ La **politica** può seguire impostazioni cloud e ZIP full versionati; la **pian
 
 Un risveglio o processo che si perde dopo `claimed` non riarma alla cieca: il checkpoint distingue nessuna AI partita, tentativo concluso o richiesta incerta. Nessuna duplicazione per perdita dell'ACK.
 
-**Budget:** mantenere il runId logico attraverso attesa e riacquisizione. `AutopilotRunner.run` oggi ne crea uno nuovo a ogni avvio: va aggiunto un ingresso interno di ripresa del piano che non sia un nuovo «Avvia/Riprendi» manuale. Altrimenti ogni ciclo differito azzererebbe erroneamente il cap per sessione.
+**Budget:** `AutopilotRunner.run` con la generazione del piano usa il runId già esistente. «Avvia/Riprendi» ordinario non elimina più il piano per azzerare il budget della sessione: occorre usare «Riprova ora» oppure decidere esplicitamente di annullare l'attesa.
 
 ## Browser, server e orologi
 
@@ -99,4 +102,4 @@ Stesso motore puro per classificazione, contatori e transizioni; adapter distint
 
 ## Verifiche prima dell'implementazione
 
-F03 richiede test a tempo virtuale per contatori e scadenze, persistenza/CAS tra due schede e due processi, annullamento, sleep/riavvio, budget della stessa sessione, privacy, parità dei due host e compatibilità delle impostazioni. Tutte le etichette qui descritte sono future; oggi è disponibile soltanto la politica ravvicinata corrente.
+F03 richiede test a tempo virtuale per contatori e scadenze, persistenza/CAS tra due schede e due processi, annullamento, sleep/riavvio, budget della stessa sessione, privacy, parità dei due host e compatibilità delle impostazioni. Restano da provare o rifinire il clock monotono, i guasti di persistenza con revisori anticipati e il riarmo consensuale dopo un futuro cambio di autorità. Il sorgente attuale blocca il trasferimento mentre esiste un'attesa.

@@ -6,6 +6,7 @@ import {
 import type { AppSettings, BookProject, EndpointProfile } from "@engine/domain/types";
 import { decryptLocal, encryptLocal } from "../infrastructure/crypto";
 import { getDb, loadSettings } from "../infrastructure/db";
+import { rotateRetrySettingsEpoch } from "../infrastructure/retry-settings-epoch";
 import { CloudError, type CloudSession } from "../infrastructure/cloud/types";
 import { getCloudDevice, getCloudLink, updateCloudLink } from "../infrastructure/cloud/cloud-state";
 import {
@@ -131,6 +132,7 @@ export async function pullProfile(
       throw new CloudError("conflict", "Le impostazioni locali sono cambiate durante l'aggiornamento: nessuna modifica applicata. Riprova.");
     }
     void tx.objectStore("settings").put(next, "global");
+    await rotateRetrySettingsEpoch(tx.objectStore("meta"), current, next);
     await tx.done;
     await updateCloudLink(link => ({
       ...link, profileRevision: profile.revision, dirtyProfile: false,

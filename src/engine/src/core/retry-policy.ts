@@ -1,4 +1,13 @@
 import { z } from "zod";
+import type { AppSettings } from "../domain/types";
+
+export const retrySettingsEpochSchema = z.string().uuid().nullable();
+/** Compared only in memory. Persist a random epoch, not this data or a hash of any secret. */
+export function sameRetrySettings(a: AppSettings, b: AppSettings): boolean {
+  const relevant = (settings: AppSettings) => [settings.defaultRoute, settings.taskRoutes,
+    settings.taskReasoningEfforts, settings.endpoints];
+  return JSON.stringify(relevant(a)) === JSON.stringify(relevant(b));
+}
 
 /** Shared by the browser and Node hosts. A missing policy never grants permission. */
 export const longTermRetrySchema = z.object({
@@ -21,6 +30,8 @@ export const retryScheduleSchema = z.object({
   cyclesUsed: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   scheduledAt: z.string().datetime(), nextRetryAt: z.string().datetime(),
   state: z.enum(["waiting", "claimed"]),
+  /** Legacy unbound waits are readable but never executable. null is an explicit new-host epoch. */
+  settingsEpoch: retrySettingsEpochSchema.optional(),
 }).strict().superRefine((value, context) => {
   const scheduled = Date.parse(value.scheduledAt);
   const due = Date.parse(value.nextRetryAt);
@@ -59,6 +70,7 @@ export function makeRetrySchedule(input: {
   bookId: string; runId: string; endpointId: string; modelId: string;
   taskKey: string; bookStamp: string; policy: LongTermRetryPolicy; cyclesUsed: number; now: number;
   authorizedPolicies: Record<string, LongTermRetryPolicy>;
+  settingsEpoch?: string | null;
 }): RetrySchedule | undefined {
   const policy = readLongTermRetry(input.policy);
   if (!policy.enabled || policy.maxCycles !== null && input.cyclesUsed >= policy.maxCycles) return undefined;
@@ -67,6 +79,7 @@ export function makeRetrySchedule(input: {
     bookId: input.bookId, runId: input.runId, endpointId: input.endpointId, modelId: input.modelId,
     taskKey: input.taskKey, bookStamp: input.bookStamp, policy, cyclesUsed: input.cyclesUsed,
     authorizedPolicies: input.authorizedPolicies,
+    settingsEpoch: input.settingsEpoch,
     scheduledAt: new Date(input.now).toISOString(),
     nextRetryAt: new Date(input.now + policy.intervalMinutes * 60_000).toISOString(), state: "waiting",
   });

@@ -187,6 +187,11 @@ function stableJson(value: unknown): string {
 /** Detects a local edit of the synchronised part, secrets included, WITHOUT any
  * plaintext fingerprint: a secret contributes only its AES-GCM ciphertext, which
  * changes exactly when the author re-enters the secret. */
+/** Order-independent equality of the public, cross-device settings projection. */
+export function sameCloudSettings(left: CloudSettings, right: CloudSettings): boolean {
+  return stableJson(left) === stableJson(right);
+}
+
 export function cloudSettingsSignature(settings: AppSettings): string {
   return stableJson({
     settings: projectSettings(settings),

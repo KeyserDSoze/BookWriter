@@ -20,7 +20,7 @@ import {
   CONVERSATIONS_BUDGET_BYTES, CONVERSATIONS_MAX_FILES, isConversationPath, projectConversations,
 } from "../domain/conversation-export";
 import { host } from "../core/host";
-import { BookNotFound, decryptLocal, getBook, listActivities, loadSettings } from "../core/store";
+import { BookNotFound, decryptLocal, getBookForMutation, listActivities, loadSettings } from "../core/store";
 import type { ManualPushIntent } from "./manual-push-intent";
 import { executionAuthoritySchema } from "../domain/execution-authority";
 
@@ -223,6 +223,7 @@ function parseRemoteBook(raw: string): BookProject {
   // A newer app's snapshot gets a clear explanation, before any schema error.
   bookFormatVersion((data && typeof data === "object" ? data : {}) as { formatVersion?: unknown });
   const parsed = z.object({
+    executionAuthority: executionAuthoritySchema.optional(),
     id: z.string().uuid(),
     title: z.string().min(1),
     brief: z.string(),
@@ -336,17 +337,30 @@ export async function readGitHubSnapshot(remote: GitHubRemote, signal?: AbortSig
   return snapshotAtRef(token, remote, ref, signal);
 }
 
-/** Authority-only check for the Node guard: no Markdown tree/activities scan.
- * Reads one pinned project, never treats missing/failed data as a free authority. */
-export async function readGitHubExecutionAuthority(remote: GitHubRemote): Promise<{
+async function executionAuthorityAt(token: string, remote: GitHubRemote, head: string, signal?: AbortSignal): Promise<{
   bookId: string; authority: import("../domain/execution-authority").ExecutionAuthority;
 }> {
-  const token = await tokenFromVault();
-  const ref = await headSha(token, remote);
-  const raw = await readFile(token, remote, ".bookwriter/project.json", ref);
+  const raw = await readFile(token, remote, ".bookwriter/project.json", head, signal);
   if (raw === null) throw new Error("Autorità GitHub assente: effettua il primo salvataggio prima di avviare AI.");
-  const value = z.object({ id: z.string().uuid(), executionAuthority: executionAuthoritySchema }).parse(JSON.parse(raw));
-  return { bookId: value.id, authority: value.executionAuthority };
+  const value = z.object({ id: z.string().uuid(), executionAuthority: executionAuthoritySchema })
+    .safeParse(parseJson<unknown>(raw, "Autorità GitHub"));
+  if (!value.success) throw new RemoteConflict("Autorità GitHub non verificabile.");
+  return { bookId: value.data.id, authority: value.data.executionAuthority };
+}
+
+/** Authority-only check for the Node guard, on the same HEAD used for the baseline check. */
+export async function readGitHubExecutionAuthority(remote: GitHubRemote, signal?: AbortSignal) {
+  const token = await tokenFromVault();
+  const head = await headSha(token, remote, signal);
+  return { ...await executionAuthorityAt(token, remote, head, signal), head };
+}
+
+async function assertPublishedAuthority(book: BookProject, token: string, remote: GitHubRemote, head: string): Promise<void> {
+  if (!book.executionAuthority) return;
+  const actual = await executionAuthorityAt(token, remote, head);
+  if (actual.bookId !== book.id || actual.authority.serverId !== book.executionAuthority.serverId ||
+      actual.authority.epoch !== book.executionAuthority.epoch)
+    throw new RemoteConflict("Autorità GitHub cambiata: nessun salvataggio confermato.");
 }
 
 /** Read-only setup preview, pinned to one HEAD. Never returns manuscript or audit. */
@@ -671,9 +685,7 @@ export async function verifyPublishedManualPush(intent: ManualPushIntent): Promi
 export async function pushGitHubBook(
   bookId: string, consentPublic = false, options: PushOptions = {},
 ): Promise<PushResult> {
-  const token = await tokenFromVault();
-  const current = await getBook(bookId);
-  if (current) await host().admission?.assert?.(current);
+  const current = await getBookForMutation(bookId);
   if (!current?.remote) throw new Error("Collega prima una repository a questo libro.");
   if (githubPublicationBlocker(current))
     throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
@@ -681,6 +693,9 @@ export async function pushGitHubBook(
     throw new Error("Metti in pausa l'autopilot prima della sincronizzazione GitHub.");
   if (options.automatic && !current.remote.autoSync)
     throw new Error("La sincronizzazione automatica non è abilitata su questo libro.");
+  if (current.executionAuthority && options.automatic && !current.remote.lastSyncedCommit)
+    throw new RemoteConflict("Il primo salvataggio GitHub del server deve essere esplicito.");
+  const token = await tokenFromVault();
   const operationId = options.operationId ?? crypto.randomUUID();
   if (!/^[0-9a-f-]{36}$/i.test(operationId)) throw new Error("Identificatore di sincronizzazione non valido.");
   const remote = validateRemote(current.remote);
@@ -703,6 +718,8 @@ export async function pushGitHubBook(
         token, remote, head, bookId, operationId,
       );
       if (publishedRevision !== null) {
+        await assertPublishedAuthority(current, token, remote, head);
+        if (current.executionAuthority) await confirmGitHubHead(remote, head);
         await persistRemoteAcknowledgment(
           bookId, remote, head, publishedRevision,
           operationId, current.remote.lastSyncedCommit,
@@ -715,6 +732,11 @@ export async function pushGitHubBook(
     }
     if (current.remote.lastSyncedCommit)
       throw new RemoteConflict("Il branch remoto è cambiato dall'ultima sincronizzazione. Importa/controlla le modifiche prima di scrivere.");
+  }
+  if (current.executionAuthority) {
+    if (current.remote.lastSyncedCommit) await assertPublishedAuthority(current, token, remote, head);
+    else if (await readFile(token, remote, ".bookwriter/project.json", head) !== null)
+      throw new RemoteConflict("La destinazione contiene già un progetto. Nessun primo salvataggio eseguito.");
   }
   const previousManifestRaw = await readFile(token, remote, ".bookwriter/manifest.json", head);
   let previousPaths: string[] = [];
@@ -788,7 +810,7 @@ export async function pushGitHubBook(
   // Check the HEAD immediately before producing new Git objects.
   if (await headSha(token, remote) !== head)
     throw new RemoteConflict("GitHub è cambiato durante la preparazione; ripeti la verifica.");
-  const verifiedLocal = await getBook(bookId);
+  const verifiedLocal = await getBookForMutation(bookId);
   if (!verifiedLocal || verifiedLocal.updatedAt !== current.updatedAt) throw new LocalBookChanged();
   if (githubPublicationBlocker(verifiedLocal))
     throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");

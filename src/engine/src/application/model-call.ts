@@ -157,27 +157,34 @@ export class ReviewCallPool {
     return undefined;
   }
 
-  /** Never leave a possibly billed look-ahead call as "running": record it as not applied. */
+  /** Never leave a possibly billed look-ahead call as "running": record it as not applied.
+   * Every call is stopped first and every record is attempted even if one write fails;
+   * a failure is reported only after the rest were settled. Whatever stays "running" is
+   * closed by the interrupted-run recovery, never silently dropped. */
   async drain(): Promise<void> {
     const all = [...this.entries.values(), ...this.retired];
     this.entries.clear();
     this.retired.length = 0;
+    for (const entry of all) entry.abort.abort();
+    let failure: unknown;
     for (const entry of all) {
-      entry.abort.abort();
-      const settled = await entry.promise.then(answer => ({ answer }), (error: unknown) => ({ error }));
-      const { started } = entry;
-      if ("answer" in settled) {
-        started.endpointId = settled.answer.endpointId;
-        started.modelId = settled.answer.modelId;
-        started.inputTokens = settled.answer.inputTokens;
-        started.outputTokens = settled.answer.outputTokens;
-        started.cachedInputTokens = settled.answer.cachedInputTokens;
-      } else keepObservedUsageOnRejectedReply(started, settled.error);
-      started.status = "cancelled";
-      started.error = "Revisione in parallelo non applicata: la sessione si è fermata o il testo è cambiato prima di usarla.";
-      started.endedAt = new Date().toISOString();
-      finishLiveAi(started.id,"interrotta");
-      await saveActivity(started);
+      try {
+        const settled = await entry.promise.then(answer => ({ answer }), (error: unknown) => ({ error }));
+        const { started } = entry;
+        if ("answer" in settled) {
+          started.endpointId = settled.answer.endpointId;
+          started.modelId = settled.answer.modelId;
+          started.inputTokens = settled.answer.inputTokens;
+          started.outputTokens = settled.answer.outputTokens;
+          started.cachedInputTokens = settled.answer.cachedInputTokens;
+        } else keepObservedUsageOnRejectedReply(started, settled.error);
+        started.status = "cancelled";
+        started.error = "Revisione in parallelo non applicata: la sessione si è fermata o il testo è cambiato prima di usarla.";
+        started.endedAt = new Date().toISOString();
+        finishLiveAi(started.id,"interrotta");
+        await saveActivity(started);
+      } catch (error) { failure ??= error; }
     }
+    if (failure !== undefined) throw failure;
   }
 }

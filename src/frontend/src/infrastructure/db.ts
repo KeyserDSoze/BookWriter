@@ -2,6 +2,8 @@ import { openDB, type IDBPDatabase } from "idb";
 import { BookRevisionConflict } from "@engine/core/errors";
 import { assertLocalBook, isServerBook } from "@engine/domain/execution-authority";
 import { retryStamp } from "@engine/core/retry-policy";
+import { retryScheduleKey } from "@engine/infrastructure/retry-schedule";
+import { rotateRetrySettingsEpoch } from "./retry-settings-epoch";
 import { narrativeStateJson } from "@engine/core/narrative-state";
 import type { Activity, AppSettings, BookProject } from "@engine/domain/types";
 import { DEFAULT_SETTINGS } from "@engine/domain/types";
@@ -71,6 +73,7 @@ export async function saveSettings(
     throw new Error("Impostazioni cambiate durante il salvataggio: nessuna scrittura eseguita.");
   }
   const written = store.put(settings, "global");
+  await rotateRetrySettingsEpoch(tx.objectStore("meta"), previous, settings);
   await markCloudProfileDirty(tx.objectStore("meta"), previous, settings);
   await written;
   await tx.done;
@@ -304,9 +307,10 @@ export async function recoverInterruptedRuns(): Promise<InterruptedRun[]> {
   const db = await getDb();
   const books = (await db.getAll("books")) as BookProject[];
   const activities = (await db.getAll("activities")) as Activity[];
-  const candidates = new Set(
-    books.filter(book => book.status === "running" && !isServerBook(book)).map(book => book.id),
-  );
+  const retryPrefix = retryScheduleKey("");
+  const retryKeys = await db.getAllKeys("meta", IDBKeyRange.bound(retryPrefix, retryPrefix + "\uffff"));
+  const candidates = new Set(books.filter(book => book.status === "running" && !isServerBook(book)).map(book => book.id));
+  for (const key of retryKeys) candidates.add(String(key).slice(retryPrefix.length));
   for (const activity of activities) {
     if (activity.status === "running") candidates.add(activity.bookId);
   }
@@ -317,16 +321,23 @@ export async function recoverInterruptedRuns(): Promise<InterruptedRun[]> {
       if (!lock) return; // A different tab is still writing this book.
       // Open the transaction only *after* taking the lock. Re-read the
       // records under the transaction, not from the earlier candidate scan.
-      const tx = db.transaction(["books", "activities"], "readwrite");
+      const tx = db.transaction(["books", "activities", "meta"], "readwrite");
+      void tx.done.catch(() => undefined);
       const bookStore = tx.objectStore("books");
       const book = await bookStore.get(bookId) as BookProject | undefined;
       if (book && isServerBook(book)) { await tx.done; return; }
+      const retryStore = tx.objectStore("meta");
+      const retry = await retryStore.get(retryScheduleKey(bookId)) as { state?: string } | undefined;
+      const interruptedRetry = retry?.state === "claimed" || !!retry && book?.status === "running";
+      if (interruptedRetry) await retryStore.delete(retryScheduleKey(bookId));
       let wasRunning = false;
       let lastActivityAt = book?.updatedAt ?? "";
-      if (book?.status === "running") {
-        wasRunning = true;
+      if (book && (book.status === "running" || interruptedRetry)) {
+        wasRunning = book.status === "running" && !interruptedRetry;
         book.status = "paused";
-        book.previousError = "La pagina è stata interrotta. Riprendi dall'ultimo checkpoint.";
+        book.previousError = interruptedRetry
+          ? "Ripartenza long-term interrotta: controlla l'attività e gli eventuali addebiti prima di riprendere. Nessuna nuova richiesta automatica."
+          : "La pagina è stata interrotta. Riprendi dall'ultimo checkpoint.";
         await bookStore.put(book, bookId);
       }
       const activityStore = tx.objectStore("activities");

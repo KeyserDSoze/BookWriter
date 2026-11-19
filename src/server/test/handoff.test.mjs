@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { FileBookStore, Vault, createRuntime, Controller, newBook } from "../dist/testing.mjs";
+import { FileBookStore, Vault, createRuntime, Controller, newBook, bookEtag } from "../dist/testing.mjs";
 
 async function fixture(action) {
   const base = process.platform === "win32" ? tmpdir() : process.env.BOOKWRITER_TEST_TMP ?? "/tmp/opencode";
@@ -111,6 +111,28 @@ test("cancelling after acceptance never undoes it; only the owning client can as
     await assert.rejects(controller.cancelHandoff({ ...client, id: randomUUID() }, body.handoffId, book.id), status(409));
     assert.equal((await store.read(book.id)).book.title, book.title);
     assert.deepEqual(await store.ids(), [book.id]);
+  });
+});
+
+test("command compaction keeps the adoption receipt; a legacy missing receipt never unlocks the client", async () => {
+  await fixture(async ({ store, controller, client, local, request }) => {
+    const body = request(local()), id = body.book.id;
+    await controller.adopt(client, body);
+    await store.transaction(id, record => {
+      for (let sequence = 1; sequence < 2000; sequence++) {
+        record.commands[randomUUID()] = { digest: "b".repeat(64), clientId: client.id, sequence,
+          state: "completed", result: { accepted: true } };
+      }
+      record.watermarks[client.id] = 1999;
+    });
+    await controller.command(id, client, bookEtag(await store.read(id)), {
+      commandId: randomUUID(), sequence: 2000, command: { type: "cancel_retry" },
+    });
+    assert.deepEqual(await controller.cancelHandoff(client, body.handoffId, id), { state: "adopted", bookId: id });
+    assert.equal(await controller.adopt(client, body), id);
+    await store.transaction(id, record => { delete record.commands[body.handoffId]; });
+    await assert.rejects(controller.cancelHandoff(client, body.handoffId, id), error => error.code === "handoff_unverified");
+    assert.deepEqual(await store.ids(), [id]);
   });
 });
 

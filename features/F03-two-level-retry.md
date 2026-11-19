@@ -1,6 +1,6 @@
 # F03 — Retry short-term e long-term condivisi
 
-- Stato: **implementazione locale in preparazione, non rilasciata**; 2026-11-19.
+- Stato: **frontend dalla 0.32.0, host server sperimentale**. Le correzioni di review sono nella 0.32.1.
 - [ADR 0168](../ADR/0168-short-and-long-term-retry.md) · [Specifica](../docs/retry-policy.md).
 - Vale sia per il frontend locale sia per il backend di [F02](F02-personal-server.md); non richiede il server per usare i retry nel browser.
 
@@ -12,7 +12,7 @@
 - [x] Attesa file e stesso pianificatore; repliche escluse.
 - [x] Ripresa con runId/budget originari e guardie/preflight.
 - [x] UI impostazioni/attesa, annulla/riprova ora e descrittore puro con stato operativo.
-- [ ] Nessuna attesa eseguibile importata da cloud/ZIP/GitHub; handoff e cambi di autorità invalidano la generazione precedente.
+- [ ] Nessuna attesa eseguibile importata da cloud/ZIP/GitHub: implementato, con revoca durevole al cambio di configurazione. Il trasferimento blocca i piani ancora presenti; manca il riarmo supervisionato dopo un cambio di host.
 - [ ] Audit e usage per tentativo, gestione dei look-ahead ancora attivi e riconciliazione dopo crash prima di ulteriori richieste.
 
 ## Scenari di accettazione
@@ -38,4 +38,4 @@ Unit test con clock virtuale, integrazione IndexedDB/file e Playwright desktop/m
 
 Test aggiunti: `autopilot-long-retry.test.ts`, `personal-server-client.test.ts`, contratti file in `src/server/test/server.test.mjs`, E2E `personal-server.spec.ts`. Non confondere questi test con collaudi di servizi, tunnel o provider reali.
 
-La ripartenza differita è un consenso a nuove richieste potenzialmente addebitate, non prova che quelle fallite siano gratuite né una garanzia di successo. Non estendere la politica a PATCH GitHub, lease o update. Nessuna release frontend effettuata da questa preparazione.
+La ripartenza differita è un consenso a nuove richieste potenzialmente addebitate, non prova che quelle fallite siano gratuite né una garanzia di successo. Non estendere la politica a PATCH GitHub, lease o update.

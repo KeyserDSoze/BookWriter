@@ -1,6 +1,6 @@
 # Server personale — stato reale e prove da sorgente
 
-> **Tranche sperimentale locale, non un server completo rilasciato.** Il codice esiste; non sono disponibili installer, servizi gestiti o aggiornamenti remoti firmati. Non usare manoscritti o credenziali reali per il primo collaudo.
+> **Tranche sperimentale: l'interfaccia è su Pages (0.32.1); il server si avvia da sorgente.** Non sono disponibili installer, servizi gestiti o aggiornamenti remoti firmati. Le correzioni di review descritte qui sono nella 0.32.1 del frontend e nel sorgente del server. Non usare manoscritti o credenziali reali per il primo collaudo.
 
 ## Cosa è implementato
 
@@ -35,7 +35,14 @@ src/engine/src/
 - **Browser** (`src/frontend/src/host/browser-host.ts`): IndexedDB (`db.ts`), WebCrypto (`crypto.ts`), Web Locks, store delle conversazioni (`ai-trace-store.ts`). Resta nel frontend ciò che è solo del browser: checkpoint opt-in della prosa/del libro, marcatore del profilo cloud, ZIP, import GitHub in IndexedDB (`github-import.ts`), recupero delle esecuzioni interrotte e tutta l'interfaccia. Una replica di un libro del server è in sola lettura nella `transaction` del browser.
 - **Server** (`src/server/src/runtime.ts`): file per libro, vault, blocco in memoria nel processo più lock OS della radice dati, PAT per libro. La guardia di scrittura, il lease GitHub, la coda, gli intenti e il retry sono le **stesse funzioni** del browser.
 - **Contratto condiviso.** `testing/host-contract.ts` contiene 14 casi (libro assente, commit atomico di libro+coda+intento+log, rollback, CAS, lock esclusivo, cifratura, coda GitHub con backoff e ACK, intento manuale, retry long-term con claim unico) che eseguono anche codice reale del motore. Girano sul browser (`browser-host.contract.test.ts`, fake IndexedDB) **e** sul server (`test/host-contract.test.mjs`, file reali): se un host si discosta dalla porta, lo stesso caso fallisce. Il contratto è stato verificato con guasti iniettati (scrittura della coda saltata, blocco non esclusivo).
-- **Cosa il contratto NON prova:** non confronta prompt, contesti per ruolo, budget o validazioni tra i due host (la parità è garantita dal fatto che il codice è lo stesso file, non da fixture di confronto), non esercita Web Locks reali di un browser né il lock OS di Windows.
+- **Cosa il contratto NON prova:** non confronta sistematicamente tutti i prompt, ruoli, budget o validazioni fra i due host; non esercita Web Locks reali di un browser né il lock OS di Windows. Le suite applicative coprono singoli percorsi reali del runner; il test server di review esercita lettore personalizzato, rotta dedicata e assenza di memoria segreta nel suo prompt.
+
+## Configurazione e libri personalizzati
+
+- **Impostazioni → Server personale:** prima salva le modifiche sul dispositivo. Il pannello confronta la configurazione AI salvata con la parte non segreta di quella sul server. L'invio confermato usa la revisione mostrata: se un altro client l'ha cambiata, prima rileggila. Non c'è sincronizzazione automatica delle impostazioni.
+- Passano rotte, endpoint approvati, modelli, capacità, limiti, tariffe, reasoning configurato e retry. Non passano tema, cronologia o preferenze delle conversazioni, catalogo di reasoning rilevato sul browser, token OAuth o Cloudflare. Per le chiavi AI scegli se mantenere, sostituire o rimuovere; cambio di URL o passaggio a nessuna autenticazione non eredita la chiave. Il PAT si delega o si rimuove per il singolo libro, senza cambiare la configurazione AI. La rimozione dal vault server non revoca il PAT presso GitHub.
+- **Nuovo libro server:** titolo, idea, stile e pubblico si inseriscono direttamente. Puoi riusare i profili dei lettori/scrittori/direttore, preferenze di redazione, rotte, reasoning e limiti del budget di un libro, con un nuovo periodo di conteggio. Le istruzioni dei profili si copiano come scritte; il template non preleva capitoli, memoria, sinossi, credenziali o consensi. Non avvia l'AI. Una risposta persa lascia la creazione in attesa; «Riprendi creazione sul server» ritenta solo lo stesso identificativo e payload, con lo stesso client verificato.
+- **Libro affidato:** conserva le configurazioni nel libro, con revoca dei consensi ereditati. La modifica dei profili e degli override **dopo** la creazione o l'affidamento non è ancora esposta da remoto. Un endpoint o modello citato dal libro deve comunque essere configurato sul server; il confronto non certifica che un modello/chiave funzioni.
 
 ## Come provarlo su Linux
 
@@ -60,13 +67,13 @@ La radice viene creata privata se assente. Se esiste con permessi aperti, l'avvi
 5. Generare un token o un codice di pairing, confrontare l'impronta e collegare il client.
 6. Creare un libro **sintetico** sul server. Delegare la configurazione AI salvata e solo le chiavi scelte. Una base loopback indica il PC server.
 7. Per GitHub, delegare il PAT a quel libro; dal pannello del libro collegare una repository privata già inizializzata e senza libro, effettuare il primo salvataggio esplicito, poi attivare autosync. L'autorità deve risultare pubblicata prima delle chiamate AI.
-8. Avviare sul server. Chiudere il client non ferma Node. Alla riapertura usare «Sincronizza dal server»/«Aggiorna replica»: questa tranche non ha ancora un coordinatore automatico completo.
+8. Avviare sul server. Chiudere il client non ferma Node. Alla riapertura, con l'aggiornamento automatico attivo, gli eventi notificano al client di rileggere gli snapshot. Si può anche usare «Sincronizza dal server»/«Aggiorna replica». Non è ancora l'orchestrazione automatica cloud → GitHub → server.
 
 Windows può compilare gli stessi sorgenti con Node 22 e PowerShell. Il codice DPAPI/mutex e la matrice CI sono predisposti, ma **in questa sessione non è stato eseguito un sistema Windows**. Non è disponibile un servizio SCM installabile; non usare `sc create` direttamente su Node.
 
 ## Rete e sicurezza
 
-L'adapter Node usa destinazioni approvate, rifiuta reti private/link-local/metadati e indirizzi IPv6 di transizione; risolve e fissa l'indirizzo **nella connessione effettiva**, senza affidarsi a un controllo DNS preliminare seguito da `fetch` libero. Loopback è ammesso solo per basi AI approvate. Nessun redirect con credenziali. GitHub resta su `api.github.com`, la ricerca su `it.wikipedia.org`.
+L'adapter Node usa destinazioni approvate, rifiuta reti private/link-local/metadati e indirizzi IPv6 di transizione; risolve e fissa l'indirizzo **nella connessione effettiva**, senza affidarsi a un controllo DNS preliminare seguito da `fetch` libero. Loopback è ammesso solo per basi AI approvate. Nessun redirect con credenziali. GitHub resta su `https://api.github.com`, Wikipedia sui due indirizzi HTTPS italiani e inglesi supportati dal motore.
 
 HTTPS, firma dell'identità e CORS non proteggono da amministratore/host/browser compromessi e non rendono il tunnel E2EE. Gli archivi dei libri contengono manoscritti e segreti narrativi in chiaro. Backup off-device, recupero dopo perdita del disco e affidabilità del filesystem richiedono prove separate.
 
@@ -77,7 +84,7 @@ HTTPS, firma dell'identità e CORS non proteggono da amministratore/host/browser
 | Tutti i comandi editoriali, merge/AI-edit e dossier remoti | Catalogo parziale; editor locali nascosti nelle repliche, nessun fallback. |
 | Trasferimento di un libro GitHub esistente e ritorno al locale | Non completato. L'upload non può aggirare il protocollo di autorità GitHub: i libri con `remote` sono rifiutati sia dal client sia dal server. Nessun pulsante di subentro per timeout; per tornare al locale si esporta la replica e si importa come nuova copia. |
 | Adozione di un libro locale **senza** GitHub | Implementata a senso unico (sezione sotto). Prove sintetiche su file reali e IndexedDB; non provata con grandi manoscritti reali né su Windows. |
-| SSE | Endpoint autenticato con backpressure/revoca; riconnessione richiede snapshot. Il client attuale usa aggiornamenti espliciti, non un log eventi durevole completo. |
+| SSE | Avvisi autenticati di aggiornamento e rilettura degli snapshot; non è un log durevole. La UI non mostra ancora il testo in arrivo dei libri server. |
 | Upload grandi tipizzati e bozze offline | Non completati; nessuna promessa di editing remoto completo per scene oltre la busta ordinaria di 64 KiB. |
 | Profilo Google/Microsoft, connessioni e registro multi-PAT | Non completati. Connessione attuale per dispositivo in `meta`; PAT per libro soltanto nel vault server. |
 | Ordine automatico cloud → GitHub → server | Non completato. Non viene presentato come flusso automatico operativo. |
@@ -94,7 +101,7 @@ Flusso in tre azioni, tutte esplicite, dalla scheda **Server personale**:
 2. **Invio idempotente.** `POST /api/v1/handoffs` accetta solo un libro già bloccato con l'epoca indicata, senza GitHub e senza tentativi in corso; non sostituisce mai un libro esistente. La ricevuta durevole (stesso `handoffId`, stessi byte, stesso client) rende l'invio ripetibile senza duplicati; stesso ID con byte diversi o ID libro già presente sono conflitti. Il server applica comunque la revoca dei consensi (difesa in profondità) e non consuma sequenze di comando. Replica, cursore e chiusura del marcatore sono confermati nella stessa transazione IndexedDB.
 3. **Recupero.** «Riprendi invio» ripete lo stesso POST; «Verifica ricezione» legge solo la ricevuta e ne confronta l'impronta; «Annulla trasferimento non ricevuto» chiede al server un **rifiuto durevole** di quell'`handoffId` (`POST /api/v1/handoffs/:id/resolve`) e solo dopo la sua risposta `cancelled` sblocca il libro locale. Se il server lo aveva già accettato, vince l'accettazione. Un server irraggiungibile, un registro illeggibile o una connessione diversa lasciano il libro bloccato.
 
-Limiti: a senso unico (nessun «ritorno al locale»), solo libri senza GitHub, nessun trasferimento automatico di copie/consensi locali `meta`, upload unico fino a 80 MiB (nessun upload a pezzi), nessun test su manoscritti reali. Il libro locale bloccato resta leggibile ed esportabile.
+Limiti: a senso unico (nessun «ritorno al locale»), solo libri senza GitHub, nessun trasferimento automatico di copie/consensi locali `meta` o bozze di fusione. Occorre chiudere le bozze in sospeso prima di affidare il libro. Upload unico fino a 80 MiB (nessun upload a pezzi), nessun test su manoscritti reali. Se esiste già il libro server ma la ricevuta non è verificabile, il libro locale resta bloccato, leggibile ed esportabile.
 
 ## Comandi remoti: registro durevole e ricevute
 
@@ -118,4 +125,4 @@ Limiti: a senso unico (nessun «ritorno al locale»), solo libri senza GitHub, n
 
 Queste prove integrano i contratti di archivio, vault, API, pairing, retry, riavvio e ACK GitHub; non attestano la feature completa, Windows o un provider reale.
 
-Il numero `0.1.0` di `src/server/package.json` è un'etichetta privata del sorgente, **non una release distribuita**. La versione frontend non è stata aumentata da questa preparazione locale. Nessun commit, push o deploy è stato eseguito.
+Il numero `0.1.0` di `src/server/package.json` è un'etichetta privata del sorgente, **non una release binaria distribuita**. La review non comprende un nuovo bump frontend né un deploy.

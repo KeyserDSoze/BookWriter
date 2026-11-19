@@ -2,23 +2,31 @@ import { z } from "zod";
 import {
   normalizeServerUrl, serverInfoSchema, serverConnectionSchema, serverSessionSchema,
   serverCommandEnvelopeSchema, serverCommandReceiptSchema, serverCommandDigestInput,
+  serverConfigurationSchema, serverBookCreationInputSchema,
   type ServerInfo, type ServerConnection, type ServerCommand, type ServerSession, type ServerCommandReceipt,
+  type ServerBookCreationInput, type ServerConfiguration,
 } from "@engine/domain/personal-server";
-import { bookSchema, activitySchema } from "./backup";
-import { getDb } from "./db";
+import { bookSchema, activitySchema } from "@engine/domain/book-schema";
+import { getDb, loadSettings } from "./db";
 import { encryptLocal, decryptLocal } from "./crypto";
-import type { BookProject, Activity } from "@engine/domain/types";
+import type { AppSettings, BookProject, Activity } from "@engine/domain/types";
 import { BOOK_FORMAT_VERSION } from "@engine/domain/book-format";
-import { projectSettings } from "@engine/domain/cloud-profile";
-import { loadSettings } from "./db";
-import { retryScheduleSchema } from "@engine/core/retry-policy";
+import { cloudSettingsSignature, projectSettings } from "@engine/domain/cloud-profile";
+import { retryScheduleSchema, type RetrySchedule } from "@engine/core/retry-policy";
 import {
   serverCommandJournalKey, readServerCommandJournal, MAX_PENDING_SERVER_COMMANDS,
   assertCommandConnection, commandMatchesConnection, settleCommandJournal, type PendingServerCommand,
 } from "./personal-server-command-journal";
 
 export const SERVER_CONNECTION_KEY = "personal-server:connection:v1";
+export const SERVER_CREATE_INTENT_KEY = "personal-server:create:v1";
 export const replicaKey = (id: string) => "personal-server:replica:v1:" + id;
+const pendingCreationSchema = z.object({
+  commandId: z.string().uuid(), clientId: z.string().uuid(), serverId: z.string().uuid(),
+  baseUrl: z.string().max(500), fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  input: serverBookCreationInputSchema, preparedAt: z.string().datetime(),
+}).strict();
+export type PendingPersonalServerCreation = z.infer<typeof pendingCreationSchema>;
 let generation = 0;
 const b64 = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 const hex = (value: Uint8Array) => [...value].map(n => n.toString(16).padStart(2, "0")).join("");
@@ -134,11 +142,13 @@ export const sameConnection = (a: unknown, b: unknown) => {
   const left = serverConnectionSchema.safeParse(a), right = serverConnectionSchema.safeParse(b);
   return left.success && right.success && JSON.stringify(left.data) === JSON.stringify(right.data);
 };
-export async function connectionRequest(connection: ServerConnection, path: string, options: Parameters<typeof http>[2] = {}) {
+export async function connectionRequest(connection: ServerConnection, path: string, options: Parameters<typeof http>[2] = {},
+  beforeSend?: () => Promise<void>) {
   const expectedGeneration = generation;
   if (!sameConnection(await personalServerConnection(), connection)) throw new Error("Connessione server cambiata.");
   await probePersonalServer(connection.baseUrl, connection);
   const token = await decryptLocal(connection.token);
+  await beforeSend?.();
   if (expectedGeneration !== generation || !sameConnection(await personalServerConnection(), connection))
     throw new Error("Connessione server cambiata prima dell'invio.");
   const response = await http(connection.baseUrl, path, { ...options, token });
@@ -158,6 +168,8 @@ export interface SnapshotSettlement {
   command?: { pending: PendingServerCommand; receipt: ServerCommandReceipt };
   /** The adoption marker that this snapshot closes (same transaction). */
   handoffId?: string;
+  /** Clear just this creation intent, together with the verified replica. */
+  creationId?: string;
 }
 export async function syncSnapshot(connection: ServerConnection, bookId: string, settlement?: SnapshotSettlement): Promise<BookProject> {
   z.string().uuid().parse(bookId);
@@ -206,6 +218,11 @@ export async function syncSnapshot(connection: ServerConnection, bookId: string,
     await tx.objectStore("meta").put({ serverId: connection.serverId, epoch: book.executionAuthority.epoch,
       revision: replica.revision, etag: response.etag, nextSequence: replica.nextSequence,
       clientId: connection.clientId, retrySchedule: replica.retrySchedule, syncedAt: new Date().toISOString() }, replicaKey(bookId));
+    if (settlement?.creationId) {
+      const meta = tx.objectStore("meta");
+      const pending = parsePendingCreation(await meta.get(SERVER_CREATE_INTENT_KEY));
+      if (pending?.commandId === settlement.creationId) await meta.delete(SERVER_CREATE_INTENT_KEY);
+    }
     await tx.done; return book;
   } catch (error) { try { tx.abort(); } catch { /* already aborted */ } throw error; }
 }
@@ -277,13 +294,60 @@ export async function openServerEventStream(connection: ServerConnection, signal
   } catch (error) { throw error instanceof ServerRequestError ? error : new ServerRequestError(); }
   finally { clearTimeout(timer); signal.removeEventListener("abort", onAbort); }
 }
-export async function createPersonalServerBook(input: { title: string; brief: string; writingStyle: string; audience: string }): Promise<BookProject> {
+function parsePendingCreation(raw: unknown): PendingPersonalServerCreation | undefined {
+  return raw === undefined ? undefined : pendingCreationSchema.parse(raw);
+}
+export async function pendingPersonalServerCreation(): Promise<PendingPersonalServerCreation | undefined> {
+  return parsePendingCreation(await (await getDb()).get("meta", SERVER_CREATE_INTENT_KEY));
+}
+async function postCreation(connection: ServerConnection, pending: PendingPersonalServerCreation): Promise<BookProject> {
+  if (pending.serverId !== connection.serverId || pending.clientId !== connection.clientId ||
+      pending.baseUrl !== connection.baseUrl || pending.fingerprint !== connection.fingerprint)
+    throw new Error("La creazione precedente appartiene a un'altra connessione: ricollega lo stesso server e client prima di riprenderla.");
+  const response = await connectionRequest(connection, "/api/v1/books", { method: "POST",
+    body: { commandId: pending.commandId, ...pending.input } });
+  const result = z.strictObject({ bookId: z.string().uuid() }).parse(response.data);
+  return syncSnapshot(connection, result.bookId, { creationId: pending.commandId });
+}
+export async function resumePersonalServerCreation(): Promise<BookProject> {
+  const pending = await pendingPersonalServerCreation();
+  if (!pending) throw new Error("Nessuna creazione del libro server è in attesa.");
   const connection = await personalServerConnection();
   if (!connection) throw new Error("Collega prima il server.");
-  const response = await connectionRequest(connection, "/api/v1/books", { method: "POST",
-    body: { commandId: crypto.randomUUID(), ...input }, maxBytes: 16_384 });
-  const result = z.object({ bookId: z.string().uuid() }).strict().parse(response.data);
-  return syncServerBook(connection, result.bookId);
+  return postCreation(connection, pending);
+}
+export async function createPersonalServerBook(input: ServerBookCreationInput): Promise<BookProject> {
+  const connection = await personalServerConnection();
+  if (!connection?.clientId) throw new Error("Ricollega il client prima di creare un libro sul server.");
+  const parsed = serverBookCreationInputSchema.parse(input);
+  const prepared: PendingPersonalServerCreation = {
+    commandId: crypto.randomUUID(), clientId: connection.clientId,
+    serverId: connection.serverId, baseUrl: connection.baseUrl, fingerprint: connection.fingerprint,
+    input: parsed, preparedAt: new Date().toISOString(),
+  };
+  if (new TextEncoder().encode(JSON.stringify({ commandId: prepared.commandId, ...parsed })).byteLength > 1_048_576)
+    throw new ServerRequestError(413);
+  const tx = (await getDb()).transaction("meta", "readwrite");
+  void tx.done.catch(() => undefined);
+  try {
+    if (!sameConnection(await tx.store.get(SERVER_CONNECTION_KEY), connection))
+      throw new Error("Connessione server cambiata prima della creazione.");
+    if (await tx.store.get(SERVER_CREATE_INTENT_KEY) !== undefined)
+      throw new Error("Esiste già una creazione server da confermare. Riprendi quella richiesta prima di crearne un'altra.");
+    await tx.store.add(prepared, SERVER_CREATE_INTENT_KEY); await tx.done;
+  } catch (error) { try { tx.abort(); } catch { /* already aborted */ } throw error; }
+  return postCreation(connection, prepared);
+}
+
+/** Display only: a server retry is never placed in the local executable scheduler. */
+export async function replicatedRetrySchedule(book: BookProject): Promise<RetrySchedule | undefined> {
+  const raw = await (await getDb()).get("meta", replicaKey(book.id)) as {
+    serverId?: string; epoch?: string; retrySchedule?: unknown;
+  } | undefined;
+  if (!raw || !book.executionAuthority || raw.serverId !== book.executionAuthority.serverId ||
+      raw.epoch !== book.executionAuthority.epoch || raw.retrySchedule == null) return undefined;
+  const plan = retryScheduleSchema.parse(raw.retrySchedule);
+  return plan.bookId === book.id ? plan : undefined;
 }
 function commandCursor(raw: unknown) {
   const parsed = z.object({ serverId: z.string().uuid(), clientId: z.string().uuid(), epoch: z.string().uuid(),
@@ -392,32 +456,77 @@ export async function reconcileServerCommand(bookId: string, options?: { cancelU
   }
   return summary;
 }
-export async function pairPersonalServer(base: string, code: string, label: string): Promise<{ id: string; nonce: string }> {
+export interface PendingServerPairing { id: string; nonce: string; baseUrl: string; serverId: string; publicKey: string }
+export async function pairPersonalServer(base: string, code: string, label: string,
+  expected: Pick<ServerInfo, "serverId" | "publicKey">, isCurrent: () => boolean = () => true): Promise<PendingServerPairing> {
+  const baseUrl = normalizeServerUrl(base);
+  const info = await probePersonalServer(baseUrl, expected);
+  if (!isCurrent()) throw new Error("Connessione cambiata prima dell'abbinamento.");
   const nonce = hex(crypto.getRandomValues(new Uint8Array(32)));
-  const response = await http(base, "/api/v1/pairings", { method: "POST", body: { code, nonce, label } });
-  return { id: z.object({ id: z.string().uuid() }).strict().parse(response.data).id, nonce };
+  const response = await http(baseUrl, "/api/v1/pairings", { method: "POST", body: { code, nonce, label } });
+  return { id: z.strictObject({ id: z.string().uuid() }).parse(response.data).id, nonce, baseUrl,
+    serverId: info.serverId, publicKey: info.publicKey };
 }
-export async function finishPairPersonalServer(base: string, pending: { id: string; nonce: string }): Promise<string | undefined> {
-  const response = await http(base, `/api/v1/pairings/${pending.id}/result`, { method: "POST", body: { nonce: pending.nonce } });
+export async function finishPairPersonalServer(pending: PendingServerPairing, isCurrent: () => boolean = () => true): Promise<string | undefined> {
+  await probePersonalServer(pending.baseUrl, pending);
+  if (!isCurrent()) throw new Error("Connessione cambiata durante l'abbinamento.");
+  const response = await http(pending.baseUrl, `/api/v1/pairings/${pending.id}/result`, { method: "POST", body: { nonce: pending.nonce } });
   const result = z.union([z.object({ pending: z.literal(true) }).strict(), z.object({ token: z.string().min(40).max(200) }).strict()]).parse(response.data);
   return "token" in result ? result.token : undefined;
 }
 
-/** Explicit provisioning only: selected credentials, no OAuth/cloud or tunnel token. */
-export async function provisionPersonalServer(endpointIds: string[], bookId?: string, sharePat = false): Promise<void> {
+export interface ServerConfigurationReview { configuration: ServerConfiguration; etag: string; connectionId: string }
+export async function personalServerConfiguration(): Promise<ServerConfigurationReview> {
   const connection = await personalServerConnection();
   if (!connection) throw new Error("Collega prima il server.");
-  const settings = await loadSettings();
-  const keys: Record<string, string> = {};
-  for (const endpoint of settings.endpoints) if (endpointIds.includes(endpoint.id) && endpoint.secret)
-    keys[endpoint.id] = await decryptLocal(endpoint.secret);
-  const githubToken = sharePat && settings.githubToken ? await decryptLocal(settings.githubToken) : undefined;
-  if (sharePat && (!bookId || !githubToken)) throw new Error("Seleziona il libro server e un PAT locale già salvato.");
   const response = await connectionRequest(connection, "/api/v1/settings", { maxBytes: 1_048_576 });
-  if (!response.etag) throw new Error("Versione delle impostazioni server non verificabile.");
-  await connectionRequest(connection, "/api/v1/settings", {
-    method: "POST", etag: response.etag, maxBytes: 1_048_576,
-    body: { consent: true, settings: projectSettings(settings), endpointKeys: keys,
-      ...(githubToken ? { bookId, githubToken } : {}) },
+  const configuration = serverConfigurationSchema.parse(response.data);
+  if (response.etag !== `"config:${configuration.revision}"`)
+    throw new Error("Versione delle impostazioni server non verificabile.");
+  return { configuration, etag: response.etag, connectionId: connection.id };
+}
+
+async function connectionForConfiguration(review: ServerConfigurationReview): Promise<ServerConnection> {
+  const connection = await personalServerConnection();
+  if (connection?.id !== review.connectionId)
+    throw new Error("Connessione server cambiata: rileggi la configurazione prima di inviarla.");
+  return connection;
+}
+
+export async function setPersonalServerBookPat(review: ServerConfigurationReview, bookId: string,
+  action: "delegate" | "revoke", expectedSecret?: AppSettings["githubToken"]): Promise<void> {
+  z.string().uuid().parse(bookId);
+  const connection = await connectionForConfiguration(review);
+  if (action === "delegate" && !expectedSecret) throw new Error("Salva prima il PAT GitHub su questo dispositivo.");
+  const githubToken = action === "delegate" && expectedSecret ? await decryptLocal(expectedSecret) : null;
+  await connectionRequest(connection, `/api/v1/books/${bookId}/github-credential`, {
+    method: "POST", etag: review.etag, body: { consent: true, githubToken },
+  }, async () => {
+    if (action === "delegate" && JSON.stringify((await loadSettings()).githubToken) !== JSON.stringify(expectedSecret))
+      throw new Error("Il PAT locale è cambiato: nessuna credenziale inviata.");
   });
+}
+
+/** Use the revision the author actually saw. A separate PAT action never replaces the AI settings. */
+export async function provisionPersonalServer(review: ServerConfigurationReview, displayed: AppSettings,
+  actions: Readonly<Record<string, "delegate" | "revoke">>): Promise<void> {
+  const connection = await connectionForConfiguration(review);
+  const signature = cloudSettingsSignature(displayed);
+  const checkLocal = async () => {
+    const saved = await loadSettings();
+    if (cloudSettingsSignature(saved) !== signature)
+      throw new Error("Le impostazioni salvate sono cambiate: aggiornate la scheda prima di inviarle.");
+    return saved;
+  };
+  const settings = await checkLocal();
+  const entries = await Promise.all(Object.entries(actions).map(async ([id, action]) => {
+    const endpoint = settings.endpoints.find(e => e.id === id);
+    if (!endpoint || action === "delegate" && (!endpoint.secret || endpoint.authMode === "none"))
+      throw new Error("Impossibile delegare una chiave AI non salvata o di un endpoint senza autenticazione.");
+    return [id, action === "revoke" ? null : await decryptLocal(endpoint.secret!)] as const;
+  }));
+  await connectionRequest(connection, "/api/v1/settings", {
+    method: "POST", etag: review.etag,
+    body: { consent: true, settings: projectSettings(settings), endpointKeys: Object.fromEntries(entries) },
+  }, async () => { await checkLocal(); });
 }

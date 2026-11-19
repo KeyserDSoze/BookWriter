@@ -10,6 +10,7 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const secret = () => randomBytes(32).toString("base64url");
 const constantMatch = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const MAX_CLIENTS = 100;
 const clientSchema = z.object({
   id: z.string().uuid(), label: z.string().min(1).max(80), hash: z.string().length(64),
   scopes: z.array(serverScopeSchema).min(1).max(4), createdAt: z.number(), revoked: z.boolean(),
@@ -21,11 +22,37 @@ const pairingSchema = z.object({
   issued: z.object({ iv: z.string(), data: z.string() }).optional(),
 }).strict();
 const authSchema = z.object({
-  version: z.literal(1), bootstrapHash: z.string().length(64), clients: z.array(clientSchema).max(100),
+  version: z.literal(1), bootstrapHash: z.string().length(64), clients: z.array(clientSchema).max(MAX_CLIENTS),
   pairing: pairingSchema.optional(), failureWindow: z.number(), failures: z.number().int().min(0),
 }).strict();
 type AuthState = z.infer<typeof authSchema>;
 export type Client = z.infer<typeof clientSchema>;
+
+/** Recover the durable bootstrap if the process stopped before writing authorization.json. */
+async function bootstrapCode(path: string): Promise<string> {
+  try {
+    const info = await fs.lstat(path);
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size !== 44 ||
+        process.platform !== "win32" && (info.mode & 0o077) !== 0)
+      throw new Error("File di bootstrap locale non valido o non privato: nessuna rigenerazione automatica.");
+    const text = await fs.readFile(path, "utf8");
+    if (!/^[A-Za-z0-9_-]{43}\n$/.test(text)) throw new Error("Codice di bootstrap locale non valido.");
+    return text.slice(0, -1);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    const code = secret();
+    await fs.writeFile(path, code + "\n", { flag: "wx", mode: 0o600, flush: true });
+    return code;
+  }
+}
+function appendClient(state: AuthState, client: Client): void {
+  if (state.clients.length >= MAX_CLIENTS) {
+    const revoked = state.clients.findIndex(item => item.revoked);
+    if (revoked === -1) throw new ApiError(409, "client_limit", "Troppi client attivi: revoca un token prima di generarne un altro.");
+    state.clients.splice(revoked, 1);
+  }
+  state.clients.push(client);
+}
 
 export class Auth {
   private sessions = new Map<string, { csrf: string; until: number }>();
@@ -35,9 +62,8 @@ export class Auth {
     const stored = await readJson(path, 1024 * 1024);
     let state: AuthState;
     if (stored === undefined) {
-      const code = secret();
       // This file is shown only by a local administrator, never returned by the API or logged.
-      await fs.writeFile(join(store.root, "private", "admin-bootstrap.txt"), code + "\n", { flag: "wx", mode: 0o600 });
+      const code = await bootstrapCode(join(store.root, "private", "admin-bootstrap.txt"));
       state = { version: 1, bootstrapHash: hash(code), clients: [], failureWindow: Date.now(), failures: 0 };
       await atomicJson(path, state);
     } else state = authSchema.parse(stored);
@@ -86,15 +112,14 @@ export class Auth {
   }
   async issue(label: string, scopes: ServerScope[], replaceId?: string): Promise<{ token: string; clientId: string }> {
     return this.change(state => {
-      if (replaceId) {
-        const old = state.clients.find(c => c.id === replaceId);
-        if (!old) throw new ApiError(404, "client_missing", "Client non trovato.");
-        old.revoked = true;
-      }
-      const token = secret(), clientId = randomUUID();
-      const client = clientSchema.parse({ id: clientId, label, scopes, hash: hash(token), revoked: false, createdAt: Date.now() });
       if (new Set(scopes).size !== scopes.length) throw new ApiError(422, "scopes", "Permessi duplicati.");
-      state.clients.push(client);
+      const index = replaceId ? state.clients.findIndex(c => c.id === replaceId) : -1;
+      if (replaceId && index === -1) throw new ApiError(404, "client_missing", "Client non trovato.");
+      const token = secret(), clientId = replaceId ?? randomUUID();
+      const client = clientSchema.parse({ id: clientId, label, scopes, hash: hash(token), revoked: false, createdAt: Date.now() });
+      // Rotate the secret, not the command/creation identity. The old hash stops working.
+      if (index >= 0) state.clients[index] = client;
+      else appendClient(state, client);
       return { token, clientId };
     });
   }
@@ -129,7 +154,7 @@ export class Auth {
       if (!p || p.id !== id || p.expiresAt < Date.now() || !p.requestHash || !p.label || p.issued)
         throw new ApiError(409, "pairing_state", "Abbinamento non più approvabile.");
       const token = secret();
-      state.clients.push(clientSchema.parse({ id: randomUUID(), label: p.label,
+      appendClient(state, clientSchema.parse({ id: randomUUID(), label: p.label,
         hash: hash(token), scopes: p.scopes, revoked: false, createdAt: Date.now() }));
       p.issued = await this.vault.encrypt(token);
     });

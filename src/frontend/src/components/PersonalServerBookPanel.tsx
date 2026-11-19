@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import type { BookProject } from "@engine/domain/types";
 import type { ServerCommand } from "@engine/domain/personal-server";
-import { personalServerConnection, reconcileServerCommand, sendServerCommand, syncServerBook } from "../infrastructure/personal-server-client";
+import { describeNextAutopilotStep } from "@engine/domain/autopilot-step";
+import type { RetrySchedule } from "@engine/core/retry-policy";
+import { personalServerConnection, reconcileServerCommand, replicatedRetrySchedule, sendServerCommand, syncServerBook } from "../infrastructure/personal-server-client";
 import { Button } from "./ui/button";
 import { exportDocx, exportEpub, exportPdf } from "../infrastructure/export-book";
 import { pendingPersonalServerHandoff } from "../infrastructure/personal-server-handoff";
@@ -13,11 +15,18 @@ export function PersonalServerBookPanel({ book, onChanged }: { book: BookProject
   const [repository, setRepository] = useState("");
   const [branch, setBranch] = useState("main");
   const [handoffPending, setHandoffPending] = useState(false);
+  const [retry, setRetry] = useState<{ book: BookProject; plan?: RetrySchedule }>();
+  const plan = retry?.book === book ? retry.plan : undefined;
   useEffect(() => {
     let mounted = true;
     void pendingPersonalServerHandoff(book.id).then(value => { if (mounted) setHandoffPending(!!value); }).catch(() => { if (mounted) setHandoffPending(true); });
     return () => { mounted = false; };
-  }, [book.id, book.updatedAt]);
+  }, [book]);
+  useEffect(() => {
+    let current = true;
+    void replicatedRetrySchedule(book).then(plan => { if (current) setRetry({ book, plan }); }).catch(() => undefined);
+    return () => { current = false; };
+  }, [book]);
   const act = (action: () => unknown | Promise<unknown>) => {
     setBusy(true); setNotice("");
     void Promise.resolve().then(action).catch(error => setNotice(error instanceof Error ? error.message : "Operazione remota non confermata."))
@@ -37,7 +46,8 @@ export function PersonalServerBookPanel({ book, onChanged }: { book: BookProject
     <p className="muted break-all text-sm">Autorità {book.executionAuthority?.serverId}. La replica permette lettura offline; disconnessione e timeout non autorizzano un secondo runner. Controlli remoti ancora sperimentali.</p>
     {handoffPending && <p role="status" className="text-sm">Trasferimento al server non concluso: apri Impostazioni → Server personale per riprendere l'invio, verificare la ricezione o annullarlo. Finché non è confermato i comandi restano disabilitati.</p>}
     <div className="flex flex-wrap gap-2">
-      <Button type="button" disabled={busy || handoffPending || book.status === "running"} onClick={() => command({ type: "start" })}>Avvia sul server</Button>
+      <Button type="button" disabled={busy || handoffPending || retry?.book !== book || !!plan || book.status === "running" || (!!book.remote && !book.remote.lastSyncedCommit)}
+        onClick={() => command({ type: "start" })}>Avvia sul server</Button>
       <Button type="button" variant="outline" disabled={busy} onClick={() => command({ type: "pause" })}>Pausa sul server</Button>
       <Button type="button" variant="outline" disabled={busy} onClick={() => command({ type: "stop_after_task" })}>Ferma il server a fine task</Button>
       <Button type="button" variant="outline" disabled={busy} onClick={() => act(async () => {
@@ -51,8 +61,12 @@ export function PersonalServerBookPanel({ book, onChanged }: { book: BookProject
       }}>Annulla richieste non ricevute</Button>
       {book.remote && <Button type="button" variant="outline" disabled={busy} onClick={() => command({ type: "save_github", consentPublic: false })}>Salva su GitHub dal server</Button>}
       {book.remote && <Button type="button" variant="outline" disabled={busy || book.status === "running"} onClick={() => command({ type: "set_autosync", enabled: !book.remote?.autoSync })}>{book.remote.autoSync ? "Disattiva autosync server" : "Attiva autosync server"}</Button>}
-      <Button type="button" variant="outline" disabled={busy} onClick={() => command({ type: "cancel_retry" })}>Annulla retry sul server</Button>
+      {plan && <Button type="button" variant="outline" disabled={busy || handoffPending} onClick={() => command({ type: "cancel_retry" })}>Annulla retry sul server</Button>}
+      {plan?.state === "waiting" && <Button type="button" disabled={busy || handoffPending || book.status === "running"} onClick={() => command({ type: "retry_now", generation: plan.generation })}>Riprova ora sul server</Button>}
     </div>
+    {book.remote && !book.remote.lastSyncedCommit && <p className="muted text-sm">Conferma il primo salvataggio GitHub prima di avviare l'AI su questo libro.</p>}
+    {plan && <p className="muted text-sm" role="status">{plan.state === "waiting" ? describeNextAutopilotStep(book, { retry: plan }).headline : "Ripartenza long-term acquisita"}
+      {` Ripartenza ${plan.cyclesUsed + 1}${plan.policy.maxCycles === null ? " senza limite" : ` di ${plan.policy.maxCycles}`} · non prima del ${new Date(plan.nextRetryAt).toLocaleString("it-IT")}. Il budget della sessione resta invariato.`}</p>}
     {notice && <p role="status" className="break-words text-sm">{notice}</p>}
     <p className="muted text-sm">In questa tranche gli editor e i controlli storici del browser non modificano le repliche. I task del server non creano copie testuali pre/post sul dispositivo.</p>
     {!book.remote && <details><summary>Collega GitHub dal server</summary>

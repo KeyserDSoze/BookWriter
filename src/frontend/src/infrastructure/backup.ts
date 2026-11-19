@@ -12,6 +12,7 @@ import { manualReviewSchema, MAX_REVIEWS } from "@engine/domain/manual-review";
 import { interruptImportedReviews } from "@engine/domain/manual-review-flow";
 import { BOOK_FORMAT_VERSION, migrateBook, NewerBookFormatError } from "@engine/domain/book-format";
 import { decryptLocal, encryptLocal } from "./crypto";
+import { rotateRetrySettingsEpoch } from "./retry-settings-epoch";
 import { getDb, listBooks, listActivities, loadSettings } from "./db";
 import { endpointAuthMode, normalizeEndpoint } from "@engine/infrastructure/ai";
 import { assertModelCapabilitySettings } from "@engine/domain/model-capabilities";
@@ -421,7 +422,7 @@ async function importBackupInternal(
       }))),
     };
   }
-  const tx = db.transaction(["books", "activities", "settings", "mergeDrafts"], "readwrite");
+  const tx = db.transaction(["books", "activities", "settings", "mergeDrafts", "meta"], "readwrite");
   // Observe tx.done even when an explicit guard rejects before any writes.
   void tx.done.catch(()=>{});
   const booksStore=tx.objectStore("books");
@@ -450,7 +451,12 @@ async function importBackupInternal(
   for (const draft of safeDrafts)
     if(forkSource) await draftsStore.add(draft,draft.id);
     else await draftsStore.put(draft,draft.id);
-  if (importedSettings) await tx.objectStore("settings").put(importedSettings, "global");
+  if (importedSettings) {
+    const settingsStore = tx.objectStore("settings");
+    const previous = await settingsStore.get("global") as AppSettings | undefined;
+    await settingsStore.put(importedSettings, "global");
+    await rotateRetrySettingsEpoch(tx.objectStore("meta"), previous, importedSettings);
+  }
   await tx.done;
   return idMap;
 }

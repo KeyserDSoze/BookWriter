@@ -21,6 +21,9 @@ export function publicAddress(address: string): boolean {
     !/^2001:db8:/i.test(address) && !/^2002:/i.test(address);
 }
 
+const builtInOrigins = new Set(["https://api.github.com", "https://it.wikipedia.org", "https://en.wikipedia.org"]);
+export const isBuiltInOutboundOrigin = (url: URL): boolean => builtInOrigins.has(url.origin);
+
 /** Node-only fetch adapter. DNS is checked AND pinned in the actual connection;
  * checking then calling native fetch would leave a DNS-rebinding race. */
 export function installOutboundNetwork(approvedBases: () => string[]): () => void {
@@ -29,7 +32,7 @@ export function installOutboundNetwork(approvedBases: () => string[]): () => voi
     const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
     const hostname = url.hostname.replace(/^\[|\]$/g, "");
     const configured = approvedBases().some(base => new URL(base).origin === url.origin);
-    const fixed = url.protocol === "https:" && ["api.github.com", "it.wikipedia.org"].includes(url.hostname);
+    const fixed = isBuiltInOutboundOrigin(url);
     const loopback = ["localhost", "127.0.0.1"].includes(url.hostname);
     if (url.username || url.password || url.hash || !configured && !fixed ||
         url.protocol !== "https:" && !(configured && loopback && url.protocol === "http:"))

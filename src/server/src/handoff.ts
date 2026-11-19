@@ -7,6 +7,19 @@ import {
 import { FileBookStore, atomicJson, readJson } from "./files";
 import type { Client } from "./auth";
 import { ApiError } from "./errors";
+import type { HostBookRecord, ServerCommandReceipt } from "@engine/index";
+
+/** Creation/adoption receipts are permanent origin evidence, not command history. */
+export function isOriginReceipt(receipt: ServerCommandReceipt | undefined, bookId: string): boolean {
+  return receipt?.state === "completed" && receipt.sequence === 1 && !!receipt.result &&
+    typeof receipt.result === "object" && "bookId" in receipt.result && receipt.result.bookId === bookId;
+}
+function isAdoptionReceipt(record: HostBookRecord, handoffId: string): boolean {
+  const receipt = record.commands[handoffId];
+  const result = receipt?.result;
+  return isOriginReceipt(receipt, record.book.id) && !!result && typeof result === "object" &&
+    "handoff" in result && result.handoff === true;
+}
 
 const MAX_TOMBSTONES = 5000;
 const ledgerSchema = z.object({
@@ -44,16 +57,17 @@ export class HandoffService {
         "Trasferimento non valido: serve un libro locale fermo, senza GitHub, già bloccato dal client con questa epoca e senza tentativi in corso.");
     const digest = createHash("sha256").update(serverHandoffDigestInput(client.id, raw)).digest("hex");
     return this.store.serial("$handoffs", () => this.store.serial("$adopt:" + book.id, async () => {
-      accepting();
-      if (!this.isCurrent(client)) throw new ApiError(401, "revoked", "Token revocato prima dell'accettazione.");
-      if ((await this.ledger()).cancelled[raw.handoffId])
-        throw new ApiError(409, "handoff_cancelled", "Trasferimento annullato: nessun libro è stato accettato.");
+      const ledger = await this.ledger();
       const existing = await this.store.read(book.id);
+      if (!this.isCurrent(client)) throw new ApiError(401, "revoked", "Token revocato prima dell'accettazione.");
+      if (ledger.cancelled[raw.handoffId])
+        throw new ApiError(409, "handoff_cancelled", "Trasferimento annullato: nessun libro è stato accettato.");
       if (existing) {
         const receipt = existing.commands[raw.handoffId];
-        if (receipt?.clientId === client.id && receipt.digest === digest) return book.id;
+        if (isAdoptionReceipt(existing, raw.handoffId) && receipt?.clientId === client.id && receipt.digest === digest) return book.id;
         throw new ApiError(409, "book_exists", "Libro già presente: nessuna copia sostituita.");
       }
+      accepting();
       // Defence in depth: a permission never survives a change of host.
       const adopted: BookProject = { ...book, ...withoutInheritedConsents(book) };
       migrateBook(adopted);
@@ -68,15 +82,20 @@ export class HandoffService {
   async cancel(client: Client, handoffId: string, bookId: string, accepting: () => void): Promise<HandoffResolution> {
     if (!client.scopes.includes("write")) throw new ApiError(403, "scope", "Permesso di scrittura richiesto.");
     return this.store.serial("$handoffs", () => this.store.serial("$adopt:" + bookId, async () => {
-      if (!this.isCurrent(client)) throw new ApiError(401, "revoked", "Token revocato prima della riconciliazione.");
       const existing = await this.store.read(bookId);
-      const receipt = existing?.commands[handoffId];
-      if (receipt) {
-        if (receipt.clientId !== client.id) throw new ApiError(409, "handoff_foreign", "Trasferimento di un altro client.");
-        return { state: "adopted" as const, bookId };
+      if (!this.isCurrent(client)) throw new ApiError(401, "revoked", "Token revocato prima della riconciliazione.");
+      if (existing) {
+        // An older version may have compacted the original receipt. The file's
+        // presence is enough to rule out cancellation, but not to prove adoption.
+        if (isAdoptionReceipt(existing, handoffId) && existing.commands[handoffId]?.clientId === client.id)
+          return { state: "adopted" as const, bookId };
+        throw new ApiError(409, "handoff_unverified", "Il libro esiste sul server ma la ricevuta non è verificabile: non sbloccare la copia locale.");
       }
-      accepting();
       const ledger = await this.ledger();
+      accepting();
+      if (!this.isCurrent(client)) throw new ApiError(401, "revoked", "Token revocato prima della riconciliazione.");
+      if (ledger.cancelled[handoffId] && ledger.cancelled[handoffId].bookId !== bookId)
+        throw new ApiError(409, "handoff_unverified", "L'identificativo non identifica questo trasferimento.");
       if (!ledger.cancelled[handoffId]) {
         if (Object.keys(ledger.cancelled).length >= MAX_TOMBSTONES)
           throw new ApiError(409, "handoff_ledger_full", "Troppi trasferimenti annullati: conserva la copia locale e contatta l'amministratore.");

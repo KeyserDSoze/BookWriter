@@ -2,15 +2,16 @@ import { installHostRuntime, type HostBookRecord, type HostRuntime, type LockRes
 import { BookNotFound, LocksUnavailable } from "@engine/core/errors";
 import { assertLocalBook, isServerBook } from "@engine/domain/execution-authority";
 import { migrateBook } from "@engine/domain/book-format";
-import type { Activity, BookProject, SyncOutboxItem } from "@engine/domain/types";
+import { DEFAULT_SETTINGS, type Activity, type AppSettings, type BookProject, type SyncOutboxItem } from "@engine/domain/types";
 import type { ManualPushIntent } from "@engine/infrastructure/manual-push-intent";
-import type { RetrySchedule } from "@engine/core/retry-policy";
+import { retrySettingsEpochSchema, type RetrySchedule } from "@engine/core/retry-policy";
 import {
   getBook, getDb, getLocalBook, listActivities, listBooks, loadSettings, saveActivity, saveBook,
   saveBookAndActivity, saveBookWithAuthorActivity, saveSettings,
 } from "../infrastructure/db";
 import { decryptLocal, encryptLocal } from "../infrastructure/crypto";
 import { createTraceStore } from "../infrastructure/ai-trace-store";
+import { RETRY_SETTINGS_EPOCH_KEY } from "../infrastructure/retry-settings-epoch";
 
 const intentKey = (bookId: string) => "manual-github-push:" + bookId;
 const retryKey = (bookId: string) => "retry-schedule:v1:" + bookId;
@@ -48,10 +49,22 @@ async function transaction<T>(
     };
     const result = await change(record);
 
+    const changedActivities = record.activities.filter(activity => before.activities.get(activity.id) !== json(activity));
+    const activityStore = tx.objectStore("activities");
+    const changedIds = new Set<string>();
+    for (const activity of changedActivities) {
+      const previous = await activityStore.get(activity.id) as Activity | undefined;
+      if (activity.bookId !== bookId || previous && previous.bookId !== bookId || changedIds.has(activity.id))
+        throw new Error("Attività duplicata o di un altro libro nella transazione.");
+      changedIds.add(activity.id);
+    }
     const changed = {
       book: json(record.book) !== before.book, outbox: json(record.outbox) !== before.outbox,
       intent: json(record.manualPushIntent) !== before.intent, retry: json(record.retrySchedule) !== before.retry,
     };
+    // A read-only replica may not accumulate audits through a back door even when the caller
+    // only changes HostBookRecord.activities. The same fail-closed rule applies to every activity write.
+    if (replica && changedActivities.length) assertLocalBook(stored);
     // A replica is read-only here. Removing a local artefact is allowed, writing a new one is not.
     if (changed.book || record.outbox && changed.outbox || record.manualPushIntent && changed.intent ||
         record.retrySchedule && changed.retry) {
@@ -71,9 +84,8 @@ async function transaction<T>(
       else await meta.delete(retryKey(bookId));
     }
     // The log is append-only: a changed or new entry is stored, an entry left out is never deleted.
-    for (const activity of record.activities)
-      if (before.activities.get(activity.id) !== json(activity))
-        await tx.objectStore("activities").put(activity, activity.id);
+    for (const activity of changedActivities)
+      await activityStore.put(activity, activity.id);
     await tx.done;
     return result;
   } catch (error) {
@@ -100,6 +112,17 @@ export function createBrowserHost(): HostRuntime {
     getBook, getBookForMutation: getLocalBook, listBooks,
     listBookIds: async () => (await (await getDb()).getAllKeys("books")).map(String),
     loadSettings, saveSettings, saveBook, saveActivity, saveBookAndActivity, saveBookWithAuthorActivity, listActivities,
+    loadRetrySettings: async bookId => {
+      const tx = (await getDb()).transaction(bookId ? ["settings", "meta", "books"] : ["settings", "meta"], "readonly");
+      const settings = await tx.objectStore("settings").get("global") as AppSettings | undefined;
+      const meta = tx.objectStore("meta");
+      const rawEpoch = await meta.get(RETRY_SETTINGS_EPOCH_KEY);
+      const stored = bookId ? await tx.objectStore("books").get(bookId) as BookProject | undefined : undefined;
+      const plan = stored && !isServerBook(stored) ? await meta.get(retryKey(bookId!)) as RetrySchedule | undefined : undefined;
+      await tx.done;
+      return { settings: settings ?? structuredClone(DEFAULT_SETTINGS), epoch: retrySettingsEpochSchema.parse(rawEpoch ?? null),
+        book: stored && migrateBook(stored), plan };
+    },
     transaction,
     readOutbox: async id => await (await getDb()).get("outbox", id) as SyncOutboxItem | undefined,
     listOutbox: async () => await (await getDb()).getAll("outbox") as SyncOutboxItem[],

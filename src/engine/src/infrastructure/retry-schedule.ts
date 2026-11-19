@@ -8,6 +8,9 @@ export const retryScheduleKey = (bookId: string) => "retry-schedule:v1:" + bookI
 export class RetryScheduleNotReady extends Error {
   constructor() { super("Ripartenza non più autorizzata o non ancora dovuta. Controlla il libro e riprendi manualmente."); }
 }
+export class RetrySchedulePending extends Error {
+  constructor() { super("È già pianificata una ripartenza: usa «Riprova ora» per conservare la sessione, oppure annulla l'attesa prima di avviare un nuovo run."); }
+}
 function parse(value: unknown): RetrySchedule | undefined {
   if (value === undefined) return undefined;
   const result = retryScheduleSchema.safeParse(value);
@@ -59,14 +62,17 @@ function revokedPlan(plan: RetrySchedule, book: BookProject, endpoints: Endpoint
 
 /** Called while holding the REAL writer lock. An abandoned claimed plan is never replayed. */
 export async function claimRetrySchedule(bookId: string, generation: string, force = false): Promise<RetrySchedule> {
-  const settings = await host().loadSettings();
+  const { settings, epoch } = await host().loadRetrySettings();
   const claimed = await host().transaction(bookId, record => {
     const plan = parse(record.retrySchedule);
     const stillRunning = !!plan && record.activities.some(a => a.runId === plan.runId && a.status === "running");
-    if (!plan || !currentPlan(plan, record.book, settings.endpoints, generation, force) || stillRunning) {
+    if (!plan || plan.settingsEpoch !== epoch || !currentPlan(plan, record.book, settings.endpoints, generation, force) || stillRunning) {
       if (plan?.generation === generation && plan.state === "waiting" &&
-          (revokedPlan(plan, record.book, settings.endpoints) || stillRunning))
+          (plan.settingsEpoch !== epoch || revokedPlan(plan, record.book, settings.endpoints) || stillRunning)) {
         delete record.retrySchedule;
+        if (record.book.previousError?.startsWith("In attesa di retry long-term:"))
+          record.book.previousError = "Attesa long-term revocata: verifica libro e impostazioni prima di riprendere.";
+      }
       return undefined;
     }
     plan.state = "claimed"; record.retrySchedule = plan; return structuredClone(plan);
@@ -76,20 +82,18 @@ export async function claimRetrySchedule(bookId: string, generation: string, for
 }
 
 export async function assertRetryClaim(plan: RetrySchedule): Promise<void> {
-  const current = await getRetrySchedule(plan.bookId);
+  // The last storage read must see the wait, policy epoch and book together;
+  // separate reads would reopen a window for revocation in another tab.
+  const { book, plan: persisted, settings, epoch } = await host().loadRetrySettings(plan.bookId);
+  const current = parse(persisted);
   if (current?.generation !== plan.generation || current.state !== "claimed")
     throw new DOMException("Ripartenza annullata.", "AbortError");
-  // Revocation in another tab must win before the network call as well.
-  const settings = await host().loadSettings();
+  if (epoch !== plan.settingsEpoch || current.settingsEpoch !== epoch)
+    throw new DOMException("Configurazione AI cambiata: ripartenza revocata.", "AbortError");
   const policy = restrictRetryPolicy(plan.policy,
     readLongTermRetry(settings.endpoints.find(e => e.id === plan.endpointId)?.longTermRetry));
   if (!policy.enabled || policy.maxCycles !== null && plan.cyclesUsed >= policy.maxCycles)
     throw new DOMException("Retry long-term disattivato.", "AbortError");
-  const book = await host().getBook(plan.bookId);
   if (!book || retryStamp(narrativeStateJson(book)) !== plan.bookStamp)
     throw new DOMException("Il libro è cambiato durante la ripartenza.", "AbortError");
-  // Last awaited read: cancellation while settings/book were being checked must win.
-  const final = await getRetrySchedule(plan.bookId);
-  if (final?.generation !== plan.generation || final.state !== "claimed")
-    throw new DOMException("Ripartenza annullata prima della richiesta.", "AbortError");
 }

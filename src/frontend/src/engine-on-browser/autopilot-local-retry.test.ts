@@ -29,6 +29,7 @@ beforeEach(() => {
   writerGuard.mockImplementation(async (_b, _r, _c, callback) =>
     callback({ assertActive: async () => {}, failure: () => undefined }));
 });
+const TRANSIENT = "Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.";
 const ok = (text: string) => ({ text, endpointId: "openai", modelId: "m", inputTokens: 1, outputTokens: 1 });
 
 describe("Ritentativo automatico limitato su endpoint locale", () => {
@@ -38,7 +39,7 @@ describe("Ritentativo automatico limitato su endpoint locale", () => {
     let n = 0;
     modelCall.mockImplementation(async (_kind: TaskKind) => {
       n++;
-      if (n <= 2) throw new Error("Il provider non ha inviato dati per troppo tempo.");
+      if (n <= 2) throw new Error(TRANSIENT);
       runner.stopAfterCurrent();
       return ok("Idee LONG MID SHORT");
     });
@@ -54,7 +55,7 @@ describe("Ritentativo automatico limitato su endpoint locale", () => {
 
   it("si ferma in errore dopo il numero massimo di tentativi", async () => {
     const book = await setup({ retry: true, local: true });
-    modelCall.mockRejectedValue(new Error("rete"));
+    modelCall.mockRejectedValue(new Error(TRANSIENT));
     await new AutopilotRunner().run(book.id, async () => undefined);
     expect(modelCall).toHaveBeenCalledTimes(1 + MAX_LOCAL_AUTO_RETRIES);
     const saved = (await getBook(book.id))!;
@@ -66,7 +67,7 @@ describe("Ritentativo automatico limitato su endpoint locale", () => {
     for (const options of [{ retry: false, local: true }, { retry: true, local: false }]) {
       modelCall.mockReset();
       const book = await setup(options);
-      modelCall.mockRejectedValue(new Error("rete"));
+      modelCall.mockRejectedValue(new Error(TRANSIENT));
       await new AutopilotRunner().run(book.id, async () => undefined);
       expect(modelCall).toHaveBeenCalledTimes(1);
       expect((await getBook(book.id))!.status).toBe("error");
@@ -115,7 +116,7 @@ describe("Ritentativo automatico opt-in su qualsiasi endpoint", () => {
   it("un errore di rete non viene inserito nel prompt come se fosse una risposta da correggere", async () => {
     const book = await setup({ retry: false, local: true, autoRetry: true });
     const runner = new AutopilotRunner();
-    modelCall.mockRejectedValueOnce(new Error("rete"));
+    modelCall.mockRejectedValueOnce(new Error(TRANSIENT));
     modelCall.mockImplementationOnce(async () => { runner.stopAfterCurrent(); return ok("Idee LONG MID SHORT"); });
     await runner.run(book.id, async () => undefined);
     expect(modelCall.mock.calls[1]![2]).not.toContain("CORREZIONE DEL TENTATIVO PRECEDENTE");
@@ -141,7 +142,7 @@ describe("Ritentativo automatico opt-in su qualsiasi endpoint", () => {
 
   it("rispetta il numero massimo di tentativi configurato", async () => {
     const book = await setup({ retry: false, local: false, autoRetry: true, max: 4 });
-    modelCall.mockRejectedValue(new Error("rete"));
+    modelCall.mockRejectedValue(new Error(TRANSIENT));
     await new AutopilotRunner().run(book.id, async () => undefined);
     expect(modelCall).toHaveBeenCalledTimes(5);
     expect((await getBook(book.id))!.status).toBe("error");
@@ -161,7 +162,7 @@ describe("Ritentativo automatico opt-in su qualsiasi endpoint", () => {
 
   it("autoRetry=false prevale sul vecchio flag locale", async () => {
     const book = await setup({ retry: true, local: true, autoRetry: false });
-    modelCall.mockRejectedValue(new Error("rete"));
+    modelCall.mockRejectedValue(new Error(TRANSIENT));
     await new AutopilotRunner().run(book.id, async () => undefined);
     expect(modelCall).toHaveBeenCalledTimes(1);
   });
