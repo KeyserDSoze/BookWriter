@@ -76,7 +76,7 @@ async function fixture(action, { ai } = {}) {
   const sceneText = async () => (await book()).chapters[0].scenes[0].text;
   /** Another device: a clone, a changed book and a push — through the same projection the app writes. */
   const external = async (branch, change) => {
-    await fs.rm(ext, { recursive: true, force: true });
+    await fs.rm(ext, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
     await git(dir, "clone", "--branch", branch, pathToFileURL(origin).href, ext);
     const current = JSON.parse(await fs.readFile(join(ext, ".bookwriter", "project.json"), "utf8"));
     change(current);
@@ -92,7 +92,7 @@ async function fixture(action, { ai } = {}) {
   const head = async branch => (await git(origin, "rev-parse", `refs/heads/${branch}`)).stdout.trim();
   const parents = async sha => (await git(origin, "rev-list", "--parents", "-n", "1", sha)).stdout.trim().split(" ").slice(1);
   try { await action({ service, id, send, book, sceneText, external, head, parents, origin, root, calls, client }); }
-  finally { globalThis.fetch = native; await service.close(); await fs.rm(dir, { recursive: true, force: true }); }
+  finally { globalThis.fetch = native; await service.close(); await fs.rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); }
 }
 const skip = probe ? { skip: probe } : {};
 const edit = (patch) => book => { Object.assign(book.chapters[0].scenes[0], patch); };
