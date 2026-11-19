@@ -1,0 +1,456 @@
+import type { AppSettings, BookProject, TaskKind } from "../domain/types";
+import { routeFor } from "../domain/types";
+import { effectiveReasoningEffort } from "../domain/task-reasoning";
+import { decryptLocal } from "../core/store";
+import { cachedTokensFromUsage, validTokenCount } from "../domain/ai-usage";
+import { assertChatModelCapability } from "../domain/model-capabilities";
+import { EmptyProviderContentError, MalformedProviderContentError, TruncatedProviderContentError } from "./ai-provider-error";
+import { readChatCompletionJson } from "./ai-completion-response";
+import { chatReasoningEffort, endpointStreamMode, chatStreamTimeoutSeconds, readChatCompletionStream,
+  type AiStreamDelta } from "./ai-stream";
+import { lmStudioNativeProtocol, lmStudioNativeEndpoint, lmStudioNativeReasoning,
+  readLmStudioNativeStream, type LmStudioPhase, type AiTransportStats } from "./lmstudio-native";
+import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
+import { localEndpointTimeoutHint } from "./local-endpoint-probe";
+import { SUBMIT_TOOL_NOTE, hasEmptyToolCall, hasRequiredFields, toolCallArguments, toolOutputAvailable, toolRequestFields,
+  type ToolSchema } from "../domain/structured-output";
+import { ProviderContentError } from "./ai-provider-error";
+
+export type ModelAnswer = {
+  text: string;
+  endpointId: string;
+  modelId: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  /** Provider-reported cached share of inputTokens (OpenAI-style prompt_tokens_details). */
+  cachedInputTokens?: number;
+  /** Only for a structured (tools) request: how the model delivered the result. */
+  delivery?: "function" | "text";
+};
+
+export function normalizeEndpoint(raw: string): string {
+  const url = new URL(raw.trim());
+  const local = (url.hostname === "localhost" || url.hostname === "127.0.0.1") && url.protocol === "http:";
+  if (url.protocol !== "https:" && !local) throw new Error("L'endpoint deve utilizzare HTTPS (HTTP consentito solo su localhost).");
+  if (url.username || url.password || url.search || url.hash) throw new Error("Non includere credenziali, query o fragment nell'URL dell'endpoint.");
+  return url.toString().replace(/\/$/, "");
+}
+
+/** A missing API key is explicitly allowed only for literal loopback hostnames. */
+export function endpointAuthMode(value: unknown, endpointUrl: string): "api_key" | "none" {
+  if (value === undefined || value === "api_key") return "api_key";
+  if (value !== "none") throw new Error("Modalità autenticazione AI non valida.");
+  const url = new URL(normalizeEndpoint(endpointUrl));
+  if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1")
+    throw new Error("Senza API key è consentito solo un endpoint localhost o 127.0.0.1.");
+  return "none";
+}
+
+function friendlyApiError(status: number): string {
+  switch (status) {
+    case 401: return "Autenticazione API non valida (HTTP 401): controlla la chiave.";
+    case 403: return "Accesso al modello non autorizzato (HTTP 403).";
+    case 404: return "Endpoint o modello non trovato (HTTP 404).";
+    case 408: return "Timeout dal provider (HTTP 408).";
+    case 429: return "Limite richieste o credito insufficiente (HTTP 429).";
+    default: return `Errore del provider AI (HTTP ${status}). Verifica disponibilità e configurazione.`;
+  }
+}
+
+/** Accept only plain text or a fully text-only array of OpenAI-compatible
+ * content parts. Reject mixed/malformed parts instead of implicitly coercing
+ * objects/numbers into prose or partially accepting a response.
+ * Undefined denotes an invalid shape; whitespace remains an empty response. */
+function responseTextContent(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return undefined;
+  const texts: string[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object" || Array.isArray(part)) return undefined;
+    const candidate = part as { type?: unknown; text?: unknown };
+    if (candidate.type !== undefined && candidate.type !== "text") return undefined;
+    if (typeof candidate.text !== "string") return undefined;
+    texts.push(candidate.text);
+  }
+  return texts.join("\n");
+}
+
+/** Select only explicitly supported Chat Completions output parameter.
+ * Legacy endpoints retain max_tokens; no automatic retry with another field
+ * because the first request may already have consumed billable tokens.
+ */
+export function chatOutputTokenParameter(value: unknown): "max_tokens" | "max_completion_tokens" {
+  if (value === undefined || value === "max_tokens") return "max_tokens";
+  if (value === "max_completion_tokens") return "max_completion_tokens";
+  throw new Error("Parametro limite output AI non valido: scegli max_tokens oppure max_completion_tokens nelle Impostazioni.");
+}
+
+export async function callModel(
+  kind: TaskKind,
+  system: string,
+  prompt: string,
+  settings: AppSettings,
+  book: BookProject,
+  signal: AbortSignal,
+  options?: { maxOutputTokens?: number; onProgress?: (delta: AiStreamDelta) => void;
+    /** The JSON schema of the result: delivered via a forced function call when the model is tagged «tools». */
+    structuredJson?: ToolSchema;
+    /** Host ownership/retry fence, after credential decryption and adjacent to POST. Never sent to the provider. */
+    beforeRequest?: () => Promise<void>;
+    onHeaders?: () => void; onPhase?: (phase:LmStudioPhase)=>void;
+    onTools?: (requested: boolean) => void;
+    onTransport?: (stats:AiTransportStats)=>void },
+): Promise<ModelAnswer> {
+  const assignment = routeFor(kind, settings, book);
+  const endpoint = settings.endpoints.find(p => p.id === assignment.endpointId);
+  if (!endpoint) throw new Error(`Endpoint non configurato per ${kind}.`);
+  if (!assignment.modelId.trim()) throw new Error(`Seleziona il modello per l'attività ${kind} nelle Impostazioni.`);
+  assertChatModelCapability(endpoint, assignment.modelId);
+  // Fail closed on malformed local/imported settings before decrypting or POST.
+  const outputField = chatOutputTokenParameter(endpoint.outputTokenParameter);
+  const effort = chatReasoningEffort(effectiveReasoningEffort(kind,settings,book,endpoint,assignment.modelId));
+  const protocol=lmStudioNativeProtocol(endpoint.apiProtocol);
+  const streaming = endpointStreamMode(endpoint) === "sse";
+  const streamTimeoutMs=chatStreamTimeoutSeconds(endpoint.streamTimeoutSeconds)*1000;
+  if (options?.maxOutputTokens !== undefined &&
+      (!Number.isSafeInteger(options.maxOutputTokens) ||
+        options.maxOutputTokens < 1 || options.maxOutputTokens > 32_768)) {
+    throw new Error("Limite output AI non valido: usa un intero tra 1 e 32768 token.");
+  }
+  const base = normalizeEndpoint(endpoint.baseUrl);
+  const nativeUrl=protocol==="lmstudio_native"?lmStudioNativeEndpoint(base):undefined;
+  // Tools only with a schema that rules out `{}`: an empty schema makes a model call the function with no arguments.
+  const toolSchema = protocol !== "lmstudio_native" && hasRequiredFields(options?.structuredJson) &&
+    toolOutputAvailable(endpoint, assignment.modelId) ? options!.structuredJson : undefined;
+  const structured = toolSchema !== undefined;
+  const nativeReasoning=protocol==="lmstudio_native"?lmStudioNativeReasoning(effort):undefined;
+  const authMode = endpointAuthMode(endpoint.authMode, base);
+  if (authMode === "api_key" && !endpoint.secret)
+    throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
+  const apiKey = authMode === "api_key" ? await decryptLocal(endpoint.secret!) : null;
+  if (authMode === "api_key" && !apiKey)
+    throw new Error(`Chiave API mancante per l'endpoint ${endpoint.name}.`);
+  await options?.beforeRequest?.();
+  if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
+  try { options?.onTools?.(structured); } catch { /* observer only */ }
+
+  let response: Response;
+  try {
+    response = await fetchChatCompletionHeaders(nativeUrl??`${base}/chat/completions`, {
+      method: "POST",
+      mode: "cors",
+      redirect: "error",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey === null ? {} : { Authorization: `Bearer ${apiKey}` }),
+      },
+      body: JSON.stringify(nativeUrl?{
+        model:assignment.modelId, system_prompt:system,input:prompt,
+        stream:true,store:false,
+        ...(options?.maxOutputTokens===undefined?{}:{max_output_tokens:options.maxOutputTokens}),
+        ...(nativeReasoning===undefined?{}:{reasoning:nativeReasoning}),
+      }:{
+        model: assignment.modelId,
+        messages: [{ role: "system", content: structured ? system + SUBMIT_TOOL_NOTE : system }, { role: "user", content: prompt }],
+        ...(toolSchema ? toolRequestFields(toolSchema) : {}),
+        ...(options?.maxOutputTokens !== undefined ? { [outputField]: options.maxOutputTokens } : {}),
+        ...(effort === undefined ? {} : { reasoning_effort: effort }),
+        ...(streaming ? { stream: true, stream_options: { include_usage: true } } : {}),
+      }),
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+    }, signal, endpoint.headerTimeoutSeconds);
+  } catch (e) {
+    if (signal.aborted) throw new DOMException("Interrotto", "AbortError");
+    if (e instanceof ProviderHeaderTimeoutError) {
+      // Free local endpoints only: a quick probe turns a bare timeout into a cause.
+      if (authMode === "none") {
+        const jsonMode = !streaming && protocol !== "lmstudio_native"
+          ? " Lo streaming è disattivato: in modalità JSON il server invia gli header solo a risposta completa, quindi un modello lento supera l'attesa. Attiva «Streaming SSE» nelle Impostazioni." : "";
+        throw new ProviderHeaderTimeoutError(jsonMode + await localEndpointTimeoutHint(base));
+      }
+      throw e;
+    }
+    throw new Error("Impossibile contattare l'endpoint AI. Controlla rete, URL e CORS.");
+  }
+  if (signal.aborted) throw new DOMException("Generazione interrotta dall'autore.", "AbortError");
+  if (!response.ok) {
+    // Do not read untrusted error payloads; release the stream best effort.
+    // Cancellation is not a second request and must not hide the HTTP status.
+    try {
+      void response.body?.cancel().catch(() => {});
+    } catch {
+      // Some custom Response/stream implementations can throw synchronously.
+      // Preserve the original HTTP failure instead of replacing it.
+    }
+    const reason = friendlyApiError(response.status);
+    // A rejected request may have been billed; never inspect provider body or retry.
+    if ((response.status === 400 || response.status === 422) && structured) {
+      throw new Error(`${reason} La richiesta usava le funzioni (tools) per consegnare il risultato: se il modello non le supporta, togli il tag «tools» dal modello o imposta «Output strutturato» su Disattivato per questo endpoint, poi riprova manualmente.`);
+    }
+    if ((response.status === 400 || response.status === 422) && options?.maxOutputTokens !== undefined) {
+      throw new Error(`${reason} Controlla anche il parametro limite output API nelle Impostazioni e la documentazione del provider prima di riprovare manualmente.`);
+    }
+    throw new Error(reason);
+  }
+
+  try{options?.onHeaders?.();}catch{/* observers are optional */}
+  const payload = nativeUrl
+    ? await readLmStudioNativeStream(response,signal,options?.onProgress,
+        options?.onPhase,options?.onTransport,streamTimeoutMs)
+    : streaming && /^text\/event-stream\b/i.test(response.headers.get("content-type")??"")
+    ? await readChatCompletionStream(response, signal, options?.onProgress,streamTimeoutMs,options?.onTransport)
+    : await readChatCompletionJson(response, signal);
+  if (!payload || typeof payload !== "object") throw new Error("Risposta AI non valida.");
+  const data = payload as {
+    choices?: unknown;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+  };
+  const invalid = () => new MalformedProviderContentError(
+    endpoint.id, assignment.modelId, data.usage);
+  // A 2xx JSON envelope is not evidence of text. Validate every part before
+  // returning a ModelAnswer; invalid text still carries provider usage into
+  // the failed Activity, without exposing the raw response.
+  if (!Array.isArray(data.choices) || !data.choices.length) throw invalid();
+  const first: unknown = data.choices[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) throw invalid();
+  // A reply cut by the length/context limit looks like valid prose: never accept it.
+  if ((first as { finish_reason?: unknown }).finish_reason === "length")
+    throw new TruncatedProviderContentError(endpoint.id, assignment.modelId, data.usage);
+  const message: unknown = (first as {message?: unknown}).message;
+  if (!message || typeof message !== "object" || Array.isArray(message)) throw invalid();
+  const content: unknown = (message as {content?: unknown}).content;
+  // A structured reply carries the result as the arguments of the forced function call.
+  const toolText = structured ? toolCallArguments(message) : undefined;
+  if (toolText !== undefined) return {
+    text: toolText.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
+    inputTokens: validTokenCount(data.usage?.prompt_tokens),
+    outputTokens: validTokenCount(data.usage?.completion_tokens),
+    cachedInputTokens: cachedTokensFromUsage(data.usage), delivery: "function",
+  };
+  if (structured && toolText === undefined && hasEmptyToolCall(message) &&
+      (typeof content !== "string" || !content.trim())) throw new ProviderContentError(
+    "Il modello ha chiamato la funzione di consegna con argomenti vuoti (\"{}\"): nessun risultato. Nessuna modifica applicata. Se si ripete, imposta «Output strutturato» su Disattivato per questo endpoint o togli il tag «tools» a questo modello.",
+    endpoint.id, assignment.modelId, data.usage);
+  if (content === null || content === undefined) throw new EmptyProviderContentError(
+    endpoint.id, assignment.modelId, data.usage);
+  const text = responseTextContent(content);
+  if (text === undefined) throw invalid();
+  if (!text.trim()) throw new EmptyProviderContentError(
+    endpoint.id, assignment.modelId, data.usage);
+  return {
+    text: text.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
+    inputTokens: validTokenCount(data.usage?.prompt_tokens),
+    outputTokens: validTokenCount(data.usage?.completion_tokens),
+    cachedInputTokens: cachedTokensFromUsage(data.usage),
+    ...(structured ? { delivery: "text" as const } : {}),
+  };
+}
+
+const MAX_MODEL_CATALOG_BYTES = 256_000;
+const MAX_MODEL_CATALOG_ITEMS = 2_000;
+const MAX_MODEL_ID_LENGTH = 256;
+const MODEL_CATALOG_TIMEOUT_MS = 12_000;
+
+class ModelCatalogError extends Error {
+  constructor(message: string) { super(message); this.name = "ModelCatalogError"; }
+}
+function invalidModelCatalog(): ModelCatalogError {
+  return new ModelCatalogError(
+    "Catalogo modelli non valido: conserva i modelli precedenti o inserisci manualmente il nome.");
+}
+
+/** A rejected /models reply is untrusted, including its body. Never read it,
+ * and never let a broken/locked stream replace the original validation error. */
+function discardModelCatalogBody(response: Response): void {
+  try { void response.body?.cancel().catch(() => { /* network already closed */ }); }
+  catch { /* a locked or broken stream must not mask the reason for rejection */ }
+}
+
+/** A provider response is untrusted even with HTTP 200. Never buffer an
+ * unbounded model catalogue, trust Content-Length alone or log its body. */
+async function boundedModelCatalog(response: Response, signal: AbortSignal): Promise<unknown> {
+  const mime = response.headers.get("content-type") ?? "";
+  if (mime && !/\/json(?:\s*;|$)|\+json(?:\s*;|$)/i.test(mime)) {
+    discardModelCatalogBody(response);
+    throw invalidModelCatalog();
+  }
+  const rawLength = response.headers.get("content-length");
+  if (rawLength !== null) {
+    if (!/^\d+$/.test(rawLength.trim())) {
+      discardModelCatalogBody(response);
+      throw invalidModelCatalog();
+    }
+    if (Number(rawLength) > MAX_MODEL_CATALOG_BYTES) {
+      discardModelCatalogBody(response);
+      throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
+    }
+  }
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try { reader = response.body?.getReader(); }
+  catch {
+    discardModelCatalogBody(response);
+    throw invalidModelCatalog();
+  }
+  if (!reader) throw invalidModelCatalog();
+  let onAbort: (() => void) | undefined;
+  const interrupted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(invalidModelCatalog());
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  let complete = false;
+  try {
+    let size = 0;
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      // The 12 s request deadline also covers a provider that never finishes
+      // its response body even if reader.read() ignores AbortController.
+      const chunk = await Promise.race([reader.read(), interrupted]);
+      if (signal.aborted) throw invalidModelCatalog();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > MAX_MODEL_CATALOG_BYTES)
+        throw new ModelCatalogError("Catalogo modelli troppo grande: usa l'inserimento manuale.");
+      chunks.push(chunk.value);
+    }
+    if (signal.aborted) throw invalidModelCatalog();
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+    } catch {
+      throw invalidModelCatalog();
+    }
+    if (signal.aborted) throw invalidModelCatalog();
+    complete = true;
+    return parsed;
+  } catch (error) {
+    if (error instanceof ModelCatalogError) throw error;
+    throw invalidModelCatalog();
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+    try {
+      if (!complete) void reader.cancel().catch(() => { /* already closed */ });
+    } catch { /* broken reader cannot override the original error */ }
+    try { reader.releaseLock(); } catch { /* pending read may be active */ }
+  }
+}
+
+/** Optional /models/details (llmproxy): context window and max answer per model. Any failure
+ * (404, CORS, malformed or oversized body, timeout) yields undefined and the author sets limits by hand. */
+export async function fetchModelDetails(
+  endpointUrl: string, secret: string | null, signal?: AbortSignal,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  const timeout = setTimeout(() => controller.abort(), MODEL_CATALOG_TIMEOUT_MS);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  let onDeadline: (() => void) | undefined;
+  try {
+    const base = normalizeEndpoint(endpointUrl);
+    endpointAuthMode(secret === null ? "none" : "api_key", base);
+    if (secret !== null && !secret) return undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      onDeadline = () => reject(new Error("timeout"));
+      controller.signal.addEventListener("abort", onDeadline, { once: true });
+      if (controller.signal.aborted) onDeadline();
+    });
+    const response = await Promise.race([fetch(base + "/models/details", {
+      method: "GET", mode: "cors", credentials: "omit",
+      referrerPolicy: "no-referrer", cache: "no-store", redirect: "error",
+      headers: secret === null ? {} : { Authorization: "Bearer " + secret },
+      signal: controller.signal,
+    }), deadline]);
+    if (!response.ok) { discardModelCatalogBody(response); return undefined; }
+    return await boundedModelCatalog(response, controller.signal);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+    if (onDeadline) controller.signal.removeEventListener("abort", onDeadline);
+    signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+/** GET /models is advisory. Malformed/empty responses must never replace an
+ * existing catalogue with incomplete or non-string entries. */
+export async function fetchModels(
+  endpointUrl: string,
+  secret: string | null,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const base = normalizeEndpoint(endpointUrl);
+  endpointAuthMode(secret === null ? "none" : "api_key", base);
+  if (secret !== null && !secret) throw new Error("Inserisci prima la chiave API.");
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  const timeout = setTimeout(() => controller.abort(), MODEL_CATALOG_TIMEOUT_MS);
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    if (signal?.aborted) throw new DOMException("Richiesta annullata.", "AbortError");
+    let response: Response;
+    // A provider/test proxy can ignore abort before headers. Do not wait for
+    // the underlying fetch forever; the same deadline covers headers and body.
+    let waitingForHeaders = true;
+    let onDeadline: (() => void) | undefined;
+    const interruptedHeaders = new Promise<never>((_, reject) => {
+      onDeadline = () => reject(new Error("Ricerca modelli interrotta."));
+      controller.signal.addEventListener("abort", onDeadline, { once: true });
+      if (controller.signal.aborted) onDeadline();
+    });
+    try {
+      const pendingHeaders = fetch(base + "/models", {
+        method: "GET", mode: "cors", credentials: "omit",
+        referrerPolicy: "no-referrer", cache: "no-store", redirect: "error",
+        headers: secret === null ? {} : { Authorization: "Bearer " + secret },
+        signal: controller.signal,
+      }).then(late => {
+        if (!waitingForHeaders) {
+          try { void late.body?.cancel().catch(() => {}); }
+          catch { /* stale response may already be locked */ }
+        }
+        return late;
+      });
+      response = await Promise.race([pendingHeaders, interruptedHeaders]);
+    } catch {
+      throw new Error("Impossibile contattare il catalogo modelli: verifica rete, URL e CORS.");
+    } finally {
+      waitingForHeaders = false;
+      if (onDeadline) controller.signal.removeEventListener("abort", onDeadline);
+    }
+    if (!response.ok) {
+      // HTTP errors do not contain usable catalogue data. Never read the
+      // provider's untrusted body or allow cleanup to hide the HTTP status.
+      discardModelCatalogBody(response);
+      throw new Error(friendlyApiError(response.status));
+    }
+    const parsed = await boundedModelCatalog(response, controller.signal);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      throw invalidModelCatalog();
+    const data = (parsed as { data?: unknown }).data;
+    if (!Array.isArray(data) || data.length === 0 || data.length > MAX_MODEL_CATALOG_ITEMS)
+      throw invalidModelCatalog();
+    const ids = new Set<string>();
+    for (const entry of data) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry))
+        throw invalidModelCatalog();
+      const id: unknown = (entry as { id?: unknown }).id;
+      if (typeof id !== "string" || !id || id !== id.trim() ||
+          id.length > MAX_MODEL_ID_LENGTH || /[\u0000-\u001f\u007f-\u009f]/u.test(id))
+        throw invalidModelCatalog();
+      ids.add(id);
+    }
+    return [...ids].sort();
+  } catch (error) {
+    if (signal?.aborted) throw new DOMException("Richiesta annullata.", "AbortError");
+    if (controller.signal.aborted)
+      throw new ModelCatalogError("Timeout del catalogo modelli: usa l'inserimento manuale.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", onAbort);
+  }
+}

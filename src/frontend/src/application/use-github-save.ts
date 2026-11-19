@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import type { BookProject, SyncOutboxItem } from "../domain/types";
-import { githubPublicationBlocker } from "../domain/github-publication";
-import { getOutbox } from "../infrastructure/outbox";
-import { saveToGitHubNow } from "./auto-sync";
+import type { BookProject, SyncOutboxItem } from "@engine/domain/types";
+import { githubPublicationBlocker } from "@engine/domain/github-publication";
+import { getOutbox } from "@engine/infrastructure/outbox";
+import { saveToGitHubNow } from "@engine/application/auto-sync";
 
 /** What the author needs to know about the GitHub copy of the book being worked on, and the «save now» action.
  * Read-only apart from `saveNow`, which goes through the same queue as the automatic saves. */

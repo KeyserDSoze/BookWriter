@@ -1,8 +1,8 @@
-import type {Activity} from "../domain/types";
+import type {Activity} from "@engine/domain/types";
 import {createNarrativeKnowledgeTimingDecision,
   type KnowledgeAccessMoment,type NarrativeTemporalOrder}
-  from "../domain/narrative-knowledge-timing";
-import {getBook,getDb} from "../infrastructure/db";
+  from "@engine/domain/narrative-knowledge-timing";
+import {getLocalBook as getBook,getDb} from "../infrastructure/db";
 
 /** Explicit author-only action, serialized with writer and sync.
  * No model call, no automatic publication or modification of canonical memory. */

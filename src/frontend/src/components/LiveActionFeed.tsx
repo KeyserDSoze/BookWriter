@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import type { BookProject } from "../domain/types";
-import type { LiveAiTrace } from "../infrastructure/ai-observability";
-import { describeLiveProgress, type LiveAction, type LiveTone, type SceneResolver } from "../domain/live-progress";
+import type { BookProject } from "@engine/domain/types";
+import type { LiveAiTrace } from "@engine/infrastructure/ai-observability";
+import { describeLiveProgress, type LiveAction, type LiveTone, type SceneResolver } from "@engine/domain/live-progress";
 
 /** Scene titles of a book, to say «capitolo 2 · scena 3 «La lettera»» instead of an id. */
 export function sceneResolver(book: Pick<BookProject, "chapters"> | undefined): SceneResolver | undefined {

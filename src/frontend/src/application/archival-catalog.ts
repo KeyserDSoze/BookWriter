@@ -1,9 +1,9 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { extendArchiveCatalog, normalizeArchiveQueries } from "../domain/archival-catalog";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import type { Activity, BookProject } from "../domain/types";
-import { getBook, getDb } from "../infrastructure/db";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { extendArchiveCatalog, normalizeArchiveQueries } from "@engine/domain/archival-catalog";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { getLocalBook as getBook, getDb } from "../infrastructure/db";
 import { searchLibraryOfCongress } from "../infrastructure/library-of-congress";
 
 export interface ArchiveLookupResult {

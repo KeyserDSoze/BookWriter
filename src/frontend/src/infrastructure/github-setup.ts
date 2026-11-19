@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { GitHubRemote } from "../domain/types";
+import type { GitHubRemote } from "@engine/domain/types";
 import { decryptLocal } from "./crypto";
 import { loadSettings } from "./db";
-import { confirmGitHubHead, inspectGitHubDestination, validateRemote } from "./github-sync";
+import { confirmGitHubHead, inspectGitHubDestination, validateRemote } from "@engine/infrastructure/github-sync";
 
 const API = "https://api.github.com";
 const MAX_BYTES = 2 * 1024 * 1024;

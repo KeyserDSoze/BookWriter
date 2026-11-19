@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, newBook, type Activity } from "../domain/types";
+import { DEFAULT_SETTINGS, newBook, type Activity } from "@engine/domain/types";
 import { getBook, getDb, loadSettings, saveActivity, saveBook, saveSettings } from "./db";
 import { enableFailedTaskRetries } from "./failed-task-retry";
 

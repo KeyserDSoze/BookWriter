@@ -1,0 +1,50 @@
+name: Server contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/server/**"
+      - "src/engine/**"
+      - "src/frontend/**"
+      - ".github/workflows/server.yml"
+  pull_request:
+    paths:
+      - "src/server/**"
+      - "src/engine/**"
+      - "src/frontend/**"
+      - ".github/workflows/server.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install shared build dependencies from the existing lockfile
+        working-directory: src/frontend
+        run: npm ci --no-audit --no-fund
+      - name: Check the shared engine types (strict, no DOM types)
+        working-directory: src/engine
+        run: npm run typecheck
+      - name: Check Node adapter types
+        working-directory: src/server
+        run: npm run typecheck
+      - name: Bundle the shared engine and server
+        working-directory: src/server
+        run: npm run build
+      - name: Run real file and OS-lock contracts, and the host contract shared with the browser
+        working-directory: src/server
+        run: npm test

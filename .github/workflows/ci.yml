@@ -25,6 +25,9 @@ jobs:
         run: git diff --exit-code -- package-lock.json
       - name: Typecheck
         run: npm run typecheck
+      - name: Typecheck the shared engine alone (strict, no DOM types)
+        working-directory: src/engine
+        run: npm run typecheck
       - name: Tests
         run: npm run test
       - name: Smoke tests

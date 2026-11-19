@@ -1,11 +1,15 @@
 import { openDB, type IDBPDatabase } from "idb";
-import type { Activity, AppSettings, BookProject } from "../domain/types";
-import { DEFAULT_SETTINGS } from "../domain/types";
-import { bookFormatVersion, migrateBook } from "../domain/book-format";
-import { enqueueCheckpoint } from "./outbox";
+import { BookRevisionConflict } from "@engine/core/errors";
+import { assertLocalBook, isServerBook } from "@engine/domain/execution-authority";
+import { retryStamp } from "@engine/core/retry-policy";
+import { narrativeStateJson } from "@engine/core/narrative-state";
+import type { Activity, AppSettings, BookProject } from "@engine/domain/types";
+import { DEFAULT_SETTINGS } from "@engine/domain/types";
+import { bookFormatVersion, migrateBook } from "@engine/domain/book-format";
+import { enqueueCheckpoint } from "@engine/infrastructure/outbox";
 import { markCloudProfileDirty } from "./cloud/cloud-dirty";
-import { createTaskStructuralCheckpoint } from "../domain/task-structural-checkpoint";
-import { createTaskProseCheckpoint } from "../domain/task-prose-checkpoint";
+import { createTaskStructuralCheckpoint } from "@engine/domain/task-structural-checkpoint";
+import { createTaskProseCheckpoint } from "@engine/domain/task-prose-checkpoint";
 import { taskProseConsentKey, taskProseKey, taskProseUsageKey } from "./task-prose-checkpoint";
 import { taskProseLimitKey } from "./task-prose-storage";
 import {
@@ -15,12 +19,12 @@ import {
   createTaskBookCheckpoint, estimatedTaskBookBytes,
   TASK_BOOK_PAIR_LIMIT_BYTES, TASK_BOOK_TOTAL_LIMIT_BYTES,
   TaskBookStorageLimitExceeded, validTaskBookUsage,
-} from "../domain/task-book-checkpoint";
+} from "@engine/domain/task-book-checkpoint";
 import {
   estimateProsePayloadBytes, TaskProseQuotaExceeded, PROSE_MIB,
   validProseLimitMiB, validTaskProseUsageLedger,
   type TaskProseUsageLedger,
-} from "../domain/task-prose-storage";
+} from "@engine/domain/task-prose-storage";
 
 const DB_NAME = "bookwriter";
 const DB_VERSION = 2;
@@ -32,6 +36,8 @@ function revisionTimestamp(previous?: BookProject): string {
   const milliseconds = Number.isFinite(previousTime) ? Math.max(Date.now(), previousTime + 1) : Date.now();
   return new Date(milliseconds).toISOString();
 }
+
+export { BookRevisionConflict };
 
 export function getDb(): Promise<IDBPDatabase> {
   database ??= openDB(DB_NAME, DB_VERSION, {
@@ -84,18 +90,26 @@ export async function getBook(id: string): Promise<BookProject | undefined> {
   const book = (await db.get("books", id)) as BookProject | undefined;
   return book && migrateBook(book);
 }
+/** Mutation preflight, separate from the read-only getter used by replica views.
+ * Never silently route an unsupported browser action into a server-owned book. */
+export async function getLocalBook(id: string): Promise<BookProject | undefined> {
+  const book = await getBook(id);
+  if (book) assertLocalBook(book);
+  return book;
+}
 /** Older code must never overwrite a book saved by a newer app. */
 function assertWritable(book: BookProject, stored: BookProject | undefined): void {
+  assertLocalBook(book);
+  if (stored) assertLocalBook(stored);
   bookFormatVersion(book);
   if (stored) bookFormatVersion(stored);
 }
-
-/** A manual editor is submitting a snapshot that is no longer current. */
-export class BookRevisionConflict extends Error {
-  constructor() {
-    super("Il libro è cambiato in un'altra scheda: aggiorna i dati prima di salvare.");
-    this.name = "BookRevisionConflict";
-  }
+async function invalidateChangedRetry(book: BookProject, meta: {
+  get(key: string): Promise<unknown>; delete(key: string): Promise<unknown>;
+}): Promise<void> {
+  const key = "retry-schedule:v1:" + book.id;
+  const plan = await meta.get(key) as { bookStamp?: string } | undefined;
+  if (plan && plan.bookStamp !== retryStamp(narrativeStateJson(book))) await meta.delete(key);
 }
 
 export async function saveBook(
@@ -105,7 +119,7 @@ export async function saveBook(
   // The read, revision comparison, book update and optional outbox enqueue
   // share one IndexedDB readwrite transaction: no stale snapshot can win
   // between the revision check and the actual save.
-  const tx = db.transaction(["books", "outbox"], "readwrite");
+  const tx = db.transaction(["books", "outbox", "meta"], "readwrite");
   const books = tx.objectStore("books");
   const stored = await books.get(book.id) as BookProject | undefined;
   if (expectedUpdatedAt !== undefined && stored?.updatedAt !== expectedUpdatedAt) {
@@ -113,6 +127,7 @@ export async function saveBook(
     throw new BookRevisionConflict();
   }
   assertWritable(book, stored);
+  await invalidateChangedRetry(book, tx.objectStore("meta"));
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   if (queueSync) await enqueueCheckpoint(book, tx.objectStore("outbox"));
@@ -121,7 +136,14 @@ export async function saveBook(
 
 export async function saveActivity(activity: Activity): Promise<void> {
   const db = await getDb();
-  await db.put("activities", activity, activity.id);
+  const tx = db.transaction(["books", "activities"], "readwrite");
+  void tx.done.catch(() => undefined);
+  const book = await tx.objectStore("books").get(activity.bookId) as BookProject | undefined;
+  if (book) {
+    try { assertLocalBook(book); } catch (error) { tx.abort(); throw error; }
+  }
+  await tx.objectStore("activities").put(activity, activity.id);
+  await tx.done;
 }
 
 /** Author-side change plus its log entry, CAS-checked in one transaction.
@@ -131,7 +153,7 @@ export async function saveBookWithAuthorActivity(
   book: BookProject, activity: Activity, expectedUpdatedAt: string,
 ): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
+  const tx = db.transaction(["books", "activities", "outbox", "meta"], "readwrite");
   void tx.done.catch(() => {});
   const books = tx.objectStore("books");
   const stored = await books.get(book.id) as BookProject | undefined;
@@ -140,6 +162,7 @@ export async function saveBookWithAuthorActivity(
     throw new BookRevisionConflict();
   }
   assertWritable(book, stored);
+  await invalidateChangedRetry(book, tx.objectStore("meta"));
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   await tx.objectStore("activities").put(activity, activity.id);
@@ -166,6 +189,7 @@ export async function saveBookAndActivity(
     throw new BookRevisionConflict();
   }
   assertWritable(book, stored);
+  await invalidateChangedRetry(book, tx.objectStore("meta"));
   book.updatedAt = revisionTimestamp(stored);
   await books.put(book, book.id);
   await tx.objectStore("activities").put(activity, activity.id);
@@ -249,6 +273,9 @@ export async function saveBookAndActivity(
   // succeeded asks for a GitHub save (one queue item per book, the worker spaces the pushes out).
   if (activity.status === "succeeded") {
     await enqueueCheckpoint(book, tx.objectStore("outbox"));
+    const key = "retry-schedule:v1:" + book.id;
+    const plan = await tx.objectStore("meta").get(key) as { runId?: string } | undefined;
+    if (plan?.runId === activity.runId) await tx.objectStore("meta").delete(key);
   }
   await tx.done;
 }
@@ -278,7 +305,7 @@ export async function recoverInterruptedRuns(): Promise<InterruptedRun[]> {
   const books = (await db.getAll("books")) as BookProject[];
   const activities = (await db.getAll("activities")) as Activity[];
   const candidates = new Set(
-    books.filter(book => book.status === "running").map(book => book.id),
+    books.filter(book => book.status === "running" && !isServerBook(book)).map(book => book.id),
   );
   for (const activity of activities) {
     if (activity.status === "running") candidates.add(activity.bookId);
@@ -293,6 +320,7 @@ export async function recoverInterruptedRuns(): Promise<InterruptedRun[]> {
       const tx = db.transaction(["books", "activities"], "readwrite");
       const bookStore = tx.objectStore("books");
       const book = await bookStore.get(bookId) as BookProject | undefined;
+      if (book && isServerBook(book)) { await tx.done; return; }
       let wasRunning = false;
       let lastActivityAt = book?.updatedAt ?? "";
       if (book?.status === "running") {

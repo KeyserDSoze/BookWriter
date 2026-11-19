@@ -1,9 +1,10 @@
-import type { BookProject } from "../domain/types";
+import type { BookProject } from "@engine/domain/types";
 import { getDb } from "../infrastructure/db";
+import { assertLocalBook } from "@engine/domain/execution-authority";
 import {
   getManualPushIntent, type ManualPushIntent,
-} from "../infrastructure/manual-push-intent";
-import { verifyPublishedManualPush } from "../infrastructure/github-sync";
+} from "@engine/infrastructure/manual-push-intent";
+import { verifyPublishedManualPush } from "@engine/infrastructure/github-sync";
 
 function mismatchedDestinationOrBaseline(book: BookProject, intent: ManualPushIntent): boolean {
   return !book.remote ||
@@ -44,6 +45,7 @@ export async function reconcileSuspendedManualPush(
       if (!outbox) throw new Error("Una sincronizzazione GitHub è già in corso.");
       const db = await getDb();
       const current = await db.get("books", bookId) as BookProject | undefined;
+      if (current) assertLocalBook(current);
       const intent = await getManualPushIntent(bookId);
       if (!current || !intent || intent.bookId !== bookId)
         throw new Error("Nessun tentativo manuale sospeso da verificare.");
@@ -59,6 +61,7 @@ export async function reconcileSuspendedManualPush(
       // A stale button/another tab cannot delete a replacement intent.
       const tx = db.transaction(["books", "meta"], "readwrite");
       const latest = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+      if (latest) assertLocalBook(latest);
       const intentKey = "manual-github-push:" + bookId;
       const stored = await tx.objectStore("meta").get(intentKey) as ManualPushIntent | undefined;
       const sameBook = latest?.updatedAt === current.updatedAt &&

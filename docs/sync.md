@@ -62,3 +62,15 @@ Versione schema con migrations incrementali IDB + formato GitHub; indice rigener
 ## Osservabilità
 
 UI: `locale salvato`, `in coda per GitHub`, `sincronizzazione in corso`, `sincronizzato (commit SHA)`, `conflitto`, `offline`. Mostrare tempi, retry manuale e causa dell'errore, non presentare stato verde se solo locale.
+
+## Modalità server personale — progetto completo e prima tranche
+
+Il [progetto F02](../features/F02-personal-server.md), deciso in [ADR 0167](../ADR/0167-optional-personal-server-and-shared-engine.md), distingue libro locale e libro affidato al server. Per quest'ultimo il file server è archivio operativo, IndexedDB è replica, e runner, lease **e push GitHub con PAT** girano sul server anche senza browser. I browser non accodano un secondo push per gli stessi checkpoint.
+
+La tranche attuale implementa nuove creazioni sul server e aggiornamenti espliciti delle repliche; **non** il riallineamento automatico completo o la connessione cloud descritti sotto. [Matrice dello stato effettivo](personal-server-development.md).
+
+Riallineamento previsto: **profilo Google/Microsoft → GitHub → server**. Cloud facoltativo, poi verifiche/import sicuri GitHub, poi inventario/snapshot/comandi server. Non è una precedenza dei dati: GitHub vecchio non sovrascrive un server avanti; divergenze conservano entrambe le copie e richiedono riconciliazione. Nuovi libri adottati da client differenti compaiono su tutti i client autorizzati.
+
+Autorità per epoca, revisioni server e comandi idempotenti sostituiscono il confronto per soli orologi fra repliche. La connessione segue il profilo/vault cloud, non il manoscritto. Offline si leggono repliche e si conservano bozze; nessun fallback automatico al runner locale. Il trasferimento di autorità richiede un protocollo confermato.
+
+[Flussi completi, multi-PAT e conflitti](personal-server.md) · [Commit file, eventi e ACK GitHub](personal-server-protocol.md). Accodamento per compito, distanza di due minuti, limiti, `force:false` e controllo SHA restano vincoli anche nel progetto server.

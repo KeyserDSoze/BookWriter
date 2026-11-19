@@ -1,8 +1,8 @@
-import type {Activity} from "../domain/types";
+import type {Activity} from "@engine/domain/types";
 import {
   createNarrativeTransferAssessment,type NarrativeTransferVerdict,
-} from "../domain/narrative-transfer-assessments";
-import {getBook,getDb} from "../infrastructure/db";
+} from "@engine/domain/narrative-transfer-assessments";
+import {getLocalBook as getBook,getDb} from "../infrastructure/db";
 
 /** A manual, private annotation of a CURRENT literal witness.
  * The existing writer/outbox lock and optimistic CAS guard all commits. */

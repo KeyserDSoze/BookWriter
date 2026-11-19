@@ -1,5 +1,5 @@
-import type { Activity, BookProject } from "../domain/types";
-import { getBook, saveBookAndActivity } from "../infrastructure/db";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { getLocalBook as getBook, saveBookAndActivity } from "../infrastructure/db";
 
 /**
  * Author-only promotion after visually reviewing a previously accepted

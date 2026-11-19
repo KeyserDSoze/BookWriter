@@ -1,8 +1,8 @@
-import type { Activity } from "../domain/types";
-import type { NarrativeEventCandidate } from "../domain/narrative-event-candidates";
+import type { Activity } from "@engine/domain/types";
+import type { NarrativeEventCandidate } from "@engine/domain/narrative-event-candidates";
 import { createNarrativeEventDecision, type NarrativeEventDecision }
-  from "../domain/narrative-event-decisions";
-import { getBook, getDb } from "../infrastructure/db";
+  from "@engine/domain/narrative-event-decisions";
+import { getLocalBook as getBook, getDb } from "../infrastructure/db";
 
 /** Explicit local author action. No AI calls, automatic canon updates or GitHub push. */
 export async function recordNarrativeEventDecision(

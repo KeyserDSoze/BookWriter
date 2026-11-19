@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { createBackup, readBackup } from "./backup";
 import { getDb, saveActivity, saveBook } from "./db";
-import { newBook, type Activity } from "../domain/types";
+import { newBook, type Activity } from "@engine/domain/types";
 
 beforeEach(async () => {
   const db=await getDb();

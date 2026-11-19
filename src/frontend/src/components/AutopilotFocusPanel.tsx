@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { AlertTriangle, BookOpen, CheckCircle2, Circle, CircleDot, Loader2, PauseCircle, Settings2 } from "lucide-react";
-import type { Activity, AppSettings, BookProject } from "../domain/types";
-import { explainAutopilotError } from "../domain/autopilot-error";
-import { endpointAutoRetry } from "../application/auto-retry";
-import { PIPELINE_STAGES, bookProgress, describeNextAutopilotStep } from "../domain/autopilot-step";
-import { describeEta, estimateBookEta } from "../domain/book-eta";
-import type { LiveAiTrace } from "../infrastructure/ai-observability";
+import type { Activity, AppSettings, BookProject } from "@engine/domain/types";
+import { explainAutopilotError } from "@engine/domain/autopilot-error";
+import { endpointAutoRetry } from "@engine/application/auto-retry";
+import { PIPELINE_STAGES, bookProgress, describeNextAutopilotStep } from "@engine/domain/autopilot-step";
+import { describeEta, estimateBookEta } from "@engine/domain/book-eta";
+import type { LiveAiTrace } from "@engine/infrastructure/ai-observability";
 import { LiveTaskStream, formatElapsed, useElapsedSeconds } from "./LiveTaskStream";
 import { Button } from "./ui/button";
 

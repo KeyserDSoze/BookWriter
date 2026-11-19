@@ -1,4 +1,4 @@
-import type { AppSettings, EndpointProfile } from "../domain/types";
+import type { AppSettings, EndpointProfile } from "@engine/domain/types";
 
 /** The caller holds the endpoint object from the exact click. App settings
  * updates always replace affected profile objects, including manual model

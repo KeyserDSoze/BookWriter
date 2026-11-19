@@ -1,8 +1,8 @@
-import type { BookProject } from "../domain/types";
+import type { BookProject } from "@engine/domain/types";
 import {
   estimateNextProsePairBytes, estimateProsePayloadBytes, validProseLimitMiB,
   validTaskProseUsageLedger, type TaskProseUsageLedger,
-} from "../domain/task-prose-storage";
+} from "@engine/domain/task-prose-storage";
 import { getDb } from "./db";
 import { taskProseKey, taskProseUsageKey } from "./task-prose-checkpoint";
 

@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { getDb, listBooks, saveBook, saveSettings } from "./db";
-import { DEFAULT_SETTINGS } from "../domain/types";
-import { knowledgeBook } from "../domain/__fixtures__/knowledge";
-import { editScene } from "../domain/book-editing";
-import { createManualReview } from "../domain/manual-review-flow";
-import { elementReviewState } from "../domain/book-edits";
-import { defaultWebResearchSettings } from "../domain/web-research";
+import { DEFAULT_SETTINGS } from "@engine/domain/types";
+import { knowledgeBook } from "@engine/domain/__fixtures__/knowledge";
+import { editScene } from "@engine/domain/book-editing";
+import { createManualReview } from "@engine/domain/manual-review-flow";
+import { elementReviewState } from "@engine/domain/book-edits";
+import { defaultWebResearchSettings } from "@engine/domain/web-research";
 
 const NOW = "2026-11-14T10:00:00.000Z";
 beforeEach(async () => {

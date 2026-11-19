@@ -71,7 +71,7 @@ jobs:
           if [[ "$legacy_current" == "$legacy_sha" ]] &&
              ! grep -Fxq -- "$legacy_branch" "$tempdir/open.txt" &&
              [[ "$(gh api "repos/$GH_REPO/pulls/50" --jq '.merged_at // ""')" != "" ]] &&
-             gh api "repos/$GH_REPO/contents/src/frontend/src/domain/narrative-event-decisions.ts?ref=main" >/dev/null 2>&1; then
+             gh api "repos/$GH_REPO/contents/src/engine/src/domain/narrative-event-decisions.ts?ref=main" >/dev/null 2>&1; then
             echo "Eliminazione prototipo sostituito dalla PR #50: $legacy_branch ($legacy_sha)"
             gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$legacy_branch"
           else

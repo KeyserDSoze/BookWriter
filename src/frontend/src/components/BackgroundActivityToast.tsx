@@ -1,12 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2, Minimize2, Maximize2 } from "lucide-react";
-import type { Activity, BookProject } from "../domain/types";
-import { bookProgress, describeNextAutopilotStep } from "../domain/autopilot-step";
-import type { LiveAiTrace } from "../infrastructure/ai-observability";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { bookProgress, describeNextAutopilotStep } from "@engine/domain/autopilot-step";
+import type { LiveAiTrace } from "@engine/infrastructure/ai-observability";
 import { liveStageText } from "./LiveTaskStream";
-import { describeHeadline } from "../domain/live-progress";
+import { describeHeadline } from "@engine/domain/live-progress";
 import { AiStreamText } from "./AiStreamText";
 import { LiveActionFeed } from "./LiveActionFeed";
+import { isServerBook } from "@engine/domain/execution-authority";
 
 /** Small bottom-right card: which books the autopilot is working on and what the last task is.
  * The text arriving from the model is always shown here: no opt-in is needed to watch it. */
@@ -52,7 +53,7 @@ export function BackgroundActivityToast({ books, live, currentBookId, currentAct
       aria-expanded={expanded} onClick={() => {setExpanded(open => !open);setPreviewHidden(false);}}>
       <Loader2 size={16} className="shrink-0 motion-safe:animate-spin text-emerald-500" aria-hidden />
       <span className="min-w-0 flex-1">
-        <span className="block font-semibold">{running.length === 1 ? "Autopilot al lavoro" : `${running.length} libri al lavoro`}</span>
+        <span className="block font-semibold">{running.length === 1 ? isServerBook(first.book) ? "Server · ultimo stato confermato" : "Autopilot al lavoro" : `${running.length} libri al lavoro`}</span>
         <span className="muted block truncate text-xs">{first.book.title} · {first.taskTitle ?? first.step.headline}</span>
       </span>
       {expanded ? <ChevronDown size={16} aria-hidden /> : <ChevronUp size={16} aria-hidden />}

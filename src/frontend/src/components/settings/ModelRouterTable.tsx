@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { TASK_KINDS, type AppSettings, type EndpointProfile, type TaskKind, type TaskReasoning } from "../../domain/types";
-import { declaredModelCapabilities } from "../../domain/model-capabilities";
-import { REASONING_LEVELS, REASONING_LEVEL_LABEL, reasoningLevelSupported, reasoningSupport } from "../../domain/model-reasoning";
-import { FAST_CHECK_TASKS } from "../../domain/model-routing-preset";
+import { TASK_KINDS, type AppSettings, type EndpointProfile, type TaskKind, type TaskReasoning } from "@engine/domain/types";
+import { declaredModelCapabilities } from "@engine/domain/model-capabilities";
+import { REASONING_LEVELS, REASONING_LEVEL_LABEL, reasoningLevelSupported, reasoningSupport } from "@engine/domain/model-reasoning";
+import { FAST_CHECK_TASKS } from "@engine/domain/model-routing-preset";
 import { ReasoningHint, ReasoningSelect } from "../ReasoningSelect";
 import { Button } from "../ui/button";
 import { ModelPicker } from "./ModelPicker";

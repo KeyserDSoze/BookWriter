@@ -1,10 +1,10 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { extendHistoricalDossier, normalizeResearchQueries } from "../domain/historical-research";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import type { BookProject, Activity } from "../domain/types";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { extendHistoricalDossier, normalizeResearchQueries } from "@engine/domain/historical-research";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import type { BookProject, Activity } from "@engine/domain/types";
 import { searchHistoricalWikipedia } from "../infrastructure/historical-sources";
-import { getBook, getDb } from "../infrastructure/db";
+import { getLocalBook as getBook, getDb } from "../infrastructure/db";
 
 export interface HistoricalSearchResult {
   sourceCount: number; missingQueries: string[]; restartedReview: boolean;

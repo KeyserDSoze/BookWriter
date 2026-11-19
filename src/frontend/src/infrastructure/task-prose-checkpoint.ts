@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { validatedTaskProseCheckpoint, type TaskProseCheckpoint } from "../domain/task-prose-checkpoint";
+import { validatedTaskProseCheckpoint, type TaskProseCheckpoint } from "@engine/domain/task-prose-checkpoint";
 
 export function taskProseConsentKey(bookId: string): string {
   return "task-prose-consent:v1:" + bookId;

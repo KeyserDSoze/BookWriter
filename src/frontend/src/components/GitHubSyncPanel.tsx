@@ -1,24 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Cloud, Download, Github, LockKeyhole, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
-import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "../domain/types";
+import type { AppSettings, BookProject, GitHubRemote, SyncOutboxItem } from "@engine/domain/types";
 import { decryptLocal, encryptLocal } from "../infrastructure/crypto";
 import { GitHubConnectionPicker } from "./GitHubConnectionPicker";
-import { githubPublicationBlocker } from "../domain/github-publication";
+import { githubPublicationBlocker } from "@engine/domain/github-publication";
 import { connectBookRemote, setBookAutoSync } from "../application/github-book-settings";
-import { pushManualGitHubBook } from "../application/manual-github-push";
+import { pushManualGitHubBook } from "@engine/application/manual-github-push";
 import { reconcileSuspendedManualPush } from "../application/manual-push-reconciliation";
-import { getManualPushIntent, type ManualPushIntent } from "../infrastructure/manual-push-intent";
-import { getOutbox, retryBlockedSync } from "../infrastructure/outbox";
-import { drainGitHubOutbox, saveToGitHubNow } from "../application/auto-sync";
+import { getManualPushIntent, type ManualPushIntent } from "@engine/infrastructure/manual-push-intent";
+import { getOutbox, retryBlockedSync } from "@engine/infrastructure/outbox";
+import { drainGitHubOutbox, saveToGitHubNow } from "@engine/application/auto-sync";
 import {
   inspectWriterLease, isLeaseFromThisBrowser, isLeaseRecoverable, recoverExpiredWriterLease,
   type WriterLeaseStatus,
-} from "../infrastructure/github-lease";
-import {
-  importGitHubBook, inspectRepository, PUSH_LIMIT_BYTES, validateRemote,
-  type RepoInfo,
-} from "../infrastructure/github-sync";
+} from "@engine/infrastructure/github-lease";
+import { inspectRepository, PUSH_LIMIT_BYTES, validateRemote, type RepoInfo } from "@engine/infrastructure/github-sync";
+import { importGitHubBook } from "../infrastructure/github-import";
 
 interface Props {
   book?: BookProject;

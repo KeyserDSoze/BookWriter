@@ -1,11 +1,11 @@
 import {useMemo} from "react";
-import type {BookProject,Chapter} from "../domain/types";
-import type {ChapterEditorialCycle} from "../domain/editorial-board";
+import type {BookProject,Chapter} from "@engine/domain/types";
+import type {ChapterEditorialCycle} from "@engine/domain/editorial-board";
 import {
   compareEditorialArchiveToCurrentRevision,
   type ArchiveLiteralRelation,type ArchiveSuggestedCheckRelation,
   type HistoricalAuthorNoteState,
-} from "../domain/editorial-archive-comparison";
+} from "@engine/domain/editorial-archive-comparison";
 
 const RELATION:Record<ArchiveLiteralRelation,string>={
   same_literal_anchor:"Stessa citazione, stessa posizione letterale",

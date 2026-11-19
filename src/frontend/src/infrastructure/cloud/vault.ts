@@ -1,7 +1,7 @@
 import {
   vaultSecretsSchema, VAULT_MAX_PBKDF2_ITERATIONS, VAULT_MIN_PBKDF2_ITERATIONS,
   type PassphraseEnvelope, type VaultEnvelope, type VaultSecrets,
-} from "../../domain/cloud-profile";
+} from "@engine/domain/cloud-profile";
 
 /** Credential vault of the cloud profile (GitHub PAT, AI API keys).
  *  - "passphrase": AES-GCM-256 under a PBKDF2-SHA256 key. The cloud account

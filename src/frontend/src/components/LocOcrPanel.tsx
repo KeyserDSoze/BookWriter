@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { BookOpenText,ExternalLink,ShieldAlert } from "lucide-react";
-import { activeArchivalItems } from "../domain/archival-catalog";
-import { activeInstitutionalInspections } from "../domain/institutional-inspection";
+import { activeArchivalItems } from "@engine/domain/archival-catalog";
+import { activeInstitutionalInspections } from "@engine/domain/institutional-inspection";
 import { activeLocOcrExcerpts,allLocOcrExcerpts,
-  type LocOcrRights } from "../domain/loc-ocr";
+  type LocOcrRights } from "@engine/domain/loc-ocr";
 import { attachLocOcrExcerpt } from "../application/loc-ocr";
 import { attachLocScanCollation } from "../application/loc-scan-collation";
-import { activeLocScanCollations } from "../domain/loc-scan-collation";
+import { activeLocScanCollations } from "@engine/domain/loc-scan-collation";
 import { quarantineLocOcrSource } from "../application/loc-ocr-audit";
 import { auditStoredLocOcrExcerpt,type LocOcrAuditResult } from "../infrastructure/loc-ocr";
-import type { BookProject,Chapter } from "../domain/types";
+import type { BookProject,Chapter } from "@engine/domain/types";
 import { Button } from "./ui/button";
 
 export function LocOcrPanel({

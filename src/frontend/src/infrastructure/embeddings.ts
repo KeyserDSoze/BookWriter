@@ -1,7 +1,7 @@
-import type { AppSettings } from "../domain/types";
-import { declaredModelCapabilities } from "../domain/model-capabilities";
+import type { AppSettings } from "@engine/domain/types";
+import { declaredModelCapabilities } from "@engine/domain/model-capabilities";
 import { decryptLocal } from "./crypto";
-import { endpointAuthMode, normalizeEndpoint } from "./ai";
+import { endpointAuthMode, normalizeEndpoint } from "@engine/infrastructure/ai";
 
 export const MAX_EMBED_BATCH = 8;
 const MAX_EMBED_INPUT = 1600;

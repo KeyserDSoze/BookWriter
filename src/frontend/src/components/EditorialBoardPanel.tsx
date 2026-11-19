@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { BookCheck, RotateCcw, ShieldAlert, Users } from "lucide-react";
-import type { BookProject, Chapter } from "../domain/types";
+import type { BookProject, Chapter } from "@engine/domain/types";
 import { NarrativeEventDecisionsPanel } from "./NarrativeEventDecisionsPanel";
 import { EditorialVerificationPlanPanel } from "./EditorialVerificationPlanPanel";
 import { EditorialArchiveComparisonPanel } from "./EditorialArchiveComparisonPanel";
 import { EditorialDiffLedgerPanel } from "./EditorialDiffLedgerPanel";
 import { EDITORIAL_ROLES, ROLE_LABELS, reviewerLabel, acceptedRepairs, cycleRoles, type EditorialRole,
   buildEditorialRecommendationDisagreements, isNarrativeEvidenceAnchorCurrent, type EditorialRound,
-  type EditorialReport, type EditorialJudgment } from "../domain/editorial-board";
-import { editorialRecoveryProblem, recoverEditorialCheckpoint, reopenChapterReview } from "../application/editorial-control";
+  type EditorialReport, type EditorialJudgment } from "@engine/domain/editorial-board";
+import { recoverEditorialCheckpoint, reopenChapterReview } from "../application/editorial-control";
+import { editorialRecoveryProblem } from "@engine/domain/editorial-recovery";
 import { Button } from "./ui/button";
 import { HistoricalResearchPanel } from "./HistoricalResearchPanel";
 import { HistoricalSourceRelationsPanel } from "./HistoricalSourceRelationsPanel";
@@ -16,13 +17,13 @@ import { BibliographyPanel } from "./BibliographyPanel";
 import { ArchiveCatalogPanel } from "./ArchiveCatalogPanel";
 import { LocOcrPanel } from "./LocOcrPanel";
 import { LocIiifPanel } from "./LocIiifPanel";
-import type { HistoricalSource } from "../domain/historical-research";
-import type { EditorialProfiles } from "../domain/editorial-profiles";
-import { activeManualEvidence, allManualEvidence, type ManualDocumentExcerpt } from "../domain/manual-evidence";
+import type { HistoricalSource } from "@engine/domain/historical-research";
+import type { EditorialProfiles } from "@engine/domain/editorial-profiles";
+import { activeManualEvidence, allManualEvidence, type ManualDocumentExcerpt } from "@engine/domain/manual-evidence";
 import { ManualEvidencePanel } from "./ManualEvidencePanel";
 import { WikisourcePanel } from "./WikisourcePanel";
 import { allWikisourceExcerpts, activeWikisourceExcerpts,
-  wikisourceRevisionUrl, type WikisourceExcerpt } from "../domain/wikisource-excerpts";
+  wikisourceRevisionUrl, type WikisourceExcerpt } from "@engine/domain/wikisource-excerpts";
 
 function RoundDetails({ round, reports, judgment, chapter, roles, profileSettings, sources = [], manualSources = [], activeManualIds = [],
   wikisourceSources = [], activeWikisourceIds = [] }: {

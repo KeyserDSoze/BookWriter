@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Save, Sparkles, Trash2 } from "lucide-react";
-import type { BookProject } from "../../domain/types";
+import type { BookProject } from "@engine/domain/types";
 import { ATTRIBUTE_FIELDS, ENTITY_LABELS, NARRATION_LABELS, NARRATION_MODES, STANCE_LABELS, STANCES,
-  type EntityType, type KnowledgeEntity, type KnowledgeEvent, type KnowledgeTimeline } from "../../domain/knowledge";
-import { attributeLabel } from "../../domain/knowledge-markdown";
+  type EntityType, type KnowledgeEntity, type KnowledgeEvent, type KnowledgeTimeline } from "@engine/domain/knowledge";
+import { attributeLabel } from "@engine/domain/knowledge-markdown";
 import { createEntity, createEvent, editBase, ElementChangedError, removeEntity, removeEvent, removeTimeline, saveEntityEdit,
   saveEventEdit, saveTimelineEdit } from "../../application/book-editing";
 import { Button } from "../ui/button";

@@ -13,6 +13,12 @@ async function openSettings(page: Page) {
 async function interceptCatalog(page: Page) {
   let calls = 0;
   const pending = new Map<number, Pending>();
+  // Model discovery also probes the optional llmproxy endpoint. Never leave
+  // this request on the real network: its 12 s deadline exceeds the UI assertion
+  // and made this synthetic race depend on external CORS/latency.
+  await page.route("https://api.openai.com/v1/models/details", route => route.fulfill({
+    status: 404, headers: { "access-control-allow-origin": "*" }, body: "",
+  }));
   await page.route("https://api.openai.com/v1/models", async route => {
     // Authorization makes this a CORS preflight in Chromium; only the GET
     // is a catalogue request and should consume a deferred response.

@@ -2,8 +2,8 @@ import {
   CLOUD_LIBRARY_FILE, CLOUD_PROFILE_FILE, MAX_CLOUD_FILE_BYTES, cloudSettingsSignature, mergeLibrary,
   parseCloudLibrary, parseCloudProfile, projectSettings, removeLibraryEntry, summarizeBook,
   type CloudLibrary, type CloudProfile, type CloudSettings, type VaultEnvelope, type VaultSecrets,
-} from "../domain/cloud-profile";
-import type { AppSettings, BookProject, EndpointProfile } from "../domain/types";
+} from "@engine/domain/cloud-profile";
+import type { AppSettings, BookProject, EndpointProfile } from "@engine/domain/types";
 import { decryptLocal, encryptLocal } from "../infrastructure/crypto";
 import { getDb, loadSettings } from "../infrastructure/db";
 import { CloudError, type CloudSession } from "../infrastructure/cloud/types";
@@ -13,7 +13,7 @@ import {
   VaultLockedError, VaultPassphraseError,
 } from "../infrastructure/cloud/vault";
 import { loadRememberedVaultKey, rememberVaultKey } from "../infrastructure/cloud/vault-store";
-import { verifyEndpointSettings } from "./endpoint-settings-save";
+import { verifyEndpointSettings } from "@engine/application/endpoint-settings-save";
 
 export const CLOUD_LOCK = "bookwriter:cloud-sync";
 

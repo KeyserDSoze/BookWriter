@@ -1,8 +1,8 @@
-import type {Activity} from "../domain/types";
+import type {Activity} from "@engine/domain/types";
 import {createNarrativeKnowledgeShareDecision,
   type NarrativeKnowledgeShareDecision,type KnowledgeShareRecipient}
-  from "../domain/narrative-knowledge-sharing";
-import {getBook,getDb} from "../infrastructure/db";
+  from "@engine/domain/narrative-knowledge-sharing";
+import {getLocalBook as getBook,getDb} from "../infrastructure/db";
 
 /** Explicit author-only consent action. Never automatically enables sync. */
 export async function recordNarrativeKnowledgeShareDecision(

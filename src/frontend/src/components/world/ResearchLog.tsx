@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Globe, Search } from "lucide-react";
-import type { BookProject } from "../../domain/types";
-import type { ResearchEntry } from "../../domain/web-research";
-import { clearResearchLog } from "../../application/web-research";
+import type { BookProject } from "@engine/domain/types";
+import type { ResearchEntry } from "@engine/domain/web-research";
+import { clearResearchLog } from "@engine/application/web-research";
 import { Button } from "../ui/button";
 import { Badge, EmptyState, Segmented } from "../ui/primitives";
 import { SourceList } from "../settings/WebResearchPanel";

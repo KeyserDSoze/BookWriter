@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newBook } from "../domain/types";
+import { newBook } from "@engine/domain/types";
 import {
   MAX_SCENE_EMBED_CHARS, MAX_SCENE_EMBED_PASSAGES, MAX_SEMANTIC_PASSAGES,
   MAX_SEMANTIC_SCENES, rankSemanticPassages, relatedSemanticPassages,

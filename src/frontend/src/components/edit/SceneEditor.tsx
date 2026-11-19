@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Save, AlertTriangle, Wand2 } from "lucide-react";
-import type { BookProject, Chapter, Scene } from "../../domain/types";
+import type { BookProject, Chapter, Scene } from "@engine/domain/types";
 import { editBase, ElementChangedError, saveSceneEdit, type EditBase } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/primitives";

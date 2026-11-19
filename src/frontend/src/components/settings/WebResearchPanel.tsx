@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Globe, Search, ShieldCheck, Sparkles } from "lucide-react";
-import type { AppSettings, BookProject } from "../../domain/types";
-import { defaultWebResearchSettings, RESEARCH_AGENTS, RESEARCH_AGENT_LABELS, type ResearchEntry, type WebResearchSettings } from "../../domain/web-research";
-import { researchRoute, testWebResearch, updateWebResearchSettings } from "../../application/web-research";
+import type { AppSettings, BookProject } from "@engine/domain/types";
+import { defaultWebResearchSettings, RESEARCH_AGENTS, RESEARCH_AGENT_LABELS, type ResearchEntry, type WebResearchSettings } from "@engine/domain/web-research";
+import { researchRoute, testWebResearch, updateWebResearchSettings } from "@engine/application/web-research";
 import { Button } from "../ui/button";
 import { Badge, Segmented, Switch } from "../ui/primitives";
 import { ModelPicker } from "./ModelPicker";

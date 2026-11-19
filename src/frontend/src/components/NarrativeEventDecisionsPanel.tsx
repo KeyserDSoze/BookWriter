@@ -1,13 +1,13 @@
 import { useState } from "react";
-import type { BookProject } from "../domain/types";
-import { buildNarrativeEventCandidateIndex, type NarrativeEventCandidate } from "../domain/narrative-event-candidates";
+import type { BookProject } from "@engine/domain/types";
+import { buildNarrativeEventCandidateIndex, type NarrativeEventCandidate } from "@engine/domain/narrative-event-candidates";
 import { currentNarrativeEventDecision, MAX_EVENT_DECISIONS, type NarrativeEventDecision }
-  from "../domain/narrative-event-decisions";
+  from "@engine/domain/narrative-event-decisions";
 import { recordNarrativeEventDecision } from "../application/narrative-event-decisions";
-import { buildNarrativeEventLedger } from "../domain/narrative-event-ledger";
-import { buildNarrativeContinuityHints } from "../domain/narrative-continuity-hints";
+import { buildNarrativeEventLedger } from "@engine/domain/narrative-event-ledger";
+import { buildNarrativeContinuityHints } from "@engine/domain/narrative-continuity-hints";
 import { buildNarrativeAliasRegistry, MAX_ALIAS_DECISIONS,
-  type NarrativeAliasDecision } from "../domain/narrative-alias-decisions";
+  type NarrativeAliasDecision } from "@engine/domain/narrative-alias-decisions";
 import { recordNarrativeAliasDecision } from "../application/narrative-alias-decisions";
 import { NarrativeKnowledgeDecisionsPanel } from "./NarrativeKnowledgeDecisionsPanel";
 import { Button } from "./ui/button";

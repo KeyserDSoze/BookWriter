@@ -1,8 +1,8 @@
 import {useState} from "react";
-import type {BookProject} from "../domain/types";
-import {buildNarrativeEventLedger} from "../domain/narrative-event-ledger";
+import type {BookProject} from "@engine/domain/types";
+import {buildNarrativeEventLedger} from "@engine/domain/narrative-event-ledger";
 import {buildNarrativeKnowledgeRegistry,MAX_KNOWLEDGE_DECISIONS,
-  type NarrativeKnowledgeDecision} from "../domain/narrative-knowledge-decisions";
+  type NarrativeKnowledgeDecision} from "@engine/domain/narrative-knowledge-decisions";
 import {recordNarrativeKnowledgeDecision}
   from "../application/narrative-knowledge-decisions";
 import {Button} from "./ui/button";
@@ -10,7 +10,7 @@ import {NarrativeKnowledgeTimingPanel} from "./NarrativeKnowledgeTimingPanel";
 import {NarrativeKnowledgeTopicPanel} from "./NarrativeKnowledgeTopicPanel";
 import {KNOWLEDGE_SHARE_RECIPIENTS,buildKnowledgeSharingRegistry,
   MAX_KNOWLEDGE_SHARE_DECISIONS,type KnowledgeShareRecipient}
-  from "../domain/narrative-knowledge-sharing";
+  from "@engine/domain/narrative-knowledge-sharing";
 import {recordNarrativeKnowledgeShareDecision}
   from "../application/narrative-knowledge-sharing";
 

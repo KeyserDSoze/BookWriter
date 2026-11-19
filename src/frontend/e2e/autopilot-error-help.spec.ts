@@ -8,7 +8,7 @@ test("spiega una citazione scartata e attiva i tentativi sull'endpoint giusto se
   await page.getByRole("button", { name: "Crea libro", exact: true }).click();
   await page.evaluate(async () => {
     const { getDb } = await import("/src/infrastructure/db.ts");
-    const { DEFAULT_SETTINGS, TASK_KINDS } = await import("/src/domain/types.ts");
+    const { DEFAULT_SETTINGS, TASK_KINDS } = await (window as any).__engine("domain/types.ts");
     const db = await getDb();
     const tx = db.transaction(["books", "activities", "settings"], "readwrite");
     const book = (await tx.objectStore("books").getAll())[0];

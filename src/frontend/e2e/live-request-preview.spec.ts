@@ -29,9 +29,9 @@ async function prepare(page:Page){
   });
   await page.goto("/");
   await page.evaluate(async()=>{
-    const dbPath="/src/infrastructure/db.ts",typesPath="/src/domain/types.ts";
+    const dbPath="/src/infrastructure/db.ts";
     const {saveBook,saveSettings}=await import(/* @vite-ignore */dbPath);
-    const {newBook,DEFAULT_SETTINGS}=await import(/* @vite-ignore */typesPath);
+    const {newBook,DEFAULT_SETTINGS}=await (window as any).__engine("domain/types.ts");
     const settings=structuredClone(DEFAULT_SETTINGS);
     settings.endpoints=[{id:"openai",name:"Modello sintetico",baseUrl:"http://localhost:1234/v1",
       authMode:"none",secret:null,models:["test-stream"],streamMode:"sse",localAutoRetry:false,autoRetry:false}];
@@ -90,8 +90,7 @@ test("Attività segue la risposta completa; il riquadro sfuma cinque righe e la 
   await expect(toast).toHaveCount(0);
   await expect(inspector.getByText("Risposta modello restituita",{exact:true})).toBeVisible();
   await page.evaluate(async()=>{
-    const path="/src/infrastructure/ai-observability.ts";
-    const {startLiveAi,finishLiveAi}=await import(/* @vite-ignore */path);
+    const {startLiveAi,finishLiveAi}=await (window as any).__engine("infrastructure/ai-observability.ts");
     // Simulate newer task metadata without any additional model calls. The
     // explicitly opened final response must outlive the bounded volatile cache.
     for(let index=0;index<10;index++){
@@ -172,8 +171,7 @@ test("conservazione impostabile: tempo e numero di task, poi senza scadenza e Gi
   await page.goto("/");
   // One old and one fresh temporary conversation, seeded as the app itself would have stored them.
   await page.evaluate(async()=>{
-    const path="/src/infrastructure/ai-observability.ts";
-    const {saveAiTrace}=await import(/* @vite-ignore */path);
+    const {saveAiTrace}=await (window as any).__engine("infrastructure/ai-observability.ts");
     const make=(id:string,minutes:number)=>saveAiTrace({activityId:id,bookId:"libro",
       createdAt:new Date(Date.now()-minutes*60_000).toISOString(),endpointId:"e",modelId:"m",
       systemPrompt:"S",userPrompt:"U",truncated:false,kept:false});

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { GitFork, ShieldAlert } from "lucide-react";
-import type { BookProject, Chapter } from "../domain/types";
+import type { BookProject, Chapter } from "@engine/domain/types";
 import { activeHistoricalSources, activeHistoricalSourceRelations,
-  type HistoricalSourceRelation, type HistoricalSourceRelationKind } from "../domain/historical-research";
-import { activeManualEvidence } from "../domain/manual-evidence";
-import { activeWikisourceExcerpts } from "../domain/wikisource-excerpts";
-import { activeLocOcrExcerpts } from "../domain/loc-ocr";
+  type HistoricalSourceRelation, type HistoricalSourceRelationKind } from "@engine/domain/historical-research";
+import { activeManualEvidence } from "@engine/domain/manual-evidence";
+import { activeWikisourceExcerpts } from "@engine/domain/wikisource-excerpts";
+import { activeLocOcrExcerpts } from "@engine/domain/loc-ocr";
 import { attestHistoricalSourceRelation } from "../application/historical-source-relations";
 import { Button } from "./ui/button";
 

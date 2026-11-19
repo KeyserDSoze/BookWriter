@@ -1,5 +1,5 @@
 import { zipSync, strToU8 } from "fflate";
-import type { BookProject, Chapter, Scene } from "../domain/types";
+import type { BookProject, Chapter, Scene } from "@engine/domain/types";
 
 /** XHTML/OPF are XML 1.0 documents: an LLM or imported draft may contain
  * invisible control bytes or lone UTF-16 surrogates. Keep valid Unicode and

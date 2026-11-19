@@ -1,5 +1,21 @@
 # BookWriter — istruzioni per agenti e sviluppatori
 
+## Retry short-term / long-term — ADR 0168 / F03, preparazione locale
+
+- [Specifica](docs/retry-policy.md), [ADR 0168](ADR/0168-short-and-long-term-retry.md) e [F03](features/F03-two-level-retry.md): stesso pianificatore nel frontend locale e backend. Retry attuale = short-term; dopo l'esaurimento, long-term opt-in con pausa in minuti e numero di ripartenze configurabili, illimitato solo su scelta esplicita.
+- Attesa durevole atomica con tentativo/audit, generazione e claim CAS; niente sola `setTimeout` in RAM. Browser `meta` locale, server contenitore operativo; mai piano eseguibile in ZIP/GitHub/cloud né timer sulle repliche. Annullamento/pausa/cambio autorità invalidano i timer vecchi.
+- Rilasciare lock/lease durante l'attesa e chiudere/contabilizzare i look-ahead; risveglio con controlli completi, stesso task e **runId logico/budget sessione**, non un nuovo `run()` che azzera il cap. Non recuperare a raffica gli intervalli mancati.
+- Non ritentare abort volontari, budget bloccante, permessi/configurazione, contesto, ownership/CAS, quota/checkpoint o blocchi editoriali; non applicare il long-term a PATCH GitHub/lease/update. Usage ignoto resta ignoto, nessun replay cieco dopo crash. La richiesta successiva «Implementare tutto quanto» ha avviato il runtime, non una release.
+
+## Server personale opzionale — ADR 0167 / F02, prima tranche sperimentale
+
+- Dopo la specifica l'autore ha richiesto l'implementazione. Ora esistono host Node, file/vault, admin/API, pairing, primi comandi e repliche, retry e adapter GitHub; [stato reale](docs/personal-server-development.md). **Non presentare il progetto come completo o rilasciato**: cloud multi-PAT, handoff dei libri GitHub e ritorno al locale (l'adozione di un libro locale senza GitHub è a senso unico: il client blocca il libro PRIMA della rete, il server accetta per `handoffId` con ricevuta durevole e un annullamento esige un rifiuto durevole; mai riaprire il libro locale su semplice timeout), intero catalogo remoto, installer, tunnel guidato e updater firmato mancano.
+- Scelta finale dell'autore: **Node.js/TypeScript, non .NET**, motore unico condiviso e adapter browser/server, modalità locale invariata. Chiarimento finale: il server userà **anche il PAT per lease e salvataggi GitHub**, come il client, non soltanto come proxy AI o relay dei salvataggi al browser.
+- Nel futuro sviluppo: una sola autorità per libro, nessun fallback locale su timeout; commit file con libro+audit+outbox/intenti, replica IndexedDB e comandi idempotenti/CAS. Conservare guardie editoriali, consensi, uso incerto, `force:false`, ACK esatto e distanza automatica di due minuti; «ogni turno» accoda, non elimina il rate limit.
+- Admin loopback 24105 separato dall'API proposta 24106, token `apikey` revocabili, credenziali nel vault e consenso esplicito al trasferimento; tunnel dedicato senza modificare quelli altrui; updater con manifest firmato, non URL/script arbitrari. Profili cloud solo piano di controllo, mai manoscritti o token tunnel.
+- **Il motore è un pacchetto fisico**: `src/engine/src/{domain,core,application,infrastructure,testing}`, importato da frontend e server con l'alias `@engine/*` (una sola copia di `zod`; `src/frontend/vite.config.ts`, `src/server/build.mjs`, i tre `tsconfig`). Il motore parla SOLO con `HostRuntime` (`core/host.ts`, installato una volta per processo; senza host `host()` fallisce): niente `window`, `indexedDB`, `localStorage`, `navigator`, `node:*`, `idb`, `fflate`, `react` — `tsconfig` del motore senza DOM e `tests/engine-boundary.test.mjs`. Il browser installa `src/frontend/src/host/browser-host.ts` in `main.tsx` (e nel setup di Vitest, dopo i `vi.mock` del test); il server `createRuntime`. Nuovo comportamento di persistenza = una porta in `HostRuntime` + un caso in `testing/host-contract.ts` eseguito su ENTRAMBI gli host, mai un ramo `if (host)` nel motore. Resta nel frontend ciò che è solo browser: `db.ts`, `crypto.ts`, ZIP, import GitHub in IndexedDB (`github-import.ts`), checkpoint opt-in, conversazioni conservate (`ai-trace-store.ts`), cloud. I test e2e raggiungono i moduli del motore con `window.__engine("domain/types.ts")` (solo dev server, `src/test/dev-hooks.ts`), non con URL `/src/domain/…`. I test del motore che richiedono IndexedDB stanno in `src/frontend/src/engine-on-browser/`. Non usare fake IndexedDB sul server. `executionAuthority` è migrato nel formato libro senza bump DB_VERSION; repliche non avviabili localmente, import come nuova copia revoca l'associazione. Copie/consensi locali `meta` non si trasferiscono.
+- Provare `src/server` con dipendenze dal lock frontend: `npm run typecheck`, `npm run build`, `npm test`. CI Windows/Linux aggiuntiva senza indebolire frontend/EPUBCheck; un test Linux non certifica Windows, servizi, tunnel o release. Nessun commit/push/deploy senza richiesta.
+
 ## Redazione bloccata: revisione stile pull request e delega al direttore — preparazione 0.31.0
 
 - **Pagina Revisioni** (`components/review/BlockedReviewPanel.tsx`, in cima a `ReviewsPage` quando `book.editorialCycle.stage === "blocked"`): elenco passo passo dei rilievi dell'ultima tornata (`domain/blocked-review.ts#blockedReviewItems`: tornata archiviata se il blocco è il limite, tornata corrente se è una regola obbligatoria), proposta del direttore per ognuno, scelta dell'autore (`follow_director | accept_as_is | custom` + nota senza limite nella bozza), «Accetto tutte le proposte del direttore», nota generale. Pulsante rapido dalla Dashboard (`EditorialBoardPanel.onOpenBlockedReview`), badge «!» nel menu e pulsante «Revisioni · decidi» nella barra di stato.
@@ -488,9 +504,9 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 ## Struttura obbligatoria
 
 - `src/frontend/`: React + TypeScript + Vite, shadcn/ui e Tailwind, temi chiaro/scuro, accessibilità e UX mobile.
-- `src/frontend/src/domain/`: tipi, schemi e regole pure per canon, job, revisione, sincronizzazione.
-- `src/frontend/src/application/`: orchestrazione, routing dei modelli, state machine e use case.
-- `src/frontend/src/infrastructure/`: adapter IndexedDB, API OpenAI-compatible, GitHub, Google Drive, Microsoft Graph, Web Crypto.
+- `src/engine/src/domain/` (condiviso da browser e server): tipi, schemi e regole pure per canon, job, revisione, sincronizzazione. `src/frontend/src/domain` non esiste più.
+- `src/frontend/src/application/`: i casi d'uso del solo browser (cloud, modifiche dell'interfaccia, repliche del server). Runner, routing dei modelli, state machine e casi d'uso condivisi stanno in `src/engine/src/application`.
+- `src/frontend/src/infrastructure/`: adapter del browser (IndexedDB, Web Crypto, ZIP, esport, Google Drive, Microsoft Graph). Trasporti AI e protocolli GitHub sono condivisi in `src/engine/src/infrastructure`.
 - `src/frontend/src/components/`, `pages/`: UI e navigazione, senza logica di dominio o token nel rendering.
 - `tests/`: unit test e test e2e. `docs/`: contratti, UX, runbook. `ADR/`: decisioni irreversibili o architetturali. `features/`: requisiti e criteri di accettazione.
 - `.github/workflows/`: CI e Pages; proteggere main.
@@ -527,7 +543,7 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 
 ## GitHub Sync — regole del codice
 
-- Fonte: `ADR/0005-github-manual-sync.md`, `docs/github-sync.md`, issue #3. `src/frontend/src/domain/narrarium.ts` costruisce proiezioni Markdown senza credenziali; `infrastructure/github-sync.ts` implementa Git Data REST.
+- Fonte: `ADR/0005-github-manual-sync.md`, `docs/github-sync.md`, issue #3. `src/engine/src/domain/narrarium.ts` costruisce proiezioni Markdown senza credenziali; `infrastructure/github-sync.ts` implementa Git Data REST.
 - Tutte le chiamate con PAT devono restare su `https://api.github.com`; mai token negli URL, log, tree, commit, ZIP narrativi o errori.
 - Una repository per libro; mai `force push`. Prima scrittura conservativa (nessun book.md preesistente estraneo); update di branch solo con parent SHA originale e `force:false`.
 - Eliminare solo file elencati in manifest precedente; path derivati da slug sicuri, no traversal. Se remote HEAD cambia, bloccare e conservare i dati locali.
@@ -807,7 +823,7 @@ Una SPA React/TypeScript, responsive e local-first, che gestisce autonomamente i
 
 ## Recupero mirato di continuità v0.11.2 (ADR 0035, issue #20)
 
-- `src/frontend/src/domain/continuity-retrieval.ts` calcola sul dispositivo un ranking **deterministico e dichiaratamente NON semantico**: entità esplicite, termini testuali e date fra segmento corrente e scene pubbliche precedenti. Non usa canone privato, segreti, scene future, rete, embeddings o nuove chiamate AI; non memorizza indici persistenti.
+- `src/engine/src/domain/continuity-retrieval.ts` calcola sul dispositivo un ranking **deterministico e dichiaratamente NON semantico**: entità esplicite, termini testuali e date fra segmento corrente e scene pubbliche precedenti. Non usa canone privato, segreti, scene future, rete, embeddings o nuove chiamate AI; non memorizza indici persistenti.
 - Conservare sempre un ancoraggio dal capitolo origine e dall'ultimo predecessore se diversi, poi scegliere scene pertinenti anche **nei capitoli intermedi**. Massimo 4 scene complessive e 2 per capitolo; 1.600 candidati scansionati con priorità a origine/ultimo e successivi recenti, scansione testuale bounded (16.000 caratteri inizio/mezzo/fine per scena) e al massimo 48 termini query. Mai spacciare il punteggio come qualità semantica.
 - Ogni selezione espone `selectionReason`, `matchSignals`, `candidateSceneCount`, `scannedSceneCount`, `unscannedSceneCount`, `omittedSceneCount` e finestre **letterali** di massimo 1.250 caratteri con offset esatto (preferire termini rilevanti nel mezzo per scene lunghe). Se il limite esclude candidati, il prompt e lo storico devono dichiararlo. L'audit salva la selezione di capitolo, non necessariamente ogni estratto visto dal singolo reviewer.
 - Conservare gli stessi ruoli autorizzati di v0.11.1, mai dare retrieval ai 5 lettori ciechi; `finding.evidence` resta **citazione del segmento corrente**. Il giudice può respingere rilievi infondati, e né la selezione né il freeze certificano contraddizioni, eventi semantici o verità storiche. Schema ZIP legacy compatibile e strict sui nuovi contatori.

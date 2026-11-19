@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { LiveAiTrace } from "../infrastructure/ai-observability";
-import type { BookProject } from "../domain/types";
-import { describeHeadline } from "../domain/live-progress";
+import type { LiveAiTrace } from "@engine/infrastructure/ai-observability";
+import type { BookProject } from "@engine/domain/types";
+import { describeHeadline } from "@engine/domain/live-progress";
 import { AiStreamText } from "./AiStreamText";
 import { LiveActionFeed } from "./LiveActionFeed";
 

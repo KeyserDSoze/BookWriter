@@ -1,4 +1,4 @@
-import { normalizeDois, type BibliographicWork } from "../domain/bibliography";
+import { normalizeDois, type BibliographicWork } from "@engine/domain/bibliography";
 
 /** Direct read-only metadata lookup. An abstract or DOI record is never used
  * as evidence that the claims in the underlying paper are true. */

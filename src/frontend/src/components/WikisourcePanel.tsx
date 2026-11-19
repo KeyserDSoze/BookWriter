@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { BookText, ExternalLink, SearchCheck, ShieldAlert } from "lucide-react";
-import type { BookProject, Chapter } from "../domain/types";
+import type { BookProject, Chapter } from "@engine/domain/types";
 import {
   activeWikisourceExcerpts, allWikisourceExcerpts, normalizeWikisourceQueries,
   wikisourceRevisionUrl, hasExactRevisionProof,
-} from "../domain/wikisource-excerpts";
+} from "@engine/domain/wikisource-excerpts";
 import { attachWikisourceResearch } from "../application/wikisource-research";
 import { quarantineWikisourceSource } from "../application/wikisource-audit";
 import { auditStoredWikisourceRevision, type WikisourceAuditResult } from "../infrastructure/wikisource";

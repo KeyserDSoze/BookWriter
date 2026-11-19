@@ -23,6 +23,25 @@ Browser React/Vite (Pages)
 
 Nessun servizio server custom necessario per il primo rilascio. Il processo AI gira in una **pagina in primo piano**; non promettere elaborazioni durante chiusura browser o sospensione mobile. Background worker persistente sarebbe un prodotto/fase separati.
 
+### Server personale opzionale — prima tranche nel sorgente
+
+[ADR 0167](../ADR/0167-optional-personal-server-and-shared-engine.md) e [F02](../features/F02-personal-server.md) definiscono quella fase separata: host Node.js/TypeScript installato dall'autore su Windows/Linux, non un backend di GitHub Pages.
+
+```text
+                         Motore TypeScript unico
+                         dominio + orchestrazione
+                         /                     \
+Browser locale + adapter IDB/lock       Server Node + adapter file/OS/vault
+                                                |
+Browser collegati <-- comandi, snapshot, live ---+
+                                                +--> AI / ricerca consentita
+                                                +--> GitHub (lease + outbox + PAT)
+```
+
+Per i libri affidati, il server diventa archivio operativo; IndexedDB conserva repliche e bozze non confermate. Una sola autorità per libro, handoff esplicito e nessun fallback locale in caso di disconnessione. Il server salva direttamente anche su GitHub dopo i compiti; il browser non è un publisher concorrente. Google/Microsoft restano piano di controllo di connessione, impostazioni e vault, mai dei testi.
+
+Pannello locale 24105, API 24106, file/vault e primi comandi sono implementati in modo sperimentale; il runner è condiviso tramite porte/re-export, non copiato o riscritto in .NET. Estrazione fisica completa, intero catalogo remoto, handoff, cloud multi-PAT, installer, tunnel guidato e updater firmato restano da completare. [Stato reale](personal-server-development.md) · [Contratto completo](personal-server-protocol.md).
+
 ## Struttura del libro (remote canon)
 
 ```text

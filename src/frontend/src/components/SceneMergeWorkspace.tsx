@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GitCompareArrows, Save, Sparkles, XCircle } from "lucide-react";
-import type { AppSettings } from "../domain/types";
-import { routeFor } from "../domain/types";
-import { diffSceneText } from "../domain/scene-diff";
-import type { ConflictUnit } from "../domain/conflicts";
-import type { AcceptedSceneDraft, SceneMergeDraft } from "../domain/scene-merge";
-import type { ConflictReview } from "../infrastructure/conflict-recovery";
+import type { AppSettings } from "@engine/domain/types";
+import { routeFor } from "@engine/domain/types";
+import { diffSceneText } from "@engine/domain/scene-diff";
+import type { ConflictUnit } from "@engine/domain/conflicts";
+import type { AcceptedSceneDraft, SceneMergeDraft } from "@engine/domain/scene-merge";
+import type { ConflictReview } from "@engine/domain/conflicts";
 import {
   generateSceneMergeDraft, listSceneMergeDrafts,
   rejectSceneMergeDraft, saveManualSceneMergeDraft,

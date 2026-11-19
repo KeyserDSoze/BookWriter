@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
+import { AiTraceReadFence } from "@engine/domain/ai-trace-read-fence";
 import { HistoricalReviewPlanPanel } from "./HistoricalReviewPlanPanel";
 import { Button } from "./ui/button";
 import {
   TASK_BOOK_PAIR_LIMIT_BYTES, TASK_BOOK_TOTAL_LIMIT_BYTES,
   type TaskBookCheckpointSummary,
-} from "../domain/task-book-checkpoint";
-import type { NarrativeHistoryImpact } from "../domain/narrative-task-history-impact";
+} from "@engine/domain/task-book-checkpoint";
+import type { NarrativeHistoryImpact } from "@engine/domain/narrative-task-history-impact";
 import {
   inspectTaskBookCheckpoint, inspectNarrativeTaskHistoryImpact,
   loadTaskBookConsent, loadTaskBookInventory,

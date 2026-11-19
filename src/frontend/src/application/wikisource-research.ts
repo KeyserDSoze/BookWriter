@@ -1,9 +1,9 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import { extendWikisourceDossier, normalizeWikisourceQueries } from "../domain/wikisource-excerpts";
-import type { Activity, BookProject } from "../domain/types";
-import { getBook, getDb } from "../infrastructure/db";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import { extendWikisourceDossier, normalizeWikisourceQueries } from "@engine/domain/wikisource-excerpts";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { getLocalBook as getBook, getDb } from "../infrastructure/db";
 import { searchWikisource } from "../infrastructure/wikisource";
 
 export interface WikisourceSearchResult {

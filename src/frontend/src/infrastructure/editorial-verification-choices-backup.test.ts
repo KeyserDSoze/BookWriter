@@ -1,16 +1,16 @@
 import "fake-indexeddb/auto";
 import {beforeEach,describe,expect,it} from "vitest";
 import {strFromU8,strToU8,unzipSync,zipSync} from "fflate";
-import {newBook} from "../domain/types";
+import {newBook} from "@engine/domain/types";
 import {chapterSegments,createEditorialCycle,validateReport,validateJudgment,
-  type EditorialRole,type ChapterEditorialCycle} from "../domain/editorial-board";
+  type EditorialRole,type ChapterEditorialCycle} from "@engine/domain/editorial-board";
 import {buildEditorialVerificationPlan,buildFrozenEditorialVerificationPlan}
-  from "../domain/editorial-verification-plan";
+  from "@engine/domain/editorial-verification-plan";
 import {
   createEditorialVerificationChoice,currentEditorialVerificationChoice,
   createArchivedEditorialVerificationChoice,currentArchivedEditorialVerificationChoice,
   MAX_EDITORIAL_VERIFICATION_CHOICES,
-} from "../domain/editorial-verification-choices";
+} from "@engine/domain/editorial-verification-choices";
 import {getDb,saveBook,listBooks} from "./db";
 import {createBackup,readBackup,importBackup} from "./backup";
 

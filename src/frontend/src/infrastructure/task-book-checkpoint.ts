@@ -1,19 +1,19 @@
-import type { Activity, BookProject } from "../domain/types";
-import { type TaskBookCheckpoint } from "../domain/task-book-checkpoint";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { type TaskBookCheckpoint } from "@engine/domain/task-book-checkpoint";
 import {
   buildHistoricalRewindReviewPlan, snapshotForHistoricalTarget,
   type HistoricalRewindReviewPlan, type HistoricalTarget,
-} from "../domain/historical-rewind-review-plan";
+} from "@engine/domain/historical-rewind-review-plan";
 import {
   estimatedTaskBookBytes, summarizeTaskBookCheckpoint,
   TASK_BOOK_TOTAL_LIMIT_BYTES, validTaskBookUsage, type TaskBookCheckpointSummary,
   type TaskBookUsage,
-} from "../domain/task-book-checkpoint";
+} from "@engine/domain/task-book-checkpoint";
 import { getDb } from "./db";
 import {
   compareNarrativeTaskHistory, type NarrativeHistoryImpact,
-} from "../domain/narrative-task-history-impact";
-import { narrativeBookCopy } from "../domain/task-book-checkpoint";
+} from "@engine/domain/narrative-task-history-impact";
+import { narrativeBookCopy } from "@engine/domain/task-book-checkpoint";
 
 export function taskBookConsentKey(bookId: string): string {
   return "task-book-consent:v1:" + bookId;

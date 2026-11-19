@@ -1,11 +1,11 @@
 import { useMemo, type RefObject } from "react";
 import { History, MessageSquareText, PlayCircle, Square, WandSparkles } from "lucide-react";
-import type { AuthorInterventionScope, BookProject } from "../domain/types";
+import type { AuthorInterventionScope, BookProject } from "@engine/domain/types";
 import {
   INTERVENTION_SCOPE_HELP, INTERVENTION_SCOPE_LABELS, MAX_INTERVENTION_CHARS,
   interventionStatusText, pendingAuthorNotes,
-} from "../domain/author-interventions";
-import { describeNextAutopilotStep } from "../domain/autopilot-step";
+} from "@engine/domain/author-interventions";
+import { describeNextAutopilotStep } from "@engine/domain/autopilot-step";
 import { Button } from "./ui/button";
 
 export type InterventionSubmitMode = "record" | "record_and_continue" | "interrupt_and_record";

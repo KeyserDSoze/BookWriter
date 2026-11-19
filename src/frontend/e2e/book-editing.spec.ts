@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { DEFAULT_SETTINGS } from "../src/domain/types";
+import { DEFAULT_SETTINGS } from "@engine/domain/types";
 
 const nav = (page: Page) => page.getByRole("navigation", {
   name: test.info().project.name === "mobile-chromium" ? "Navigazione mobile" : "Navigazione principale",
@@ -19,7 +19,7 @@ async function seed(page: Page) {
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Le sparizioni");
   await page.getByRole("button", { name: "Crea libro", exact: true }).click();
   await page.evaluate(async ({ defaults }) => {
-    const { knowledgeBook } = await import("/src/domain/__fixtures__/knowledge.ts");
+    const { knowledgeBook } = await (window as any).__engine("domain/__fixtures__/knowledge.ts");
     const { getDb, saveBook, saveSettings } = await import("/src/infrastructure/db.ts");
     const { encryptLocal } = await import("/src/infrastructure/crypto.ts");
     const current = (await (await getDb()).getAll("books"))[0];
@@ -93,7 +93,7 @@ test("review mirata di solo controllo: la esegue l'autopilot, poi il libro torna
   await seed(page);
   await page.evaluate(async () => {
     const { getDb, saveBook } = await import("/src/infrastructure/db.ts");
-    const { editScene } = await import("/src/domain/book-editing.ts");
+    const { editScene } = await (window as any).__engine("domain/book-editing.ts");
     const book = (await (await getDb()).getAll("books"))[0];
     editScene(book, "scene:002:001", { text: "Markus aspetta sul molo al tramonto. Dice di conoscere il Consiglio cittadino." }, { now: new Date().toISOString(), origin: "manual" });
     await saveBook(book, false);
@@ -130,7 +130,7 @@ test("review di una parte delle modifiche: le escluse restano da rivedere; la re
   await seed(page);
   await page.evaluate(async () => {
     const { getDb, saveBook } = await import("/src/infrastructure/db.ts");
-    const { editScene } = await import("/src/domain/book-editing.ts");
+    const { editScene } = await (window as any).__engine("domain/book-editing.ts");
     const book = (await (await getDb()).getAll("books"))[0];
     editScene(book, "scene:002:001", { text: "Markus aspetta sul molo al tramonto. Dice di conoscere il Consiglio cittadino." }, { now: "2026-11-14T10:00:00.000Z", origin: "manual" });
     editScene(book, "scene:002:001", { text: "Markus aspetta sul molo al tramonto, nervoso. Dice di conoscere il Consiglio cittadino." }, { now: "2026-11-14T11:00:00.000Z", origin: "manual" });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
+import { AiTraceReadFence } from "@engine/domain/ai-trace-read-fence";
 import {
   createLocalForkFromVerifiedSafetyBackup, downloadBookSafetyBackup,
   prepareBookSafetyBackup, verifyDownloadedBookSafetyBackup,

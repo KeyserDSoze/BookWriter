@@ -1,7 +1,7 @@
-import type { GitHubRemote } from "../domain/types";
-import { BookRevisionConflict, getBook, listBooks, saveBook } from "../infrastructure/db";
+import type { GitHubRemote } from "@engine/domain/types";
+import { BookRevisionConflict, getLocalBook as getBook, listBooks, saveBook } from "../infrastructure/db";
 import { initializeEmptyGitHubRepository, inspectGitHubSetup } from "../infrastructure/github-setup";
-import { validateRemote } from "../infrastructure/github-sync";
+import { validateRemote } from "@engine/infrastructure/github-sync";
 
 /** Guided connection: writer -> outbox, live revision, conservative destination
  * probe, optional neutral initialization, then CAS. Never publishes a manuscript. */

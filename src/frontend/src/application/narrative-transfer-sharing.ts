@@ -1,8 +1,8 @@
-import type {Activity} from "../domain/types";
+import type {Activity} from "@engine/domain/types";
 import {createNarrativeTransferShareDecision,
   type NarrativeTransferShareDecision,type TransferShareRecipient}
-  from "../domain/narrative-transfer-sharing";
-import {getBook,getDb} from "../infrastructure/db";
+  from "@engine/domain/narrative-transfer-sharing";
+import {getLocalBook as getBook,getDb} from "../infrastructure/db";
 
 /** A new, separate author action is required to send any transfer assessment
  * to an external AI. Old permissions for knowledge quotes do not apply. */

@@ -1,11 +1,11 @@
 import {useMemo,useState} from "react";
-import type {BookProject,Chapter} from "../domain/types";
+import type {BookProject,Chapter} from "@engine/domain/types";
 import {
   buildEditorialDiffLedger,
   type EditorialLedgerTextChange,type EditorialLedgerCheckChange,
   type EditorialLedgerProvenance,type EditorialLedgerObservation,
   type EditorialLedgerFocus,
-} from "../domain/editorial-diff-ledger";
+} from "@engine/domain/editorial-diff-ledger";
 
 const POSITION:Record<EditorialLedgerTextChange,string>={
   first_literal_witness:"Prima occorrenza registrata nel campione",

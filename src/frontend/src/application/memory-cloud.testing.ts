@@ -1,4 +1,4 @@
-import type { CloudFileName } from "../domain/cloud-profile";
+import type { CloudFileName } from "@engine/domain/cloud-profile";
 import { CloudError, type CloudProvider, type CloudSession, type CloudStore } from "../infrastructure/cloud/types";
 
 /** In-memory cloud account with the same version/conflict rules as the real stores. Tests only. */

@@ -13,7 +13,16 @@
     "jsx": "react-jsx",
     "strict": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@engine/*": ["../engine/src/*"],
+      "zod": ["./node_modules/zod"],
+      "zod/*": ["./node_modules/zod/*"],
+      "vitest": ["./node_modules/vitest"],
+      "vitest/*": ["./node_modules/vitest/*"],
+      "fake-indexeddb": ["./node_modules/fake-indexeddb"],
+      "fake-indexeddb/*": ["./node_modules/fake-indexeddb/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../engine/src"]
 }

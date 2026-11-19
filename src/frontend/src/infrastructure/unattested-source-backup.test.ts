@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
 import { describe,expect,it } from "vitest";
 import { strFromU8,strToU8,unzipSync,zipSync } from "fflate";
-import { newBook } from "../domain/types";
-import { sceneTextStamp } from "../domain/narrative-event-decisions";
-import type { EditorialReport,EditorialJudgment } from "../domain/editorial-board";
+import { newBook } from "@engine/domain/types";
+import { sceneTextStamp } from "@engine/domain/narrative-event-decisions";
+import type { EditorialReport,EditorialJudgment } from "@engine/domain/editorial-board";
 import { saveBook } from "./db";
 import { createBackup,readBackup } from "./backup";
 

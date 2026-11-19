@@ -1,5 +1,5 @@
-import { locItemUrl } from "../domain/archival-catalog";
-import type { InstitutionalInspection } from "../domain/institutional-inspection";
+import { locItemUrl } from "@engine/domain/archival-catalog";
+import type { InstitutionalInspection } from "@engine/domain/institutional-inspection";
 
 const MAX_BYTES=240_000;
 const TIMEOUT_MS=12_000;

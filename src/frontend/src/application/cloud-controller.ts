@@ -1,5 +1,5 @@
-import { CLOUD_LIBRARY_FILE, type CloudLibrary, type CloudDevice } from "../domain/cloud-profile";
-import type { BookProject } from "../domain/types";
+import { CLOUD_LIBRARY_FILE, type CloudLibrary, type CloudDevice } from "@engine/domain/cloud-profile";
+import type { BookProject } from "@engine/domain/types";
 import { CloudError, CLOUD_PROVIDER_LABEL, type CloudProvider, type CloudSession } from "../infrastructure/cloud/types";
 import {
   clearCloudLink, clearMicrosoftSession, createCloudLink, getCloudDevice, getCloudLink, loadCloudConfig,

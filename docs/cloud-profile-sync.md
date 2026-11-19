@@ -96,3 +96,11 @@ Con l'accesso scaduto la sincronizzazione cloud si ferma con un messaggio; il la
 ## Per chi pubblica il sito
 
 I Client ID sono identificativi **pubblici**: si passano al build come **variabili** del repository (`GOOGLE_CLIENT_ID`, `MICROSOFT_CLIENT_ID`, facoltativa `MICROSOFT_TENANT`) lette dal workflow Pages, mai come *secret*. I fork e le prove locali possono usare i campi di Impostazioni avanzate. La pagina `public/oauth/microsoft.html` (redirect Microsoft) deve restare raggiungibile a `/oauth/microsoft.html`.
+
+## Connessione al server personale — solo progetto
+
+[ADR 0167](../ADR/0167-optional-personal-server-and-shared-engine.md) prevede di ritrovare anche URL/identità del server e credenziale di connessione su un nuovo PC. La credenziale sarà nel vault con le stesse scelte passphrase oppure «solo account» **non E2EE**, mai accanto alle impostazioni in chiaro. Non sono già campi accettati dal formato corrente: servono schema versionato, migrazione e test.
+
+Il progetto include più PAT nominati e mapping per repository; oggi il profilo ha un solo `githubToken`. L'ordine previsto è profilo cloud → GitHub → server, senza mandare testi in Drive/OneDrive o far regredire il server. Token tunnel, privilegi di aggiornamento, chiavi private del server e token OAuth non vengono condivisi con questa connessione.
+
+Ripristinare una connessione non avvia AI né autorizza l'invio di libri/chiavi a un server appena cambiato. [Dettagli e consensi](personal-server.md) · [Contratto cloud proposto](personal-server-protocol.md).

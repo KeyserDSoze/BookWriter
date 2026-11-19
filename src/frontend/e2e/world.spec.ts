@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { DEFAULT_SETTINGS } from "../src/domain/types";
+import { DEFAULT_SETTINGS } from "@engine/domain/types";
 
 const nav = (page: Page) => page.getByRole("navigation", {
   name: test.info().project.name === "mobile-chromium" ? "Navigazione mobile" : "Navigazione principale",
@@ -31,7 +31,7 @@ async function seed(page: Page, mutate = "") {
   await page.getByRole("textbox", { name: "Titolo provvisorio" }).fill("Le sparizioni");
   await page.getByRole("button", { name: "Crea libro", exact: true }).click();
   const id = await page.evaluate(async ({ defaults, mutate }) => {
-    const { knowledgeBook } = await import("/src/domain/__fixtures__/knowledge.ts");
+    const { knowledgeBook } = await (window as any).__engine("domain/__fixtures__/knowledge.ts");
     const { getDb, saveBook, saveSettings } = await import("/src/infrastructure/db.ts");
     const { encryptLocal } = await import("/src/infrastructure/crypto.ts");
     const current = (await (await getDb()).getAll("books"))[0];

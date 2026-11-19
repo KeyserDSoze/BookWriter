@@ -1,0 +1,13 @@
+{
+  "name": "bookwriter-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "typecheck": "node ../frontend/node_modules/typescript/bin/tsc -p tsconfig.json",
+    "build": "node build.mjs",
+    "start": "node dist/server.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

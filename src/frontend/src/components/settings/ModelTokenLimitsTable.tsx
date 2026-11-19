@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { EndpointProfile } from "../../domain/types";
-import { MAX_MODEL_TOKENS, MIN_MODEL_TOKENS, declaredModelTokenLimits, isModelTokenCount, withModelTokenLimits } from "../../domain/model-token-limits";
+import type { EndpointProfile } from "@engine/domain/types";
+import { MAX_MODEL_TOKENS, MIN_MODEL_TOKENS, declaredModelTokenLimits, isModelTokenCount, withModelTokenLimits } from "@engine/domain/model-token-limits";
 
 type Field = "inputTokens" | "outputTokens";
 

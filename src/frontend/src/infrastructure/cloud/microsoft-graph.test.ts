@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CLOUD_LIBRARY_FILE, CLOUD_PROFILE_FILE, type CloudFileName } from "../../domain/cloud-profile";
+import { CLOUD_LIBRARY_FILE, CLOUD_PROFILE_FILE, type CloudFileName } from "@engine/domain/cloud-profile";
 import {
   assertMicrosoftConfig, buildAuthorizeUrl, connectMicrosoft, createGraphStore, describeMicrosoftAccount,
   MICROSOFT_SCOPES, pkceChallenge, refreshMicrosoft, OAUTH_CHANNEL,

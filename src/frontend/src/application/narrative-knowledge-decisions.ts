@@ -1,7 +1,7 @@
-import type { Activity } from "../domain/types";
+import type { Activity } from "@engine/domain/types";
 import { createNarrativeKnowledgeDecision,
-  type NarrativeKnowledgeDecision } from "../domain/narrative-knowledge-decisions";
-import { getBook,getDb } from "../infrastructure/db";
+  type NarrativeKnowledgeDecision } from "@engine/domain/narrative-knowledge-decisions";
+import { getLocalBook as getBook,getDb } from "../infrastructure/db";
 
 /** Explicit local author action. No AI calls, canon update, or automatic push. */
 export async function recordNarrativeKnowledgeDecision(

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import type { AppSettings, BookProject, TaskKind, TaskReasoning } from "../../domain/types";
-import { routeFor } from "../../domain/types";
-import { declaredModelCapabilities } from "../../domain/model-capabilities";
-import { reasoningSupport } from "../../domain/model-reasoning";
+import type { AppSettings, BookProject, TaskKind, TaskReasoning } from "@engine/domain/types";
+import { routeFor } from "@engine/domain/types";
+import { declaredModelCapabilities } from "@engine/domain/model-capabilities";
+import { reasoningSupport } from "@engine/domain/model-reasoning";
 import { ReasoningSelect } from "../ReasoningSelect";
 import { Button } from "../ui/button";
 import { ModelPicker } from "./ModelPicker";

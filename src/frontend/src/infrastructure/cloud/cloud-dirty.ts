@@ -1,5 +1,5 @@
-import { cloudSettingsSignature } from "../../domain/cloud-profile";
-import type { AppSettings } from "../../domain/types";
+import { cloudSettingsSignature } from "@engine/domain/cloud-profile";
+import type { AppSettings } from "@engine/domain/types";
 
 /** Marks the cloud profile as having local changes. It runs INSIDE the same
  * IndexedDB transaction that stores the settings, so an edit can never be saved

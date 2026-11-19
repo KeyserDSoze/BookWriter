@@ -4,6 +4,16 @@
 
 > Stato: **prima applicazione local-first e in evoluzione**. Le funzionalità descritte sono obiettivi di prodotto, non ancora un'applicazione pronta per la produzione.
 
+## In sviluppo: retry a due livelli e server personale opzionale
+
+**Preparazione locale non rilasciata:** retry long-term configurabili e durevoli, host **Node.js/TypeScript** che riusa il runner del browser, archivio file, vault, admin **24105**, API **24106**, pairing e primi comandi/repliche client. Il server usa anche PAT, lease e salvataggi GitHub. La modalità locale resta indipendente.
+
+**Non è ancora la feature completa:** trasferimenti di autorità, tutti i comandi editoriali, connessioni cloud/multi-PAT, riallineamento automatico, installer, tunnel guidato e updater firmato restano da completare. Nessun installer/download è pubblicato. [Stato reale e prova da sorgente](docs/personal-server-development.md).
+
+[Progetto e flussi](docs/personal-server.md) · [Motore e protocollo](docs/personal-server-protocol.md) · [ADR 0167](ADR/0167-optional-personal-server-and-shared-engine.md) · [Piano in otto tranche e accettazione F02](features/F02-personal-server.md).
+
+**Implementazione locale in preparazione per entrambi gli ambienti:** retry **short-term** ravvicinati e retry **long-term** dopo una pausa configurabile in minuti, con stato persistente, annullamento e budget della stessa sessione. Non ancora rilasciata: [specifica](docs/retry-policy.md), [ADR 0168](ADR/0168-short-and-long-term-retry.md), [F03](features/F03-two-level-retry.md).
+
 ## Funzionalità disponibili
 
 - **Salvataggio continuo su GitHub (0.30.0).** Il libro si salva su GitHub com'è, anche a metà lavoro (capitolo non congelato, revisione in corso, mondo, registro dei compiti), dopo ogni compito dell'autopilot e quando si ferma; «Salva ora su GitHub» lo fa a richiesta. Così lo riprendi uguale su un altro PC. Limite: un'operazione da 12 MiB al massimo ([dettagli](ADR/0165-continuous-github-save-of-work-in-progress.md)).

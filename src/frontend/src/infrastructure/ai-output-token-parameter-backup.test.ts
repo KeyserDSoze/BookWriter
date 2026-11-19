@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { DEFAULT_SETTINGS, newBook } from "../domain/types";
+import { DEFAULT_SETTINGS, newBook } from "@engine/domain/types";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { encryptLocal } from "./crypto";
 import { getDb, loadSettings, saveBook, saveSettings } from "./db";

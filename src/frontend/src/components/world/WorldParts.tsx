@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Flag, History, MapPin, Package, Pencil, Plus, Users } from "lucide-react";
-import type { BookProject } from "../../domain/types";
-import { ATTRIBUTE_FIELDS, ENTITY_LABELS, MEMORY_FOLDER, NARRATION_LABELS, STANCE_LABELS, type EntityType, type KnowledgeEntity, type KnowledgeEvent } from "../../domain/knowledge";
-import { dependentEvents, entityReferences, entityState, eventState, STATE_LABELS, timelineOrders, type NarrativeState, type SceneRef } from "../../domain/knowledge-index";
-import { attributeLabel } from "../../domain/knowledge-markdown";
+import type { BookProject } from "@engine/domain/types";
+import { ATTRIBUTE_FIELDS, ENTITY_LABELS, MEMORY_FOLDER, NARRATION_LABELS, STANCE_LABELS, type EntityType, type KnowledgeEntity, type KnowledgeEvent } from "@engine/domain/knowledge";
+import { dependentEvents, entityReferences, entityState, eventState, STATE_LABELS, timelineOrders, type NarrativeState, type SceneRef } from "@engine/domain/knowledge-index";
+import { attributeLabel } from "@engine/domain/knowledge-markdown";
 import { shiftEvent } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge, EmptyState, Segmented } from "../ui/primitives";

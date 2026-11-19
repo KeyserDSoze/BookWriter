@@ -1,28 +1,15 @@
-import type { Activity, BookProject, GitHubRemote } from "../domain/types";
-import { assertDraftMatchesReview, validateSceneProposal, type AcceptedSceneDraft, type SceneMergeDraft } from "../domain/scene-merge";
+import type { Activity, BookProject, GitHubRemote } from "@engine/domain/types";
+import { assertDraftMatchesReview, validateSceneProposal, type AcceptedSceneDraft, type SceneMergeDraft } from "@engine/domain/scene-merge";
 import {
   assembleBookResolution, compareBookVersions,
-  type ConflictUnit, type ResolutionChoice,
-} from "../domain/conflicts";
+  type ConflictReview, type ConflictUnit, type ResolutionChoice,
+} from "@engine/domain/conflicts";
 import { getBook, getDb, listActivities } from "./db";
+import { assertLocalBook } from "@engine/domain/execution-authority";
 import {
   confirmGitHubHead, readGitHubSnapshot, readGitHubSnapshotAt,
   RemoteConflict, type RemoteBookSnapshot,
-} from "./github-sync";
-
-export interface ConflictReview {
-  bookId: string;
-  localUpdatedAt: string;
-  localSyncedCommit?: string;
-  headSha: string;
-  baselineSha?: string;
-  baseAvailable: boolean;
-  baselineWarning?: string;
-  local: BookProject;
-  remote: BookProject;
-  remoteActivities: Activity[];
-  units: ConflictUnit[];
-}
+} from "@engine/infrastructure/github-sync";
 
 /** Read-only inspection. Never mutates the book, remote repo or sync outbox. */
 export async function inspectBookConflict(bookId: string): Promise<ConflictReview> {
@@ -78,6 +65,7 @@ function createSafetyCopy(
     id: crypto.randomUUID(),
     title: source.title + " (copia " + kind + " " + now.slice(0, 10) + ")",
     remote: undefined,
+    executionAuthority: undefined,
     status: "paused",
     createdAt: now, updatedAt: now,
     previousError: "Copia di sicurezza generata dal confronto GitHub" +
@@ -131,6 +119,7 @@ export async function applyBookConflictResolution(
   review: ConflictReview, selections: Record<string, ResolutionChoice>,
   acceptedDrafts: Record<string, AcceptedSceneDraft> = {},
 ): Promise<ConflictResolutionResult> {
+  assertLocalBook(review.local); assertLocalBook(review.remote);
   const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
   if (!locks?.request)
     throw new Error("Web Locks non disponibile: non è sicuro applicare il ripristino in questo browser.");
@@ -139,6 +128,7 @@ export async function applyBookConflictResolution(
     return locks.request("bookwriter:github-outbox", { ifAvailable: true }, async outboxLock => {
       if (!outboxLock) throw new RemoteConflict("Sincronizzazione GitHub in corso. Riprova dopo il checkpoint.");
       const before = await getBook(review.bookId);
+      if (before) assertLocalBook(before);
       if (!before?.remote || !repositoryMatches(before.remote, review.local.remote) ||
           before.status === "running" || before.updatedAt !== review.localUpdatedAt ||
           before.remote.lastSyncedCommit !== review.localSyncedCommit) {
@@ -193,6 +183,7 @@ export async function applyBookConflictResolution(
       const tx = db.transaction(["books", "activities", "outbox", "mergeDrafts"], "readwrite");
       const books = tx.objectStore("books");
       const actual = await books.get(review.bookId) as BookProject | undefined;
+      if (actual) assertLocalBook(actual);
       if (!actual?.remote || actual.status === "running" ||
           actual.updatedAt !== review.localUpdatedAt ||
           actual.remote.lastSyncedCommit !== review.localSyncedCommit ||

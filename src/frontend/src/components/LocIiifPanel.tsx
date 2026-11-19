@@ -1,9 +1,9 @@
 import {useState} from "react";
 import {Image as ImageIcon,ExternalLink} from "lucide-react";
-import type {BookProject,Chapter} from "../domain/types";
-import {activeLocScanCollations} from "../domain/loc-scan-collation";
-import {activeLocOcrExcerpts} from "../domain/loc-ocr";
-import {activeLocIiifReferences,type LocIiifCandidate} from "../domain/loc-iiif";
+import type {BookProject,Chapter} from "@engine/domain/types";
+import {activeLocScanCollations} from "@engine/domain/loc-scan-collation";
+import {activeLocOcrExcerpts} from "@engine/domain/loc-ocr";
+import {activeLocIiifReferences,type LocIiifCandidate} from "@engine/domain/loc-iiif";
 import {listLocIiifCandidates} from "../infrastructure/loc-iiif";
 import {attachLocIiifReference} from "../application/loc-iiif";
 import {Button} from "./ui/button";

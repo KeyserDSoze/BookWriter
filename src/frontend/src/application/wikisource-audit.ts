@@ -1,9 +1,10 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import { activeWikisourceExcerpts } from "../domain/wikisource-excerpts";
-import type { Activity, BookProject } from "../domain/types";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import { activeWikisourceExcerpts } from "@engine/domain/wikisource-excerpts";
+import type { Activity, BookProject } from "@engine/domain/types";
 import { getDb } from "../infrastructure/db";
+import { assertLocalBook } from "@engine/domain/execution-authority";
 
 /** Explicit author decision AFTER remote mismatch. This does not delete source
  * snapshots or old reports, but removes the compromised ID from future review.
@@ -21,6 +22,7 @@ export async function quarantineWikisourceSource(
       const db=await getDb();
       const tx=db.transaction(["books","activities","outbox"],"readwrite");
       const book=await tx.objectStore("books").get(bookId) as BookProject|undefined;
+      if (book) assertLocalBook(book);
       if(!book || book.updatedAt!==expectedUpdatedAt || book.status==="running" ||
         !!book.editorialCycle){
         await tx.done;

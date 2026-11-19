@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardCheck, ExternalLink, ListChecks, Play, ShieldAlert, SkipForward, XCircle } from "lucide-react";
-import type { BookProject } from "../../domain/types";
+import type { BookProject } from "@engine/domain/types";
 import { CHANGE_KIND_LABELS, currentStamp, findScene, pendingElements, REVIEW_STATE_LABELS, REVIEW_STATE_TONES,
-  type EditTarget, type PendingElement } from "../../domain/book-edits";
+  type EditTarget, type PendingElement } from "@engine/domain/book-edits";
 import { activeManualReview, estimateBoardCalls, estimateReviewCalls, REVIEW_ENGINE_LABELS, REVIEW_ENGINES, REVIEW_MODE_LABELS, REVIEW_MODES, REVIEW_SCOPE_LABELS, REVIEW_SCOPES,
-  boardReviewChapters, type ManualReview, type ReviewEngine, type ReviewMode, type ReviewScope, type ReviewUnit } from "../../domain/manual-review";
-import { describeManualReview, MAX_REVIEW_CORRECTIONS } from "../../domain/manual-review-flow";
-import { ENTITY_LABELS } from "../../domain/knowledge";
+  boardReviewChapters, type ManualReview, type ReviewEngine, type ReviewMode, type ReviewScope, type ReviewUnit } from "@engine/domain/manual-review";
+import { describeManualReview, MAX_REVIEW_CORRECTIONS } from "@engine/domain/manual-review-flow";
+import { ENTITY_LABELS } from "@engine/domain/knowledge";
 import { cancelManualReview, decideReviewProposal, requestManualReview } from "../../application/manual-review";
 import { skipElementReview } from "../../application/book-editing";
 import { Button } from "../ui/button";

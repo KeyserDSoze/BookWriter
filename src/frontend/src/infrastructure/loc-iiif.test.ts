@@ -1,8 +1,8 @@
 import {afterEach,describe,expect,it,vi} from "vitest";
 import {listLocIiifCandidates,inspectLocIiif} from "./loc-iiif";
-import {trustedLocIiifInfoUrl} from "../domain/loc-iiif";
-import type {LocOcrExcerpt} from "../domain/loc-ocr";
-import type {LocScanCollation} from "../domain/loc-scan-collation";
+import {trustedLocIiifInfoUrl} from "@engine/domain/loc-iiif";
+import type {LocOcrExcerpt} from "@engine/domain/loc-ocr";
+import type {LocScanCollation} from "@engine/domain/loc-scan-collation";
 const at="2026-11-06T11:00:00.000Z",hash="a".repeat(64);
 const infoUrl="https://tile.loc.gov/image-services/iiif/service:tests:telegraph-page/info.json";
 const source:LocOcrExcerpt={

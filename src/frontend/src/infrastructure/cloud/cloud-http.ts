@@ -1,4 +1,4 @@
-import { MAX_CLOUD_FILE_BYTES } from "../../domain/cloud-profile";
+import { MAX_CLOUD_FILE_BYTES } from "@engine/domain/cloud-profile";
 import { CloudError } from "./types";
 
 export interface CloudRequest {

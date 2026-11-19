@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { BookOpenCheck, ExternalLink, Lightbulb, SearchCheck, ShieldAlert } from "lucide-react";
-import type { BookProject, Chapter } from "../domain/types";
-import { activeHistoricalSources, normalizeResearchQueries } from "../domain/historical-research";
-import { proposeHistoricalQueriesLocally } from "../domain/historical-query-proposals";
+import type { BookProject, Chapter } from "@engine/domain/types";
+import { activeHistoricalSources, normalizeResearchQueries } from "@engine/domain/historical-research";
+import { proposeHistoricalQueriesLocally } from "@engine/domain/historical-query-proposals";
 import { researchHistoricalChapter } from "../application/historical-research";
 import { Button } from "./ui/button";
 

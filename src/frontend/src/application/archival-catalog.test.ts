@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { newBook, type BookProject } from "../domain/types";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { newBook, type BookProject } from "@engine/domain/types";
 import { getBook, getDb, listActivities, saveBook } from "../infrastructure/db";
 
 const {lookupMock}=vi.hoisted(()=>({lookupMock:vi.fn()}));

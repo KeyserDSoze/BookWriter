@@ -1,11 +1,11 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { unzipSync, strFromU8 } from "fflate";
-import { newBook, type Activity, type BookProject } from "../domain/types";
+import { newBook, type Activity, type BookProject } from "@engine/domain/types";
 import {
   estimateNextProsePairBytes, estimateProsePayloadBytes,
   PROSE_MIB, TaskProseQuotaExceeded,
-} from "../domain/task-prose-storage";
+} from "@engine/domain/task-prose-storage";
 import { getBook, getDb, saveBook, saveBookAndActivity } from "./db";
 import { createBackup } from "./backup";
 import {

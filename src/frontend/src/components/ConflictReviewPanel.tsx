@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, GitCompareArrows, GitBranch, Save, ShieldCheck } from "lucide-react";
-import type { AppSettings, BookProject } from "../domain/types";
-import type { AcceptedSceneDraft } from "../domain/scene-merge";
+import type { AppSettings, BookProject } from "@engine/domain/types";
+import type { AcceptedSceneDraft } from "@engine/domain/scene-merge";
 import { SceneMergeWorkspace } from "./SceneMergeWorkspace";
 import {
   shortConflictPreview,
-  type ConflictUnit, type ResolutionChoice,
-} from "../domain/conflicts";
+  type ConflictReview, type ConflictUnit, type ResolutionChoice,
+} from "@engine/domain/conflicts";
 import {
   applyBookConflictResolution, inspectBookConflict, preserveRemoteVersion,
-  type ConflictReview,
 } from "../infrastructure/conflict-recovery";
 import { Button } from "./ui/button";
 

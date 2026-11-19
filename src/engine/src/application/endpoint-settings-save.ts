@@ -1,0 +1,100 @@
+import type { AppSettings, EncryptedSecret } from "../domain/types";
+import { chatOutputTokenParameter, endpointAuthMode, normalizeEndpoint } from "../infrastructure/ai";
+import { chatHeaderTimeoutSeconds } from "../infrastructure/ai-header-timeout";
+import { chatReasoningEffort, chatStreamMode, chatStreamTimeoutSeconds } from "../infrastructure/ai-stream";
+import { lmStudioNativeProtocol,lmStudioNativeEndpoint,lmStudioNativeReasoning } from "../infrastructure/lmstudio-native";
+import { assertModelCapabilitySettings } from "../domain/model-capabilities";
+import { structuredOutputMode } from "../domain/structured-output";
+import { assertModelTokenLimitSettings } from "../domain/model-token-limits";
+import { validateTaskReasoningOverrides } from "../domain/task-reasoning";
+import { readLongTermRetry } from "../core/retry-policy";
+
+export interface EndpointSettingsSnapshot {
+  settings: AppSettings;
+  keyDrafts: Record<string, string>;
+}
+
+export class StaleEndpointSettingsSave extends Error {
+  readonly superseded: boolean;
+  constructor(superseded: boolean) {
+    super(superseded
+      ? "Salvataggio precedente superato da una richiesta più recente."
+      : "Impostazioni cambiate durante la cifratura o il salvataggio: modifica non salvata. Controlla i campi e premi di nuovo Salva impostazioni.");
+    this.name = "StaleEndpointSettingsSave";
+    this.superseded = superseded;
+  }
+}
+
+/** Validate every declared setting before any encryption, persistence or network use.
+ * Also applied to profiles read from the cloud, which are untrusted input. */
+export function verifyEndpointSettings(settings: AppSettings) {
+  assertModelCapabilitySettings(settings);
+  assertModelTokenLimitSettings(settings);
+  validateTaskReasoningOverrides(settings.taskReasoningEfforts);
+  return settings.endpoints.map(profile => {
+    readLongTermRetry(profile.longTermRetry);
+    const baseUrl = normalizeEndpoint(profile.baseUrl);
+    chatHeaderTimeoutSeconds(profile.headerTimeoutSeconds);
+    chatOutputTokenParameter(profile.outputTokenParameter);
+    structuredOutputMode(profile.structuredOutput);
+    chatReasoningEffort(profile.reasoningEffort);
+    chatStreamMode(profile.streamMode);
+    chatStreamTimeoutSeconds(profile.streamTimeoutSeconds);
+    if(lmStudioNativeProtocol(profile.apiProtocol)==="lmstudio_native"){
+      lmStudioNativeEndpoint(baseUrl);
+      if(profile.reasoningEffort!==undefined)
+        lmStudioNativeReasoning(chatReasoningEffort(profile.reasoningEffort));
+    }
+    const authMode = endpointAuthMode(profile.authMode, baseUrl);
+    return { profile, baseUrl, authMode };
+  });
+}
+
+/** Intra-tab optimistic fencing for explicit endpoint-settings Save.
+ * React state is replaced immutably; compare exact object identity and
+ * draft identity instead of persisting any plaintext-key fingerprint.
+ * Persistence must recheck after opening IndexedDB, just before its write. */
+export class EndpointSettingsSaveCoordinator {
+  private latest = 0;
+
+  async save(
+    snapshot: EndpointSettingsSnapshot,
+    readCurrent: () => EndpointSettingsSnapshot,
+    encrypt: (value: string) => Promise<EncryptedSecret>,
+    persist: (next: AppSettings, isCurrent: () => boolean) => Promise<void>,
+    onSaved: (next: AppSettings) => void,
+  ): Promise<void> {
+    const attempt = ++this.latest;
+    const isCurrent = () => {
+      const current = readCurrent();
+      return attempt === this.latest &&
+        current.settings === snapshot.settings &&
+        current.keyDrafts === snapshot.keyDrafts;
+    };
+    const assertCurrent = () => {
+      if (!isCurrent()) throw new StaleEndpointSettingsSave(attempt !== this.latest);
+    };
+    try {
+      // Validate all declared model tags, defaults and endpoint profiles before
+      // starting any encryption.
+      const verified = verifyEndpointSettings(snapshot.settings);
+      const endpoints = await Promise.all(verified.map(async ({ profile, baseUrl, authMode }) => {
+        const draft = snapshot.keyDrafts[profile.id];
+        return {
+          ...profile, baseUrl,
+          secret: authMode === "none" ? null : draft ? await encrypt(draft) : profile.secret,
+        };
+      }));
+      assertCurrent();
+      const next = { ...snapshot.settings, endpoints };
+      await persist(next, isCurrent);
+      // Edits during the IDB write are still unsaved: do not lose new drafts.
+      assertCurrent();
+      // No await between this last check and the React/ref updates.
+      onSaved(next);
+    } catch (error) {
+      if (!isCurrent()) throw new StaleEndpointSettingsSave(attempt !== this.latest);
+      throw error;
+    }
+  }
+}

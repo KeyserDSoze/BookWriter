@@ -8,6 +8,10 @@ Il pannello **Fermo per un errore** ora spiega **Cosa significa** e **Cosa fare*
 
 Durante un retry automatico nella stessa sessione, se la risposta è stata scartata dal validatore il nuovo prompt riporta il motivo e chiede di rispettare formato e citazione letterale. Non si passano rapporti fra revisori e non si indeboliscono i gate. Errori di rete non diventano falsi errori di contenuto. Errori Zod/JSON hanno messaggi leggibili senza blocchi tecnici. Ogni tentativo può costare e può fallire di nuovo. Un default globale vuoto non produce più un avviso se ogni task ha già una route effettiva. [ADR 0157](../ADR/0157-explained-errors-and-corrective-retry.md).
 
+### In progetto: short-term e long-term retry
+
+Il retry ravvicinato è chiamato **short-term**. In preparazione locale, il nuovo **long-term** permette dopo l'esaurimento di attendere minuti configurabili e riprovare lo stesso compito, con limite dei cicli o ripetizione illimitata espliciti, contatori/scadenza e annullamento. Stessa politica nel browser e nell'host Node sperimentale, budget della sessione non azzerato e nessun superamento dei blocchi di sicurezza. Non è ancora una release. [Specifica](retry-policy.md) · [ADR 0168](../ADR/0168-short-and-long-term-retry.md).
+
 ## Le azioni del modello, mentre le compie — 0.16.0
 
 Oltre al testo che scorre, ora vedi **cosa sta facendo**. Quasi tutte le risposte che decidono qualcosa sono un elenco di piccole azioni: BookWriter le legge **mentre arrivano** e, appena una è completa, la mostra come scheda. Compaiono, nel riquadro in basso a destra e in Dashboard/Attività:

@@ -1,8 +1,8 @@
-import type { Activity } from "../domain/types";
-import { forceCloseCycle } from "../domain/editorial-board";
-import type { BlockedReviewDraft, ItemChoice } from "../domain/blocked-review";
-import { emptyDraft } from "../domain/blocked-review";
-import { BookRevisionConflict, getBook, getDb, saveBookAndActivity } from "../infrastructure/db";
+import type { Activity } from "@engine/domain/types";
+import { forceCloseCycle } from "@engine/domain/editorial-board";
+import type { BlockedReviewDraft, ItemChoice } from "@engine/domain/blocked-review";
+import { emptyDraft } from "@engine/domain/blocked-review";
+import { BookRevisionConflict, getLocalBook as getBook, getDb, saveBookAndActivity } from "../infrastructure/db";
 
 const CHOICES: readonly ItemChoice[] = ["follow_director", "accept_as_is", "custom"];
 const draftKey = (bookId: string, chapterId: string, round: number) => `blocked-review:v1:${bookId}:${chapterId}:${round}`;

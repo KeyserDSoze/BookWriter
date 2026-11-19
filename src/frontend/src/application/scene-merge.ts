@@ -1,18 +1,18 @@
-import type { Activity, BookProject } from "../domain/types";
-import { routeFor } from "../domain/types";
-import { preflightBookAiBudget, snapshotPriceRate } from "../domain/ai-budget";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { routeFor } from "@engine/domain/types";
+import { preflightBookAiBudget, snapshotPriceRate } from "@engine/domain/ai-budget";
 import {
   assertDraftMatchesReview, buildSceneMergePrompt,
   validateSceneProposal, type SceneMergeDraft,
-} from "../domain/scene-merge";
-import type { ConflictReview } from "../infrastructure/conflict-recovery";
-import { callModel } from "../infrastructure/ai";
-import { declaredModelTokenLimits, effectiveOutputTokens } from "../domain/model-token-limits";
-import { assertPromptWithinDeclaredInput } from "./context-guard";
-import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
-import { confirmGitHubHead, RemoteConflict } from "../infrastructure/github-sync";
-import { getBook, getDb, listActivities, loadSettings, saveActivity } from "../infrastructure/db";
-import { withWriterGuard } from "./writer-guard";
+} from "@engine/domain/scene-merge";
+import type { ConflictReview } from "@engine/domain/conflicts";
+import { callModel } from "@engine/infrastructure/ai";
+import { declaredModelTokenLimits, effectiveOutputTokens } from "@engine/domain/model-token-limits";
+import { assertPromptWithinDeclaredInput } from "@engine/application/context-guard";
+import { keepObservedUsageOnRejectedReply } from "@engine/infrastructure/ai-provider-error";
+import { confirmGitHubHead, RemoteConflict } from "@engine/infrastructure/github-sync";
+import { getLocalBook as getBook, getDb, listActivities, loadSettings, saveActivity } from "../infrastructure/db";
+import { withWriterGuard } from "@engine/application/writer-guard";
 
 export async function listSceneMergeDrafts(
   review: ConflictReview, chapterId: string, sceneId: string,

@@ -1,7 +1,7 @@
-import type { Activity } from "../domain/types";
+import type { Activity } from "@engine/domain/types";
 import { createNarrativeAliasDecision, type NarrativeAliasDecision }
-  from "../domain/narrative-alias-decisions";
-import { getBook, getDb } from "../infrastructure/db";
+  from "@engine/domain/narrative-alias-decisions";
+import { getLocalBook as getBook, getDb } from "../infrastructure/db";
 
 /** Author-only annotation, not an identity fact or automatic change to narrative memory. */
 export async function recordNarrativeAliasDecision(

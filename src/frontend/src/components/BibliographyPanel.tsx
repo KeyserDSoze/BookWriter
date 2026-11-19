@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BookMarked, ExternalLink, SearchCheck, ShieldAlert } from "lucide-react";
-import { normalizeDois, activeBibliography } from "../domain/bibliography";
-import type { BookProject, Chapter } from "../domain/types";
+import { normalizeDois, activeBibliography } from "@engine/domain/bibliography";
+import type { BookProject, Chapter } from "@engine/domain/types";
 import { attachBibliographyToChapter } from "../application/historical-bibliography";
 import { Button } from "./ui/button";
 

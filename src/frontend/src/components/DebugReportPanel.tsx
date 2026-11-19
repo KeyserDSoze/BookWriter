@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Bug, Check, Copy, RefreshCw } from "lucide-react";
-import type { Activity, BookProject, EndpointProfile } from "../domain/types";
-import { buildDebugReport } from "../domain/debug-report";
-import { loadAiTrace } from "../infrastructure/ai-observability";
+import type { Activity, BookProject, EndpointProfile } from "@engine/domain/types";
+import { buildDebugReport } from "@engine/domain/debug-report";
+
 import { Button } from "./ui/button";
+import { loadAiTrace } from "../infrastructure/ai-trace-store";
 
 /** A ready-to-paste prompt with the book state and the latest errors, for the developer. Built on the device, sent nowhere. */
 export function DebugReportPanel({ book, activities, endpoints, version }: { book: BookProject; activities: Activity[]; endpoints: EndpointProfile[]; version: string }) {

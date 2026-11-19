@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { AppSettings, BookProject, GitHubRemote } from "../domain/types";
+import type { AppSettings, BookProject, GitHubRemote } from "@engine/domain/types";
 import { connectGitHubBook } from "../application/github-connect";
 import { discoverGitHubRepositories, inspectGitHubSetup, type GitHubDestination, type GitHubRepository } from "../infrastructure/github-setup";
 import { getBook } from "../infrastructure/db";
-import { importGitHubBook, importGitHubMarkdownCopy } from "../infrastructure/github-sync";
-import { githubPublicationBlocker } from "../domain/github-publication";
+
+import { githubPublicationBlocker } from "@engine/domain/github-publication";
 import { Button } from "./ui/button";
+import { importGitHubBook, importGitHubMarkdownCopy } from "../infrastructure/github-import";
 
 export function GitHubConnectionPicker({ book, token, request, onRefresh, onSelectBook, onNewBook, onConnected }: {
   book?: BookProject; token: AppSettings["githubToken"]; request: number;

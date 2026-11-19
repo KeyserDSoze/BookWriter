@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, type EndpointProfile } from "../domain/types";
+import { DEFAULT_SETTINGS, type EndpointProfile } from "@engine/domain/types";
 import { isCurrentModelInventoryRequest } from "./model-inventory";
 
 function fixture() {

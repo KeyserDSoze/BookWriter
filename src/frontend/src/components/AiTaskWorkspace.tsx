@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { Activity, BookProject } from "../domain/types";
+import type { Activity, BookProject } from "@engine/domain/types";
 import { RewindSafetyBackupPanel } from "./RewindSafetyBackupPanel";
 import { TaskBookHistoryPanel } from "./TaskBookHistoryPanel";
-import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
+import { AiTraceReadFence } from "@engine/domain/ai-trace-read-fence";
 import {
   compareBookStructure, type TaskStructuralCheckpoint,
-} from "../domain/task-structural-checkpoint";
+} from "@engine/domain/task-structural-checkpoint";
 import { loadTaskStructuralCheckpoint } from "../infrastructure/task-structural-checkpoint";
-import { compareCanonProse, type TaskProseCheckpoint } from "../domain/task-prose-checkpoint";
+import { compareCanonProse, type TaskProseCheckpoint } from "@engine/domain/task-prose-checkpoint";
 import { CanonProseEditorialDiff } from "./CanonProseEditorialDiff";
-import { validProseLimitMiB, PROSE_MIB } from "../domain/task-prose-storage";
+import { validProseLimitMiB, PROSE_MIB } from "@engine/domain/task-prose-storage";
 import {
   deleteSelectedTaskProse, loadTaskProseInventory, setTaskProseLimit,
   wasTaskProseManuallyRemoved, type TaskProseStorageInventory,
@@ -19,19 +19,18 @@ import {
 } from "../infrastructure/task-prose-checkpoint";
 import {
   analyzeRewindPreflight, type RewindPreflightBook,
-} from "../domain/rewind-preflight";
+} from "@engine/domain/rewind-preflight";
 import {
   completedTaskDurationSeconds, estimatedTaskCostEur, filterTaskTimeline,
   groupTaskTimelineByRun, resolveTaskFocus,
   formatTaskDuration, summarizeTaskTimeline,
   type TimelineOrder, type TimelineStatus,
-} from "../domain/task-timeline";
-import {
-  aiInspectionGeneration, loadAiTrace, subscribeLiveAi, type AiLocalTrace, type LiveAiTrace,
-} from "../infrastructure/ai-observability";
+} from "@engine/domain/task-timeline";
+import { aiInspectionGeneration, subscribeLiveAi, type AiLocalTrace, type LiveAiTrace } from "@engine/infrastructure/ai-observability";
 import { LiveTaskStream } from "./LiveTaskStream";
 import { AiRequestTrace } from "./AiRequestTrace";
 import { Button } from "./ui/button";
+import { loadAiTrace } from "../infrastructure/ai-trace-store";
 
 interface Props {
   book?: RewindPreflightBook & Pick<BookProject, "updatedAt">;

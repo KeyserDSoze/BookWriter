@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { AppSettings, BookProject } from "../domain/types";
-import { speechSegments } from "../domain/speech-segments";
+import type { AppSettings, BookProject } from "@engine/domain/types";
+import { speechSegments } from "@engine/domain/speech-segments";
 import { Button } from "./ui/button";
 
 interface VoiceScene { id: string; label: string; text: string; }

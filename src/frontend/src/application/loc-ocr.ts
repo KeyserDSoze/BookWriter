@@ -1,11 +1,11 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { activeArchivalItems } from "../domain/archival-catalog";
-import { activeInstitutionalInspections } from "../domain/institutional-inspection";
-import { appendLocOcrExcerpt,type LocOcrRights } from "../domain/loc-ocr";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import type { Activity,BookProject } from "../domain/types";
-import { getBook,getDb } from "../infrastructure/db";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { activeArchivalItems } from "@engine/domain/archival-catalog";
+import { activeInstitutionalInspections } from "@engine/domain/institutional-inspection";
+import { appendLocOcrExcerpt,type LocOcrRights } from "@engine/domain/loc-ocr";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import type { Activity,BookProject } from "@engine/domain/types";
+import { getLocalBook as getBook,getDb } from "../infrastructure/db";
 import { fetchLocOcrExcerpt } from "../infrastructure/loc-ocr";
 
 /** Only called AFTER the author has explicitly attested rights and approved the

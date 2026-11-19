@@ -1,16 +1,16 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { knowledgeBook } from "../domain/__fixtures__/knowledge";
-import { projectBook } from "../domain/narrarium";
-import { readNarrarium } from "../domain/narrarium-reader";
-import { readMarkdownDocument } from "../domain/markdown-document";
-import { summarizeBook } from "../domain/cloud-profile";
+import { knowledgeBook } from "@engine/domain/__fixtures__/knowledge";
+import { projectBook } from "@engine/domain/narrarium";
+import { readNarrarium } from "@engine/domain/narrarium-reader";
+import { readMarkdownDocument } from "@engine/domain/markdown-document";
+import { summarizeBook } from "@engine/domain/cloud-profile";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { getBook, getDb, listBooks, saveBook } from "./db";
-import { editEntity, editScene } from "../domain/book-editing";
-import { createManualReview } from "../domain/manual-review-flow";
-import { BOOK_FORMAT_VERSION } from "../domain/book-format";
+import { editEntity, editScene } from "@engine/domain/book-editing";
+import { createManualReview } from "@engine/domain/manual-review-flow";
+import { BOOK_FORMAT_VERSION } from "@engine/domain/book-format";
 
 const markdownOnly = (files: Record<string, string>) => Object.fromEntries(Object.entries(files).filter(([path]) => path.endsWith(".md")));
 

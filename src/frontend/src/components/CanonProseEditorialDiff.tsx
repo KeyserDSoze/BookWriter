@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
+import { AiTraceReadFence } from "@engine/domain/ai-trace-read-fence";
 import { loadTaskProseCheckpoint } from "../infrastructure/task-prose-checkpoint";
 import { Button } from "./ui/button";
 import {
   diffProseParagraphs, selectCanonSceneText,
   type CanonSceneIdentity,
-} from "../domain/canon-prose-paragraph-diff";
+} from "@engine/domain/canon-prose-paragraph-diff";
 import {
   compareCanonProse, type TaskProseCheckpoint,
-} from "../domain/task-prose-checkpoint";
+} from "@engine/domain/task-prose-checkpoint";
 
 interface Props {
   checkpoint: TaskProseCheckpoint;

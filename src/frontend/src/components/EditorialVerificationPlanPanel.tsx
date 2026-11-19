@@ -1,11 +1,11 @@
 import {useMemo,useState} from "react";
-import type {BookProject,Chapter} from "../domain/types";
-import type {ChapterEditorialCycle} from "../domain/editorial-board";
+import type {BookProject,Chapter} from "@engine/domain/types";
+import type {ChapterEditorialCycle} from "@engine/domain/editorial-board";
 import {
   buildEditorialVerificationPlan,buildFrozenEditorialVerificationPlan,
   type VerificationPlanItem,
   type VerificationPlanStatus,
-} from "../domain/editorial-verification-plan";
+} from "@engine/domain/editorial-verification-plan";
 import {EditorialVerificationChoiceControl}
   from "./EditorialVerificationChoiceControl";
 

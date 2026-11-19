@@ -1,4 +1,4 @@
-import type { PassphraseEnvelope } from "../../domain/cloud-profile";
+import type { PassphraseEnvelope } from "@engine/domain/cloud-profile";
 import { getDb } from "../db";
 
 /** Keeps the DERIVED key (non-extractable CryptoKey, same protection as the device

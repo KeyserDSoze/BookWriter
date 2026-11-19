@@ -1,6 +1,6 @@
 import { BarChart3, AlertTriangle } from "lucide-react";
-import type { Activity, EndpointProfile } from "../domain/types";
-import { summarizeAiUsage } from "../domain/ai-usage";
+import type { Activity, EndpointProfile } from "@engine/domain/types";
+import { summarizeAiUsage } from "@engine/domain/ai-usage";
 
 const fmt = new Intl.NumberFormat("it-IT");
 export function AiUsagePanel({

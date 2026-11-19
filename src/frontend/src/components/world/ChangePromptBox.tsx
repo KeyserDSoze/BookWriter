@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
-import type { BookProject } from "../../domain/types";
-import type { ChangeTarget } from "../../domain/narrative-change";
+import type { BookProject } from "@engine/domain/types";
+import type { ChangeTarget } from "@engine/domain/narrative-change";
 import { MAX_CHANGE_INSTRUCTION, requestNarrativeChange } from "../../application/narrative-change";
 import { Button } from "../ui/button";
 

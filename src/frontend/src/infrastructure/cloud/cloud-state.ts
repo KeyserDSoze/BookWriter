@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { cleanDeviceName, type CloudDevice } from "../../domain/cloud-profile";
-import type { EncryptedSecret } from "../../domain/types";
+import { cleanDeviceName, type CloudDevice } from "@engine/domain/cloud-profile";
+import type { EncryptedSecret } from "@engine/domain/types";
 import { decryptLocal, encryptLocal } from "../crypto";
 import { getDb } from "../db";
 import { CLOUD_LINK_KEY } from "./cloud-dirty";

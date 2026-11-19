@@ -1,8 +1,8 @@
-import type { BookProject } from "../domain/types";
-import type { BookEdit } from "../domain/book-edits";
-import { REVIEW_MODE_LABELS, REVIEW_SCOPE_LABELS, type ManualReview } from "../domain/manual-review";
-import { cancelManualReview as cancelReview, createManualReview, decideReviewProposal as decide, type ManualReviewRequest } from "../domain/manual-review-flow";
-import { mutateCurrentAsAuthor } from "./author-mutation";
+import type { BookProject } from "@engine/domain/types";
+import type { BookEdit } from "@engine/domain/book-edits";
+import { REVIEW_MODE_LABELS, REVIEW_SCOPE_LABELS, type ManualReview } from "@engine/domain/manual-review";
+import { cancelManualReview as cancelReview, createManualReview, decideReviewProposal as decide, type ManualReviewRequest } from "@engine/domain/manual-review-flow";
+import { mutateCurrentAsAuthor } from "@engine/application/author-mutation";
 
 /** The author asks for a review of the edits they chose. The runner executes it
  * before anything else (start the autopilot if it is not running); no AI here. */

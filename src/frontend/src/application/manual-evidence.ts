@@ -1,9 +1,10 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { appendManualEvidence, type ManualExcerptInput } from "../domain/manual-evidence";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import type { Activity, BookProject } from "../domain/types";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { appendManualEvidence, type ManualExcerptInput } from "@engine/domain/manual-evidence";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import type { Activity, BookProject } from "@engine/domain/types";
 import { getDb } from "../infrastructure/db";
+import { assertLocalBook } from "@engine/domain/execution-authority";
 
 /** Local-only submission. No external fetch, OCR or ingestion of private documents. */
 export async function attachManualEvidence(
@@ -21,6 +22,7 @@ export async function attachManualEvidence(
       const db = await getDb();
       const tx = db.transaction(["books","activities","outbox"],"readwrite");
       const book = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+      if (book) assertLocalBook(book);
       if (!book || book.updatedAt !== expectedUpdatedAt ||
           book.status === "running" || !!book.editorialCycle) {
         await tx.done;

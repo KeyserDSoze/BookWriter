@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { extendArchiveCatalog } from "../domain/archival-catalog";
-import { type ManualExcerptInput } from "../domain/manual-evidence";
-import { newBook, type BookProject } from "../domain/types";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { extendArchiveCatalog } from "@engine/domain/archival-catalog";
+import { type ManualExcerptInput } from "@engine/domain/manual-evidence";
+import { newBook, type BookProject } from "@engine/domain/types";
 import { getBook, getDb, listActivities, saveBook } from "../infrastructure/db";
 import { attachManualEvidence } from "./manual-evidence";
 

@@ -1,7 +1,7 @@
 import {
   normalizeWikisourceQueries, validateWikisourceExcerpt,
   wikisourcePageUrl, type WikisourceExcerpt,
-} from "../domain/wikisource-excerpts";
+} from "@engine/domain/wikisource-excerpts";
 
 const API="https://it.wikisource.org/w/api.php";
 const TIMEOUT_MS=12_000;

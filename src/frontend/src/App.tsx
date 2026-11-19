@@ -8,8 +8,8 @@ import {
 import { Tabs } from "./components/ui/primitives";
 import { ReviewsPage } from "./components/review/ReviewsPage";
 import { DirectorDecidesToggle } from "./components/review/BlockedReviewPanel";
-import { findScene, pendingElements, type EditTarget } from "./domain/book-edits";
-import { activeManualReview } from "./domain/manual-review";
+import { findScene, pendingElements, type EditTarget } from "@engine/domain/book-edits";
+import { activeManualReview } from "@engine/domain/manual-review";
 import { LibraryPage } from "./components/LibraryPage";
 import { readLastBookId, rememberLastBookId } from "./application/last-book";
 import { currentRoute, formatRoute, type Page } from "./application/route";
@@ -26,41 +26,41 @@ import { WorldPage, type WorldFocus } from "./components/world/WorldPage";
 import { ReviewLauncher } from "./components/edit/EditKit";
 import { BookWorkspace } from "./components/book/BookWorkspace";
 import { usePwaInstall } from "./application/pwa";
-import { AutopilotRunner } from "./application/autopilot";
-import { recordAuthorIntervention } from "./application/author-intervention";
+import { AutopilotRunner } from "@engine/application/autopilot";
+import { recordAuthorIntervention } from "@engine/application/author-intervention";
 import { AiTaskWorkspace } from "./components/AiTaskWorkspace";
 import { DebugReportPanel } from "./components/DebugReportPanel";
 import { AutopilotFocusPanel } from "./components/AutopilotFocusPanel";
 import { AuthorInterventionPanel, interventionScopeBlocker, type InterventionSubmitMode } from "./components/AuthorInterventionPanel";
 import { NewBookPanel, type NewBookDraft } from "./components/NewBookPanel";
-import { adoptLegacyAiTraces, clearAiTraces, currentLiveAi, pruneAiTraces, subscribeLiveAi, type LiveAiTrace } from "./infrastructure/ai-observability";
+import { currentLiveAi, pruneAiTraces, subscribeLiveAi, type LiveAiTrace } from "@engine/infrastructure/ai-observability";
 import { AiTraceSettings } from "./components/settings/AiTraceSettings";
 import { AutoResumeSettings } from "./components/settings/AutoResumeSettings";
 import { autoResumeEnabled, pageLoadKind, pickAutoResume } from "./application/auto-resume";
-import { aiTracePolicy, describeAiTraceRetention } from "./domain/ai-trace-policy";
+import { aiTracePolicy, describeAiTraceRetention } from "@engine/domain/ai-trace-policy";
 import { confirmEditorialScene } from "./application/editorial-review";
-import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type GitHubRemote, type TaskKind, type TaskReasoning } from "./domain/types";
+import { DEFAULT_SETTINGS, newBook, type Activity, type AppSettings, type AuthorInterventionScope, type BookProject, type EndpointProfile, type GitHubRemote, type TaskKind, type TaskReasoning } from "@engine/domain/types";
 import { connectGitHubBook } from "./application/github-connect";
-import { recommendedReasoningPreset } from "./domain/reasoning-presets";
-import { checklistEditorialProfiles } from "./domain/editorial-profiles";
-import { fetchLmStudioReasoningCatalog } from "./infrastructure/lmstudio-models";
-import { bookProgress, describeNextAutopilotStep } from "./domain/autopilot-step";
-import { missingModelRoutes } from "./domain/model-routes";
-import { routeFor, TASK_KINDS } from "./domain/types";
-import { DEFAULT_AUTO_RETRIES } from "./application/auto-retry";
+import { recommendedReasoningPreset } from "@engine/domain/reasoning-presets";
+import { checklistEditorialProfiles } from "@engine/domain/editorial-profiles";
+import { fetchLmStudioReasoningCatalog } from "@engine/infrastructure/lmstudio-models";
+import { bookProgress, describeNextAutopilotStep } from "@engine/domain/autopilot-step";
+import { missingModelRoutes } from "@engine/domain/model-routes";
+import { routeFor, TASK_KINDS } from "@engine/domain/types";
+import { DEFAULT_AUTO_RETRIES } from "@engine/application/auto-retry";
 import { enableFailedTaskRetries } from "./infrastructure/failed-task-retry";
 import { decryptLocal, encryptLocal } from "./infrastructure/crypto";
-import { endpointAuthMode, fetchModelDetails, fetchModels, normalizeEndpoint } from "./infrastructure/ai";
-import { capabilityTagsFromDetails, tokenLimitsFromDetails, withDetectedCapabilities, withDetectedTokenLimits } from "./domain/model-token-limits";
+import { endpointAuthMode, fetchModelDetails, fetchModels, normalizeEndpoint } from "@engine/infrastructure/ai";
+import { capabilityTagsFromDetails, tokenLimitsFromDetails, withDetectedCapabilities, withDetectedTokenLimits } from "@engine/domain/model-token-limits";
 import { getBook, listActivities, listBooks, loadSettings, recoverInterruptedRuns, saveBook, saveSettings } from "./infrastructure/db";
 import { createBackup, downloadBackup, importBackup, readBackup, type BackupMode } from "./infrastructure/backup";
 import { exportDocx, exportEpub, exportPdf } from "./infrastructure/export-book";
 import { GitHubSyncPanel } from "./components/GitHubSyncPanel";
 import { CloudSyncPanel } from "./components/CloudSyncPanel";
 import { CloudController } from "./application/cloud-controller";
-import { libraryView, type LibraryEntry } from "./domain/cloud-profile";
+import { libraryView, type LibraryEntry } from "@engine/domain/cloud-profile";
 import { pullBookFastForward } from "./application/book-pull";
-import { importGitHubBook, validateRemote } from "./infrastructure/github-sync";
+import { validateRemote } from "@engine/infrastructure/github-sync";
 import { ConflictReviewPanel } from "./components/ConflictReviewPanel";
 import { SyncStatusSummary } from "./components/SyncStatusSummary";
 import { AiUsagePanel } from "./components/AiUsagePanel";
@@ -70,13 +70,23 @@ import { ModelCapabilitiesPanel } from "./components/ModelCapabilitiesPanel";
 import { VoiceReaderPanel } from "./components/VoiceReaderPanel";
 import { SemanticSearchPanel } from "./components/SemanticSearchPanel";
 import { EditorialBoardPanel } from "./components/EditorialBoardPanel";
-import { drainGitHubOutbox, saveToGitHubNow } from "./application/auto-sync";
+import { drainGitHubOutbox, saveToGitHubNow } from "@engine/application/auto-sync";
 import { useGitHubSave } from "./application/use-github-save";
+import { getRetrySchedule } from "@engine/infrastructure/retry-schedule";
+import { retryIsDue } from "@engine/core/retry-policy";
+import { RetrySchedulePanel } from "./components/RetrySchedulePanel";
+import { PersonalServerPanel } from "./components/settings/PersonalServerPanel";
+import { PersonalServerBookPanel } from "./components/PersonalServerBookPanel";
+import { replicaFeed } from "./application/personal-server-feed";
+import { SERVER_CONNECTION_EVENT } from "./infrastructure/personal-server-client";
+import { isServerBook } from "@engine/domain/execution-authority";
 import { inheritBookModelSettings, setBookModelRoutes, updateBookEditorialConcurrency, updateBookEditorialMode, updateBookModelRoute, updateBookTaskReasoning } from "./application/book-settings";
 import { isCurrentModelInventoryRequest } from "./application/model-inventory";
-import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "./application/endpoint-settings-save";
+import { EndpointSettingsSaveCoordinator, StaleEndpointSettingsSave } from "@engine/application/endpoint-settings-save";
 import packageInfo from "../package.json";
 import { useWakeLock } from "./application/use-wake-lock";
+import { adoptLegacyAiTraces, clearAiTraces } from "./infrastructure/ai-trace-store";
+import { importGitHubBook } from "./infrastructure/github-import";
 
 type NavGroup = "work" | "control" | "config";
 const NAV_GROUPS: ReadonlyArray<{ id: NavGroup; label: string }> = [
@@ -100,6 +110,7 @@ const navigation: ReadonlyArray<{ id: Page; label: string; icon: typeof BookOpen
 const SETTINGS_TABS = [
   { id: "modelli", label: "Modelli AI" }, { id: "cloud", label: "Account e cloud" }, { id: "conversazioni", label: "Conversazioni AI" },
   { id: "dispositivo", label: "Questo dispositivo" },
+  { id: "server", label: "Server personale" },
 ] as const;
 const BOOK_SETTINGS_TABS = [
   { id: "modelli", label: "Modelli" }, { id: "redazione", label: "Redazione" }, { id: "ricerca", label: "Ricerca web" },
@@ -253,6 +264,21 @@ export default function App() {
     });
   }, []);
   useEffect(() => { rememberLastBookId(selectedId); }, [selectedId]);
+  // Read-only live refresh of server replicas; never starts a runner, command or outbox.
+  useEffect(() => {
+    if (!ready) return;
+    replicaFeed.onSynced = refresh;
+    const restart = () => { void replicaFeed.start(); };
+    const visible = () => { if (document.visibilityState === "visible" && replicaFeed.getSnapshot().state === "retrying") restart(); };
+    restart();
+    window.addEventListener(SERVER_CONNECTION_EVENT, restart);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener(SERVER_CONNECTION_EVENT, restart);
+      document.removeEventListener("visibilitychange", visible);
+      replicaFeed.stop(); replicaFeed.onSynced = () => undefined;
+    };
+  }, [ready, refresh]);
   useEffect(() => {
     // After the cloud profile was applied, React must show what IndexedDB now holds.
     cloud.onSettingsApplied = async () => { adoptSaved(await loadSettings()); setKeyDrafts({}); };
@@ -267,7 +293,7 @@ export default function App() {
     const timer = window.setTimeout(() => cloud.tick(), 4_000);
     return () => window.clearTimeout(timer);
   }, [cloud, books]);
-  const startRunnerRef = useRef<(bookId: string) => void>(() => undefined);
+  const startRunnerRef = useRef<(bookId: string, retry?: { generation: string; force?: boolean }) => void>(() => undefined);
   const autoResumed = useRef(false);
   useEffect(() => {
     void (async () => {
@@ -287,6 +313,29 @@ export default function App() {
       } catch { setNotice("Impossibile aprire IndexedDB: verifica la modalità privacy del browser."); }
     })();
   }, [refresh]);
+  useEffect(() => {
+    if (!ready) return;
+    let current = true;
+    let checking = false;
+    const attempted = new Map<string, number>();
+    const tick = async () => {
+      if (checking || runner.running) return;
+      checking = true;
+      try {
+        for (const book of await listBooks()) {
+          if (!current || runner.running) break;
+          const plan = await getRetrySchedule(book.id);
+          if (!plan || !retryIsDue(plan, Date.now()) || Date.now() - (attempted.get(plan.generation) ?? 0) < 30_000) continue;
+          attempted.set(plan.generation, Date.now());
+          startRunnerRef.current(book.id, { generation: plan.generation });
+          break;
+        }
+      } catch { /* invalid plans never grant a network request */ }
+      finally { checking = false; }
+    };
+    void tick(); const timer = window.setInterval(() => void tick(), 5000);
+    return () => { current = false; clearInterval(timer); };
+  }, [ready, runner]);
   useEffect(() => {
     // The scene-merge workspace can commit an Activity without changing the
     // book revision. Re-read the ledger when returning to the Dashboard, not
@@ -321,6 +370,7 @@ export default function App() {
   }, [settings.theme]);
 
   const current = useMemo(() => books.find(x => x.id === selectedId), [books, selectedId]);
+  const serverBook = current ? isServerBook(current) : false;
   const lastOpenedId = readLastBookId();
   const booksRef = useRef(books);
   booksRef.current = books;
@@ -473,7 +523,10 @@ export default function App() {
     setNotice(connectionError ? "Libro creato sul dispositivo. " + connectionError : "Libro creato in IndexedDB. Configura un modello e avvia l'autopilot.");
     return true;
   }
-  function startRunner(bookId: string) {
+  function startRunner(bookId: string, retry?: { generation: string; force?: boolean }) {
+    if (books.some(book => book.id === bookId && isServerBook(book))) {
+      setNotice("Questo libro appartiene al server: usa i comandi remoti. Nessun fallback locale."); return;
+    }
     if (runner.running) {
       setNotice(runnerBookId && runnerBookId !== bookId
         ? "L'autopilot sta già lavorando su un altro libro: mettilo in pausa prima di avviarne un altro."
@@ -482,7 +535,7 @@ export default function App() {
     }
     setRunnerBookId(bookId);
     setStopAfterRequested(false);
-    const promise: Promise<void> = runner.run(bookId, async () => { await refresh(); void drainGitHubOutbox(); })
+    const promise: Promise<void> = runner.run(bookId, async () => { await refresh(); void drainGitHubOutbox(); }, retry)
       .catch(e => setNotice(e instanceof Error ? e.message : "Errore di esecuzione."))
       .finally(async () => {
         const gracefulStop = runner.stopAfterCurrentRequested;
@@ -737,7 +790,6 @@ export default function App() {
     }
   }
 
-
   function applyRecommendedThinking() {
     const result = recommendedReasoningPreset(settingsRef.current);
     setSettings(s => ({ ...s, taskReasoningEfforts: result.efforts }));
@@ -925,9 +977,10 @@ export default function App() {
           <p className="muted truncate text-xs">{runningActivity ? `Ora: ${runningActivity.title}` : `Prossimo: ${nextStep?.headline ?? phaseText[current.phase]}`}</p>
           <p className="muted hidden text-xs sm:block">{!progressInfo?.scenes ? "Piano non ancora creato" :
             `${progressInfo.canonScenes}/${progressInfo.scenes} scene canoniche (${Math.round(progressInfo.canonScenes / progressInfo.scenes * 100)}%) · ${progressInfo.frozenChapters}/${progressInfo.chapters} capitoli congelati`}</p>
-          {githubSave.active && <p className="muted text-xs" data-testid="github-save-line">{githubSave.label}{githubSave.message ? " · " + githubSave.message : ""}</p>}
+          {!serverBook && githubSave.active && <p className="muted text-xs" data-testid="github-save-line">{githubSave.label}{githubSave.message ? " · " + githubSave.message : ""}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
+          {!serverBook && <>
           {current.status === "running" ? runningHere ? <>
               <Button onClick={pause} variant="secondary"><Pause size={17} /> Pausa</Button>
               <Button variant="outline" disabled={stopAfterRequested} onClick={stopAfterCurrentTask}
@@ -943,8 +996,12 @@ export default function App() {
             <ClipboardCheck size={17}/> Revisioni{blockedReview ? " · decidi" : reviewRunning ? " · in corso" : <span className="rounded-full bg-amber-500/20 px-1.5 text-amber-800 dark:text-amber-300"><span className="text-xs">{pendingReview}</span></span>}</Button>}
           <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setPage("activities")}><ListChecks size={17} /> Log</Button>
           {pendingFused > 0 && <Button variant="outline" onClick={() => setPage("reader")}>Rileggi scene ({pendingFused})</Button>}
+          </>}
         </div>
       </div>}
+      {current && bookPage && !serverBook && <RetrySchedulePanel book={current} onChanged={refresh}
+        onRetry={plan => startRunner(current.id, { generation: plan.generation, force: true })}/>}
+      {current && bookPage && serverBook && <PersonalServerBookPanel key={current.id} book={current} onChanged={refresh}/>}
 
       {page === "library" && <LibraryPage books={books} selectedId={selectedId} lastOpenedId={lastOpenedId}
         onOpen={id => { creatingNewBook.current = false; setSelectedId(id); setPage("dashboard"); }}
@@ -957,7 +1014,7 @@ export default function App() {
         onDownload={entry => void downloadCloudBook(entry)} onPull={id => void pullCloudBook(id)}
         onForget={id => void cloud.removeBook(id)} onOpenCloud={() => openPage("settings", "cloud")} />}
 
-      {page === "bookSettings" && (current ? (() => {
+      {page === "bookSettings" && !serverBook && (current ? (() => {
         const tab = tabOf(BOOK_SETTINGS_TABS, activeTab);
         return <div className="space-y-3">
           <Tabs label="Sezioni di Modelli e redazione" value={("book-" + tab) as `book-${BookSettingsTab}`}
@@ -993,7 +1050,7 @@ export default function App() {
           </section>}
           <NewBookPanel onCreate={createProject}/>
         </>}
-        {current && <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
+        {current && !serverBook && <div className="flex min-w-0 flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:items-start">
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
             <div className="order-1 min-w-0 xl:order-none">
               <AutopilotFocusPanel book={current} activities={activities} live={liveAi}
@@ -1018,7 +1075,7 @@ export default function App() {
             </div>
           </div>
         </div>}
-        {current && <details open={current.status!=="running"} className="min-w-0">
+        {current && !serverBook && <details open={current.status!=="running"} className="min-w-0">
           <summary className="mb-3 cursor-pointer rounded-lg border border-slate-400/40 p-3 text-sm font-semibold">
             Brief, redazione, memoria e sincronizzazione
           </summary>
@@ -1086,13 +1143,15 @@ export default function App() {
 
       {page === "costs" && (current ?
         <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start">
-          <AiBudgetPanel key={current.id} book={current} settings={settings}
-            activities={activities} onRefresh={refresh}/>
+          <fieldset disabled={serverBook} className="min-w-0">
+            <AiBudgetPanel key={current.id} book={current} settings={settings}
+              activities={activities} onRefresh={refresh}/>
+          </fieldset>
           <AiUsagePanel activities={activities} endpoints={settings.endpoints}/>
         </div>
         : <Section title="Costi AI"><Empty>Seleziona un libro per vedere consumi e budget.</Empty></Section>)}
 
-      {page === "reader" && <div className="space-y-4">
+      {page === "reader" && !serverBook && <div className="space-y-4">
         <Section title="Il libro" description="Ogni capitolo si legge per intero, scena per scena o in riassunto. Le scene canoniche sono il testo approvato; bozze e scene pianificate sono ancora in lavorazione. Esporta EPUB, DOCX e PDF dall'Archivio.">
         {!current?.chapters.length ? <Empty>Non c'è ancora un piano capitoli. Avvia l'autopilot.</Empty>
           : <BookWorkspace book={current} chapterId={chapterId} onChapter={setChapterId} busy={busy}
@@ -1105,25 +1164,25 @@ export default function App() {
         </div>}
       </div>}
 
-      {page === "atlas" && (current
+      {page === "atlas" && !serverBook && (current
         ? <WorldPage key={current.id + (worldFocus ? ":" + worldFocus.id : "")} book={current} onRefresh={refresh} onStart={startRunner} runningHere={runningHere}
           onOpenAgents={() => openPage("bookSettings", "redazione")} onOpenBook={() => setPage("reader")} focus={worldFocus}/>
         : <Section title="Mondo del libro"><Empty>Seleziona un libro per consultarne personaggi, luoghi, eventi e timeline.</Empty></Section>)}
 
-      {page === "reviews" && (current
+      {page === "reviews" && !serverBook && (current
         ? <ReviewsPage key={current.id} book={current} runningHere={runningHere} onStart={startRunner} onRefresh={refresh} onOpen={openElement}
           preselect={reviewPreselect} onPreselectUsed={() => setReviewPreselect(undefined)}/>
         : <Section title="Revisioni"><Empty>Seleziona un libro per vedere le modifiche da rivedere.</Empty></Section>)}
 
       {page === "export" && <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        <div className="lg:col-span-2">
+        {!serverBook && <div className="lg:col-span-2">
           <GitHubSyncPanel book={current} settings={settings} onRefresh={refresh}
             onSaveSettings={persistSettings} onSelectBook={setSelectedId} onNewBook={newBookWithPat}/>
-        </div>
-        <div className="lg:col-span-2">
+        </div>}
+        {!serverBook && <div className="lg:col-span-2">
           <ConflictReviewPanel book={current} settings={settings} hasGitHubToken={!!settings.githubToken}
             onRefresh={refresh} onSelectBook={setSelectedId}/>
-        </div>
+        </div>}
         <Section title="Backup ZIP" description="Copia portabile di tutti i libri presenti su questo browser, con log, riassunti e checkpoint.">
           <div className="space-y-4">
             <Field label="Tipo di backup"><select className="field" value={backupMode} onChange={e => setBackupMode(e.target.value as BackupMode)}>
@@ -1209,6 +1268,8 @@ export default function App() {
         {tab === "dispositivo" && <Section title="Ripresa dopo un ricaricamento" description="Valgono solo per questo browser: non fanno parte del libro e non si sincronizzano.">
           <AutoResumeSettings />
         </Section>}
+        {tab === "server" && <PersonalServerPanel settings={settings} book={current} onChanged={refresh}
+          onCreated={id => { creatingNewBook.current = false; setSelectedId(id); }}/>}
         {tab === "conversazioni" && <Section title="Richieste e risposte dell'AI" description="Il testo in arrivo dal modello si vede sempre. Qui scegli per quanto tempo restano consultabili richiesta e risposta di ogni task: contengono prompt, testo del romanzo e possibili segreti.">
           <AiTraceSettings settings={settings} onChange={patch => changeAiTracePreference(patch)}
             onClear={async () => {
@@ -1225,7 +1286,6 @@ export default function App() {
     </ReviewLauncher.Provider>
     <BackgroundActivityToast books={books} live={liveAi} currentBookId={selectedId}
       currentActivities={activities} onOpen={openWork} />
-
 
   </div>;
 }

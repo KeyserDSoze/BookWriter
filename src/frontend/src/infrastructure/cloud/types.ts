@@ -1,4 +1,4 @@
-import type { CloudFileName } from "../../domain/cloud-profile";
+import type { CloudFileName } from "@engine/domain/cloud-profile";
 
 export type CloudProvider = "google" | "microsoft";
 export const CLOUD_PROVIDER_LABEL: Record<CloudProvider, string> = {

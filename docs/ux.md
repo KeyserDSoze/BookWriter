@@ -5,7 +5,7 @@
 - **Libreria** da sola; poi tre gruppi: **Scrittura** (Dashboard, Libro, Mondo, Revisioni), **Controllo** (Attività, Costi, Archivio), **Configurazione** (Modelli e redazione: solo questo libro; Impostazioni: tutti i libri). Revisioni mostra quante modifiche attendono; un punto verde indica l'autopilot al lavoro.
 - Una sola intestazione per pagina: gruppo, titolo, a cosa serve la pagina, libro attivo e tema. La barra dell'autopilot compare nelle pagine del libro, non in Libreria e Impostazioni.
 - Gli indirizzi sono veri percorsi (`/worldbuilding`, `/revisioni`, `/costi`…, con `?book=`); i vecchi `#/` si riscrivono. Su desktop il menu laterale si **comprime alle icone** (pulsante in alto): sul passaggio del mouse compare solo il nome, riaprendolo si vede tutto; la scelta si ricorda su questo dispositivo, la barra del telefono non cambia.
-- Le due pagine di configurazione sono divise in schede, ricordate nell'indirizzo (`?tab=`): Impostazioni → Modelli AI, Account e cloud, Conversazioni AI; Modelli e redazione → Modelli, Redazione, Ricerca web.
+- Le due pagine di configurazione sono divise in schede, ricordate nell'indirizzo (`?tab=`): Impostazioni → Modelli AI, Account e cloud, Conversazioni AI, Questo dispositivo, Server personale (sperimentale); Modelli e redazione → Modelli, Redazione, Ricerca web.
 
 ## Pagine
 
@@ -36,3 +36,13 @@
 `idle`, `planning`, `running`, `pause requested`, `paused`, `needs author`, `error`, `completed`, `offline`, `sync pending`, `sync conflict`.
 
 Mai mostrare un finto completamento: distinguere task eseguito, testo generato ma non validato, testo canonizzato e commit sincronizzato.
+
+## Server personale — UX proposta, non disponibile
+
+Nuova scheda **Impostazioni → Server personale**: prima URL/token e pairing, poi stato/versione/aggiornamento, casella «Invia tutte le richieste al server», infine download Linux/Windows e guide di installazione/tunnel. Niente download o pulsanti di update fittizi finché gli artifact non esistono.
+
+Spiegare autorità per libro e consenso per manoscritto/chiavi/PAT; connessione, adozione ed esecuzione sono azioni diverse. Scollegare non porta il libro in locale e un server offline non abilita il runner browser. Nuovo dispositivo non avvia automaticamente libri o AI.
+
+Tre conferme di salvataggio separate: replica locale, checkpoint confermato dal server, commit GitHub. Mostrare ultima sincronizzazione, stato obsoleto/offline, bozze non inviate, conflitti e risultato reale dell'update dopo il riavvio. Il server esegue anche GitHub con il PAT delegato.
+
+Admin solo locale sulla porta 24105, pairing approvato, rigenerazione/revoca e permesso update separato. I controlli remoti devono conservare gli stessi criteri mobile/accessibili; live provvisorio distinto dai dati confermati. [Flussi completi](personal-server.md) · [Accettazione F02](../features/F02-personal-server.md).

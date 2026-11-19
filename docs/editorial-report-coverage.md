@@ -25,6 +25,6 @@ I vecchi rapporti senza `segmentTextStamp` **rimangono visibili** negli archivi:
 
 ## Per chi sviluppa
 
-`src/frontend/src/domain/editorial-board.ts` contiene `editorialSegmentTextStamp`, `assertEditorialReviewCoverage`, `validateReport` e `nextReviewSlot`. `src/frontend/src/application/autopilot.ts` applica il gate prima del giudice, dell'applicazione del verdetto e dei riepiloghi congelabili. Unit test: `editorial-coverage-gate.test.ts`; E2E desktop/mobile: `editorial-coverage-gate.spec.ts`. Nessuna nuova dipendenza, chiamata LLM o backend.
+`src/engine/src/domain/editorial-board.ts` contiene `editorialSegmentTextStamp`, `assertEditorialReviewCoverage`, `validateReport` e `nextReviewSlot`. `src/engine/src/application/autopilot.ts` applica il gate prima del giudice, dell'applicazione del verdetto e dei riepiloghi congelabili. Unit test: `editorial-coverage-gate.test.ts`; E2E desktop/mobile: `editorial-coverage-gate.spec.ts`. Nessuna nuova dipendenza, chiamata LLM o backend.
 
 [ADR 0099](../ADR/0099-complete-editorial-review-checkpoint-gate.md) · [Issue #104](https://github.com/KeyserDSoze/BookWriter/issues/104) · [Epic #20](https://github.com/KeyserDSoze/BookWriter/issues/20).

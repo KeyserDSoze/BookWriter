@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import type { NewBookOptions } from "../domain/types";
-import { MAX_TARGET_CHAPTERS, parseChapterSynopses, parseTargetChapterCount } from "../domain/book-start";
+import type { NewBookOptions } from "@engine/domain/types";
+import { MAX_TARGET_CHAPTERS, parseChapterSynopses, parseTargetChapterCount } from "@engine/domain/book-start";
 import { Button } from "./ui/button";
 
 export interface NewBookDraft {

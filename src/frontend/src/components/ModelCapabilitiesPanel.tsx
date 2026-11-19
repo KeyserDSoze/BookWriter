@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import type { AppSettings, AuxiliaryModelCapability, ModelCapability, ModelRoute } from "../domain/types";
+import type { AppSettings, AuxiliaryModelCapability, ModelCapability, ModelRoute } from "@engine/domain/types";
 import { Button } from "./ui/button";
 import {
   AUXILIARY_MODEL_CAPABILITIES, MODEL_CAPABILITIES, MODEL_CAPABILITY_LABELS,
   declaredModelCapabilities, sameModelRoute, withModelCapability,
-} from "../domain/model-capabilities";
+} from "@engine/domain/model-capabilities";
 
 interface Props {
   settings: AppSettings;

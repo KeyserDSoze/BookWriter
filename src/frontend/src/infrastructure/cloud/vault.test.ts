@@ -6,7 +6,7 @@ import {
 } from "./vault";
 import { forgetVaultKey, loadRememberedVaultKey, rememberVaultKey } from "./vault-store";
 import { getDb } from "../db";
-import type { VaultSecrets } from "../../domain/cloud-profile";
+import type { VaultSecrets } from "@engine/domain/cloud-profile";
 
 const SECRETS: VaultSecrets = {
   githubToken: "github_pat_SEGRETISSIMO_1234567890",

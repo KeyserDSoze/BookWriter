@@ -1,7 +1,7 @@
-import type { BookProject, GitHubRemote } from "../domain/types";
-import { BookRevisionConflict, getBook, saveBook } from "../infrastructure/db";
-import { validateRemote } from "../infrastructure/github-sync";
-import { githubPublicationBlocker } from "../domain/github-publication";
+import type { BookProject, GitHubRemote } from "@engine/domain/types";
+import { BookRevisionConflict, getLocalBook as getBook, saveBook } from "../infrastructure/db";
+import { validateRemote } from "@engine/infrastructure/github-sync";
+import { githubPublicationBlocker } from "@engine/domain/github-publication";
 
 /**
  * Manual GitHub settings must not replace a book currently being written by AI,

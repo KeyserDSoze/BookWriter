@@ -2,7 +2,15 @@
 
 ## Modello di fiducia
 
-BookWriter è una SPA statica distribuita tramite GitHub Pages. Il codice JavaScript/TypeScript compilato **non può essere nascosto** all'utente o a estensioni/browser compromessi; non esiste alcun backend che mantenga segreti. La login Google/Microsoft è un'autenticazione per accedere ad API cloud e file personali, non una vera barriera server-side davanti al bundle.
+BookWriter è una SPA statica distribuita tramite GitHub Pages. Il codice JavaScript/TypeScript compilato **non può essere nascosto** all'utente o a estensioni/browser compromessi; in modalità locale non esiste un backend che mantenga segreti. La login Google/Microsoft è un'autenticazione per accedere ad API cloud e file personali, non una vera barriera server-side davanti al bundle.
+
+### Server personale: implementazione sperimentale parziale
+
+Il [progetto ADR 0167](../ADR/0167-optional-personal-server-and-shared-engine.md) aggiunge opzionalmente un nuovo soggetto fidato: il PC server dell'autore. Per lavorare e salvare senza browser, quel server dovrà leggere manoscritto/memoria privata e ricevere **chiavi AI e PAT GitHub** con consenso separato dal pairing. Non cambia la natura pubblica del bundle Pages e non introduce credenziali nel build.
+
+Principi del progetto: admin solo loopback 24105 distinto dall'API, pairing approvato e token `apikey` revocabili, scope aggiornamento separato, protezione SSRF/CSRF/rebinding, vault OS separato dai file dei libri e installer che non modifica tunnel altrui. Manifest firmato e supervisore per l'update, nessuna esecuzione di URL/script forniti dal client. Il tunnel Cloudflare termina TLS e **non è E2EE** rispetto a Cloudflare; un servizio avviabile senza passphrase non è un vault E2EE contro l'amministratore dell'host.
+
+Libri server con autorità/CAS, outbox e lease gestiti dal server, senza fallback locale. Cloud per connessione/multi-PAT, handoff completi, installer e updater sono ancora obiettivi, non capacità operative. [Minacce e contratto completo](personal-server-protocol.md) · [Stato del codice, protezioni effettive e limiti](personal-server-development.md). I consensi/copie locali non vengono estesi implicitamente.
 
 ## Identità e accesso ai cloud storage
 

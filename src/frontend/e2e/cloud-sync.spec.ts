@@ -38,10 +38,10 @@ async function openCloud(page: Page) {
 
 async function seedDevice(page: Page, title: string): Promise<string> {
   return page.evaluate(async ({ title, pat, key, sha }) => {
-    const dbPath = "/src/infrastructure/db.ts", cryptoPath = "/src/infrastructure/crypto.ts", typesPath = "/src/domain/types.ts";
+    const dbPath = "/src/infrastructure/db.ts", cryptoPath = "/src/infrastructure/crypto.ts";
     const { saveBook, saveSettings, getBook } = await import(/* @vite-ignore */ dbPath);
     const { encryptLocal } = await import(/* @vite-ignore */ cryptoPath);
-    const { newBook, DEFAULT_SETTINGS } = await import(/* @vite-ignore */ typesPath);
+    const { newBook, DEFAULT_SETTINGS } = await (window as any).__engine("domain/types.ts");
     const settings = structuredClone(DEFAULT_SETTINGS);
     settings.githubToken = await encryptLocal(pat);
     settings.endpoints = [{ id: "openai", name: "OpenAI E2E", baseUrl: "https://api.openai.com/v1",

@@ -1,15 +1,15 @@
 import {useMemo,useState} from "react";
-import type {BookProject} from "../domain/types";
+import type {BookProject} from "@engine/domain/types";
 import {buildNarrativeKnowledgeRegistry,type CurrentKnowledgeDecision}
-  from "../domain/narrative-knowledge-decisions";
+  from "@engine/domain/narrative-knowledge-decisions";
 import {buildNarrativeKnowledgeTopicRegistry,reviewNarrativeKnowledgeTopicTriangles,
   MAX_KNOWLEDGE_TOPIC_DECISIONS,
   type NarrativeKnowledgeTopicDecision}
-  from "../domain/narrative-knowledge-topic-decisions";
+  from "@engine/domain/narrative-knowledge-topic-decisions";
 import {recordNarrativeKnowledgeTopicDecision}
   from "../application/narrative-knowledge-topic-decisions";
 import {previewKnowledgeTransferForPair}
-  from "../domain/knowledge-transfer-preview";
+  from "@engine/domain/knowledge-transfer-preview";
 import {NarrativeTransferAssessmentPanel} from "./NarrativeTransferAssessmentPanel";
 import {Button} from "./ui/button";
 

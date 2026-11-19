@@ -1,4 +1,4 @@
-import type { Activity, AppSettings, BookProject } from "../domain/types";
+import type { Activity, AppSettings, BookProject } from "@engine/domain/types";
 import { getDb } from "./db";
 import { markCloudProfileDirty } from "./cloud/cloud-dirty";
 

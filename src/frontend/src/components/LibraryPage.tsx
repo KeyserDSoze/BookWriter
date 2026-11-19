@@ -1,7 +1,7 @@
 import { BookOpen, CloudDownload, PlayCircle, Plus, Settings2 } from "lucide-react";
-import type { BookProject } from "../domain/types";
-import type { CloudBookView, LibraryEntry } from "../domain/cloud-profile";
-import { bookProgress } from "../domain/autopilot-step";
+import type { BookProject } from "@engine/domain/types";
+import type { CloudBookView, LibraryEntry } from "@engine/domain/cloud-profile";
+import { bookProgress } from "@engine/domain/autopilot-step";
 import { Button } from "./ui/button";
 
 const STATUS: Record<BookProject["status"], string> = {

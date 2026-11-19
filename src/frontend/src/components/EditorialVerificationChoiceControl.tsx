@@ -1,10 +1,10 @@
 import {useState} from "react";
-import type {BookProject} from "../domain/types";
-import type {VerificationPlanItem} from "../domain/editorial-verification-plan";
+import type {BookProject} from "@engine/domain/types";
+import type {VerificationPlanItem} from "@engine/domain/editorial-verification-plan";
 import {
   currentEditorialVerificationChoice,currentArchivedEditorialVerificationChoice,
   type EditorialVerificationChoiceStatus,
-} from "../domain/editorial-verification-choices";
+} from "@engine/domain/editorial-verification-choices";
 import {recordEditorialVerificationChoice,recordArchivedEditorialVerificationChoice}
   from "../application/editorial-verification-choices";
 import {Button} from "./ui/button";

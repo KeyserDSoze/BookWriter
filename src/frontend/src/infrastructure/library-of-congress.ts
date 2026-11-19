@@ -1,6 +1,6 @@
 import {
   locItemUrl, normalizeArchiveQueries, type ArchivalCatalogItem,
-} from "../domain/archival-catalog";
+} from "@engine/domain/archival-catalog";
 
 /** Library of Congress public search API. Results are catalogue metadata only.
  * Never send manuscript content, canon, secrets, PAT or AI keys. */

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
-import type { BookProject } from "../../domain/types";
-import { memoryLabel, memoryValue, type MemoryFolder } from "../../domain/book-edits";
+import type { BookProject } from "@engine/domain/types";
+import { memoryLabel, memoryValue, type MemoryFolder } from "@engine/domain/book-edits";
 import { editBase, ElementChangedError, saveMemoryEdit } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/primitives";

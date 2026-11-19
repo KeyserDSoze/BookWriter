@@ -1,8 +1,8 @@
-import { locItemUrl } from "../domain/archival-catalog";
+import { locItemUrl } from "@engine/domain/archival-catalog";
 import {
   trustedLocTextUrl,validLocOcrExcerpt,
   type LocOcrExcerpt,type LocOcrRights,
-} from "../domain/loc-ocr";
+} from "@engine/domain/loc-ocr";
 
 const MAX_METADATA_BYTES=240_000;
 const MAX_TEXT_BYTES=160_000;

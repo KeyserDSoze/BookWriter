@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import type { Activity, AppSettings } from "../domain/types";
-import { listBookAiCostHistory } from "../domain/ai-cost-ledger";
+import type { Activity, AppSettings } from "@engine/domain/types";
+import { listBookAiCostHistory } from "@engine/domain/ai-cost-ledger";
 import { Button } from "./ui/button";
 
 const PAGE_SIZE = 10;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
-import type { BookProject, Chapter } from "../../domain/types";
-import type { StructureOperation } from "../../domain/book-editing";
+import type { BookProject, Chapter } from "@engine/domain/types";
+import type { StructureOperation } from "@engine/domain/book-editing";
 import { editBase, ElementChangedError, saveChapterEdit, saveStructureEdit } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/primitives";

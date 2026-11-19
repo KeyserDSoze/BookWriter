@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Plus, Save, Users } from "lucide-react";
-import type { BookProject, Chapter, Scene } from "../../domain/types";
-import { findEntity, MEMORY_FOLDER, type EntityType } from "../../domain/knowledge";
-import { SCENE_META_LISTS, type SceneMetaList, type SceneMetaPatch } from "../../domain/book-editing";
+import type { BookProject, Chapter, Scene } from "@engine/domain/types";
+import { findEntity, MEMORY_FOLDER, type EntityType } from "@engine/domain/knowledge";
+import { SCENE_META_LISTS, type SceneMetaList, type SceneMetaPatch } from "@engine/domain/book-editing";
 import { ElementChangedError, saveSceneMetadata, sceneMetaBase, type EditBase } from "../../application/book-editing";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/primitives";

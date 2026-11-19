@@ -1,8 +1,8 @@
-import type {Activity} from "../domain/types";
+import type {Activity} from "@engine/domain/types";
 import {createNarrativeKnowledgeTopicDecision,
   type NarrativeKnowledgeTopicDecision}
-  from "../domain/narrative-knowledge-topic-decisions";
-import {getBook,getDb} from "../infrastructure/db";
+  from "@engine/domain/narrative-knowledge-topic-decisions";
+import {getLocalBook as getBook,getDb} from "../infrastructure/db";
 
 /** Local author-only declaration with the same writer/outbox and CAS guards.
  * No AI call, no remote push, no update to canon or old sharing permissions. */

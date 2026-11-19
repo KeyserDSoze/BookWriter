@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { newBook, type Activity, type BookProject } from "../domain/types";
+import { newBook, type Activity, type BookProject } from "@engine/domain/types";
 import {
   getBook, getDb, recoverInterruptedRuns, saveActivity, saveBook,
 } from "./db";

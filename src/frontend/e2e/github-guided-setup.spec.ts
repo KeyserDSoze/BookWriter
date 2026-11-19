@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { newBook } from "../src/domain/types";
+import { newBook } from "@engine/domain/types";
 
 const TOKEN = "github_pat_synthetic_guided_setup_2026";
 const HEAD = "a".repeat(40);

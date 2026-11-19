@@ -1,7 +1,7 @@
 import { AlertTriangle, ArrowRight, Wallet } from "lucide-react";
-import type { Activity, AppSettings, BookProject } from "../domain/types";
-import { accountBookAiBudget, assessAiBudgetHeadroom } from "../domain/ai-budget";
-import { summarizeAiUsage } from "../domain/ai-usage";
+import type { Activity, AppSettings, BookProject } from "@engine/domain/types";
+import { accountBookAiBudget, assessAiBudgetHeadroom } from "@engine/domain/ai-budget";
+import { summarizeAiUsage } from "@engine/domain/ai-usage";
 import { Button } from "./ui/button";
 
 const number = new Intl.NumberFormat("it-IT");

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { CheckCircle2, CircleDashed, History, Loader2, Play, Undo2, XCircle } from "lucide-react";
-import type { BookProject } from "../../domain/types";
-import { activeChange, CHANGE_STATE_LABELS, type ChangeState, type NarrativeChangeOperation } from "../../domain/narrative-change";
-import { revertProblem } from "../../domain/narrative-change-flow";
+import type { BookProject } from "@engine/domain/types";
+import { activeChange, CHANGE_STATE_LABELS, type ChangeState, type NarrativeChangeOperation } from "@engine/domain/narrative-change";
+import { revertProblem } from "@engine/domain/narrative-change-flow";
 import { confirmNarrativeChange, revertNarrativeChange } from "../../application/narrative-change";
 import { Button } from "../ui/button";
 import { Badge, EmptyState } from "../ui/primitives";

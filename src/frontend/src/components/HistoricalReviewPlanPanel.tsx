@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
+import { AiTraceReadFence } from "@engine/domain/ai-trace-read-fence";
 import {
   type HistoricalPlanBlocker, type HistoricalRewindReviewPlan,
   type HistoricalTarget,
-} from "../domain/historical-rewind-review-plan";
+} from "@engine/domain/historical-rewind-review-plan";
 import { prepareHistoricalRewindReviewPlan } from "../infrastructure/task-book-checkpoint";
 import { Button } from "./ui/button";
 

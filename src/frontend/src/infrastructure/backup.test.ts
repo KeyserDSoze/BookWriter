@@ -2,13 +2,13 @@ import "fake-indexeddb/auto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { markHistoricalEvidenceChanged, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
+import { markHistoricalEvidenceChanged, completeContinuityRecheck } from "@engine/domain/cross-chapter-continuity";
 import { encryptLocal } from "./crypto";
 import { getDb, listBooks, saveActivity, saveBook, saveSettings } from "./db";
-import { DEFAULT_SETTINGS, newBook } from "../domain/types";
-import { buildNarrativeEventCandidateIndex } from "../domain/narrative-event-candidates";
-import { createNarrativeEventDecision, currentNarrativeEventDecision } from "../domain/narrative-event-decisions";
-import { createNarrativeAliasDecision, buildNarrativeAliasRegistry } from "../domain/narrative-alias-decisions";
+import { DEFAULT_SETTINGS, newBook } from "@engine/domain/types";
+import { buildNarrativeEventCandidateIndex } from "@engine/domain/narrative-event-candidates";
+import { createNarrativeEventDecision, currentNarrativeEventDecision } from "@engine/domain/narrative-event-decisions";
+import { createNarrativeAliasDecision, buildNarrativeAliasRegistry } from "@engine/domain/narrative-alias-decisions";
 
 const API_SECRET = "sk-test-backup-must-not-leak";
 const passphrase = "test-bookwriter-2026-very-secret";

@@ -1,13 +1,14 @@
 import { RefreshCw } from "lucide-react";
-import type { AiPriceRate, AppSettings, EndpointProfile } from "../../domain/types";
-import { reasoningSupport } from "../../domain/model-reasoning";
-import { declaredModelCapabilities } from "../../domain/model-capabilities";
-import { endpointAutoRetry } from "../../application/auto-retry";
-import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS } from "../../infrastructure/ai-header-timeout";
+import type { AiPriceRate, AppSettings, EndpointProfile } from "@engine/domain/types";
+import { reasoningSupport } from "@engine/domain/model-reasoning";
+import { declaredModelCapabilities } from "@engine/domain/model-capabilities";
+import { endpointAutoRetry } from "@engine/application/auto-retry";
+import { DEFAULT_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS, MIN_CHAT_HEADER_TIMEOUT_SECONDS } from "@engine/infrastructure/ai-header-timeout";
 import { ReasoningSelect } from "../ReasoningSelect";
 import { Button } from "../ui/button";
 import { ModelPriceTable } from "./ModelPriceTable";
 import { ModelTokenLimitsTable } from "./ModelTokenLimitsTable";
+import { DEFAULT_LONG_TERM_RETRY } from "@engine/core/retry-policy";
 
 function F({ label, hint, className = "", children }: { label: string; hint?: string; className?: string; children: React.ReactNode }) {
   return <label className={`block min-w-0 ${className}`}>
@@ -26,6 +27,9 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
   onRemove?: () => void;
 }) {
   const retry = endpointAutoRetry(endpoint);
+  // Draft values may be temporarily incomplete while typing; validate on Save,
+  // not during render (otherwise clearing the numeric input crashes the page).
+  const longRetry = endpoint.longTermRetry ?? DEFAULT_LONG_TERM_RETRY;
   const isDefault = settings.defaultRoute.endpointId === endpoint.id;
   const defaultModel = isDefault ? settings.defaultRoute.modelId : "";
   const local = endpoint.authMode === "none";
@@ -152,7 +156,7 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
       <div className="mt-3 space-y-1">
         <label className="flex min-w-0 items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={retry.enabled} onChange={e => onUpdate({ autoRetry: e.target.checked })} />
-          <span>Ritenta da solo i task falliti, così l'autopilot può proseguire senza supervisione.
+          <span>Short-term retry: ritenta da solo i task falliti, così l'autopilot può proseguire senza supervisione.
             {local ? " Endpoint locale senza chiave: i tentativi non hanno costo."
               : " Attenzione: su un provider con chiave ogni tentativo può essere fatturato, anche se fallisce; tra un tentativo e l'altro c'è una pausa crescente."}
             {" "}Non ritenta errori di credenziali o configurazione, né oltre il budget AI.
@@ -164,6 +168,29 @@ export function EndpointCard({ endpoint, settings, keyDraft, onKeyDraft, onUpdat
             {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>}
+        <label className="flex min-w-0 items-start gap-2 pt-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={longRetry.enabled} onChange={e => {
+            if (e.target.checked && !window.confirm("Il retry long-term farà nuove richieste dopo una pausa, anche se quelle precedenti sono state addebitate. Vale per questo endpoint anche negli altri libri. Attivarlo non avvia un libro già fermo. Continuare?")) return;
+            onUpdate({ longTermRetry: { ...longRetry, enabled: e.target.checked } });
+          }} />
+          <span>Long-term retry: esauriti i tentativi ravvicinati, attendi e riprova lo stesso compito. Ogni tentativo può costare. Nel browser funziona solo mentre la pagina può lavorare.</span>
+        </label>
+        {longRetry.enabled && <div className="grid gap-2 sm:grid-cols-2">
+          <F label="Minuti fra i cicli long-term"><input className="field field-sm" type="number" min={1} max={10080}
+            value={longRetry.intervalMinutes} onChange={e => onUpdate({ longTermRetry: { ...longRetry, intervalMinutes: Number(e.target.value) } })}/></F>
+          <F label="Ripartenze long-term"><select className="field field-sm" value={longRetry.maxCycles === null ? "unlimited" : "limited"}
+            onChange={e => {
+              if (e.target.value === "unlimited" && !window.confirm("Ripetere senza limite fino al successo o all'annullamento può consumare crediti. Confermi la ripetizione illimitata?")) return;
+              onUpdate({ longTermRetry: { ...longRetry, maxCycles: e.target.value === "unlimited" ? null : longRetry.maxCycles ?? 3 } });
+            }}>
+            <option value="limited">Numero massimo configurabile</option>
+            <option value="unlimited">Illimitate (scelta esplicita)</option>
+          </select></F>
+          {longRetry.maxCycles !== null && <F label="Numero massimo di ripartenze long-term">
+            <input className="field field-sm" type="number" min={1} max={1000} value={longRetry.maxCycles}
+              onChange={e => onUpdate({ longTermRetry: { ...longRetry, maxCycles: Number(e.target.value) } })}/>
+          </F>}
+        </div>}
       </div>
 
       {endpoint.apiProtocol === "lmstudio_native" && <p className="muted mt-2 text-xs">

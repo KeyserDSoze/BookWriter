@@ -2,7 +2,7 @@ import { getDb } from "./db";
 import {
   validatedTaskStructuralCheckpoint,
   type TaskStructuralCheckpoint,
-} from "../domain/task-structural-checkpoint";
+} from "@engine/domain/task-structural-checkpoint";
 
 export function taskStructuralCheckpointKey(activityId: string): string {
   return "task-structure:v1:" + activityId;

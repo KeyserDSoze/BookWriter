@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ClipboardCheck, ListChecks, Save } from "lucide-react";
-import type { BookProject } from "../../domain/types";
-import { reviewerLabel } from "../../domain/editorial-board";
+import type { BookProject } from "@engine/domain/types";
+import { reviewerLabel } from "@engine/domain/editorial-board";
 import { blockedReviewItems, blockedReviewSource, composeBlockedInstruction, emptyDraft, followDirectorOnAll, itemReady, reviewProgress,
-  type BlockedReviewDraft, type BlockedReviewItem, type ItemChoice } from "../../domain/blocked-review";
+  type BlockedReviewDraft, type BlockedReviewItem, type ItemChoice } from "@engine/domain/blocked-review";
 import { clearBlockedDraft, closeBlockedChapterByAuthor, loadBlockedDraft, saveBlockedDraft } from "../../application/blocked-review";
 import { reopenChapterReview } from "../../application/editorial-control";
 import { updateDirectorDecidesWhenBlocked } from "../../application/book-settings";

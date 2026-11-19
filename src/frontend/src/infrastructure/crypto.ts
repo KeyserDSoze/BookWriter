@@ -1,4 +1,4 @@
-import type { EncryptedSecret } from "../domain/types";
+import type { EncryptedSecret } from "@engine/domain/types";
 import { getDb } from "./db";
 
 const KEY_ID = "device-encryption-key";

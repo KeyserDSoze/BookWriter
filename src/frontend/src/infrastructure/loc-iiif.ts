@@ -1,10 +1,10 @@
-import {locItemUrl} from "../domain/archival-catalog";
+import {locItemUrl} from "@engine/domain/archival-catalog";
 import {
   trustedLocIiifInfoUrl,type LocIiifCandidate,
   type LocIiifReference,
-} from "../domain/loc-iiif";
-import type {LocOcrExcerpt} from "../domain/loc-ocr";
-import type {LocScanCollation} from "../domain/loc-scan-collation";
+} from "@engine/domain/loc-iiif";
+import type {LocOcrExcerpt} from "@engine/domain/loc-ocr";
+import type {LocScanCollation} from "@engine/domain/loc-scan-collation";
 
 const MAX_ITEM_BYTES=240_000,MAX_IIIF_BYTES=96_000,TIMEOUT_MS=12_000;
 type Data=Record<string,unknown>;

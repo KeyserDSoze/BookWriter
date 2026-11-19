@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, type AppSettings } from "../domain/types";
+import { DEFAULT_SETTINGS, type AppSettings } from "@engine/domain/types";
 import { embedTextBatch, localEmbeddingSelection, MAX_EMBED_BATCH } from "./embeddings";
 import { decryptLocal } from "./crypto";
 

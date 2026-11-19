@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CLOUD_LIBRARY_FILE, CLOUD_PROFILE_FILE } from "../domain/cloud-profile";
-import { DEFAULT_SETTINGS, newBook, type BookProject } from "../domain/types";
+import { CLOUD_LIBRARY_FILE, CLOUD_PROFILE_FILE } from "@engine/domain/cloud-profile";
+import { DEFAULT_SETTINGS, newBook, type BookProject } from "@engine/domain/types";
 import { encryptLocal } from "../infrastructure/crypto";
 import { getDb, loadSettings, saveSettings } from "../infrastructure/db";
 import { clearCloudLink, getCloudLink, saveMicrosoftSession } from "../infrastructure/cloud/cloud-state";

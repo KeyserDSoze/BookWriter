@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Wallet } from "lucide-react";
-import type { Activity, AppSettings, BookProject, ModelRoute } from "../domain/types";
-import { accountBookAiBudget, accountSessionAiBudget, assessAiBudgetHeadroom, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid } from "../domain/ai-budget";
+import type { Activity, AppSettings, BookProject, ModelRoute } from "@engine/domain/types";
+import { accountBookAiBudget, accountSessionAiBudget, assessAiBudgetHeadroom, DEFAULT_MAX_OUTPUT_TOKENS, isBudgetValid } from "@engine/domain/ai-budget";
 import { getBook, saveBook } from "../infrastructure/db";
 import { exportAiCostLedgerCsv } from "../infrastructure/ai-ledger-export";
-import { isBillableAttempt } from "../domain/ai-budget";
+import { isBillableAttempt } from "@engine/domain/ai-budget";
 import { AiCostHistoryPanel } from "./AiCostHistoryPanel";
 import { Button } from "./ui/button";
 

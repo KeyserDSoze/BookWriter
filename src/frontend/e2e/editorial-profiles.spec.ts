@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { profileBook } from "../src/domain/__fixtures__/editorial-profiles";
-import { DEFAULT_SETTINGS } from "../src/domain/types";
-import { projectBook } from "../src/domain/narrarium";
+import { profileBook } from "@engine/domain/__fixtures__/editorial-profiles";
+import { DEFAULT_SETTINGS } from "@engine/domain/types";
+import { projectBook } from "@engine/domain/narrarium";
 
 const nav = (page: Page) => page.getByRole("navigation", {
   name: test.info().project.name === "mobile-chromium" ? "Navigazione mobile" : "Navigazione principale",
@@ -59,7 +59,7 @@ test("CMS per libro: lettori e scrittori modificabili, conferma, persistenza e i
   expect(configured.chapters).toEqual(before.chapters);
   expect(configured.memory).toEqual(before.memory);
   const otherId = await page.evaluate(async () => {
-    const { newBook } = await import("/src/domain/types.ts");
+    const { newBook } = await (window as any).__engine("domain/types.ts");
     const { saveBook } = await import("/src/infrastructure/db.ts");
     const book = newBook("Un altro libro.", "Altro libro standard", "Semplice", "Adulti");
     await saveBook(book, false); return book.id;

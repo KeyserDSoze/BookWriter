@@ -1,16 +1,16 @@
 import "fake-indexeddb/auto";
 import {beforeEach,describe,expect,it} from "vitest";
 import {strFromU8,strToU8,unzipSync,zipSync} from "fflate";
-import {newBook} from "../domain/types";
-import {buildNarrativeEventCandidateIndex} from "../domain/narrative-event-candidates";
-import {createNarrativeEventDecision} from "../domain/narrative-event-decisions";
-import {createNarrativeKnowledgeDecision} from "../domain/narrative-knowledge-decisions";
-import {createNarrativeKnowledgeTopicDecision} from "../domain/narrative-knowledge-topic-decisions";
-import {previewKnowledgeTransferForPair} from "../domain/knowledge-transfer-preview";
-import {createNarrativeTransferAssessment} from "../domain/narrative-transfer-assessments";
+import {newBook} from "@engine/domain/types";
+import {buildNarrativeEventCandidateIndex} from "@engine/domain/narrative-event-candidates";
+import {createNarrativeEventDecision} from "@engine/domain/narrative-event-decisions";
+import {createNarrativeKnowledgeDecision} from "@engine/domain/narrative-knowledge-decisions";
+import {createNarrativeKnowledgeTopicDecision} from "@engine/domain/narrative-knowledge-topic-decisions";
+import {previewKnowledgeTransferForPair} from "@engine/domain/knowledge-transfer-preview";
+import {createNarrativeTransferAssessment} from "@engine/domain/narrative-transfer-assessments";
 import {createNarrativeTransferShareDecision,buildTransferSharingRegistry,
   buildSharedTransferPack,MAX_TRANSFER_SHARE_DECISIONS}
-  from "../domain/narrative-transfer-sharing";
+  from "@engine/domain/narrative-transfer-sharing";
 import {getDb,saveBook,listBooks} from "./db";
 import {createBackup,readBackup,importBackup} from "./backup";
 

@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
-import { newBook, type BookProject, type Chapter, type Scene } from "../domain/types";
+import { newBook, type BookProject, type Chapter, type Scene } from "@engine/domain/types";
 import { buildEpub } from "./export-book";
 
 const modified = new Date("2026-11-09T13:42:15.000Z");

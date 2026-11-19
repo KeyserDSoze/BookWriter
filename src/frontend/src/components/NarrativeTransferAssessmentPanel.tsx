@@ -1,11 +1,11 @@
 import {useState} from "react";
-import type {BookProject} from "../domain/types";
-import type {KnowledgeTransferPreview} from "../domain/knowledge-transfer-preview";
+import type {BookProject} from "@engine/domain/types";
+import type {KnowledgeTransferPreview} from "@engine/domain/knowledge-transfer-preview";
 import {buildNarrativeTransferAssessmentRegistry,
-  type NarrativeTransferVerdict} from "../domain/narrative-transfer-assessments";
+  type NarrativeTransferVerdict} from "@engine/domain/narrative-transfer-assessments";
 import {recordNarrativeTransferAssessment}
   from "../application/narrative-transfer-assessments";
-import {buildTransferSharingRegistry} from "../domain/narrative-transfer-sharing";
+import {buildTransferSharingRegistry} from "@engine/domain/narrative-transfer-sharing";
 import {NarrativeTransferShareControl} from "./NarrativeTransferShareControl";
 import {Button} from "./ui/button";
 

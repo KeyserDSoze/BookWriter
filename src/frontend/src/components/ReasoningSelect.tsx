@@ -1,5 +1,5 @@
-import { REASONING_LEVELS, REASONING_LEVEL_LABEL, describeReasoningSupport, reasoningLevelSupported, type ReasoningSupport } from "../domain/model-reasoning";
-import type { TaskReasoning } from "../domain/types";
+import { REASONING_LEVELS, REASONING_LEVEL_LABEL, describeReasoningSupport, reasoningLevelSupported, type ReasoningSupport } from "@engine/domain/model-reasoning";
+import type { TaskReasoning } from "@engine/domain/types";
 
 type Level = (typeof REASONING_LEVELS)[number];
 

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Bot, BookOpen, CalendarClock, ChevronDown, Globe2, History, Play, Search, Users, X } from "lucide-react";
-import type { BookProject } from "../../domain/types";
-import { ENTITY_LABELS, type EntityType } from "../../domain/knowledge";
-import { MEMORY_FOLDERS, MEMORY_PART_LABELS, parseMemoryId, type MemoryFolder } from "../../domain/book-edits";
+import type { BookProject } from "@engine/domain/types";
+import { ENTITY_LABELS, type EntityType } from "@engine/domain/knowledge";
+import { MEMORY_FOLDERS, MEMORY_PART_LABELS, parseMemoryId, type MemoryFolder } from "@engine/domain/book-edits";
 import { requestKnowledgeGeneration, updateChangeMode } from "../../application/narrative-change";
 import { readPref, writePref } from "../../application/ui-prefs";
 import { Button } from "../ui/button";

@@ -1,4 +1,4 @@
-import { isTrustedHistoricalUrl, normalizeResearchQueries, type HistoricalSource } from "../domain/historical-research";
+import { isTrustedHistoricalUrl, normalizeResearchQueries, type HistoricalSource } from "@engine/domain/historical-research";
 
 /** Anonymous read-only Wikipedia IT Action API. No manuscript, secret, AI key,
  * author profile, cookie or GitHub credential is included in this request.

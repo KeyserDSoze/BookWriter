@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CLOUD_LIBRARY_FILE, CLOUD_PROFILE_FILE, parseCloudProfile } from "../domain/cloud-profile";
-import { DEFAULT_SETTINGS, newBook, type AppSettings, type BookProject } from "../domain/types";
+import { CLOUD_LIBRARY_FILE, CLOUD_PROFILE_FILE, parseCloudProfile } from "@engine/domain/cloud-profile";
+import { DEFAULT_SETTINGS, newBook, type AppSettings, type BookProject } from "@engine/domain/types";
 import { decryptLocal, encryptLocal } from "../infrastructure/crypto";
 import { getDb, loadSettings, saveBook, saveSettings } from "../infrastructure/db";
 import { createCloudLink, getCloudDevice, getCloudLink } from "../infrastructure/cloud/cloud-state";

@@ -161,7 +161,7 @@ test("copia sicurezza del solo libro: ZIP scaricato e riletto con SHA-256, deskt
   await page.goto("/");
   const bookA=await createBook(page,"Libro A sicurezza prima rewind");
   const bookB=await page.evaluate(async()=>{
-    const {newBook}=await import("/src/domain/types.ts");
+    const {newBook}=await (window as any).__engine("domain/types.ts");
     const {saveBook}=await import("/src/infrastructure/db.ts");
     const other=newBook("Brief secondo libro","Libro B non esportare","Narrativo","Adulti");
     await saveBook(other,false);
@@ -440,7 +440,7 @@ test("analisi narrativa: cambio task e libro nasconde i metadati storici, deskto
   await page.goto("/");
   const bookA=await createBook(page,"Storico differenze per task");
   const bookB=await page.evaluate(async()=>{
-    const {newBook}=await import("/src/domain/types.ts");
+    const {newBook}=await (window as any).__engine("domain/types.ts");
     const {saveBook}=await import("/src/infrastructure/db.ts");
     const book=newBook("Altro libro sintetico","Altro libro","Narrativo","Adulti");
     await saveBook(book,false);

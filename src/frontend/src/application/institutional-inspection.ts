@@ -1,10 +1,10 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { activeArchivalItems } from "../domain/archival-catalog";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import { appendInstitutionalInspection } from "../domain/institutional-inspection";
-import type { Activity, BookProject } from "../domain/types";
-import { getBook,getDb } from "../infrastructure/db";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { activeArchivalItems } from "@engine/domain/archival-catalog";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import { appendInstitutionalInspection } from "@engine/domain/institutional-inspection";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { getLocalBook as getBook,getDb } from "../infrastructure/db";
 import { inspectLocItem } from "../infrastructure/loc-item-inspection";
 
 export async function attachInstitutionalInspection(

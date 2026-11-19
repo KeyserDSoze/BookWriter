@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AppSettings, BookProject } from "../domain/types";
+import type { AppSettings, BookProject } from "@engine/domain/types";
 import {
   MAX_SEMANTIC_PASSAGES, MAX_SEMANTIC_SCENES, rankSemanticPassages, relatedSemanticPassages, semanticEmbeddingInput, semanticScenes,
   type SemanticMatch, type SemanticScene,

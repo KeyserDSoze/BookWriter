@@ -1,14 +1,14 @@
-import type { Activity, BookProject } from "../domain/types";
-import { routeFor } from "../domain/types";
-import { currentStamp as currentStampOf } from "../domain/book-edits";
-import { aiEditCalls, aiEditSystem, applyAiEditChange, type AiEditChange, type AiEditProposal, type AiEditRequest } from "../domain/ai-edit";
-import { taskReasoningChoice } from "../domain/task-reasoning";
-import { keepObservedUsageOnRejectedReply } from "../infrastructure/ai-provider-error";
-import { finishLiveAi } from "../infrastructure/ai-observability";
-import { getBook, loadSettings, saveActivity } from "../infrastructure/db";
-import { launchModelCall } from "./model-call";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { routeFor } from "@engine/domain/types";
+import { currentStamp as currentStampOf } from "@engine/domain/book-edits";
+import { aiEditCalls, aiEditSystem, applyAiEditChange, type AiEditChange, type AiEditProposal, type AiEditRequest } from "@engine/domain/ai-edit";
+import { taskReasoningChoice } from "@engine/domain/task-reasoning";
+import { keepObservedUsageOnRejectedReply } from "@engine/infrastructure/ai-provider-error";
+import { finishLiveAi } from "@engine/infrastructure/ai-observability";
+import { getLocalBook as getBook, loadSettings, saveActivity } from "../infrastructure/db";
+import { launchModelCall } from "@engine/application/model-call";
 import { applyAiEdit } from "./book-editing";
-import type { WriterGuard } from "./writer-guard";
+import type { WriterGuard } from "@engine/application/writer-guard";
 
 const aborted = (error: unknown) => error instanceof DOMException && error.name === "AbortError";
 

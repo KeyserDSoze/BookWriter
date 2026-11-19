@@ -1,8 +1,8 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { profileBook } from "../domain/__fixtures__/editorial-profiles";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { BASE_READER_ROLES, bumpProfileVersions, withStandardReaders } from "../domain/editorial-profiles";
+import { profileBook } from "@engine/domain/__fixtures__/editorial-profiles";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { BASE_READER_ROLES, bumpProfileVersions, withStandardReaders } from "@engine/domain/editorial-profiles";
 import { saveEditorialProfiles } from "./editorial-profiles";
 import { getBook, getDb, listActivities, saveBook } from "../infrastructure/db";
 

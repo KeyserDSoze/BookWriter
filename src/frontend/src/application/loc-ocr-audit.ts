@@ -1,9 +1,10 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import { activeLocOcrExcerpts } from "../domain/loc-ocr";
-import type { Activity,BookProject } from "../domain/types";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import { activeLocOcrExcerpts } from "@engine/domain/loc-ocr";
+import type { Activity,BookProject } from "@engine/domain/types";
 import { getDb } from "../infrastructure/db";
+import { assertLocalBook } from "@engine/domain/execution-authority";
 
 /** Explicit local quarantine of ONE active OCR evidence ID after a mismatch.
  * The remote audit is intentionally separate and does not mutate IndexedDB.
@@ -22,6 +23,7 @@ export async function quarantineLocOcrSource(
       const db=await getDb();
       const tx=db.transaction(["books","activities","outbox"],"readwrite");
       const book=await tx.objectStore("books").get(bookId) as BookProject|undefined;
+      if (book) assertLocalBook(book);
       if(!book||book.updatedAt!==expectedUpdatedAt||book.status==="running"||
         !!book.editorialCycle){
         await tx.done;

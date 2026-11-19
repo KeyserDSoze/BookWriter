@@ -1,9 +1,9 @@
-import type {Activity} from "../domain/types";
+import type {Activity} from "@engine/domain/types";
 import {createEditorialVerificationChoice,
   createArchivedEditorialVerificationChoice,
   type EditorialVerificationChoiceStatus}
-  from "../domain/editorial-verification-choices";
-import {getBook,getDb} from "../infrastructure/db";
+  from "@engine/domain/editorial-verification-choices";
+import {getLocalBook as getBook,getDb} from "../infrastructure/db";
 
 /** Private author tracking only. Never updates findings, judgment, freezes,
  * repairs or canon. Serialize with the same local writer/outbox guards as

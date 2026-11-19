@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../ui/button";
-import type { AppSettings } from "../../domain/types";
+import type { AppSettings } from "@engine/domain/types";
 import {
   AI_TRACE_AGE_PRESETS, AI_TRACE_MAX_TASKS, AI_TRACE_MIN_TASKS, aiTracePolicy,
-} from "../../domain/ai-trace-policy";
-import { summarizeAiTraces, type AiTraceInventory } from "../../infrastructure/ai-observability";
+} from "@engine/domain/ai-trace-policy";
+
+import { summarizeAiTraces, type AiTraceInventory } from "../../infrastructure/ai-trace-store";
 
 type Patch = Pick<AppSettings, "keepAiConversations" | "syncAiConversationsToGitHub" | "aiTraceRetention">;
 

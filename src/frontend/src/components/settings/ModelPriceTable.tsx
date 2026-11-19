@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { AiPriceRate } from "../../domain/types";
-import { isPriceRate } from "../../domain/ai-budget";
+import type { AiPriceRate } from "@engine/domain/types";
+import { isPriceRate } from "@engine/domain/ai-budget";
 
 type Draft = { input: string; output: string; cached: string; sig: string };
 const sigOf = (rate?: AiPriceRate) => rate ? JSON.stringify(rate) : "none";

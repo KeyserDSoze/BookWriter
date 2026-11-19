@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { AlertTriangle, BookOpenText, CheckCircle2, ChevronDown, ListOrdered, Pencil, ScrollText } from "lucide-react";
-import type { BookProject, Chapter, Scene } from "../../domain/types";
-import type { EditTarget } from "../../domain/book-edits";
-import { relevantKnowledge } from "../../domain/knowledge-index";
-import { ENTITY_LABELS } from "../../domain/knowledge";
-import { CHANGE_STATE_LABELS } from "../../domain/narrative-change";
+import type { BookProject, Chapter, Scene } from "@engine/domain/types";
+import type { EditTarget } from "@engine/domain/book-edits";
+import { relevantKnowledge } from "@engine/domain/knowledge-index";
+import { ENTITY_LABELS } from "@engine/domain/knowledge";
+import { CHANGE_STATE_LABELS } from "@engine/domain/narrative-change";
 import { Button } from "../ui/button";
 import { Badge, Segmented, Tabs } from "../ui/primitives";
 import { EditHistory, PendingEditActions, PromptEditChoices, ReviewStateBadge } from "../edit/EditKit";

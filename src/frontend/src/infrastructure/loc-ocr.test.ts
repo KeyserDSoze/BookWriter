@@ -1,6 +1,6 @@
 import { afterEach,describe,expect,it,vi } from "vitest";
 import { fetchLocOcrExcerpt,selectLocOcrExcerpt } from "./loc-ocr";
-import { trustedLocTextUrl } from "../domain/loc-ocr";
+import { trustedLocTextUrl } from "@engine/domain/loc-ocr";
 
 const itemId="2020123456",catalogItemId="loc:2020123456:1793980800000",
   inspectionId="locdetail:2020123456:1793980860000";

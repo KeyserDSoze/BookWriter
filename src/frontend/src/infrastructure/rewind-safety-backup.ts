@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
-import type { Activity, BookProject } from "../domain/types";
-import type { SceneMergeDraft } from "../domain/scene-merge";
+import type { Activity, BookProject } from "@engine/domain/types";
+import type { SceneMergeDraft } from "@engine/domain/scene-merge";
 import { getBook, getDb } from "./db";
 import { importBackupAsLocalFork, readBackup } from "./backup";
 

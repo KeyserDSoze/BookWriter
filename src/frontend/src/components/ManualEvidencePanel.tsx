@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { BookOpenText, ExternalLink, ShieldAlert } from "lucide-react";
-import type { BookProject, Chapter } from "../domain/types";
-import { activeArchivalItems } from "../domain/archival-catalog";
-import { activeManualEvidence, allManualEvidence, type ManualExcerptInput } from "../domain/manual-evidence";
+import type { BookProject, Chapter } from "@engine/domain/types";
+import { activeArchivalItems } from "@engine/domain/archival-catalog";
+import { activeManualEvidence, allManualEvidence, type ManualExcerptInput } from "@engine/domain/manual-evidence";
 import { attachManualEvidence } from "../application/manual-evidence";
 import { Button } from "./ui/button";
 

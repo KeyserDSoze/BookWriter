@@ -1,12 +1,12 @@
 import "fake-indexeddb/auto";
 import {beforeEach,describe,expect,it} from "vitest";
 import {strFromU8,strToU8,unzipSync,zipSync} from "fflate";
-import {newBook} from "../domain/types";
-import {buildNarrativeEventCandidateIndex} from "../domain/narrative-event-candidates";
-import {createNarrativeEventDecision} from "../domain/narrative-event-decisions";
-import {createNarrativeKnowledgeDecision} from "../domain/narrative-knowledge-decisions";
+import {newBook} from "@engine/domain/types";
+import {buildNarrativeEventCandidateIndex} from "@engine/domain/narrative-event-candidates";
+import {createNarrativeEventDecision} from "@engine/domain/narrative-event-decisions";
+import {createNarrativeKnowledgeDecision} from "@engine/domain/narrative-knowledge-decisions";
 import {buildKnowledgeSharingRegistry,createNarrativeKnowledgeShareDecision}
-  from "../domain/narrative-knowledge-sharing";
+  from "@engine/domain/narrative-knowledge-sharing";
 import {getDb,saveBook,listBooks} from "./db";
 import {createBackup,readBackup,importBackup} from "./backup";
 

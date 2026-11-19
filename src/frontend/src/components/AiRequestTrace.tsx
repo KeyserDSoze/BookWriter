@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { currentTaskAi, loadAiTrace, subscribeLiveAi, type AiLocalTrace } from "../infrastructure/ai-observability";
-import { AiTraceReadFence } from "../domain/ai-trace-read-fence";
+import { currentTaskAi, subscribeLiveAi, type AiLocalTrace } from "@engine/infrastructure/ai-observability";
+import { AiTraceReadFence } from "@engine/domain/ai-trace-read-fence";
 import { AiStreamText } from "./AiStreamText";
+import { loadAiTrace } from "../infrastructure/ai-trace-store";
 
 /** Mounted only after an explicit, identity-fenced read of one stored conversation. */
 export function AiRequestTrace({ trace }: {trace:AiLocalTrace}) {

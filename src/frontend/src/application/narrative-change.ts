@@ -1,10 +1,10 @@
-import type { Activity, BookProject } from "../domain/types";
-import { emptyKnowledge, findEntity, parseKnowledge, type KnowledgeEntity } from "../domain/knowledge";
-import { changeById, CHANGE_TARGET_KINDS, detectFactDrift, knownNames, pruneChangeOperations, targetLabel, type ChangeTarget, type NarrativeChangeOperation } from "../domain/narrative-change";
-import { applyChangePlan, followChangeEdits, revertChange } from "../domain/narrative-change-flow";
-import { memoryValue, pendingElements } from "../domain/book-edits";
-import { readableSnapshot } from "../domain/edit-readable";
-import { BookRevisionConflict, getBook, saveBookWithAuthorActivity } from "../infrastructure/db";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { emptyKnowledge, findEntity, parseKnowledge, type KnowledgeEntity } from "@engine/domain/knowledge";
+import { changeById, CHANGE_TARGET_KINDS, detectFactDrift, knownNames, pruneChangeOperations, targetLabel, type ChangeTarget, type NarrativeChangeOperation } from "@engine/domain/narrative-change";
+import { applyChangePlan, followChangeEdits, revertChange } from "@engine/domain/narrative-change-flow";
+import { memoryValue, pendingElements } from "@engine/domain/book-edits";
+import { readableSnapshot } from "@engine/domain/edit-readable";
+import { BookRevisionConflict, getLocalBook as getBook, saveBookWithAuthorActivity } from "../infrastructure/db";
 
 export const MAX_CHANGE_INSTRUCTION = 4000;
 const REWRITABLE_REVIEW_STAGES = new Set(["review", "adjudicate", "summary"]);

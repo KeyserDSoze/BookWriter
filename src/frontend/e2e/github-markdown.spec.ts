@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { syntheticNarrarium } from "../src/domain/__fixtures__/narrarium";
-import { projectBook } from "../src/domain/narrarium";
-import { newBook } from "../src/domain/types";
+import { syntheticNarrarium } from "@engine/domain/__fixtures__/narrarium";
+import { projectBook } from "@engine/domain/narrarium";
+import { newBook } from "@engine/domain/types";
 
 const HEAD = "a".repeat(40);
 const TOKEN = "github_pat_synthetic_markdown_browser";

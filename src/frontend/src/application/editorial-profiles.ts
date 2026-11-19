@@ -1,7 +1,8 @@
-import type { Activity, BookProject } from "../domain/types";
-import { bumpProfileVersions, parseEditorialProfiles, withStandardReaders, type EditorialProfiles } from "../domain/editorial-profiles";
-import { contentStamp, newEdit, pruneEdits } from "../domain/book-edits";
+import type { Activity, BookProject } from "@engine/domain/types";
+import { bumpProfileVersions, parseEditorialProfiles, withStandardReaders, type EditorialProfiles } from "@engine/domain/editorial-profiles";
+import { contentStamp, newEdit, pruneEdits } from "@engine/domain/book-edits";
 import { BookRevisionConflict, getDb } from "../infrastructure/db";
+import { assertLocalBook } from "@engine/domain/execution-authority";
 
 /** Explicit author configuration only. No AI, canonical edits or retroactive
  * reinterpretation of cycles: each started cycle keeps its own templates.
@@ -21,6 +22,7 @@ export async function saveEditorialProfiles(bookId: string, expectedUpdatedAt: s
       void tx.done.catch(() => undefined);
       try {
         const book = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+        if (book) assertLocalBook(book);
         if (!book || !expectedUpdatedAt || book.updatedAt !== expectedUpdatedAt) throw new BookRevisionConflict();
         if (book.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
         if (book.phase === "audience" && book.audienceReviews.length)

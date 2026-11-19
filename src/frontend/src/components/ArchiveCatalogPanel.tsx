@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Archive, ExternalLink, SearchCheck, ShieldAlert } from "lucide-react";
-import type { BookProject, Chapter } from "../domain/types";
-import { activeArchivalItems, normalizeArchiveQueries } from "../domain/archival-catalog";
-import { activeInstitutionalInspections } from "../domain/institutional-inspection";
+import type { BookProject, Chapter } from "@engine/domain/types";
+import { activeArchivalItems, normalizeArchiveQueries } from "@engine/domain/archival-catalog";
+import { activeInstitutionalInspections } from "@engine/domain/institutional-inspection";
 import { attachInstitutionalInspection } from "../application/institutional-inspection";
 import { attachArchiveCatalog } from "../application/archival-catalog";
 import { Button } from "./ui/button";

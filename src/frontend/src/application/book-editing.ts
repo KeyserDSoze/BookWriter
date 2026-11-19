@@ -1,10 +1,10 @@
-import type { BookProject } from "../domain/types";
-import { contentStamp, currentStamp, findScene, setReviewState, type BookEdit, type EditTarget, CHANGE_KIND_LABELS } from "../domain/book-edits";
+import type { BookProject } from "@engine/domain/types";
+import { contentStamp, currentStamp, findScene, setReviewState, type BookEdit, type EditTarget, CHANGE_KIND_LABELS } from "@engine/domain/book-edits";
 import { addEntity, addEvent, deleteEntity, deleteEvent, deleteTimeline, editChapter, editEntity, editEvent, editMemory, editScene, editSceneMetadata, editStructure,
   editTimeline, moveEvent, restoreBefore, sceneMetaContent, type ChapterPatch, type EditContext, type EntityPatch, type EventPatch, type SceneMetaPatch, type ScenePatch,
-  type StructureOperation, type TimelinePatch } from "../domain/book-editing";
-import type { EntityType, KnowledgeEntity } from "../domain/knowledge";
-import { mutateCurrentAsAuthor, type AuthorActivity } from "./author-mutation";
+  type StructureOperation, type TimelinePatch } from "@engine/domain/book-editing";
+import type { EntityType, KnowledgeEntity } from "@engine/domain/knowledge";
+import { mutateCurrentAsAuthor, type AuthorActivity } from "@engine/application/author-mutation";
 
 /** The element changed (autopilot, another tab, a restore) after the editor opened it. */
 export class ElementChangedError extends Error {

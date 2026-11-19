@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpenCheck, ChevronRight, Gavel, ListChecks, PenLine, Plus, RotateCcw, Trash2, Users } from "lucide-react";
-import type { BookProject } from "../../domain/types";
+import type { BookProject } from "@engine/domain/types";
 import { DEFAULT_DIRECTOR_INSTRUCTIONS, defaultEditorialProfiles, EXTRA_READER_ROLES, isStandardReader, MAX_READER_PROFILES, MAX_WRITER_PROFILES,
   MAX_WRITER_RULES, newWriterProfile, readEditorialProfileDocuments, selectedWriter, withStandardReaders,
-  type EditorialProfiles, type ReaderProfile, type WriterProfile, type WriterRule } from "../../domain/editorial-profiles";
+  type EditorialProfiles, type ReaderProfile, type WriterProfile, type WriterRule } from "@engine/domain/editorial-profiles";
 import { saveEditorialProfiles } from "../../application/editorial-profiles";
 import { EditHistory } from "../edit/EditKit";
 import { Button } from "../ui/button";

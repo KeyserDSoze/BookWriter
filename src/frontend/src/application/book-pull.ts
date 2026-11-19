@@ -1,10 +1,11 @@
-import type { Activity, BookProject } from "../domain/types";
+import type { Activity, BookProject } from "@engine/domain/types";
 import { getBook, getDb } from "../infrastructure/db";
 import {
   confirmGitHubHead, isGitHubAncestor, readGitHubSnapshot, RemoteConflict,
-} from "../infrastructure/github-sync";
-import { getManualPushIntent } from "../infrastructure/manual-push-intent";
-import { getOutbox } from "../infrastructure/outbox";
+} from "@engine/infrastructure/github-sync";
+import { getManualPushIntent } from "@engine/infrastructure/manual-push-intent";
+import { getOutbox } from "@engine/infrastructure/outbox";
+import { assertLocalBook } from "@engine/domain/execution-authority";
 
 export interface BookPullResult {
   status: "up_to_date" | "pulled";
@@ -34,6 +35,7 @@ export async function pullBookFastForward(bookId: string, signal?: AbortSignal):
       if (!outboxLock) throw new RemoteConflict("Sincronizzazione GitHub in corso: riprova dopo il checkpoint.");
       const local = await getBook(bookId);
       if (!local?.remote) throw new Error("Collega prima il libro a una repository GitHub.");
+      assertLocalBook(local);
       const base = local.remote.lastSyncedCommit;
       if (!base) throw new Error("Questo libro non è mai stato sincronizzato con GitHub: usa la sincronizzazione manuale o il confronto.");
       if (local.status === "running") throw new Error("Metti prima in pausa l'autopilot.");
@@ -75,6 +77,7 @@ export async function pullBookFastForward(bookId: string, signal?: AbortSignal):
       const tx = db.transaction(["books", "activities", "outbox"], "readwrite");
       void tx.done.catch(() => undefined);
       const stored = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+      if (stored?.executionAuthority) { tx.abort(); throw new RemoteConflict("Il libro è passato al server: replica locale non sostituita."); }
       if (!stored || stored.updatedAt !== local.updatedAt || stored.status === "running" ||
           await tx.objectStore("outbox").get(bookId)) {
         tx.abort();

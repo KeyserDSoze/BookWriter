@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { newBook, type Activity } from "../domain/types";
+import { newBook, type Activity } from "@engine/domain/types";
 import { getDb, listActivities, listBooks, saveActivity, saveBook } from "./db";
 import { createBackup, importBackup, readBackup } from "./backup";
 

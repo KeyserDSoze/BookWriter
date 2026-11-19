@@ -1,4 +1,4 @@
-import type { BookProject } from "../domain/types";
+import type { BookProject } from "@engine/domain/types";
 
 export const MAX_SEMANTIC_SCENES = 80;
 export const MAX_SCENE_EMBED_CHARS = 1400;

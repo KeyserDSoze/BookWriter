@@ -1,11 +1,11 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { profileBook } from "../domain/__fixtures__/editorial-profiles";
-import { createEditorialCycle, chapterSegments, validateReport } from "../domain/editorial-board";
-import { readEditorialProfileDocuments } from "../domain/editorial-profiles";
-import { projectBook } from "../domain/narrarium";
-import { summarizeBook } from "../domain/cloud-profile";
+import { profileBook } from "@engine/domain/__fixtures__/editorial-profiles";
+import { createEditorialCycle, chapterSegments, validateReport } from "@engine/domain/editorial-board";
+import { readEditorialProfileDocuments } from "@engine/domain/editorial-profiles";
+import { projectBook } from "@engine/domain/narrarium";
+import { summarizeBook } from "@engine/domain/cloud-profile";
 import { createBackup, importBackup, readBackup } from "./backup";
 import { getDb, listBooks, saveBook } from "./db";
 

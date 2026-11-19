@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, newBook } from "../domain/types";
+import { DEFAULT_SETTINGS, newBook } from "@engine/domain/types";
 import { connectGitHubBook } from "../application/github-connect";
 import { encryptLocal } from "./crypto";
 import { getBook, getDb, saveBook, saveSettings } from "./db";

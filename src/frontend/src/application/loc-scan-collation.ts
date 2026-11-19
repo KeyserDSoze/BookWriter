@@ -1,10 +1,10 @@
-import { markHistoricalEvidenceChanged } from "../domain/cross-chapter-continuity";
-import { createEditorialCycle } from "../domain/editorial-board";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
-import { activeLocOcrExcerpts } from "../domain/loc-ocr";
-import { appendLocScanCollation,type LocScanCollationInput } from "../domain/loc-scan-collation";
-import type { Activity,BookProject } from "../domain/types";
-import { getBook,getDb } from "../infrastructure/db";
+import { markHistoricalEvidenceChanged } from "@engine/domain/cross-chapter-continuity";
+import { createEditorialCycle } from "@engine/domain/editorial-board";
+import { synopsisBeforeChapter } from "@engine/domain/editorial-summary";
+import { activeLocOcrExcerpts } from "@engine/domain/loc-ocr";
+import { appendLocScanCollation,type LocScanCollationInput } from "@engine/domain/loc-scan-collation";
+import type { Activity,BookProject } from "@engine/domain/types";
+import { getLocalBook as getBook,getDb } from "../infrastructure/db";
 
 /** Visual comparison is performed by the AUTHOR outside BookWriter.
  * This use case only compares two text strings and stores their attestation.

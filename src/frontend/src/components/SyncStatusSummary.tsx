@@ -1,5 +1,5 @@
 import { Cloud, CloudAlert, CheckCircle2, CloudUpload } from "lucide-react";
-import type { BookProject } from "../domain/types";
+import type { BookProject } from "@engine/domain/types";
 import { useGitHubSave } from "../application/use-github-save";
 import { Button } from "./ui/button";
 

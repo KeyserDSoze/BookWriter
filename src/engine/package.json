@@ -1,0 +1,10 @@
+{
+  "name": "bookwriter-engine",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Motore editoriale condiviso: dominio, runner, protocolli GitHub e porte host. Nessuna dipendenza da browser o da Node.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "node ../frontend/node_modules/typescript/bin/tsc -p tsconfig.json"
+  }
+}

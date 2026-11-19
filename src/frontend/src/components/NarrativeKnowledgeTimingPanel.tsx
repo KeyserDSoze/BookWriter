@@ -1,10 +1,10 @@
 import {useState} from "react";
-import type {BookProject} from "../domain/types";
+import type {BookProject} from "@engine/domain/types";
 import {buildNarrativeKnowledgeRegistry}
-  from "../domain/narrative-knowledge-decisions";
+  from "@engine/domain/narrative-knowledge-decisions";
 import {buildNarrativeKnowledgeTimingRegistry,MAX_KNOWLEDGE_TIMING_DECISIONS,
   type KnowledgeAccessMoment,type NarrativeTemporalOrder}
-  from "../domain/narrative-knowledge-timing";
+  from "@engine/domain/narrative-knowledge-timing";
 import {recordNarrativeKnowledgeTimingDecision}
   from "../application/narrative-knowledge-timing";
 import {Button} from "./ui/button";

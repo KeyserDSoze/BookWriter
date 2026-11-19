@@ -1,6 +1,6 @@
-import { TASK_KINDS, type BookProject, type TaskKind, type TaskReasoning } from "../domain/types";
-import { validateTaskReasoning } from "../domain/task-reasoning";
-import { BookRevisionConflict, getBook, saveBook } from "../infrastructure/db";
+import { TASK_KINDS, type BookProject, type TaskKind, type TaskReasoning } from "@engine/domain/types";
+import { validateTaskReasoning } from "@engine/domain/task-reasoning";
+import { BookRevisionConflict, getLocalBook as getBook, saveBook } from "../infrastructure/db";
 
 /** One locked, revision-checked write of a per-book setting (same fencing as every manual edit). */
 async function mutateBookSettings(bookId: string, expectedUpdatedAt: string, apply: (book: BookProject) => void): Promise<void> {

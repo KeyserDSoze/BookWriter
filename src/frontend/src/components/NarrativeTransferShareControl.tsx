@@ -1,8 +1,8 @@
 import {useState} from "react";
-import type {BookProject} from "../domain/types";
+import type {BookProject} from "@engine/domain/types";
 import {TRANSFER_SHARE_RECIPIENTS,
   type NarrativeTransferShareDecision,type TransferShareRecipient}
-  from "../domain/narrative-transfer-sharing";
+  from "@engine/domain/narrative-transfer-sharing";
 import {recordNarrativeTransferShareDecision}
   from "../application/narrative-transfer-sharing";
 import {Button} from "./ui/button";
