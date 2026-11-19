@@ -50,7 +50,7 @@ function namedEntries(value: Record<string, string>): Array<[string, string]> {
  */
 export function projectLegacyBook(book: BookProject, activities: Activity[]): NarrariumProjection {
   const files: Record<string, string> = {};
-  const { remote: _localOnly, ...portable } = book;
+  const { remote: _localOnly, mergeSession: _operational, ...portable } = book;
   const canonical: BookProject = {
     ...portable,
     status: book.status === "running" ? "paused" : book.status,

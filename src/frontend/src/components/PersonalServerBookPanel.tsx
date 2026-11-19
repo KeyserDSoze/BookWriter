@@ -7,6 +7,7 @@ import { personalServerConnection, reconcileServerCommand, replicatedRetrySchedu
 import { Button } from "./ui/button";
 import { exportDocx, exportEpub, exportPdf } from "../infrastructure/export-book";
 import { pendingPersonalServerHandoff } from "../infrastructure/personal-server-handoff";
+import { ServerGitPanel } from "./ServerGitPanel";
 
 export function PersonalServerBookPanel({ book, onChanged }: { book: BookProject; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -46,7 +47,7 @@ export function PersonalServerBookPanel({ book, onChanged }: { book: BookProject
     <p className="muted break-all text-sm">Autorità {book.executionAuthority?.serverId}. La replica permette lettura offline; disconnessione e timeout non autorizzano un secondo runner. Controlli remoti ancora sperimentali.</p>
     {handoffPending && <p role="status" className="text-sm">Trasferimento al server non concluso: apri Impostazioni → Server personale per riprendere l'invio, verificare la ricezione o annullarlo. Finché non è confermato i comandi restano disabilitati.</p>}
     <div className="flex flex-wrap gap-2">
-      <Button type="button" disabled={busy || handoffPending || retry?.book !== book || !!plan || book.status === "running" || (!!book.remote && !book.remote.lastSyncedCommit)}
+      <Button type="button" disabled={busy || handoffPending || retry?.book !== book || !!plan || book.status === "running" || (!!book.remote && !book.remote.lastSyncedCommit) || (!!book.mergeSession && book.mergeSession.mode !== "autopilot")}
         onClick={() => command({ type: "start" })}>Avvia sul server</Button>
       <Button type="button" variant="outline" disabled={busy} onClick={() => command({ type: "pause" })}>Pausa sul server</Button>
       <Button type="button" variant="outline" disabled={busy} onClick={() => command({ type: "stop_after_task" })}>Ferma il server a fine task</Button>
@@ -59,7 +60,7 @@ export function PersonalServerBookPanel({ book, onChanged }: { book: BookProject
         if (window.confirm("Verificare le richieste precedenti e annullare soltanto quelle non ancora ricevute dal server? Verrà registrato un rifiuto durevole degli invii tardivi. Un comando già accettato NON viene annullato né ripetuto; per fermare il lavoro usa Pausa."))
           reconcile(true);
       }}>Annulla richieste non ricevute</Button>
-      {book.remote && <Button type="button" variant="outline" disabled={busy} onClick={() => command({ type: "save_github", consentPublic: false })}>Salva su GitHub dal server</Button>}
+      {book.remote && <Button type="button" variant="outline" disabled={busy || !!book.mergeSession} onClick={() => command({ type: "save_github", consentPublic: false })}>Salva su GitHub dal server</Button>}
       {book.remote && <Button type="button" variant="outline" disabled={busy || book.status === "running"} onClick={() => command({ type: "set_autosync", enabled: !book.remote?.autoSync })}>{book.remote.autoSync ? "Disattiva autosync server" : "Attiva autosync server"}</Button>}
       {plan && <Button type="button" variant="outline" disabled={busy || handoffPending} onClick={() => command({ type: "cancel_retry" })}>Annulla retry sul server</Button>}
       {plan?.state === "waiting" && <Button type="button" disabled={busy || handoffPending || book.status === "running"} onClick={() => command({ type: "retry_now", generation: plan.generation })}>Riprova ora sul server</Button>}
@@ -68,6 +69,7 @@ export function PersonalServerBookPanel({ book, onChanged }: { book: BookProject
     {plan && <p className="muted text-sm" role="status">{plan.state === "waiting" ? describeNextAutopilotStep(book, { retry: plan }).headline : "Ripartenza long-term acquisita"}
       {` Ripartenza ${plan.cyclesUsed + 1}${plan.policy.maxCycles === null ? " senza limite" : ` di ${plan.policy.maxCycles}`} · non prima del ${new Date(plan.nextRetryAt).toLocaleString("it-IT")}. Il budget della sessione resta invariato.`}</p>}
     {notice && <p role="status" className="break-words text-sm">{notice}</p>}
+    <ServerGitPanel book={book} busy={busy || handoffPending} act={act} command={command}/>
     <p className="muted text-sm">In questa tranche gli editor e i controlli storici del browser non modificano le repliche. I task del server non creano copie testuali pre/post sul dispositivo.</p>
     {!book.remote && <details><summary>Collega GitHub dal server</summary>
       <p className="muted my-2 text-sm">Delega prima il PAT da Impostazioni → Server personale. Usa una repository privata già inizializzata, senza un libro preesistente. Il server gestirà lease e salvataggi; il primo push resta esplicito.</p>

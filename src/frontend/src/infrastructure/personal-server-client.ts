@@ -530,3 +530,17 @@ export async function provisionPersonalServer(review: ServerConfigurationReview,
     body: { consent: true, settings: projectSettings(settings), endpointKeys: Object.fromEntries(entries) },
   }, async () => { await checkLocal(); });
 }
+
+const branchListSchema = z.object({
+  current: z.string().max(200), baseline: z.string().max(40), dirty: z.boolean(),
+  branches: z.array(z.object({ name: z.string().min(1).max(200), sha: z.string().regex(/^[a-f0-9]{40}$/) }).strict()).max(500),
+}).strict();
+export type PersonalServerBranches = z.infer<typeof branchListSchema>;
+/** Read-only: the server asks GitHub (through its working copy) which branches exist. Nothing is changed. */
+export async function listPersonalServerBranches(bookId: string): Promise<PersonalServerBranches> {
+  z.string().uuid().parse(bookId);
+  const connection = await personalServerConnection();
+  if (!connection) throw new Error("Server scollegato.");
+  const response = await connectionRequest(connection, `/api/v1/books/${bookId}/branches`, { maxBytes: 1_048_576 });
+  return branchListSchema.parse(response.data);
+}

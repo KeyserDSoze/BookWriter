@@ -13,6 +13,7 @@ import { importedSharingAudit, importedTransferShareAudit, importedVerificationA
 import { validMarkdownSource } from "./markdown-document";
 import { longTermRetrySchema } from "../core/retry-policy";
 import { executionAuthoritySchema } from "./execution-authority";
+import { mergeSessionSchema } from "./book-merge";
 import { validateTaskReasoningOverrides } from "./task-reasoning";
 import { MIN_CHAT_HEADER_TIMEOUT_SECONDS, MAX_CHAT_HEADER_TIMEOUT_SECONDS } from "../infrastructure/ai-header-timeout";
 
@@ -273,6 +274,7 @@ const authorChapterSynopsisSchema = z.object({
 
 export const bookSchema = z.object({
   executionAuthority: executionAuthoritySchema.optional(),
+  mergeSession: mergeSessionSchema.optional(),
   id: zId, title: z.string(), brief: z.string(),
   markdownSource: z.record(z.string(), z.string()).refine(validMarkdownSource, "Documenti Markdown originali non validi.").optional(),
   writingStyle: z.string(), audience: z.string(),

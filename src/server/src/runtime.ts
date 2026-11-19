@@ -5,7 +5,7 @@ import {
   DEFAULT_SETTINGS, type HostRuntime, type BookProject, type Activity, type AppSettings,
   createTaskStructuralCheckpoint, verifyEndpointSettings,
   cloudSettingsSchema, projectSettings, type EncryptedSecret,
-  retrySettingsEpochSchema, sameRetrySettings, retryStamp, narrativeStateJson,
+  retrySettingsEpochSchema, sameRetrySettings, retryStamp, narrativeStateJson, type GitHubGitTransport,
 } from "@engine/index";
 import { endpointAuthMode } from "@engine/infrastructure/ai";
 import { atomicJson, FileBookStore, readJson } from "./files";
@@ -14,6 +14,8 @@ import { ApiError } from "./errors";
 
 export async function createRuntime(store: FileBookStore, vault: Vault, options?: {
   serverId: string; assertAuthority?: (book: BookProject, signal?: AbortSignal) => Promise<void>;
+  /** Real Git working copies behind the Git Data requests; absent = HTTPS to api.github.com. */
+  git?: GitHubGitTransport;
 }) {
   const scope = new AsyncLocalStorage<string>();
   const held = new Set<string>();
@@ -132,6 +134,7 @@ export async function createRuntime(store: FileBookStore, vault: Vault, options?
       await atomicJson(metaFile, next); Object.assign(meta, next);
     }),
     // What the shared writer guard still asks of this host: who may write, and what else serialises a run.
+    ...(options?.git ? { gitHub: options.git } : {}),
     admission: {
       owns,
       assert: async (book, signal) => {

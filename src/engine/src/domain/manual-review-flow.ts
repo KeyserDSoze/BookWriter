@@ -342,6 +342,8 @@ export function decideReviewProposal(book: BookProject, reviewId: string, propos
 /** An archive or repository never resumes a review by itself: it is interrupted and its
  * edits are unreviewed again. The author can request it anew. */
 export function interruptImportedReviews(book: BookProject, now: string): void {
+  // A merge waiting for a decision belongs to the place where it started, never to an imported copy.
+  delete book.mergeSession;
   for (const review of book.manualReviews ?? []) {
     if (review.status !== "pending" && review.status !== "in_progress") continue;
     review.status = "cancelled"; review.stage = "done"; review.completedAt = now;

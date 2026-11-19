@@ -4,6 +4,8 @@
 
 ## Cosa è implementato
 
+- **GitHub con `git` (0.33.0):** cartella di lavoro per repository, pull prima di avviare e di salvare, branch e unioni con conflitti decisi dall'autore o proposti dall'autopilot. Il server ricade sull'API REST se `git` ≥ 2.32 manca. [Guida e limiti](personal-server-git.md).
+
 - Host Node.js 22+, compilato da `src/server`, che esegue **lo stesso `AutopilotRunner`** del browser. Il motore è un pacchetto fisico, [`src/engine`](#il-motore-condiviso-srcengine), che frontend e server importano allo stesso modo: non esistono copie della logica editoriale né un IndexedDB simulato nel server.
 - Un file `<UUID>.bookwriter.json` nella radice dati, con revisione, libro, attività, checkpoint **strutturali**, outbox, intento manuale, retry e ricevute di comando. CAS, validazione, temporaneo nello stesso filesystem, fsync e sostituzione; nessun troncamento oltre 80 MiB.
 - Lock OS per l'intera radice: `flock` su Linux, mutex globale tramite PowerShell su Windows. Perdere il processo che detiene il lock ferma il servizio; un secondo processo non deve partire sullo stesso archivio.

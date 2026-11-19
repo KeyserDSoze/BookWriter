@@ -3,7 +3,7 @@
  * browser through its own imports) is allowed to depend on. Nothing here knows IndexedDB, Web
  * Locks, files or a network listener: a host installs a `HostRuntime` and the engine does the rest.
  */
-export { installHostRuntime, host, type HostRuntime, type HostBookRecord, type LockResult, type RunAdmission, type TraceStore, type TransactionOptions } from "./core/host";
+export { installHostRuntime, host, type HostRuntime, type HostBookRecord, type LockResult, type RunAdmission, type TraceStore, type TransactionOptions, type GitHubGitCall, type GitHubGitTransport } from "./core/host";
 export { BookNotFound, BookRevisionConflict, LocksUnavailable } from "./core/errors";
 export { withExclusiveLock } from "./core/store";
 export * from "./core/retry-policy";
@@ -28,6 +28,11 @@ export { AutopilotRunner } from "./application/autopilot";
 export { withWriterGuard } from "./application/writer-guard";
 export { drainGitHubOutbox, saveToGitHubNow } from "./application/auto-sync";
 export { pushManualGitHubBook } from "./application/manual-github-push";
+export {
+  withBookGit, listBookBranches, pullBook, switchBranch, createBranch, startBranchMerge, resolveMerge, abortMerge, finishMerge,
+  type MergeOutcome, type BranchList,
+} from "./application/book-git";
+export { mergeSessionSchema, isMergeReady, unresolvedConflicts, type MergeSession, type MergeChoice } from "./domain/book-merge";
 export { verifyEndpointSettings } from "./application/endpoint-settings-save";
 
 export { enqueueCheckpoint } from "./infrastructure/outbox";

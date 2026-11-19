@@ -8,6 +8,8 @@ import type { BookProject } from "./types";
  * continue exactly where this one stopped. The only remaining stop is a merged scene that
  * waits for the author's confirmation: until it is confirmed it must not leave the device. */
 export function githubPublicationBlocker(book: BookProject): string | undefined {
+  if (book.mergeSession)
+    return "Una unione di branch è in attesa di decisioni: concludila o annullala prima di salvare su GitHub.";
   if (book.editorialReviewSceneIds?.length)
     return "Conferma nel Lettore tutte le scene fuse prima di salvare su GitHub. Il testo locale è conservato.";
   return undefined;

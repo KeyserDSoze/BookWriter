@@ -39,7 +39,7 @@ async function call(path, body) {
 function run(action) { return event => { event.preventDefault(); Promise.resolve().then(action).catch(e => notice(e.message)); }; }
 async function refresh() {
  const s = await call("status");
- el("identity").textContent = "Server: " + s.serverId + "\\nImpronta: " + s.fingerprint + "\\nPorta API: " + s.apiPort;
+ el("identity").textContent = "Server: " + s.serverId + "\\nImpronta: " + s.fingerprint + "\\nPorta API: " + s.apiPort + "\\nGitHub: " + (s.git.mode === "git" ? "git " + s.git.version + " (cartelle di lavoro)" : "API REST (" + (s.git.reason || "git non disponibile") + ")");
  el("bases").value = s.allowedAiBases.join("\\n"); el("origins").value = s.origins.join("\\n"); el("public").value = s.publicUrl;
  el("clients").replaceChildren();
  for(const c of s.clients) {

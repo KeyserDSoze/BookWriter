@@ -79,6 +79,11 @@ export function serverBookConfigFromBook(book: BookProject): ServerBookConfig {
 }
 
 const id = z.string().min(1).max(300);
+const branchName = z.string().min(1).max(150);
+const mergeMode = z.enum(["author", "autopilot"]);
+/** The AI sees two versions of a scene and the canon only when the author says so, for this merge. */
+const aiConsent = (value: { mode: string; consentAi: boolean }) => value.mode !== "autopilot" || value.consentAi;
+const aiConsentMessage = "L'unione con l'autopilot richiede il consenso a inviare le scene in conflitto e il canone al modello.";
 /** Finite protocol, not arbitrary patches or serialised closures. */
 export const serverCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("start") }).strict(),
@@ -95,6 +100,16 @@ export const serverCommandSchema = z.discriminatedUnion("type", [
       text: z.string().optional(), summary: z.string().optional() }).strict() }).strict(),
   z.object({ type: z.literal("edit_memory"), memoryId: id, text: z.string(), expectedStamp: z.string().max(100) }).strict(),
   z.object({ type: z.literal("close_blocked"), note: z.string().min(1).max(8000), confirmed: z.literal(true) }).strict(),
+  // Git on the server: the repository is pulled into the working folder before anything else happens.
+  z.object({ type: z.literal("git_pull"), mode: mergeMode, consentAi: z.boolean() }).strict().refine(aiConsent, aiConsentMessage),
+  z.object({ type: z.literal("git_create_branch"), name: branchName, from: branchName.optional(), switchTo: z.boolean() }).strict(),
+  z.object({ type: z.literal("git_switch_branch"), branch: branchName }).strict(),
+  z.object({ type: z.literal("git_merge"), from: branchName, mode: mergeMode, consentAi: z.boolean() }).strict().refine(aiConsent, aiConsentMessage),
+  z.object({ type: z.literal("git_merge_resolve"), mergeId: z.string().uuid(),
+    decisions: z.record(z.string().max(700), z.object({ choice: z.enum(["ours", "theirs", "proposal"]), proposal: z.string().max(60_000).optional() }).strict())
+      .refine(value => Object.keys(value).length <= 400) }).strict(),
+  z.object({ type: z.literal("git_merge_finish"), mergeId: z.string().uuid() }).strict(),
+  z.object({ type: z.literal("git_merge_abort"), mergeId: z.string().uuid() }).strict(),
 ]);
 export type ServerCommand = z.infer<typeof serverCommandSchema>;
 export const serverCommandEnvelopeSchema = z.object({

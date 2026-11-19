@@ -43,6 +43,20 @@ export interface RunAdmission {
   owns?(book: BookProject): boolean;
 }
 
+/** One request of the narrow Git Data subset the engine uses, expressed as the GitHub API path it would call. */
+export interface GitHubGitCall {
+  token: string; method: string; path: string; body?: unknown; signal?: AbortSignal;
+}
+/**
+ * Optional capability: a host that works in a real Git working copy (the personal server) answers the
+ * Git Data requests itself, so the shared push/pull/merge logic runs unchanged on it. A request it does
+ * not handle (repository metadata, lease branches, contents writes) returns `undefined` and the engine
+ * uses HTTPS to api.github.com as usual. It reports a rejected request with its HTTP-like `status`.
+ */
+export interface GitHubGitTransport {
+  handle(call: GitHubGitCall): Promise<{ status: number; json: unknown } | undefined>;
+}
+
 /**
  * Everything the editorial engine needs from the place it runs in. The browser
  * (IndexedDB, WebCrypto, Web Locks) and the personal server (files, vault, OS lock)
@@ -93,6 +107,8 @@ export interface HostRuntime {
   /** False while the network is known to be down, so background saves wait instead of failing. Default: online. */
   online?(): boolean;
   readonly traces?: TraceStore;
+  /** Git working copy behind the Git Data requests; absent in the browser (HTTPS only). */
+  readonly gitHub?: GitHubGitTransport;
 }
 
 // One host per process, however many copies of this module a bundler or a test runner creates.

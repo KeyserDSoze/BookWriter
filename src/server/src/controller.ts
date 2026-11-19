@@ -4,6 +4,8 @@ import {
   retryIsDue, serverCommandEnvelopeSchema, serverCommandDigestInput, currentStamp, bookEditing, forceCloseCycle,
   drainGitHubOutbox, saveToGitHubNow, pushManualGitHubBook,
   validateRemote, inspectRepository, inspectGitHubDestination, githubPublicationBlocker,
+  pullBook, switchBranch, createBranch, startBranchMerge, resolveMerge, abortMerge, finishMerge, listBookBranches, isMergeReady,
+  type MergeOutcome, type ServerCommand,
   type HostRuntime, type HostBookRecord, type BookProject, type Activity, type ServerCommandEnvelope,
   type ServerBookCreationInput,
 } from "@engine/index";
@@ -15,6 +17,10 @@ import { HandoffService, isOriginReceipt } from "./handoff";
 const BUSY_LOCK = "Un'altra operazione sta usando il blocco: riprova più tardi.";
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const scopeFor = (type: string) => ["start", "pause", "stop_after_task", "cancel_retry", "retry_now"].includes(type) ? "run" : "write";
+type GitCommand = Extract<ServerCommand, { type: `git_${string}` }>;
+const isGit = (cmd: ServerCommand): cmd is GitCommand => cmd.type.startsWith("git_");
+/** The repository has moved and the changes cannot be taken without a decision: nothing started. */
+class MergeRequired extends Error {}
 export function bookEtag(record: HostBookRecord): string {
   return `"${record.book.executionAuthority?.epoch}:${record.revision}"`;
 }
@@ -127,11 +133,15 @@ export class Controller {
       await this.store.transaction(id, record => {
         if (record.runAuthorization && record.runAuthorization.runId === options.runId) record.runAuthorization.state = "stopped";
       }).catch(() => undefined);
+      await this.finishAutopilotMerge(id);
+      // What others pushed while the run lasted is merged (or decided by the author) before the final save.
+      if (!this.shuttingDown) await pullBook(id).catch(() => undefined);
       if (!this.shuttingDown) await this.runtime.withBookScope(id, () => saveToGitHubNow(id)).catch(() => undefined);
     }).finally(() => {
       if (this.runners.get(id) === entry) this.runners.delete(id);
     });
   }
+  branches(id: string) { return this.track(listBookBranches(id)); }
   async create(client: Client, commandId: string, input: ServerBookCreationInput): Promise<string> {
     if (!client.scopes.includes("write")) throw new ApiError(403, "scope", "Permesso di scrittura richiesto.");
     const id = creationId(this.serverId, commandId);
@@ -189,6 +199,12 @@ export class Controller {
       const last = record.watermarks?.[client.id] ?? 0;
       if (envelope.sequence !== last + 1) throw new ApiError(409, "sequence", "Sequenza del comando non attuale: riconcilia lo stato.");
       const cmd = envelope.command;
+      if (cmd.type === "start" && record.book.mergeSession && record.book.mergeSession.mode !== "autopilot")
+        throw new ApiError(409, "merge_pending", "Un'unione di branch attende le tue decisioni: concludila o annullala prima di avviare l'autopilot.");
+      if ((cmd.type === "save_github" || cmd.type === "connect_github") && record.book.mergeSession)
+        throw new ApiError(409, "merge_pending", "Un'unione di branch attende le tue decisioni: concludila o annullala prima di salvare su GitHub.");
+      if (isGit(cmd) && (record.book.status === "running" || ["requested", "started"].includes(record.runAuthorization?.state ?? "") || this.runners.has(id)))
+        throw new ApiError(409, "runner_busy", "Metti in pausa l'autopilot prima di operare sui branch.");
       if (cmd.type === "start" && record.retrySchedule)
         throw new ApiError(409, "retry_pending", "Usa «Riprova ora» per conservare la sessione, oppure annulla prima l'attesa.");
       if (["start", "retry_now"].includes(cmd.type) &&
@@ -206,7 +222,7 @@ export class Controller {
         const runId = cmd.type === "retry_now" ? record.retrySchedule!.runId : randomUUID();
         record.runAuthorization = { commandId: envelope.commandId, runId, state: "requested" };
         receipt.result = { runId }; effect = true; receipt.state = "accepted";
-      } else if (cmd.type === "pause" || cmd.type === "stop_after_task" || cmd.type === "save_github" || cmd.type === "connect_github") {
+      } else if (cmd.type === "pause" || cmd.type === "stop_after_task" || cmd.type === "save_github" || cmd.type === "connect_github" || isGit(cmd)) {
         if (cmd.type === "pause" || cmd.type === "stop_after_task") {
           delete record.retrySchedule;
           if (record.book.previousError?.startsWith("In attesa di retry long-term:")) delete record.book.previousError;
@@ -304,6 +320,8 @@ export class Controller {
     let state: "completed" | "uncertain" = "completed";
     try {
       if (cmd.type === "start" || cmd.type === "retry_now") {
+        // The repository is read before the run: what was pushed elsewhere is merged or decided first, never overwritten.
+        if (cmd.type === "start") await this.pullBeforeWork(id);
         const runId = await this.store.transaction(id, record => {
           this.accepting();
           if (!this.isCurrent(client)) throw new ApiError(401, "revoked", "Token revocato prima dell'avvio.");
@@ -321,8 +339,11 @@ export class Controller {
       } else if (cmd.type === "stop_after_task") {
         this.runners.get(id)?.runner.stopAfterCurrent();
         result = { stopAfterTaskRequested: true };
+      } else if (isGit(cmd)) {
+        result = await this.gitEffect(id, cmd);
       } else if (cmd.type === "save_github") {
         this.accepting();
+        await this.pullBeforeWork(id);
         const book = await this.runtime.getBook(id);
         result = book?.remote?.autoSync
           ? await this.runtime.withBookScope(id, () => saveToGitHubNow(id))
@@ -347,8 +368,20 @@ export class Controller {
           })));
         result = { connected: true, firstPushRequired: true };
       }
-    } catch {
-      if (cmd.type === "save_github" || cmd.type === "connect_github") state = "uncertain";
+    } catch (error) {
+      if (error instanceof MergeRequired) {
+        if (cmd.type === "start") await this.store.transaction(id, record => {
+          if (record.runAuthorization?.commandId === envelope.commandId) record.runAuthorization.state = "stopped";
+        });
+        return this.store.transaction(id, record => {
+          const receipt = record.commands[envelope.commandId];
+          if (!receipt || receipt.clientId !== client.id) throw new Error("Ricevuta del comando non più disponibile.");
+          receipt.state = "completed";
+          receipt.result = { ok: false, code: "merge_required", message: "Il repository ha modifiche da unire: decidi i conflitti nella pagina Revisioni." };
+          return receipt;
+        });
+      }
+      if (cmd.type === "save_github" || cmd.type === "connect_github" || isGit(cmd)) state = "uncertain";
       if (cmd.type === "start" || cmd.type === "retry_now") await this.store.transaction(id, record => {
         if (record.runAuthorization?.commandId === envelope.commandId) record.runAuthorization.state = "stopped";
       });
@@ -361,6 +394,49 @@ export class Controller {
       receipt.state = state; receipt.result = result;
       return receipt;
     });
+  }
+  private async pullBeforeWork(id: string): Promise<void> {
+    const record = await this.store.read(id);
+    if (!record?.book.remote?.lastSyncedCommit || record.book.mergeSession) return;
+    if ((await pullBook(id)).state === "needs_resolution") throw new MergeRequired();
+  }
+  private async gitEffect(id: string, cmd: GitCommand): Promise<unknown> {
+    this.accepting();
+    switch (cmd.type) {
+      case "git_pull": return this.afterMerge(id, await pullBook(id, { mode: cmd.mode }), cmd.mode);
+      case "git_merge": return this.afterMerge(id, await startBranchMerge(id, { from: cmd.from, mode: cmd.mode }), cmd.mode);
+      case "git_create_branch": return createBranch(id, { name: cmd.name, from: cmd.from, switchTo: cmd.switchTo });
+      case "git_switch_branch": return switchBranch(id, cmd.branch);
+      case "git_merge_resolve": return resolveMerge(id, cmd.mergeId, cmd.decisions);
+      case "git_merge_finish": return finishMerge(id);
+      case "git_merge_abort": await abortMerge(id, cmd.mergeId); return { aborted: true };
+      default: throw new Error("Comando Git non riconosciuto.");
+    }
+  }
+  /** In autopilot mode the AI resolves the scenes edited on both branches, in the same run machinery as any other task. */
+  private async afterMerge(id: string, outcome: MergeOutcome, mode: "author" | "autopilot"): Promise<MergeOutcome> {
+    if (outcome.state !== "needs_resolution" || mode !== "autopilot") return outcome;
+    const runId = await this.store.transaction(id, record => {
+      this.accepting(); this.owns(record);
+      if (this.runners.has(id) || ["requested", "started"].includes(record.runAuthorization?.state ?? ""))
+        throw new ApiError(409, "runner_busy", "Esecuzione già attiva.");
+      const authorized = randomUUID();
+      record.runAuthorization = { commandId: randomUUID(), runId: authorized, state: "started" };
+      return authorized;
+    });
+    this.launch(id, { runId });
+    return outcome;
+  }
+  /** A merge the autopilot fully decided is published by the server, then the book stays paused for the editorial review it reopened. */
+  private async finishAutopilotMerge(id: string): Promise<void> {
+    const session = (await this.store.read(id))?.book.mergeSession;
+    if (!session || session.mode !== "autopilot" || !isMergeReady(session) || this.shuttingDown) return;
+    try { await finishMerge(id); }
+    catch (error) {
+      await this.store.transaction(id, record => {
+        record.book.previousError = "Pubblicazione dell'unione non riuscita: " + (error instanceof Error ? error.message : "errore") + " Riprova con «Concludi unione» o annullala.";
+      }).catch(() => undefined);
+    }
   }
   /** Waits for currently admitted work; unlike close(), does not request a stop. */
   async waitForIdle(): Promise<void> {

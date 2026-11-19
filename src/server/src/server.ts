@@ -15,6 +15,7 @@ import { normalizeEndpoint } from "@engine/infrastructure/ai";
 import { FileBookStore, atomicJson, readJson, unsafeKeys, MAX_FILE_BYTES } from "./files";
 import { Vault } from "./vault";
 import { createRuntime } from "./runtime";
+import { GitWorkspaces, type GitWorkspaceOptions } from "./git";
 import { Controller, bookEtag } from "./controller";
 import { Auth, type Client } from "./auth";
 import { ApiError, badRequest } from "./errors";
@@ -38,6 +39,8 @@ const provisionSchema = z.object({
 
 export interface ServerOptions {
   root: string; adminPort?: number; apiPort?: number;
+  /** Git working copies for GitHub (default: used when git ≥ 2.32 is installed, otherwise the REST API). `false` forces REST. */
+  git?: false | Pick<GitWorkspaceOptions, "binary" | "urlFor" | "allowFileProtocol">;
 }
 function json(res: ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body);
@@ -97,9 +100,18 @@ export async function startPersonalServer(options: ServerOptions) {
   const fingerprint = createHash("sha256").update(Buffer.from(installation.publicKey, "base64")).digest("hex");
   const privateKey = createPrivateKey(await vault.decrypt(installation.privateKey));
   const auth = await Auth.open(store, vault);
+  let workspaces: GitWorkspaces | undefined;
+  let gitStatus: { mode: "git" | "rest"; version?: string; reason?: string } = { mode: "rest", reason: "disattivato" };
+  if (options.git !== false) {
+    try {
+      const { version } = await GitWorkspaces.probe(options.git?.binary);
+      workspaces = new GitWorkspaces({ root: options.root, ...options.git });
+      gitStatus = { mode: "git", version };
+    } catch (error) { gitStatus = { mode: "rest", reason: error instanceof Error ? error.message : "git non disponibile" }; }
+  }
   // The installed runtime is the only global host; no fake browser database.
   const host = await createRuntime(store, vault, {
-    serverId: installation.serverId,
+    serverId: installation.serverId, ...(workspaces ? { git: workspaces.transport } : {}),
     assertAuthority: async (book, signal) => {
       if (!book.remote) return;
       if (!book.remote.lastSyncedCommit)
@@ -108,7 +120,9 @@ export async function startPersonalServer(options: ServerOptions) {
       if (remote.bookId !== book.id || remote.authority.serverId !== installation.serverId ||
           remote.authority.epoch !== book.executionAuthority?.epoch)
         throw new Error("Autorità GitHub non confermata: il server non avvia richieste AI.");
-      if (remote.head !== book.remote.lastSyncedCommit) {
+      // A pull-type merge waiting for a decision legitimately has a newer head: the one it was started against.
+      const pulling = book.mergeSession?.kind === "pull" && remote.head === book.mergeSession.theirsCommit;
+      if (remote.head !== book.remote.lastSyncedCommit && !pulling) {
         // Our autosync may have acknowledged its commit while the proof was being read.
         const latest = (await store.read(book.id))?.book;
         if (latest?.executionAuthority?.serverId !== installation.serverId ||
@@ -239,9 +253,14 @@ export async function startPersonalServer(options: ServerOptions) {
         const body = handoffResolveSchema.parse(await readBody(req, 4096));
         json(res, 200, await controller.cancelHandoff(client, uuid.parse(handoffRoute[1]), body.bookId)); return;
       }
-      const bookRoute = /^\/api\/v1\/books\/([a-f0-9-]+)\/(snapshot|commands)(?:\/([a-f0-9-]+)(\/resolve)?)?$/.exec(url.pathname);
+      const bookRoute = /^\/api\/v1\/books\/([a-f0-9-]+)\/(snapshot|commands|branches)(?:\/([a-f0-9-]+)(\/resolve)?)?$/.exec(url.pathname);
       if (bookRoute) {
         const id = uuid.parse(bookRoute[1]);
+        if (bookRoute[2] === "branches" && req.method === "GET" && !bookRoute[3]) {
+          requireScope("read"); await getRecord(id);
+          const list = await controller.branches(id);
+          requireScope("read"); json(res, 200, list); return;
+        }
         if (bookRoute[2] === "snapshot" && req.method === "GET" && !bookRoute[3]) {
           requireScope("read"); const record = await getRecord(id);
           // The local revocation epoch stays on the server. Keep the v1 snapshot
@@ -354,7 +373,7 @@ export async function startPersonalServer(options: ServerOptions) {
       if (path === "/admin/api/status" && req.method === "GET") {
         json(res, 200, { serverId: installation.serverId, fingerprint, apiPort, ...auth.list(),
           allowedAiBases: installation.allowedAiBases, origins: installation.origins,
-          publicUrl: installation.publicUrl ?? "", busy: controller.busy }); return;
+          publicUrl: installation.publicUrl ?? "", busy: controller.busy, git: gitStatus }); return;
       }
       if (path === "/admin/api/token" && req.method === "POST") {
         const body = z.object({ label: z.string().min(1).max(80), scopes: z.array(serverScopeSchema).min(1).max(4),
@@ -396,12 +415,12 @@ export async function startPersonalServer(options: ServerOptions) {
   }
   controller.startScheduler();
   return {
-    apiPort, adminPort, controller, auth, store, runtime: host.runtime,
+    apiPort, adminPort, controller, auth, store, runtime: host.runtime, git: gitStatus,
     allowedBases: () => [...installation.allowedAiBases],
     close: async () => {
       for (const close of streams) close();
       const closing = [api, admin].map(server => new Promise<void>(done => { server.close(() => done()); server.closeAllConnections(); }));
-      await controller.close(); await Promise.all(closing); host.dispose();
+      await controller.close(); await Promise.all(closing); await workspaces?.close(); host.dispose();
     },
   };
 }

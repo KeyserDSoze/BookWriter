@@ -11,7 +11,7 @@ async function withServer(action) {
   await fs.mkdir(base, { recursive: true, mode: 0o700 });
   const root = await fs.mkdtemp(join(base, "bookwriter-events-"));
   const release = await lockDataRoot(root);
-  const server = await startPersonalServer({ root, adminPort: 0, apiPort: 0 });
+  const server = await startPersonalServer({ root, adminPort: 0, apiPort: 0, git: false });
   try { await action(server, `http://127.0.0.1:${server.apiPort}`); }
   finally { await server.close(); await release(); await fs.rm(root, { recursive: true, force: true }); }
 }

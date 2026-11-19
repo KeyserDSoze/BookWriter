@@ -1,5 +1,13 @@
 # Changelog — BookWriter
 
+## 0.33.0 — 2026-11-19 — Git sul server: cartella di lavoro, pull, branch e unioni curate dall'autopilot
+
+- Il server personale lavora con il binario `git` (≥ 2.32): una cartella di lavoro per repository, push mai forzato, PAT solo nell'ambiente del processo. Il motore è lo stesso: cambia il trasporto (`HostRuntime.gitHub`), non marker, ACK, autorità o lease. Senza `git` il server ricade sul REST e lo dice nel pannello amministrativo. Il browser non cambia.
+- **Pull prima di lavorare:** prima di «Avvia sul server», prima del salvataggio dal server, a fine corsa e con «Aggiorna da GitHub»: fast-forward se qui non c'è nulla di nuovo, altrimenti unione a tre vie. Mai durante una corsa.
+- **Branch:** ramo predefinito `main`, elenco, creazione da un altro ramo, passaggio (solo a libro salvato; da corrente conserva le modifiche non salvate).
+- **Unione di un branch:** automatica per ciò che cambia da un solo lato e per la stessa scena in righe non adiacenti; conflitti durevoli decisi dall'autore («Tieni»/«Prendi») o, con consenso per quell'unione, proposti dall'autopilot per le scene modificate in entrambi i rami (bozza in capitoli riaperti, revisione editoriale normale prima del congelamento). Commit di merge con due genitori. Nulla è pubblicato né avviato mentre un'unione attende.
+- **Non ancora:** adottare dal server un libro già su GitHub e riportarlo al client; autopilot sui conflitti di campi/schede/memoria; rebase, cherry-pick, eliminazione di rami; prova con GitHub reale, Windows e proxy. Il server resta sperimentale, da sorgente. [ADR 0169](../ADR/0169-server-git-working-copy-branches-and-merge.md) · [Guida](personal-server-git.md) · [F04](../features/F04-server-git-branches-merge.md).
+
 ## 0.32.1 — 2026-11-19 — Revisione della tranche sperimentale del server personale
 
 - Versione 0.32.1 (`package.json` e `package-lock.json` generati da npm, cambia solo la versione root). Il server resta **sperimentale**, da sorgente: nessuna distribuzione binaria.

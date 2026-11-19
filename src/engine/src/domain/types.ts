@@ -16,6 +16,7 @@ export type RunStatus = "idle" | "running" | "paused" | "error" | "completed";
 export type Phase = "brainstorm" | "validate" | "audience" | "adversarial" | "outline" | "prose" | "review" | "consolidate" | "chapterReview" | "revision" | "completed";
 
 import type { ChapterEditorialCycle, EditorialRound } from "./editorial-board";
+import type { MergeSession } from "./book-merge";
 import type { ChapterHistoricalDossier } from "./historical-research";
 import type { ContinuityRecheck, ContinuityRecheckAudit } from "./cross-chapter-continuity";
 import type { NarrativeEventDecision } from "./narrative-event-decisions";
@@ -224,6 +225,8 @@ export interface AuthorIntervention {
 }
 export interface BookProject {
   executionAuthority?: ExecutionAuthority;
+  /** A branch merge waiting for a decision. Operational only: never exported, never imported. */
+  mergeSession?: MergeSession;
   id: string;
   /** Portable Markdown originals, not executable instructions or AI permissions.
    * Preserves extra metadata/documents of an explicitly imported manuscript. */

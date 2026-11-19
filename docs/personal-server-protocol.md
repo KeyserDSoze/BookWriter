@@ -126,13 +126,14 @@ API pubblica su loopback 24106 dietro HTTPS; pannello 24105 separato. URL di bas
 | Comando | `POST /api/v1/books/:id/commands` | `apikey`, `If-Match`, `commandId`, sequenza e payload validato. |
 | Esito comando | `GET /api/v1/books/:id/commands/:commandId`, `POST …/:commandId/resolve` | La lettura recupera l'ACK perso senza ripetere AI. `resolve` non esegue mai: restituisce la ricevuta esistente oppure registra un rifiuto durevole dell'identità e della sequenza esatte, solo su scelta esplicita del client originale. |
 | Configurazione AI | `GET/POST /api/v1/settings` | Lettura senza valori di credenziali, scrittura esplicita con `If-Match` della revisione mostrata. Chiavi assenti = mantieni a parità di endpoint; `null` = rimuovi. |
+| Branch | `GET /api/v1/books/:id/branches` | Elenco dei rami della repository (senza i rami del blocco di scrittura), sola lettura. |
 | Credenziale GitHub | `POST /api/v1/books/:id/github-credential` | Stesso `If-Match` della configurazione, solo PAT di quel libro o `null`; non modifica endpoint o router. |
 | Eventi | `GET /api/v1/events` tramite `fetch` streaming | Header `apikey`, cursore, eventi autorizzati e heartbeat. |
 | Impostazioni/credenziali | endpoint dedicati versionati | Scrittura con scope e CAS; chiavi mai restituite nelle normali letture. |
 | Versioni/aggiornamento | `GET /api/v1/updates`, `POST /api/v1/updates` | Lettura autenticata; mutazione con scope update e releaseId ufficiale. |
 | Esito aggiornamento | `GET /api/v1/updates/:operationId` | Persistente attraverso il riavvio, senza rieseguire l'installazione. |
 
-Catalogo comandi finito e discriminato: creazione/adottabilità, avvio, pausa, stop a fine task, annullamento/ripartenza immediata di un retry programmato, intervento autore, edit strutturato con timbro dell'elemento, review, decisione editoriale, impostazioni, merge, ricerche consensuali, salvataggio ora, trasferimento ed eliminazione confermata. Nessun `eval`, comando OS, percorso file o URL fetch arbitrario nel payload. L'API non accetta una snapshot intera come normale edit.
+Catalogo comandi finito e discriminato: creazione/adottabilità, avvio, pausa, stop a fine task, annullamento/ripartenza immediata di un retry programmato, intervento autore, edit strutturato con timbro dell'elemento, review, decisione editoriale, impostazioni, merge, ricerche consensuali, salvataggio ora, trasferimento ed eliminazione confermata. Nessun `eval`, comando OS, percorso file o URL fetch arbitrario nel payload. L'API non accetta una snapshot intera come normale edit. **Git sul server (0.33.0):** `git_pull`, `git_create_branch`, `git_switch_branch`, `git_merge`, `git_merge_resolve`, `git_merge_finish`, `git_merge_abort` (le unioni con l'autopilot richiedono `consentAi`); eseguiti come effetto asincrono, esito nella ricevuta e nel libro (`mergeSession`). Vedi [Git sul server](personal-server-git.md).
 
 ### Idempotenza e concorrenza
 

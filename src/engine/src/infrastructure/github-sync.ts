@@ -72,6 +72,12 @@ async function request<T>(
   const url = new URL(path, BASE);
   if (url.origin !== BASE || !url.pathname.startsWith("/repos/"))
     throw new Error("URL GitHub non autorizzato.");
+  const local = await host().gitHub?.handle({ token, method: init.method ?? "GET", path: url.pathname + url.search, body: init.body, signal: init.signal });
+  if (local) {
+    if (allow404 && local.status === 404) return null;
+    if (local.status < 200 || local.status > 299) throw apiError(local.status);
+    return local.json as T;
+  }
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let response: Response | undefined;
@@ -492,10 +498,78 @@ export async function readGitHubMarkdownCopy(remote: GitHubRemote, expectedHead:
   return book;
 }
 
+export interface GitHubBranch { name: string; sha: string }
+const LEASE_BRANCH_PREFIX = "bookwriter-lock/";
+/** Branches of the repository, without the writer-lease branches. Bounded: 500 at most, never silently truncated. */
+export async function listGitHubBranches(remote: GitHubRemote, signal?: AbortSignal): Promise<GitHubBranch[]> {
+  const target = validateRemote(remote);
+  const token = await tokenFromVault();
+  const result: GitHubBranch[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const items = await request<Array<{ name?: unknown; commit?: { sha?: unknown } }>>(
+      token, apiPath(target, "/branches?per_page=100&page=" + page), { signal });
+    if (!Array.isArray(items)) throw new Error("GitHub ha restituito un elenco di branch non valido.");
+    for (const item of items) {
+      if (typeof item.name !== "string" || typeof item.commit?.sha !== "string" || !shaPattern.test(item.commit.sha)) continue;
+      if (item.name.startsWith(LEASE_BRANCH_PREFIX)) continue;
+      try { validateRemote({ ...target, branch: item.name }); } catch { continue; }
+      result.push({ name: item.name, sha: item.commit.sha.toLowerCase() });
+    }
+    if (items.length < 100) return result.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  throw new Error("La repository ha più di 500 branch: elenco non completo, nessuna scelta dedotta.");
+}
+
+/** The branch tip, or null when the branch does not exist. */
+export async function readGitHubBranchHead(remote: GitHubRemote, signal?: AbortSignal): Promise<string | null> {
+  const target = validateRemote(remote);
+  const token = await tokenFromVault();
+  const response = await request<{ object?: { sha?: string } }>(
+    token, apiPath(target, "/git/ref/heads/" + target.branch.split("/").map(encodeURIComponent).join("/")), { signal }, true);
+  if (!response) return null;
+  const sha = response.object?.sha;
+  if (!sha || !shaPattern.test(sha)) throw new Error("Il branch GitHub non punta a un commit valido.");
+  return sha.toLowerCase();
+}
+
+/** Create-only: an existing branch is never moved. */
+export async function createGitHubBranch(remote: GitHubRemote, fromCommit: string, signal?: AbortSignal): Promise<void> {
+  const target = validateRemote(remote);
+  if (target.branch.startsWith(LEASE_BRANCH_PREFIX)) throw new Error("Nome branch riservato al blocco di scrittura.");
+  if (!shaPattern.test(fromCommit)) throw new Error("Commit di partenza non valido.");
+  const token = await tokenFromVault();
+  try {
+    await request(token, apiPath(target, "/git/refs"), { method: "POST", body: { ref: "refs/heads/" + target.branch, sha: fromCommit }, signal });
+  } catch (error) {
+    if (error instanceof RemoteConflict) throw new RemoteConflict("Il branch «" + target.branch + "» esiste già o non può essere creato. Nessun branch spostato.");
+    throw error;
+  }
+  if (await readGitHubBranchHead(target, signal) !== fromCommit.toLowerCase())
+    throw new RemoteConflict("GitHub non conferma il nuovo branch sul commit richiesto.");
+}
+
+export interface GitHubComparison { status: "identical" | "ahead" | "behind" | "diverged"; aheadBy: number; behindBy: number; mergeBase: string | null }
+/** Common ancestor and distance of two commits (`b` relative to `a`). */
+export async function compareGitHubCommits(remote: GitHubRemote, a: string, b: string, signal?: AbortSignal): Promise<GitHubComparison> {
+  if (!shaPattern.test(a) || !shaPattern.test(b)) throw new Error("SHA di confronto GitHub non valido.");
+  const token = await tokenFromVault();
+  const response = await request<{ status?: string; ahead_by?: number; behind_by?: number; merge_base_commit?: { sha?: string } | null }>(
+    token, apiPath(validateRemote(remote), "/compare/" + a + "..." + b + "?per_page=1&page=1"), { signal });
+  const status = response?.status;
+  if (status !== "identical" && status !== "ahead" && status !== "behind" && status !== "diverged")
+    throw new Error("GitHub ha restituito un confronto non valido.");
+  const base = response?.merge_base_commit?.sha;
+  return { status, aheadBy: Math.max(0, Number(response?.ahead_by) || 0), behindBy: Math.max(0, Number(response?.behind_by) || 0),
+    mergeBase: base && shaPattern.test(base) ? base.toLowerCase() : null };
+}
+
 export interface PushOptions {
   /** Enabled only by the autosync coordinator, never by an untrusted remote payload. */
   automatic?: boolean;
   operationId?: string;
+  /** The book already holds the result of merging `theirsParent` into `oursParent`: publish it as a merge commit.
+   * The branch must still be at `expectedHead`, which is the tree the merge is built on. */
+  merge?: { oursParent: string; theirsParent: string; expectedHead: string };
 }
 export interface PushResult {
   commit: string;
@@ -688,7 +762,8 @@ export async function pushGitHubBook(
   const current = await getBookForMutation(bookId);
   if (!current?.remote) throw new Error("Collega prima una repository a questo libro.");
   if (githubPublicationBlocker(current))
-    throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
+    throw new Error(current.mergeSession ? "Sincronizzazione bloccata: un'unione di branch è in attesa di decisioni."
+      : "Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
   if (current.status === "running" && !options.automatic)
     throw new Error("Metti in pausa l'autopilot prima della sincronizzazione GitHub.");
   if (options.automatic && !current.remote.autoSync)
@@ -710,7 +785,11 @@ export async function pushGitHubBook(
   if (!repo.permissions?.push) throw new Error("Il PAT non ha permessi di scrittura su questa repository.");
 
   const head = await headSha(token, remote);
-  if (!current.remote.lastSyncedCommit || current.remote.lastSyncedCommit !== head) {
+  const merging = options.merge;
+  if (merging) {
+    if (head !== merging.expectedHead || ![merging.oursParent, merging.theirsParent].every(p => shaPattern.test(p)))
+      throw new RemoteConflict("La repository è cambiata durante l'unione: ripeti il confronto.");
+  } else if (!current.remote.lastSyncedCommit || current.remote.lastSyncedCommit !== head) {
     // An interrupted PATCH may have succeeded remotely but failed before its local ACK.
     // Only our EXACT HEAD commit marker authorizes recovery, never an unrelated newer commit.
     if (options.operationId) {
@@ -813,7 +892,7 @@ export async function pushGitHubBook(
   const verifiedLocal = await getBookForMutation(bookId);
   if (!verifiedLocal || verifiedLocal.updatedAt !== current.updatedAt) throw new LocalBookChanged();
   if (githubPublicationBlocker(verifiedLocal))
-    throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse prima del push GitHub.");
+    throw new Error("Sincronizzazione bloccata: conferma nel Lettore tutte le scene fuse e chiudi le unioni di branch prima del push GitHub.");
   const tree = await request<{ sha?: string }>(
     token, apiPath(remote, "/git/trees"),
     { method: "POST", body: { base_tree: baseTree, tree: treeEntries } },
@@ -821,7 +900,8 @@ export async function pushGitHubBook(
   if (!tree?.sha || !shaPattern.test(tree.sha)) throw new Error("GitHub non ha creato un tree valido.");
   const commit = await request<{ sha?: string }>(
     token, apiPath(remote, "/git/commits"),
-    { method: "POST", body: { message: "bookwriter: sync " + operationId, tree: tree.sha, parents: [head] } },
+    { method: "POST", body: { message: "bookwriter: sync " + operationId, tree: tree.sha,
+      parents: merging ? [merging.oursParent, merging.theirsParent] : [head] } },
   );
   if (!commit?.sha || !shaPattern.test(commit.sha)) throw new Error("GitHub non ha creato un commit valido.");
 

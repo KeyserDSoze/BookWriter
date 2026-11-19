@@ -102,7 +102,7 @@ test("shared runner executes a real simulated HTTP completion on the file adapte
 
 test("admin/API separation, signed identity, scopes, CSRF, idempotency and CAS", async () => temporary(async root => {
   const release = await lockDataRoot(root);
-  const server = await startPersonalServer({ root, adminPort: 0, apiPort: 0 });
+  const server = await startPersonalServer({ root, adminPort: 0, apiPort: 0, git: false });
   const api = `http://127.0.0.1:${server.apiPort}`;
   const admin = `http://127.0.0.1:${server.adminPort}`;
   try {
@@ -334,7 +334,7 @@ test("Node manual GitHub save uses delegated PAT and recovers a lost PATCH ACK w
 }));
 
 test("production authority: first explicit publish, scoped PAT through a run, and advanced HEAD blocks AI", async () => temporary(async root => {
-  const service = await startPersonalServer({ root, apiPort: 0, adminPort: 0 });
+  const service = await startPersonalServer({ root, apiPort: 0, adminPort: 0, git: false });
   const native = globalThis.fetch;
   const secret = "synthetic-github-delegation", aiKey = "synthetic-ai-delegation";
   const clientToken = await service.auth.issue("Autorità test", ["read", "write", "run"]);
@@ -407,6 +407,8 @@ test("production authority: first explicit publish, scoped PAT through a run, an
         if (key === branch && ++writes === 1) throw new TypeError("synthetic lost PATCH response");
         return response({ object: { sha: body.sha } });
       }
+      // The repository cannot be read back for a pull: GitHub looks unavailable, nothing may start.
+      if (path.startsWith("/git/trees/") && method === "GET" || path.startsWith("/compare/")) return response({}, 503);
       assert.fail(`Unexpected synthetic path: ${path}`);
     } catch (e) {
       if (!(e instanceof TypeError && e.message === "synthetic lost PATCH response")) fakeFailure = e;
@@ -455,17 +457,18 @@ test("production authority: first explicit publish, scoped PAT through a run, an
     const external = sha();
     commits.set(external, commits.get(refs.get(branch)));
     refs.set(branch, external);
-    await send(bookId, { type: "start" });
+    const startAfterMove = await send(bookId, { type: "start" });
     await service.controller.waitForIdle();
-    assert.equal(posts, 1, "unchanged authority marker is not a proof of current baseline");
-    assert.match((await service.store.read(bookId)).activities.at(-1).error, /baseline GitHub/);
+    assert.equal(posts, 1, "a repository that moved and cannot be reconciled never starts the AI");
+    assert.equal((await service.store.read(bookId)).runAuthorization.state, "stopped");
+    assert.equal(startAfterMove.state === "completed" || startAfterMove.state === "accepted", true);
     assert.equal(fakeFailure, undefined);
   } finally { globalThis.fetch = native; await service.close(); }
 }));
 
 test("restart marks requested commands and in-flight AI as uncertain, with no replay or invented usage", async () => temporary(async root => {
   const release = await lockDataRoot(root);
-  let server = await startPersonalServer({ root, apiPort: 0, adminPort: 0 });
+  let server = await startPersonalServer({ root, apiPort: 0, adminPort: 0, git: false });
   const token = await server.auth.issue("Crash test", ["read", "write", "run"]);
   const client = server.auth.authenticate(token.token);
   const id = await server.controller.create(client, randomUUID(), { title: "Crash", brief: "Sintetico", writingStyle: "", audience: "" });
@@ -481,7 +484,7 @@ test("restart marks requested commands and in-flight AI as uncertain, with no re
       reason: "", nextStep: "", status: "running", aiRequested: true, createdAt: new Date().toISOString() });
   });
   await server.close();
-  server = await startPersonalServer({ root, apiPort: 0, adminPort: 0 });
+  server = await startPersonalServer({ root, apiPort: 0, adminPort: 0, git: false });
   try {
     const recovered = await server.store.read(id);
     assert.equal(recovered.book.status, "paused");
