@@ -227,7 +227,7 @@ export async function syncSnapshot(connection: ServerConnection, bookId: string,
   } catch (error) { try { tx.abort(); } catch { /* already aborted */ } throw error; }
 }
 const bookPageSchema = z.object({ books: z.array(z.object({ bookId: z.string().uuid(), title: z.string(),
-  status: z.string(), epoch: z.string().uuid(), revision: z.number().int() }).strict()).max(100),
+  status: z.string(), epoch: z.string().uuid(), revision: z.number().int(), released: z.boolean().optional() }).strict()).max(100),
   nextCursor: z.string().uuid().nullable() }).strict();
 export type ServerBookEntry = z.infer<typeof bookPageSchema>["books"][number];
 async function listServerBooks(connection: ServerConnection): Promise<ServerBookEntry[]> {
@@ -251,7 +251,12 @@ export async function syncPersonalServer(): Promise<number> {
   const connection = await personalServerConnection();
   if (!connection) throw new Error("Collega e verifica prima il server personale.");
   let count = 0;
-  for (const book of await listServerBooks(connection)) { await syncServerBook(connection, book.bookId); count++; }
+  const db = await getDb();
+  for (const book of await listServerBooks(connection)) {
+    // A book the server gave back is followed only by the replica that is waiting to take it back.
+    if (book.released && !await db.get("meta", replicaKey(book.bookId))) continue;
+    await syncServerBook(connection, book.bookId); count++;
+  }
   return count;
 }
 /** Cheap catch-up after a reconnect: only books whose epoch/revision differ from the local cursor. */
@@ -263,6 +268,7 @@ export async function syncChangedServerBooks(): Promise<{ synced: string[]; fail
   let failed = 0;
   for (const book of await listServerBooks(connection)) {
     const cursor = await db.get("meta", replicaKey(book.bookId)) as { epoch?: string; revision?: number } | undefined;
+    if (book.released && !cursor) continue;
     if (cursor?.epoch === book.epoch && cursor.revision === book.revision) continue;
     try { await syncServerBook(connection, book.bookId); synced.push(book.bookId); } catch { failed++; }
   }

@@ -111,3 +111,70 @@ test("branch, pull e unione sul server: decisioni sui conflitti, consenso AI e n
   expect(aiCalls).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
+
+test("rilascio dal server: il libro torna al dispositivo, locale e pulito rispetto alla versione rilasciata", async ({ page }) => {
+  const keys = generateKeyPairSync("ed25519");
+  const publicKey = keys.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+  const serverId = randomUUID(), clientId = randomUUID(), epoch = randomUUID();
+  const token = "synthetic-personal-server-" + "r".repeat(40);
+  const released = "c".repeat(40);
+  const book = newBook("Brief sintetico.", "Libro rilasciato", "Chiaro", "Adulti");
+  const owned = { kind: "server" as const, serverId, epoch };
+  let revision = 1, done = false;
+  book.executionAuthority = owned; book.status = "paused";
+  book.remote = { owner: "demo", repository: "faro", branch: "main", autoSync: false, allowPublicSync: false,
+    lastSyncedCommit: released, lastSyncedLocalUpdatedAt: book.updatedAt };
+  await page.route("http://127.0.0.1:24106/**", async route => {
+    const request = route.request(), url = new URL(request.url());
+    const headers = { "Access-Control-Allow-Origin": "http://127.0.0.1:5173", "Access-Control-Allow-Headers": "apikey,content-type,if-match",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Expose-Headers": "ETag" };
+    if (request.method() === "OPTIONS") { await route.fulfill({ status: 204, headers }); return; }
+    if (url.pathname === "/api/v1/info") {
+      const nonce = url.searchParams.get("nonce")!;
+      await route.fulfill({ headers, json: { apiVersion: 1, serverVersion: "0.1.0", engineVersion: "0.34.0", bookFormatVersion: BOOK_FORMAT_VERSION,
+        serverId, publicKey, fingerprint: createHash("sha256").update(Buffer.from(publicKey, "base64")).digest("hex"), nonce,
+        signature: sign(null, Buffer.from(nonce + "\n" + serverId + "\n" + publicKey), keys.privateKey).toString("base64") } });
+      return;
+    }
+    if (url.pathname === "/api/v1/session") { await route.fulfill({ headers, json: { clientId, label: "Test", scopes: ["read", "write", "run"] } }); return; }
+    if (url.pathname === "/api/v1/books") {
+      await route.fulfill({ headers, json: { books: [{ bookId: book.id, title: book.title, status: book.status, epoch, revision, ...(done ? { released: true } : {}) }], nextCursor: null } }); return;
+    }
+    if (url.pathname.endsWith("/snapshot")) {
+      book.executionAuthority = done ? { ...owned, releasedAt: "2026-11-19T12:00:00.000Z", releasedCommit: released } : owned;
+      await route.fulfill({ headers: { ...headers, ETag: `"${epoch}:${revision}"` }, json: { book, activities: [], revision, nextSequence: 2, retrySchedule: null, hasManualPushIntent: false } }); return;
+    }
+    await route.fulfill({ status: 404, headers, json: { code: "route", message: "Unavailable" } });
+  });
+  page.on("dialog", dialog => dialog.accept());
+  await page.goto("/impostazioni?tab=server");
+  await page.getByRole("textbox", { name: "URL del server" }).fill("http://127.0.0.1:24106");
+  await page.getByLabel("Token BookWriter (header apikey)", { exact: true }).fill(token);
+  await page.getByRole("button", { name: "Verifica server", exact: true }).click();
+  await expect(page.getByText(/Identità firmata ricevuta/)).toBeVisible();
+  await page.getByRole("button", { name: "Collega server", exact: true }).click();
+  await expect(page.getByText(/Connessione verificata e token cifrato/)).toBeVisible();
+  await page.getByRole("button", { name: "Sincronizza dal server", exact: true }).click();
+  await expect(page.getByText(/1 repliche confermate/)).toBeVisible();
+  await page.getByLabel("Libro attivo", { exact: true }).selectOption(book.id);
+  const nav = page.getByRole("navigation", { name: test.info().project.name === "mobile-chromium" ? "Navigazione mobile" : "Navigazione principale" });
+  await nav.getByRole("button", { name: "Dashboard", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Riporta il libro sul dispositivo" })).toBeVisible();
+  done = true; revision = 3;
+  await page.getByRole("button", { name: "Aggiorna replica", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Libro rilasciato dal server" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Avvia sul server", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "GitHub e branch sul server" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Riprendi il libro su questo dispositivo" }).click();
+  await expect(page.getByRole("region", { name: "Libro sul server personale" })).toHaveCount(0);
+  const local = await page.evaluate(async id => {
+    const { getDb } = await import("/src/infrastructure/db.ts");
+    const db = await getDb(); const stored = await db.get("books", id);
+    return { authority: !!stored.executionAuthority, commit: stored.remote.lastSyncedCommit, clean: stored.remote.lastSyncedLocalUpdatedAt === stored.updatedAt,
+      replica: !!(await db.get("meta", "personal-server:replica:v1:" + id)) };
+  }, book.id);
+  expect(local).toEqual({ authority: false, commit: released, clean: true, replica: false });
+  await page.goto("/impostazioni?tab=server");
+  await page.getByRole("button", { name: "Sincronizza dal server", exact: true }).click();
+  await expect(page.getByText(/0 repliche confermate/)).toBeVisible();
+});

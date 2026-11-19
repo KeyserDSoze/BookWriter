@@ -37,6 +37,11 @@ Mentre un'unione attende: l'avvio normale è rifiutato, il salvataggio su GitHub
 
 Scegli «L'autopilot propone le scene modificate in entrambi» e dai il **consenso a inviare al modello le scene in conflitto e il canone, segreti compresi**: vale solo per quell'unione. L'autopilot propone una scena unita per ogni conflitto di scena, con la versione di partenza comune nel prompt; le scene sono dati non attendibili, non istruzioni. La proposta diventa **bozza** in un capitolo riaperto: non è canone finché la revisione editoriale normale (lettori, specialisti, direttore) non la approva. Gli altri conflitti (campi, schede, memoria, scene presenti in un solo ramo) restano a te e l'autopilot si ferma spiegandolo. Quando tutto è deciso il server pubblica l'unione e lascia il libro in pausa: riprendi l'autopilot per la revisione.
 
+## Libri già su GitHub: affidarli al server e riprenderli
+
+- **Affida «…» al server** (Impostazioni → Server personale, libro attivo con GitHub): il libro deve essere **salvato** su GitHub. Delegando il PAT di questo dispositivo, il libro diventa subito una replica di sola lettura qui; il server **legge la repository con `git`** (il testo non viene inviato), pubblica un commit con il marcatore che lo nomina autorità e da quel momento lavora lui. Se il server non conferma, riprendi l'invio o annulla: nessun secondo esecutore.
+- **Riporta il libro sul dispositivo** (Dashboard, libro sul server): il server porta su GitHub tutto, unisce ciò che è arrivato (con conflitti si ferma), toglie il proprio marcatore dalla repository, revoca il PAT delegato e smette di eseguirlo. Poi **Riprendi il libro su questo dispositivo** lo rende di nuovo locale e pulito rispetto alla versione rilasciata. Dettagli: [ADR 0170](../ADR/0170-github-book-adoption-and-release.md).
+
 ## Sicurezza
 
 - Il PAT vive solo nell'ambiente del processo `git` (intestazione verso `github.com`), mai in argomenti, URL, configurazione o messaggi di errore. Repository `https://github.com/<proprietario>/<repository>.git` da nomi validati; ambiente costruito da zero, nessun prompt né credential helper, hook e symlink disattivati, redirect disattivati, `fsckObjects` attivo.
@@ -45,7 +50,8 @@ Scegli «L'autopilot propone le scene modificate in entrambi» e dai il **consen
 
 ## Limiti dichiarati
 
-- **Non ancora:** adottare dal server un libro già presente su GitHub; riportare il libro sul client; rebase, cherry-pick, eliminazione di rami, tag, pull request.
+- **Esclusi di proposito:** rebase e cherry-pick (riscrivono la storia: servirebbe un push forzato), tag e pull request (nessuna funzione sul libro).
+- L'autopilot propone testi per scene, campi di testo, voci di memoria, stato, timeline e liste; capitoli, struttura dei capitoli e schede narrative restano a te.
 - Le schede narrative si uniscono come un'unica unità (decisione o presa insieme). Consensi, budget e instradamenti modello restano quelli del ramo che riceve l'unione.
 - Il limite di 12 MiB per push e di 64 KiB per comando restano.
-- Provato con repository locali e GitHub simulato, non con GitHub reale (permessi, branch protetti), Windows o proxy: le variabili `HTTPS_PROXY` non sono inoltrate a `git`.
+- Provato con repository locali e GitHub simulato, non con GitHub reale (permessi, branch protetti) né con un proxy reale. `HTTPS_PROXY`, `NO_PROXY`, `ALL_PROXY` e le variabili dei certificati (`SSL_CERT_FILE`/`SSL_CERT_DIR`, `GIT_SSL_CAINFO`/`GIT_SSL_CAPATH`) sono inoltrate ai soli comandi di rete di `git`; nient'altro dell'ambiente passa. Windows è provato dalla CI.

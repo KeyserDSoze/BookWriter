@@ -107,7 +107,7 @@ export function describeNextAutopilotStep(book: BookProject, operational?: { ret
     return view(`Unione di «${merge.theirsBranch}» in «${merge.oursBranch}».`, open === 0
       ? { detail: "Tutti i conflitti hanno una decisione: l'unione viene pubblicata." }
       : merge.mode === "autopilot"
-        ? { detail: `${open} conflitti: l'autopilot propone una versione per le scene modificate in entrambi i branch; il resto lo decidi tu.` }
+        ? { detail: `${open} conflitti: l'autopilot propone una versione per i contenuti di testo modificati in entrambi i branch; il resto lo decidi tu.` }
         : { blocked: `${open} conflitti da decidere nella pagina Revisioni prima di riprendere.` });
   }
   // The runner executes a review the author asked for before anything else; a review by the

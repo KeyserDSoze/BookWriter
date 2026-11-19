@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import {
   z, serverScopeSchema, cloudSettingsSchema, normalizeServerUrl, SERVER_API_VERSION,
-  handoffRequestSchema, handoffResolveSchema, serverBookCreationInputSchema,
+  handoffRequestSchema, githubHandoffRequestSchema, handoffResolveSchema, serverBookCreationInputSchema,
   installHostRuntime, type HostBookRecord, type BookProject,
   readGitHubExecutionAuthority, subscribeLiveAi, currentLiveAi,
 } from "@engine/index";
@@ -132,7 +132,8 @@ export async function startPersonalServer(options: ServerOptions) {
       }
     },
   });
-  const controller = new Controller(store, host.runtime, installation.serverId, client => auth.isCurrent(client));
+  const controller = new Controller(store, host.runtime, installation.serverId, client => auth.isCurrent(client),
+    { stage: host.stageBookPat, drop: host.dropBookPat, revoke: host.revokeBookPat });
   try { await controller.recover(); } catch (error) { host.dispose(); throw error; }
   const streams = new Set<() => void>();
   const commits = new Set<(id: string) => void>();
@@ -230,7 +231,8 @@ export async function startPersonalServer(options: ServerOptions) {
         for (const id of ids.slice(0, 100)) {
           const record = await getRecord(id);
           books.push({ bookId: record.book.id, title: record.book.title,
-            status: record.book.status, epoch: record.book.executionAuthority!.epoch, revision: record.revision });
+            status: record.book.status, epoch: record.book.executionAuthority!.epoch, revision: record.revision,
+            ...(record.book.executionAuthority!.releasedAt ? { released: true } : {}) });
         }
         requireScope("read");
         json(res, 200, { books, nextCursor: ids.length > 100 ? ids[99] : null }); return;
@@ -240,6 +242,12 @@ export async function startPersonalServer(options: ServerOptions) {
         const body = createSchema.parse(await readBody(req, 1024 * 1024));
         requireScope("write");
         json(res, 201, { bookId: await controller.create(client, body.commandId, body) }); return;
+      }
+      if (url.pathname === "/api/v1/handoffs/github" && req.method === "POST") {
+        requireScope("write");
+        const body = githubHandoffRequestSchema.parse(await readBody(req, 16_384));
+        requireScope("write");
+        json(res, 201, await controller.adoptGitHub(client, body)); return;
       }
       if (url.pathname === "/api/v1/handoffs" && req.method === "POST") {
         requireScope("write");

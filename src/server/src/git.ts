@@ -20,6 +20,8 @@ export interface GitWorkspaceOptions {
   binary?: string;
   /** Per git process; local operations never wait longer than 30 s. */
   timeoutMs?: number;
+  /** Pass the server's proxy and CA variables (HTTPS_PROXY, SSL_CERT_FILE…) to network git commands. Default true. */
+  forwardNetworkEnvironment?: boolean;
 }
 
 const NETWORK_ERROR = "GitHub non raggiungibile. Controlla rete e autorizzazioni del browser.";
@@ -68,13 +70,21 @@ export interface GitEnvironmentInput {
   gitDir?: string; workTree?: string;
   /** Only for requests to github.com: sent as an HTTP header through env config, never argv or `.git/config`. */
   token?: string;
+  /** Copy the proxy and CA variables of the server process (see FORWARDED_NETWORK_VARIABLES); off unless asked. */
+  forwardNetwork?: boolean;
   extra?: Record<string, string>;
 }
-/** Environment built from scratch: nothing of the server's own environment reaches git except PATH. */
+/** The only variables of the server's own environment that reach git beyond PATH: proxy and CA settings for network commands. */
+const FORWARDED_NETWORK_VARIABLES = [
+  "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy",
+  "SSL_CERT_FILE", "SSL_CERT_DIR", "GIT_SSL_CAINFO", "GIT_SSL_CAPATH",
+] as const;
+/** Environment built from scratch: nothing of the server's own environment reaches git except PATH (and, for network commands, proxy and CA settings). */
 export function buildGitEnvironment(input: GitEnvironmentInput): Record<string, string> {
   const env: Record<string, string> = {};
   const inherited = process.platform === "win32" ? ["PATH", "SystemRoot", "PATHEXT", "TEMP", "TMP", "ComSpec"] : ["PATH"];
   for (const name of inherited) { const value = process.env[name]; if (value !== undefined) env[name] = value; }
+  if (input.forwardNetwork) for (const name of FORWARDED_NETWORK_VARIABLES) { const value = process.env[name]; if (value !== undefined) env[name] = value; }
   Object.assign(env, {
     HOME: input.home, XDG_CONFIG_HOME: input.home,
     ...(process.platform === "win32" ? { USERPROFILE: input.home } : {}),
@@ -491,6 +501,17 @@ async function patchRef(ctx: Ctx, branch: string, body: unknown): Promise<Out> {
   } catch { /* best effort */ }
   return ok({ ref, object: { type: "commit", sha } });
 }
+/** Delete a branch: the only deletion the engine asks for, after it proved the branch is merged. Lease branches are never touched. */
+async function deleteRef(ctx: Ctx, branch: string): Promise<Out> {
+  if (!validBranch(branch) || branch.startsWith("bookwriter-lock/")) throw invalid("Nome del ramo non valido.");
+  const ref = "refs/heads/" + branch;
+  await unlockRef(ctx, branch);
+  if (!(await remoteHeads(ctx, ref)).has(ref)) throw invalid("Il ramo non esiste.");
+  const result = await ctx.run(["push", "--porcelain", "--no-verify", "--no-recurse-submodules", "origin", ":" + ref], { network: true });
+  if (result.code !== 0 || /^!\t/m.test(result.stdout.toString("utf8"))) raise(classify(result.stdout.toString("utf8") + "\n" + result.stderr));
+  await ctx.run(["update-ref", "-d", "refs/remotes/origin/" + branch]);
+  return ok({}, 204);
+}
 async function postRef(ctx: Ctx, body: unknown): Promise<Out> {
   if (!isRecord(body) || !onlyKeys(body, ["ref", "sha"]) || typeof body.ref !== "string" ||
       !body.ref.startsWith("refs/heads/") || !validBranch(body.ref.slice(11)))
@@ -559,6 +580,9 @@ function match(method: string, p: string[], query: URLSearchParams, body: unknow
   } else if (method === "PATCH") {
     if (p[0] === "git" && p[1] === "refs" && p[2] === "heads" && p.length >= 4 && onlyQuery(query, []))
       return ctx => patchRef(ctx, p.slice(3).join("/"), body);
+  } else if (method === "DELETE") {
+    if (p[0] === "git" && p[1] === "refs" && p[2] === "heads" && p.length >= 4 && onlyQuery(query, []))
+      return ctx => deleteRef(ctx, p.slice(3).join("/"));
   }
   return undefined;
 }
@@ -595,6 +619,7 @@ export class GitWorkspaces {
   private readonly allowFile: boolean;
   private readonly binary: string;
   private readonly timeoutMs: number;
+  private readonly forwardNetwork: boolean;
   private readonly queues = new Map<string, Promise<void>>();
   private readonly ready = new Set<string>();
   private homeReady: Promise<void> | undefined;
@@ -609,6 +634,7 @@ export class GitWorkspaces {
     this.allowFile = options.allowFileProtocol === true;
     this.binary = options.binary ?? "git";
     this.timeoutMs = options.timeoutMs ?? NETWORK_TIMEOUT_MS;
+    this.forwardNetwork = options.forwardNetworkEnvironment !== false;
   }
 
   static async probe(binary = "git"): Promise<{ version: string }> {
@@ -669,7 +695,7 @@ export class GitWorkspaces {
     const env = buildGitEnvironment({
       home: this.home, hooksDir: this.hooksDir, configFile: this.configFile, allowFileProtocol: this.allowFile,
       ...options.init ? {} : { gitDir: ws.gitDir, workTree: ws.dir },
-      ...network && ws.authenticated ? { token } : {}, extra: options.env,
+      ...network && ws.authenticated ? { token } : {}, ...network && this.forwardNetwork ? { forwardNetwork: true } : {}, extra: options.env,
     });
     try {
       return await spawnGit(this.binary, args, {

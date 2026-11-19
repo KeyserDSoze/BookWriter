@@ -5,7 +5,7 @@ import {
   DEFAULT_SETTINGS, type HostRuntime, type BookProject, type Activity, type AppSettings,
   createTaskStructuralCheckpoint, verifyEndpointSettings,
   cloudSettingsSchema, projectSettings, type EncryptedSecret,
-  retrySettingsEpochSchema, sameRetrySettings, retryStamp, narrativeStateJson, type GitHubGitTransport,
+  isReleasedBook, retrySettingsEpochSchema, sameRetrySettings, retryStamp, narrativeStateJson, type GitHubGitTransport,
 } from "@engine/index";
 import { endpointAuthMode } from "@engine/infrastructure/ai";
 import { atomicJson, FileBookStore, readJson } from "./files";
@@ -38,6 +38,11 @@ export async function createRuntime(store: FileBookStore, vault: Vault, options?
     if (!owns(book))
       throw new Error("Autorità del server non confermata: nessuna scrittura.");
   };
+  /** A released book is the client's again: nothing is written for it on this server. */
+  const assertWritable = (book: BookProject) => {
+    assertLocalAuthority(book);
+    if (isReleasedBook(book)) throw new Error("Libro rilasciato al client: nessuna scrittura sul server.");
+  };
   const stamp = (book: BookProject, previous: BookProject) => {
     book.updatedAt = new Date(Math.max(Date.now(), Date.parse(previous.updatedAt) + 1)).toISOString();
   };
@@ -48,7 +53,7 @@ export async function createRuntime(store: FileBookStore, vault: Vault, options?
   const save = async (book: BookProject, queueSync: boolean, expected?: string, activity?: Activity, checkpoint = true) => {
     const written = await store.transaction(book.id, async record => {
       if (expected !== undefined && record.book.updatedAt !== expected) throw new BookRevisionConflict();
-      assertLocalAuthority(record.book); assertLocalAuthority(book);
+      assertWritable(record.book); assertLocalAuthority(book);
       if (record.book.executionAuthority?.epoch !== book.executionAuthority?.epoch)
         throw new Error("Autorità del libro cambiata.");
       const previous = record.book;
@@ -79,7 +84,7 @@ export async function createRuntime(store: FileBookStore, vault: Vault, options?
   const runtime: HostRuntime = {
     kind: "node",
     transaction: (id, action) => store.transaction(id, async record => {
-      assertLocalAuthority(record.book);
+      assertWritable(record.book);
       const epoch = record.book.executionAuthority?.epoch;
       const result = await action(record);
       assertLocalAuthority(record.book);
@@ -90,7 +95,7 @@ export async function createRuntime(store: FileBookStore, vault: Vault, options?
     getBook: async id => (await store.read(id))?.book,
     getBookForMutation: async id => {
       const book = (await store.read(id))?.book;
-      if (book) assertLocalAuthority(book);
+      if (book) assertWritable(book);
       return book;
     },
     listBookIds: () => store.ids(),
@@ -138,7 +143,7 @@ export async function createRuntime(store: FileBookStore, vault: Vault, options?
     admission: {
       owns,
       assert: async (book, signal) => {
-        assertLocalAuthority(book);
+        assertWritable(book);
         await options?.assertAuthority?.(book, signal);
       },
       locks: book => [book.remote ? "bookwriter:github-run" : "bookwriter:local-run:" + book.id],
@@ -167,6 +172,21 @@ export async function createRuntime(store: FileBookStore, vault: Vault, options?
   }
   return {
     runtime, dispose,
+    /** Adoption reads the repository BEFORE the book exists: its credential is bound to the book id first. */
+    stageBookPat: (bookId: string, token: string) => store.serial("$config", async () => {
+      await commitSettings(settings, { ...bookTokens, [bookId]: await vault.encrypt(token) });
+    }),
+    /** A released book no longer needs the credential the client delegated for it. */
+    revokeBookPat: (bookId: string) => store.serial("$config", async () => {
+      if (!bookTokens[bookId]) return;
+      const bindings = { ...bookTokens }; delete bindings[bookId];
+      await commitSettings(settings, bindings);
+    }),
+    dropBookPat: (bookId: string) => store.serial("$config", async () => {
+      if (!bookTokens[bookId] || await store.read(bookId)) return;
+      const bindings = { ...bookTokens }; delete bindings[bookId];
+      await commitSettings(settings, bindings);
+    }),
     configuration: () => ({ revision: configRevision, settings: projectSettings(settings),
       endpointKeys: settings.endpoints.filter(e => e.secret && e.authMode !== "none").map(e => e.id),
       githubBooks: Object.keys(bookTokens) }),

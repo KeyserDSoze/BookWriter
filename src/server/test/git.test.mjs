@@ -129,6 +129,39 @@ test("environment is built from scratch with auth only as env config", () => {
   } finally { delete process.env.BOOKWRITER_TEST_SECRET; }
 });
 
+const FORWARDED = {
+  HTTPS_PROXY: "http://proxyuser:proxysecret@proxy.invalid:3128", https_proxy: "http://proxyuser:proxysecret@proxy.invalid:3128",
+  HTTP_PROXY: "http://proxy.invalid:3128", http_proxy: "http://proxy.invalid:3128",
+  ALL_PROXY: "socks5://proxy.invalid:1080", all_proxy: "socks5://proxy.invalid:1080",
+  NO_PROXY: "localhost,.internal", no_proxy: "localhost,.internal",
+  SSL_CERT_FILE: "/etc/bookwriter/ca.pem", SSL_CERT_DIR: "/etc/bookwriter/certs",
+  GIT_SSL_CAINFO: "/etc/bookwriter/ca.pem", GIT_SSL_CAPATH: "/etc/bookwriter/certs",
+};
+const NOT_FORWARDED = {
+  SECRET_SENTINEL: "secret-must-not-leak", GITHUB_TOKEN: "ghp_token_must_not_leak", GH_TOKEN: "gh-token-must-not-leak",
+  GIT_SSL_NO_VERIFY: "1", GIT_TRACE: "1", GIT_ASKPASS: "/nonexistent/evil-askpass",
+};
+async function withEnvironment(values, action) {
+  const previous = Object.entries(values).map(([name]) => [name, process.env[name]]);
+  Object.assign(process.env, values);
+  try { return await action(); } finally {
+    for (const [name, value] of previous.reverse()) { if (value === undefined) delete process.env[name]; else process.env[name] = value; }
+  }
+}
+
+test("proxy and CA variables are copied from an explicit allowlist only, and only when asked", () => withEnvironment({ ...FORWARDED, ...NOT_FORWARDED }, () => {
+  const input = { home: join(tmpdir(), "h"), hooksDir: join(tmpdir(), "h", "hooks"), configFile: join(tmpdir(), "h", "cfg"), allowFileProtocol: false };
+  const bare = buildGitEnvironment(input);
+  for (const name of Object.keys(FORWARDED)) assert.equal(bare[name], undefined, name);
+  assert.deepEqual(Object.keys(buildGitEnvironment({ ...input, forwardNetwork: false })).sort(), Object.keys(bare).sort());
+  const forwarded = buildGitEnvironment({ ...input, forwardNetwork: true });
+  for (const [name, value] of Object.entries(FORWARDED)) assert.equal(forwarded[name], value, name);
+  assert.deepEqual(Object.keys(forwarded).filter(name => !(name in bare)).sort(), Object.keys(FORWARDED).sort());
+  for (const name of ["SECRET_SENTINEL", "GITHUB_TOKEN", "GH_TOKEN", "GIT_SSL_NO_VERIFY", "GIT_TRACE"]) assert.equal(forwarded[name], undefined, name);
+  assert.equal(forwarded.GIT_ASKPASS, "");
+  assert.ok(!Object.values(forwarded).some(value => /must-not-leak|must_not_leak/.test(value)));
+}));
+
 test("tree path validation", () => {
   for (const path of ["a/../b", "..", ".", "/abs", "a\\b", "a//b", "a/", ".git", ".git/config", ".GIT/x", "a/.Git", ".git ", ".git.", "GIT~1/x",
     "x\u0000y", "x\ny", "x".repeat(401), "", 7, undefined, ".\u200cgit/x", "lone\ud800"])
@@ -409,7 +442,7 @@ test("what the transport does not handle is left to HTTPS", { skip }, async () =
   const handle = (method, path, body) => f.workspaces.transport.handle({ token: SENTINEL, method, path, body });
   for (const [method, path] of [
     ["GET", REPO], ["PUT", REPO + "/contents/.bookwriter/initialization.json"], ["GET", REPO + "/git/ref/tags/v1"],
-    ["GET", REPO + "/commits"], ["GET", REPO + "/commits?sha=x&path=a"], ["POST", REPO + "/git/tags"], ["DELETE", REPO + "/git/refs/heads/main"],
+    ["GET", REPO + "/commits"], ["GET", REPO + "/commits?sha=x&path=a"], ["POST", REPO + "/git/tags"], ["DELETE", REPO + "/git/refs/tags/v1"], ["DELETE", REPO + "/git/refs"],
     ["GET", REPO + "/contents/book.md"], ["GET", "/user"], ["GET", "/repos/acme"], ["GET", REPO + "/git/trees"], ["GET", REPO + "/git/blobs"],
     ["POST", REPO + "/git/refs/heads/main"], ["PATCH", REPO + "/git/refs"], ["PATCH", REPO + "/git/refs/tags/v1"],
   ]) assert.equal(await handle(method, path), undefined, method + " " + path);
@@ -555,6 +588,8 @@ async function spy(root) {
 LOG='${log}'
 cmd="$1"
 case "$cmd" in
+  init|config)
+    env > "$LOG/$cmd.env";;
   fetch|ls-remote|push)
     env > "$LOG/$cmd.env"
     printf '%s\\n' "$@" > "$LOG/$cmd.args"
@@ -598,6 +633,42 @@ test("the PAT travels only as an HTTP header in the environment of github.com re
   await workspaces.close();
 }));
 
+test("network git commands inherit the server's proxy and CA settings and nothing else; the PAT stays out of config and errors", { skip: skip || !posix && "serve uno script eseguibile" }, async () => temporary(async root => {
+  await withEnvironment({ ...FORWARDED, ...NOT_FORWARDED }, async () => {
+    const { log, script } = await spy(root);
+    const workspaces = new GitWorkspaces({ root: join(root, "server"), binary: script });
+    const result = await workspaces.transport.handle({ token: SENTINEL, method: "GET", path: REPO + "/git/ref/heads/main" }).catch(error => error);
+    assert.equal(result.message, NETWORK);
+    const lines = (await fs.readFile(join(log, "fetch.env"), "utf8")).split("\n");
+    for (const [name, value] of Object.entries(FORWARDED)) assert.ok(lines.includes(name + "=" + value), name);
+    for (const name of ["SECRET_SENTINEL", "GITHUB_TOKEN", "GH_TOKEN", "GIT_SSL_NO_VERIFY", "GIT_TRACE"])
+      assert.ok(!lines.some(line => line.startsWith(name + "=")), name);
+    assert.ok(lines.includes("GIT_ASKPASS="));
+    assert.ok(!lines.some(line => /must-not-leak|must_not_leak|evil-askpass/.test(line)));
+    assert.ok(!lines.some(line => line.includes(SENTINEL)));
+    assert.ok(lines.some(line => line.startsWith("GIT_CONFIG_VALUE_") && line.includes("Authorization: Basic ")));
+    // Local commands never need a proxy: they do not get one.
+    for (const command of ["init", "config"]) {
+      const local = await fs.readFile(join(log, command + ".env"), "utf8");
+      for (const name of Object.keys(FORWARDED)) assert.ok(!local.split("\n").some(line => line.startsWith(name + "=")), command + " " + name);
+    }
+    const config = await fs.readFile(join(workspaces.workspacePath("acme", "book"), ".git", "config"), "utf8");
+    for (const secret of [SENTINEL, "proxysecret", "proxy.invalid"]) assert.ok(!config.includes(secret), secret);
+    assert.ok(!result.message.includes("proxysecret") && !result.message.includes(SENTINEL));
+    const args = await fs.readFile(join(log, "fetch.args"), "utf8");
+    assert.ok(!args.includes("proxysecret") && !args.includes(SENTINEL));
+    await workspaces.close();
+
+    const isolated = new GitWorkspaces({ root: join(root, "isolated"), binary: script, forwardNetworkEnvironment: false });
+    const refused = await isolated.transport.handle({ token: SENTINEL, method: "GET", path: REPO + "/git/ref/heads/main" }).catch(error => error);
+    assert.equal(refused.message, NETWORK);
+    const bare = (await fs.readFile(join(log, "fetch.env"), "utf8")).split("\n");
+    for (const name of Object.keys(FORWARDED)) assert.ok(!bare.some(line => line.startsWith(name + "=")), name);
+    assert.ok(bare.some(line => line.startsWith("GIT_CONFIG_VALUE_") && line.includes("Authorization: Basic ")));
+    await isolated.close();
+  });
+}));
+
 test("a push that hangs is killed on timeout and reported as ambiguous; an abort kills the process", { skip: skip || !posix && "serve uno script eseguibile" }, async () => temporary(async root => {
   const { log, script, mode } = await spy(root);
   const workspaces = new GitWorkspaces({ root: join(root, "server"), binary: script, timeoutMs: 1500 });
@@ -629,4 +700,20 @@ test("a push that hangs is killed on timeout and reported as ambiguous; an abort
   const already = new AbortController(); already.abort();
   await assert.rejects(api("GET", "/branches", undefined, already.signal), error => error.name === "AbortError");
   await workspaces.close();
+}));
+
+test("deleting a branch: only heads, never a lease branch, missing is refused, the working copy forgets it", { skip }, async () => temporary(async root => {
+  const f = await fixture(root);
+  const head = await refSha(f);
+  assert.equal((await f.api("POST", "/git/refs", { ref: "refs/heads/bozza", sha: head })).status, 201);
+  assert.equal((await f.api("POST", "/git/refs", { ref: "refs/heads/bookwriter-lock/abc", sha: head })).status, 201);
+  assert.equal((await f.api("DELETE", "/git/refs/heads/bookwriter-lock/abc")).status, 422, "lease branches are not deletable here");
+  assert.ok(plain(f.bare, ["rev-parse", "--verify", "refs/heads/bookwriter-lock/abc"]));
+  assert.equal((await f.api("DELETE", "/git/refs/heads/nope")).status, 422);
+  assert.equal((await f.api("DELETE", "/git/refs/heads/bozza")).status, 204);
+  assert.throws(() => plain(f.bare, ["rev-parse", "--verify", "refs/heads/bozza"]));
+  assert.equal(await refSha(f, "bozza"), undefined);
+  assert.equal((await f.api("GET", "/git/ref/heads/bozza")).status, 404);
+  assert.equal(await refSha(f), head, "main is untouched");
+  assert.equal((await f.api("DELETE", "/git/refs/heads/bozza")).status, 422, "already gone");
 }));

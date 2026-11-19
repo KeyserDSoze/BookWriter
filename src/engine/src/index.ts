@@ -14,7 +14,7 @@ export type { BookProject, Activity, AppSettings, EncryptedSecret, GitHubRemote 
 export { bookSchema, activitySchema } from "./domain/book-schema";
 export { migrateBook } from "./domain/book-format";
 export { hasForbiddenKey, cloudSettingsSchema, projectSettings } from "./domain/cloud-profile";
-export { executionAuthoritySchema, isServerBook } from "./domain/execution-authority";
+export { executionAuthoritySchema, isServerBook, isReleasedBook } from "./domain/execution-authority";
 export { createTaskStructuralCheckpoint } from "./domain/task-structural-checkpoint";
 export * as bookEditing from "./domain/book-editing";
 export { currentStamp } from "./domain/book-edits";
@@ -29,7 +29,7 @@ export { withWriterGuard } from "./application/writer-guard";
 export { drainGitHubOutbox, saveToGitHubNow } from "./application/auto-sync";
 export { pushManualGitHubBook } from "./application/manual-github-push";
 export {
-  withBookGit, listBookBranches, pullBook, switchBranch, createBranch, startBranchMerge, resolveMerge, abortMerge, finishMerge,
+  withBookGit, listBookBranches, pullBook, releaseBookToClient, deleteBranch, switchBranch, createBranch, startBranchMerge, resolveMerge, abortMerge, finishMerge,
   type MergeOutcome, type BranchList,
 } from "./application/book-git";
 export { mergeSessionSchema, isMergeReady, unresolvedConflicts, type MergeSession, type MergeChoice } from "./domain/book-merge";
@@ -38,7 +38,7 @@ export { verifyEndpointSettings } from "./application/endpoint-settings-save";
 export { enqueueCheckpoint } from "./infrastructure/outbox";
 export {
   pushGitHubBook, RemoteConflict, readGitHubSnapshot, readGitHubExecutionAuthority, validateRemote,
-  inspectRepository, inspectGitHubDestination,
+  inspectRepository, inspectGitHubDestination, prepareGitHubImport, compareGitHubCommits,
 } from "./infrastructure/github-sync";
 export {
   acquireWriterLease, assertWriterLease, renewWriterLease, releaseWriterLease, LeaseRenewalMissed, LEASE_RENEW_MS,

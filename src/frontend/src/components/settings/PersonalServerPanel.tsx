@@ -35,6 +35,7 @@ export function PersonalServerPanel({ settings, settingsDirty, book, onChanged, 
   const [review, setReview] = useState<ServerConfigurationReview>();
   const [configurationError, setConfigurationError] = useState("");
   const [templateId, setTemplateId] = useState<string>();
+  const [delegatePat, setDelegatePat] = useState(false);
   const [pendingCreation, setPendingCreation] = useState<Awaited<ReturnType<typeof pendingPersonalServerCreation>>>();
   const [writerChecklist, setWriterChecklist] = useState(true);
   const [writingStyle, setWritingStyle] = useState("Chiaro");
@@ -179,11 +180,13 @@ export function PersonalServerPanel({ settings, settingsDirty, book, onChanged, 
       </form>}
       {book && !handoff && <section className="space-y-2" aria-label="Affida il libro attivo al server">
         <h3 className="font-semibold">Affida il libro attivo al server</h3>
-        <p className="muted text-sm">Trasferimento a senso unico di un libro locale fermo e senza GitHub. Il libro diventa subito una replica di sola lettura su questo dispositivo, prima dell'invio, così non possono esistere due autori attivi. I consensi del libro (ricerca web, condivisioni AI) vengono revocati e vanno riconsiderati. Copie e consensi locali di questo browser non si trasferiscono.</p>
+        <p className="muted text-sm">Un libro locale fermo diventa subito una replica di sola lettura su questo dispositivo, prima dell'invio, così non possono esistere due autori attivi. I consensi del libro (ricerca web, condivisioni AI) vengono revocati e vanno riconsiderati. Copie e consensi locali di questo browser non si trasferiscono. Senza GitHub il testo viene inviato al server. <strong>Con GitHub</strong> il testo non viene inviato: il server lo legge dalla repository (deve essere già salvata), pubblica il marcatore che lo nomina autorità e riceve il PAT per questo libro. Puoi poi riportarlo qui dal server.</p>
+        {book.remote && <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={delegatePat} onChange={event => setDelegatePat(event.target.checked)}/>
+          <span>Delego al server il PAT GitHub salvato su questo dispositivo, per lease e salvataggi di questo libro</span></label>}
         {handoffBlock && <p className="text-sm" role="note">{handoffBlock}</p>}
-        <Button type="button" variant="outline" disabled={busy || !!handoffBlock || !connection.clientId} onClick={() => execute(async () => {
+        <Button type="button" variant="outline" disabled={busy || !!handoffBlock || !connection.clientId || !!book.remote && !delegatePat} onClick={() => execute(async () => {
           if (!window.confirm(`Affidare «${book.title}» al server? Il libro locale diventa di sola lettura subito, anche se la rete si interrompe. Potrai riprendere l'invio o annullarlo solo se il server conferma di non averlo ricevuto. Non parte alcuna chiamata AI.`)) return;
-          await beginPersonalServerHandoff(book.id, book.updatedAt);
+          await beginPersonalServerHandoff(book.id, book.updatedAt, { delegatePat });
           await afterHandoff("Libro bloccato localmente: invio al server in corso.");
           await sendPersonalServerHandoff(book.id);
           await afterHandoff("Libro accettato dal server e replica confermata. Nessuna chiamata AI avviata.");

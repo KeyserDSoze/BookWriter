@@ -548,6 +548,20 @@ export async function createGitHubBranch(remote: GitHubRemote, fromCommit: strin
     throw new RemoteConflict("GitHub non conferma il nuovo branch sul commit richiesto.");
 }
 
+/** Remove a branch. The caller must already have proved it is merged: this never decides that. Lease branches are refused. */
+export async function deleteGitHubBranch(remote: GitHubRemote, signal?: AbortSignal): Promise<void> {
+  const target = validateRemote(remote);
+  if (target.branch.startsWith(LEASE_BRANCH_PREFIX)) throw new Error("Nome branch riservato al blocco di scrittura.");
+  const token = await tokenFromVault();
+  try {
+    await request(token, apiPath(target, "/git/refs/heads/" + target.branch.split("/").map(encodeURIComponent).join("/")), { method: "DELETE", signal });
+  } catch (error) {
+    if (error instanceof RemoteConflict) throw new RemoteConflict("Il branch «" + target.branch + "» non esiste più o non può essere eliminato.");
+    throw error;
+  }
+  if (await readGitHubBranchHead(target, signal) !== null) throw new RemoteConflict("GitHub non conferma l'eliminazione del branch.");
+}
+
 export interface GitHubComparison { status: "identical" | "ahead" | "behind" | "diverged"; aheadBy: number; behindBy: number; mergeBase: string | null }
 /** Common ancestor and distance of two commits (`b` relative to `a`). */
 export async function compareGitHubCommits(remote: GitHubRemote, a: string, b: string, signal?: AbortSignal): Promise<GitHubComparison> {
@@ -570,6 +584,10 @@ export interface PushOptions {
   /** The book already holds the result of merging `theirsParent` into `oursParent`: publish it as a merge commit.
    * The branch must still be at `expectedHead`, which is the tree the merge is built on. */
   merge?: { oursParent: string; theirsParent: string; expectedHead: string };
+  /** Publish the book WITHOUT the server authority marker: the repository stops naming the server. */
+  release?: boolean;
+  /** First save of an adopted book: the head carries the same book with no marker (or ours), and this commit adds it. */
+  adopt?: boolean;
 }
 export interface PushResult {
   commit: string;
@@ -812,7 +830,15 @@ export async function pushGitHubBook(
     if (current.remote.lastSyncedCommit)
       throw new RemoteConflict("Il branch remoto è cambiato dall'ultima sincronizzazione. Importa/controlla le modifiche prima di scrivere.");
   }
-  if (current.executionAuthority) {
+  if (current.executionAuthority && options.adopt) {
+    const published = await readFile(token, remote, ".bookwriter/project.json", head);
+    const named = published === null ? undefined : z.object({ id: z.string().uuid(), executionAuthority: executionAuthoritySchema.optional() })
+      .safeParse(parseJson<unknown>(published, "Progetto remoto"));
+    if (!named?.success || named.data.id !== bookId ||
+        named.data.executionAuthority && (named.data.executionAuthority.serverId !== current.executionAuthority.serverId ||
+          named.data.executionAuthority.epoch !== current.executionAuthority.epoch))
+      throw new RemoteConflict("La repository nomina già un'altra autorità sul libro: adozione non completata.");
+  } else if (current.executionAuthority) {
     if (current.remote.lastSyncedCommit) await assertPublishedAuthority(current, token, remote, head);
     else if (await readFile(token, remote, ".bookwriter/project.json", head) !== null)
       throw new RemoteConflict("La destinazione contiene già un progetto. Nessun primo salvataggio eseguito.");
@@ -846,7 +872,7 @@ export async function pushGitHubBook(
   }
 
   const activities = await listActivities(bookId);
-  const projection = projectBook(current, activities);
+  const projection = projectBook(options.release ? { ...current, executionAuthority: undefined } : current, activities);
   // Optional, separately consented copy of the kept AI conversations (newest first, bounded).
   if (aiTracePolicy(await loadSettings()).sendToGitHub) {
     const baseBytes = JSON.stringify(Object.entries(projection.files)

@@ -1,6 +1,6 @@
 # F04 — Git sul server: pull, branch e unioni curate dall'autopilot
 
-- Stato: **implementata nel sorgente** (0.33.0); server da sorgente. [ADR 0169](../ADR/0169-server-git-working-copy-branches-and-merge.md) · [Guida](../docs/personal-server-git.md).
+- Stato: **implementata nel sorgente** (0.33.0, completata in 0.34.0); server da sorgente. [ADR 0169](../ADR/0169-server-git-working-copy-branches-and-merge.md) · [Guida](../docs/personal-server-git.md).
 
 ## Criteri di accettazione
 
@@ -12,6 +12,8 @@
 - [x] Autopilot: propone le scene modificate in entrambi i rami, con consenso per quell'unione; il risultato è bozza in capitoli riaperti.
 - [x] Nulla è pubblicato o avviato mentre un'unione attende; annullare lascia il libro com'era.
 - [x] Client: pannello per pull, elenco/creazione/cambio branch, unione, decisioni sui conflitti.
-- [ ] Adottare dal server un libro già presente su GitHub e riportarlo al client.
-- [ ] Prova con GitHub reale (permessi, branch protetti), Windows, proxy.
-- [ ] Autopilot sugli altri tipi di conflitto (schede, memoria, campi).
+- [x] Adottare dal server un libro già presente su GitHub e riportarlo al client ([ADR 0170](../ADR/0170-github-book-adoption-and-release.md)).
+- [x] Eliminare un ramo già interamente unito; variabili di proxy e CA inoltrate a `git`.
+- [ ] Prova con GitHub reale (permessi, branch protetti) e con un proxy reale. Windows è coperto dalla CI, non da prove manuali.
+- [x] Autopilot sui conflitti di testo oltre le scene (campi, voci di memoria, stato, timeline, liste). Capitoli e schede narrative restano all'autore.
+- [ ] Rebase, cherry-pick, tag, pull request: **esclusi di proposito** (riscrittura della storia / nessuna funzione sul libro).

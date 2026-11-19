@@ -104,12 +104,15 @@ export const serverCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("git_pull"), mode: mergeMode, consentAi: z.boolean() }).strict().refine(aiConsent, aiConsentMessage),
   z.object({ type: z.literal("git_create_branch"), name: branchName, from: branchName.optional(), switchTo: z.boolean() }).strict(),
   z.object({ type: z.literal("git_switch_branch"), branch: branchName }).strict(),
+  z.object({ type: z.literal("git_delete_branch"), branch: branchName }).strict(),
   z.object({ type: z.literal("git_merge"), from: branchName, mode: mergeMode, consentAi: z.boolean() }).strict().refine(aiConsent, aiConsentMessage),
   z.object({ type: z.literal("git_merge_resolve"), mergeId: z.string().uuid(),
     decisions: z.record(z.string().max(700), z.object({ choice: z.enum(["ours", "theirs", "proposal"]), proposal: z.string().max(60_000).optional() }).strict())
       .refine(value => Object.keys(value).length <= 400) }).strict(),
   z.object({ type: z.literal("git_merge_finish"), mergeId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("git_merge_abort"), mergeId: z.string().uuid() }).strict(),
+  /** Give the book back to its client: everything is saved, the marker leaves the repository, the server stops running it. */
+  z.object({ type: z.literal("release_book"), confirmed: z.literal(true) }).strict(),
 ]);
 export type ServerCommand = z.infer<typeof serverCommandSchema>;
 export const serverCommandEnvelopeSchema = z.object({
@@ -135,6 +138,18 @@ export const handoffRequestSchema = z.object({
   handoffId: z.string().uuid(), consent: z.literal(true), epoch: z.string().uuid(),
   book: z.unknown(), activities: z.unknown(),
 }).strict();
+/** Adoption of a book that already lives in a GitHub repository: the server reads it there (git), the client sends no manuscript. */
+export const githubHandoffRequestSchema = z.object({
+  handoffId: z.string().uuid(), consent: z.literal(true), epoch: z.string().uuid(), bookId: z.string().uuid(),
+  github: z.object({ owner: z.string().min(1).max(100), repository: z.string().min(1).max(100), branch: z.string().min(1).max(200),
+    expectedHead: z.string().regex(/^[a-f0-9]{40}$/), consentPublic: z.boolean() }).strict(),
+  githubToken: z.string().trim().min(1).max(600),
+}).strict();
+export type GitHubHandoffRequest = z.infer<typeof githubHandoffRequestSchema>;
+/** The credential is never part of the digest the receipt keeps. */
+export function serverGitHubHandoffDigestInput(clientId: string, body: GitHubHandoffRequest): string {
+  return JSON.stringify({ clientId, kind: "github", handoffId: body.handoffId, epoch: body.epoch, bookId: body.bookId, github: body.github });
+}
 export const handoffResolveSchema = z.object({ bookId: z.string().uuid() }).strict();
 export const handoffResolutionSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("adopted"), bookId: z.string().uuid() }).strict(),

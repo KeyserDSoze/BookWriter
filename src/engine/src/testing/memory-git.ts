@@ -120,6 +120,10 @@ export class MemoryGitHub implements GitHubGitTransport {
       if (!body.ref.startsWith("refs/heads/") || this.refs.has(name) || !this.commits.has(body.sha)) return { status: 422, json: {} };
       this.refs.set(name, body.sha); return ok({ object: { sha: body.sha } }, 201);
     }
+    if ((m = /^\/git\/refs\/heads\/(.+)$/.exec(rest)) && method === "DELETE") {
+      if (!this.refs.has(m[1]!)) return { status: 422, json: {} };
+      this.refs.delete(m[1]!); return { status: 204, json: {} };
+    }
     if (rest === "/branches" && method === "GET")
       return ok([...this.refs].sort(([a], [b]) => a.localeCompare(b)).map(([name, sha]) => ({ name, commit: { sha } })));
     if ((m = /^\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})$/.exec(rest)) && method === "GET") {

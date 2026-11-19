@@ -4,19 +4,24 @@ import { isServerBook } from "@engine/domain/execution-authority";
 import { withoutInheritedConsents } from "@engine/domain/consent-revocation";
 import { migrateBook } from "@engine/domain/book-format";
 import {
-  handoffResolutionSchema, serverCommandReceiptSchema, serverHandoffDigestInput, type ServerConnection,
+  handoffResolutionSchema, serverCommandReceiptSchema, serverHandoffDigestInput, serverGitHubHandoffDigestInput, type ServerConnection,
 } from "@engine/domain/personal-server";
-import { BookRevisionConflict, getDb } from "./db";
+import { BookRevisionConflict, getDb, loadSettings } from "./db";
+import { decryptLocal } from "./crypto";
 import {
   connectionRequest, personalServerConnection, sameConnection, ServerRequestError, syncSnapshot,
-  SERVER_CONNECTION_KEY, replicaKey,
+  SERVER_CONNECTION_KEY, replicaKey, syncServerBook,
 } from "./personal-server-client";
+import { serverCommandJournalKey } from "./personal-server-command-journal";
 
 export const handoffKey = (bookId: string) => "personal-server:handoff:v1:" + bookId;
 const uuid = z.string().uuid();
 export const handoffMarkerSchema = z.object({
   version: z.literal(1), handoffId: uuid, bookId: uuid, epoch: uuid, serverId: uuid, clientId: uuid,
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/), baseUrl: z.string().max(500), startedAt: z.string().datetime(),
+  /** A book that already lives on GitHub: the server reads it there, nothing is uploaded. */
+  github: z.object({ owner: z.string().max(100), repository: z.string().max(100), branch: z.string().max(200),
+    expectedHead: z.string().regex(/^[a-f0-9]{40}$/), consentPublic: z.boolean() }).strict().optional(),
 }).strict();
 export type HandoffMarker = z.infer<typeof handoffMarkerSchema>;
 const MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
@@ -34,8 +39,9 @@ export async function pendingPersonalServerHandoff(bookId: string): Promise<Hand
 /** Why a book cannot be handed over yet, in plain Italian. Pure; never performs I/O. */
 export function handoffBlocker(book: BookProject): string | undefined {
   if (isServerBook(book)) return "Il libro appartiene già a un server.";
-  if (book.remote) return "I libri collegati a GitHub non possono ancora essere affidati: manca il protocollo di autorità GitHub. Esporta una copia o crea un nuovo libro sul server.";
   if (book.status === "running") return "Metti in pausa il libro prima di affidarlo al server.";
+  if (book.remote && (!book.remote.lastSyncedCommit || book.remote.lastSyncedLocalUpdatedAt !== book.updatedAt))
+    return "Salva prima il libro su GitHub: il server legge la versione presente nella repository e non riceve il testo da qui.";
   return undefined;
 }
 
@@ -54,8 +60,9 @@ async function sha256(text: string): Promise<string> {
  * a closed tab can never leave two executable copies. Consents that would travel
  * with the book are revoked here, exactly as for an imported archive.
  */
-export async function beginPersonalServerHandoff(bookId: string, expectedUpdatedAt: string): Promise<HandoffMarker> {
+export async function beginPersonalServerHandoff(bookId: string, expectedUpdatedAt: string, options: { delegatePat?: boolean } = {}): Promise<HandoffMarker> {
   uuid.parse(bookId);
+  const delegated = (await loadSettings()).githubToken;
   const connection = await personalServerConnection();
   if (!connection?.clientId) throw new Error("Ricollega questo client al server prima di affidargli un libro.");
   const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
@@ -77,6 +84,8 @@ export async function beginPersonalServerHandoff(bookId: string, expectedUpdated
         const book = migrateBook(raw);
         const blocker = handoffBlocker(book);
         if (blocker) throw new Error(blocker);
+        if (book.remote && (!options.delegatePat || !delegated))
+          throw new Error("Un libro su GitHub passa al server solo delegandogli il PAT salvato su questo dispositivo: spunta la delega ed eventualmente salva prima il PAT.");
         if (book.updatedAt !== expectedUpdatedAt) throw new BookRevisionConflict();
         const activities = (await tx.objectStore("activities").getAll() as Activity[]).filter(a => a.bookId === bookId);
         if (activities.some(activity => activity.status === "running"))
@@ -89,7 +98,9 @@ export async function beginPersonalServerHandoff(bookId: string, expectedUpdated
           throw new Error("Ci sono salvataggi o attese di retry locali: concludili o annullali prima del trasferimento.");
         const marker: HandoffMarker = { version: 1, handoffId: crypto.randomUUID(), bookId, epoch: crypto.randomUUID(),
           serverId: connection.serverId, clientId: connection.clientId!, fingerprint: connection.fingerprint,
-          baseUrl: connection.baseUrl, startedAt: new Date().toISOString() };
+          baseUrl: connection.baseUrl, startedAt: new Date().toISOString(),
+          ...(book.remote ? { github: { owner: book.remote.owner, repository: book.remote.repository, branch: book.remote.branch,
+            expectedHead: book.remote.lastSyncedCommit!, consentPublic: book.remote.allowPublicSync === true } } : {}) };
         const handed: BookProject = { ...book, ...withoutInheritedConsents(book),
           executionAuthority: { kind: "server", serverId: connection.serverId, epoch: marker.epoch } };
         await tx.objectStore("books").put(handed, bookId);
@@ -101,9 +112,8 @@ export async function beginPersonalServerHandoff(bookId: string, expectedUpdated
   });
 }
 
-async function loadHandoff(bookId: string): Promise<{
-  connection: ServerConnection; marker: HandoffMarker; body: { handoffId: string; consent: true; epoch: string; book: BookProject; activities: Activity[] };
-}> {
+type UploadBody = { handoffId: string; consent: true; epoch: string; book: BookProject; activities: Activity[] };
+async function loadHandoff(bookId: string): Promise<{ connection: ServerConnection; marker: HandoffMarker; body: UploadBody }> {
   uuid.parse(bookId);
   const connection = await personalServerConnection();
   const db = await getDb();
@@ -118,9 +128,22 @@ async function loadHandoff(bookId: string): Promise<{
   return { connection, marker, body: { handoffId: marker.handoffId, consent: true, epoch: marker.epoch, book, activities } };
 }
 
-/** Step 2. Safe to repeat: the server answers the same acceptance for the same bytes. */
+const githubHandoffBody = (marker: HandoffMarker, githubToken: string) => ({
+  handoffId: marker.handoffId, consent: true as const, epoch: marker.epoch, bookId: marker.bookId, github: marker.github!, githubToken });
+const handoffDigest = async (marker: HandoffMarker, body: UploadBody) =>
+  sha256(marker.github ? serverGitHubHandoffDigestInput(marker.clientId, githubHandoffBody(marker, "-")) : serverHandoffDigestInput(marker.clientId, body));
+
+/** Step 2. Safe to repeat: the server answers the same acceptance for the same request. */
 export async function sendPersonalServerHandoff(bookId: string): Promise<BookProject> {
   const { connection, marker, body } = await loadHandoff(bookId);
+  if (marker.github) {
+    const stored = (await loadSettings()).githubToken;
+    if (!stored) throw new Error("Il PAT GitHub non è più salvato su questo dispositivo: salvalo di nuovo per riprendere l'invio.");
+    const response = await connectionRequest(connection, "/api/v1/handoffs/github",
+      { method: "POST", body: githubHandoffBody(marker, await decryptLocal(stored)), maxBytes: 64 * 1024 });
+    const accepted = z.object({ bookId: z.literal(bookId), markerPublished: z.boolean().optional() }).strict().parse(response.data);
+    return syncSnapshot(connection, accepted.bookId, { handoffId: marker.handoffId });
+  }
   if (new TextEncoder().encode(JSON.stringify(body)).byteLength > MAX_UPLOAD_BYTES)
     throw new ServerRequestError(413);
   const response = await connectionRequest(connection, "/api/v1/handoffs", { method: "POST", body, maxBytes: MAX_UPLOAD_BYTES });
@@ -139,7 +162,7 @@ export async function checkPersonalServerHandoff(bookId: string): Promise<"adopt
   }
   const receipt = serverCommandReceiptSchema.parse(response.data);
   if (receipt.clientId !== marker.clientId || receipt.state !== "completed" ||
-      receipt.digest !== await sha256(serverHandoffDigestInput(marker.clientId, body)))
+      receipt.digest !== await handoffDigest(marker, body))
     throw new Error("Ricevuta non coerente con il libro inviato: il libro resta bloccato e nulla viene approvato.");
   await syncSnapshot(connection, bookId, { handoffId: marker.handoffId });
   return "adopted";
@@ -174,5 +197,41 @@ export async function cancelPersonalServerHandoff(bookId: string): Promise<"adop
     await tx.objectStore("meta").delete(handoffKey(bookId));
     await tx.done;
     return "cancelled";
+  } catch (error) { try { tx.abort(); } catch { /* already aborted */ } throw error; }
+}
+
+/**
+ * The server gave the book back (its snapshot says so and the repository no longer names it). This device
+ * becomes the executor again: the server's final copy replaces the replica, which is exactly what the release
+ * commit on GitHub holds. A replica that never learnt about the release is refused.
+ */
+export async function takeBackPersonalServerBook(bookId: string): Promise<BookProject> {
+  uuid.parse(bookId);
+  const connection = await personalServerConnection();
+  if (!connection?.clientId) throw new Error("Ricollega questo client al server per riprendere il libro.");
+  const synced = await syncServerBook(connection, bookId);
+  const authority = synced.executionAuthority;
+  if (!authority?.releasedAt || !authority.releasedCommit || !synced.remote)
+    throw new Error("Il server non ha ancora rilasciato questo libro: nessuna modifica locale.");
+  const db = await getDb();
+  const tx = db.transaction(["books", "meta"], "readwrite");
+  void tx.done.catch(() => undefined);
+  try {
+    const stored = await tx.objectStore("books").get(bookId) as BookProject | undefined;
+    if (!sameConnection(await tx.objectStore("meta").get(SERVER_CONNECTION_KEY), connection) ||
+        !stored?.executionAuthority?.releasedCommit || stored.executionAuthority.epoch !== authority.epoch ||
+        stored.executionAuthority.serverId !== connection.serverId || stored.updatedAt !== synced.updatedAt ||
+        await tx.objectStore("meta").get(handoffKey(bookId)))
+      throw new Error("La replica è cambiata durante la ripresa: nessuna modifica applicata.");
+    const { executionAuthority, ...local } = stored;
+    const next: BookProject = { ...local, status: "paused",
+      previousError: "Libro ripreso dal server: la repository non nomina più il server e puoi lavorarci qui.",
+      remote: { ...stored.remote!, autoSync: false, lastSyncedCommit: executionAuthority.releasedCommit,
+        lastSyncedLocalUpdatedAt: stored.updatedAt, lastSyncAt: new Date().toISOString() } };
+    await tx.objectStore("books").put(next, bookId);
+    await tx.objectStore("meta").delete(replicaKey(bookId));
+    await tx.objectStore("meta").delete(serverCommandJournalKey(bookId));
+    await tx.done;
+    return next;
   } catch (error) { try { tx.abort(); } catch { /* already aborted */ } throw error; }
 }

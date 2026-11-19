@@ -8,7 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import {
-  startPersonalServer, bookEtag, DEFAULT_SETTINGS, MemoryGitHub, projectBook, GitWorkspaces,
+  startPersonalServer, bookEtag, DEFAULT_SETTINGS, MemoryGitHub, projectBook, GitWorkspaces, newBook,
 } from "../dist/testing.mjs";
 
 const run = promisify(execFile);
@@ -17,7 +17,7 @@ const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "", GIT_CONFIG_NOSYSTEM: "1"
 const git = (cwd, ...args) => run("git", ["-c", "user.name=Esterno", "-c", "user.email=esterno@example.test", "-c", "commit.gpgsign=false", "-c", "protocol.file.allow=always", ...args], { cwd, env: gitEnv });
 const TEXT = ["Apertura.", "Il faro era spento.", "Mara salì le scale.", "Parlò con Elio.", "Chiusura."].join("\n");
 
-async function fixture(action, { ai } = {}) {
+async function fixture(action, { ai, book: withBook = true } = {}) {
   const base = process.platform === "win32" ? tmpdir() : process.env.BOOKWRITER_TEST_TMP ?? "/tmp/opencode";
   await fs.mkdir(base, { recursive: true, mode: 0o700 });
   const dir = await fs.mkdtemp(join(base, "bookwriter-gitflow-"));
@@ -60,20 +60,25 @@ async function fixture(action, { ai } = {}) {
   settings.defaultRoute.modelId = "default-model";
   settings.endpoints[0].secret = await service.runtime.encrypt("chiave-sintetica");
   await service.runtime.saveSettings(settings);
-  const id = await service.controller.create(client, randomUUID(), { title: "Il faro", brief: "Un faro e una donna.", writingStyle: "Sobrio", audience: "Adulti" });
-  const credentials = await native(`http://127.0.0.1:${service.apiPort}/api/v1/books/${id}/github-credential`, { method: "POST",
-    headers: { apikey: tokens.token, "Content-Type": "application/json", "If-Match": '"config:1"' }, body: JSON.stringify({ consent: true, githubToken: "pat-sintetico" }) });
-  assert.equal(credentials.status, 200);
-  await service.store.transaction(id, record => {
-    record.book.phase = "completed"; record.book.status = "completed";
-    record.book.chapters = [{ id: "ch:1", number: 1, title: "Il ponte", purpose: "p", frozenAt: "2026-01-01T00:00:00.000Z", summary: "riassunto",
-      scenes: [{ id: "s:1", number: 1, title: "Incontro", objective: "o", text: TEXT, status: "canon", summary: "s" }] }];
-  });
-  assert.equal((await send(id, { type: "connect_github", owner: "synthetic", repository: "review", branch: "main", consentPublic: false })).result.connected, true);
-  const saved = await send(id, { type: "save_github", consentPublic: false });
-  assert.equal(saved.state, "completed", JSON.stringify(saved.result));
-  const book = async () => (await service.store.read(id)).book;
-  const sceneText = async () => (await book()).chapters[0].scenes[0].text;
+  let id, book = async () => undefined, sceneText = async () => undefined;
+  if (withBook) {
+    id = await service.controller.create(client, randomUUID(), { title: "Il faro", brief: "Un faro e una donna.", writingStyle: "Sobrio", audience: "Adulti" });
+    const credentials = await native(`http://127.0.0.1:${service.apiPort}/api/v1/books/${id}/github-credential`, { method: "POST",
+      headers: { apikey: tokens.token, "Content-Type": "application/json", "If-Match": '"config:1"' }, body: JSON.stringify({ consent: true, githubToken: "pat-sintetico" }) });
+    assert.equal(credentials.status, 200);
+    await service.store.transaction(id, record => {
+      record.book.phase = "completed"; record.book.status = "completed";
+      record.book.chapters = [{ id: "ch:1", number: 1, title: "Il ponte", purpose: "p", frozenAt: "2026-01-01T00:00:00.000Z", summary: "riassunto",
+        scenes: [{ id: "s:1", number: 1, title: "Incontro", objective: "o", text: TEXT, status: "canon", summary: "s" }] }];
+    });
+    assert.equal((await send(id, { type: "connect_github", owner: "synthetic", repository: "review", branch: "main", consentPublic: false })).result.connected, true);
+    const saved = await send(id, { type: "save_github", consentPublic: false });
+    assert.equal(saved.state, "completed", JSON.stringify(saved.result));
+  }
+  if (withBook) {
+    book = async () => (await service.store.read(id)).book;
+    sceneText = async () => (await book()).chapters[0].scenes[0].text;
+  }
   /** Another device: a clone, a changed book and a push — through the same projection the app writes. */
   const external = async (branch, change) => {
     await fs.rm(ext, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
@@ -89,9 +94,21 @@ async function fixture(action, { ai } = {}) {
     await git(ext, "add", "-A"); await git(ext, "commit", "-m", "modifica da un altro dispositivo"); await git(ext, "push", "origin", `HEAD:refs/heads/${branch}`);
     return (await git(ext, "rev-parse", "HEAD")).stdout.trim();
   };
+  /** The app on the client: a local book saved to GitHub with its own projection, no authority marker. */
+  const publishClientBook = async clientBook => {
+    await fs.rm(ext, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+    await git(dir, "clone", "--branch", "main", pathToFileURL(origin).href, ext);
+    const projection = projectBook(clientBook, []);
+    await git(ext, "rm", "-r", "-q", "--ignore-unmatch", ".");
+    for (const [path, content] of Object.entries({ ...projection.files, ".bookwriter/manifest.json": JSON.stringify(projection.manifest, null, 2) + "\n" })) {
+      await fs.mkdir(join(ext, path, ".."), { recursive: true }); await fs.writeFile(join(ext, path), content);
+    }
+    await git(ext, "add", "-A"); await git(ext, "commit", "-m", "salvataggio dal client"); await git(ext, "push", "origin", "HEAD:refs/heads/main");
+    return (await git(ext, "rev-parse", "HEAD")).stdout.trim();
+  };
   const head = async branch => (await git(origin, "rev-parse", `refs/heads/${branch}`)).stdout.trim();
   const parents = async sha => (await git(origin, "rev-list", "--parents", "-n", "1", sha)).stdout.trim().split(" ").slice(1);
-  try { await action({ service, id, send, book, sceneText, external, head, parents, origin, root, calls, client }); }
+  try { await action({ service, id, send, book, sceneText, external, head, parents, origin, root, calls, client, publishClientBook, native, tokens, memory }); }
   finally { globalThis.fetch = native; await service.close(); await fs.rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); }
 }
 const skip = probe ? { skip: probe } : {};
@@ -176,7 +193,7 @@ test("starting the autopilot first reads the repository: what was pushed elsewhe
   assert.notEqual(await head("main"), (await book()).remote.lastSyncedCommit);
 }));
 
-test("branches: create from the current one, work on it, go back, and merge it — conflicts decided by the author", skip, () => fixture(async ({ send, book, sceneText, external, head, parents, id, service }) => {
+test("branches: create from the current one, work on it, go back, and merge it — conflicts decided by the author", skip, () => fixture(async ({ send, book, sceneText, external, head, parents, id, service, origin }) => {
   const { currentStamp } = await import("../dist/testing.mjs");
   const created = await send(id, { type: "git_create_branch", name: "bozza", switchTo: true });
   assert.equal(created.result.switched, true, JSON.stringify(created.result));
@@ -208,6 +225,11 @@ test("branches: create from the current one, work on it, go back, and merge it �
   assert.ok((await parents(tip)).includes(await head("bozza")));
   const again = await send(id, { type: "git_merge", from: "bozza", mode: "author", consentAi: false });
   assert.equal(again.result.state, "current", "an already merged branch is not merged twice");
+  const removed = await send(id, { type: "git_delete_branch", branch: "bozza" });
+  assert.equal(removed.state, "completed", JSON.stringify(removed.result));
+  await assert.rejects(git(origin, "rev-parse", "--verify", "refs/heads/bozza"));
+  assert.equal((await send(id, { type: "git_delete_branch", branch: "main" })).state, "uncertain", "the current branch is never deleted");
+  assert.ok(await head("main"));
 }));
 
 test("the autopilot merges the scene edited on both branches; consent is required; the result waits for the editorial review", skip, () => fixture(async ({ send, book, sceneText, external, head, parents, id, service, calls, client }) => {
@@ -240,3 +262,80 @@ test("the autopilot merges the scene edited on both branches; consent is require
   assert.match(prompt, /Tacque\./); assert.match(prompt, /Urlò\./);
   return "Scena unita dall'autopilot.";
 } }));
+
+const clientBook = () => {
+  const created = newBook("Un faro e una donna.", "Libro dal client", "Sobrio", "Adulti");
+  created.status = "paused"; created.phase = "completed";
+  created.chapters = [{ id: "ch:1", number: 1, title: "Il ponte", purpose: "p", frozenAt: "2026-01-01T00:00:00.000Z", summary: "riassunto",
+    scenes: [{ id: "s:1", number: 1, title: "Incontro", objective: "o", text: TEXT, status: "canon", summary: "s" }] }];
+  created.webResearch = { enabled: true, consentAt: "2026-01-01T00:00:00.000Z", provider: "model", wikipediaLanguage: "it", agents: ["planning"], maxQueriesPerTask: 3, maxRounds: 1, cacheDays: 30 };
+  return created;
+};
+const handoffBody = (book, expectedHead, extra = {}) => ({ handoffId: randomUUID(), consent: true, epoch: randomUUID(), bookId: book.id,
+  github: { owner: "synthetic", repository: "review", branch: "main", expectedHead, consentPublic: false }, githubToken: "pat-sintetico", ...extra });
+
+test("adoption from GitHub: the server reads the repository, publishes the marker and works there; replays and stale clients are refused", skip, () => fixture(async ({ service, client, publishClientBook, head, parents, send, root, origin }) => {
+  const book = clientBook();
+  const saved = await publishClientBook(book);
+  const body = handoffBody(book, saved);
+  const adopted = await service.controller.adoptGitHub(client, body);
+  assert.deepEqual(adopted, { bookId: book.id, markerPublished: true });
+  const tip = await head("main");
+  assert.deepEqual(await parents(tip), [saved], "one commit on top of what the client saved");
+  const published = JSON.parse((await git(origin, "show", `${tip}:.bookwriter/project.json`)).stdout);
+  assert.deepEqual(published.executionAuthority, { kind: "server", serverId: service.runtime && published.executionAuthority.serverId, epoch: body.epoch });
+  const record = await service.store.read(book.id);
+  assert.equal(record.book.remote.lastSyncedCommit, tip);
+  assert.equal(record.book.remote.lastSyncedLocalUpdatedAt, record.book.updatedAt, "the marker commit made it clean");
+  assert.equal(record.book.status, "paused");
+  assert.equal(record.book.previousError, undefined);
+  assert.equal(record.book.webResearch?.enabled, false, "a consent never travels with a book");
+  assert.equal(record.book.executionAuthority.epoch, body.epoch);
+  // The delegated PAT works for the book: it saves and starts.
+  assert.equal((await send(book.id, { type: "save_github", consentPublic: false })).state, "completed");
+  assert.equal((await send(book.id, { type: "start" })).state, "completed");
+  assert.deepEqual(await service.controller.adoptGitHub(client, body), { bookId: book.id, markerPublished: true }, "the same request is answered again");
+  assert.equal(await head("main"), (await service.store.read(book.id)).book.remote.lastSyncedCommit, "a replay publishes nothing");
+  await assert.rejects(service.controller.adoptGitHub(client, handoffBody(book, saved)), error => error.code === "book_exists");
+
+  // A client whose saved version the repository does not descend from is refused, and its credential is not kept.
+  const other = clientBook();
+  const unrelated = handoffBody(other, "c".repeat(40));
+  await assert.rejects(service.controller.adoptGitHub(client, unrelated), error => error.code === "handoff_invalid" || error.code === "handoff_stale");
+  const settings = JSON.parse(await fs.readFile(join(root, "private", "settings.json"), "utf8"));
+  assert.equal(other.id in settings.bookTokens, false);
+  assert.equal(await service.store.read(other.id), undefined);
+}));
+
+test("release: everything is saved, the marker leaves the repository, the server stops, and the book can be adopted again", skip, () => fixture(async ({ service, client, publishClientBook, head, send, origin, parents, root }) => {
+  const { currentStamp } = await import("../dist/testing.mjs");
+  const book = clientBook();
+  const body = handoffBody(book, await publishClientBook(book));
+  await service.controller.adoptGitHub(client, body);
+  const record = await service.store.read(book.id);
+  await send(book.id, { type: "edit_scene", sceneId: "s:1", expectedStamp: currentStamp(record.book, { kind: "scene", id: "s:1" }), patch: { text: TEXT.replace("Chiusura.", "Chiusura, di notte.") } });
+  const released = await send(book.id, { type: "release_book", confirmed: true });
+  assert.equal(released.state, "completed", JSON.stringify(released.result));
+  const tip = await head("main");
+  assert.equal(released.result.commit, tip);
+  const projected = JSON.parse((await git(origin, "show", `${tip}:.bookwriter/project.json`)).stdout);
+  assert.equal(projected.executionAuthority, undefined, "the repository no longer names the server");
+  assert.match(projected.chapters[0].scenes[0].text, /di notte/, "the unsaved edit was saved first");
+  assert.equal((await parents(tip)).length, 1);
+  const settingsFile = JSON.parse(await fs.readFile(join(root, "private", "settings.json"), "utf8"));
+  assert.equal(book.id in settingsFile.bookTokens, false, "the delegated PAT leaves the server with the book");
+  const after = await service.store.read(book.id);
+  assert.equal(after.book.executionAuthority.releasedCommit, tip);
+  assert.ok(after.book.executionAuthority.releasedAt);
+  assert.equal(after.book.remote.lastSyncedCommit, tip);
+  await assert.rejects(send(book.id, { type: "start" }), error => error.code === "released");
+  await assert.rejects(send(book.id, { type: "release_book", confirmed: true }), error => error.code === "released");
+
+  const again = handoffBody(book, tip);
+  assert.deepEqual(await service.controller.adoptGitHub(client, again), { bookId: book.id, markerPublished: true });
+  const readopted = await service.store.read(book.id);
+  assert.equal(readopted.book.executionAuthority.epoch, again.epoch);
+  assert.equal(readopted.book.executionAuthority.releasedAt, undefined);
+  assert.match(readopted.book.chapters[0].scenes[0].text, /di notte/);
+  assert.equal((await send(book.id, { type: "start" })).state, "completed");
+}));

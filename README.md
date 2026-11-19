@@ -8,7 +8,7 @@
 
 **Prima tranche sperimentale, frontend dalla 0.32.0:** retry long-term configurabili e durevoli, host **Node.js/TypeScript** con lo stesso motore del browser, archivio file, vault, admin **24105**, API **24106**, pairing e primi comandi/repliche client. Il server usa anche PAT, lease e salvataggi GitHub. La modalità locale resta indipendente.
 
-**Git sul server (0.33.0, sperimentale):** cartella di lavoro `git`, pull prima di lavorare, branch (default `main`) e unioni con conflitti decisi dall'autore o proposti dall'autopilot. [Guida](docs/personal-server-git.md) · [ADR 0169](ADR/0169-server-git-working-copy-branches-and-merge.md).
+**Git sul server (0.33.0, sperimentale):** cartella di lavoro `git`, pull prima di lavorare, branch (default `main`) e unioni con conflitti decisi dall'autore o proposti dall'autopilot. Un libro già su GitHub si affida al server senza inviare il testo e si può riportare sul client (0.34.0). [Guida](docs/personal-server-git.md) · [ADR 0169](ADR/0169-server-git-working-copy-branches-and-merge.md) · [ADR 0170](ADR/0170-github-book-adoption-and-release.md).
 
 **Non è ancora la feature completa:** trasferimenti di autorità, tutti i comandi editoriali, connessioni cloud/multi-PAT, riallineamento automatico, installer, tunnel guidato e updater firmato restano da completare. Nessun installer/download è pubblicato. [Stato reale e prova da sorgente](docs/personal-server-development.md).
 

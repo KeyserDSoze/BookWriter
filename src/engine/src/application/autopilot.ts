@@ -33,8 +33,7 @@ import { formatResearchResults, parseResearchRequest, researchAgentForKind, rese
   type ResearchAgent, type ResearchEntry, type ResearchRequest } from "../domain/web-research";
 import { persistResearchLog, runResearchQueries } from "./web-research";
 import { ManualReviewChanged, nextManualReviewStep, type ManualReviewAiStep } from "../domain/manual-review-flow";
-import { buildMergeConflictPrompt, chooseMerge, isMergeReady, unresolvedConflicts, type MergeConflict } from "../domain/book-merge";
-import { validateSceneProposal } from "../domain/scene-merge";
+import { buildMergeConflictPrompt, chooseMerge, isMergeReady, mergeShape, unresolvedConflicts, type MergeConflict } from "../domain/book-merge";
 import { describeEntities, describeEvents, emptyKnowledge, KNOWLEDGE_REPLY_DESCRIPTIONS, KNOWLEDGE_REPLY_SHAPE, knowledgeReplySchema,
   mergeKnowledgeReply, syncKnowledgeWithMemory,
   MEMORY_FOLDER, findEntity, type KnowledgeBase } from "../domain/knowledge";
@@ -152,19 +151,19 @@ function manualReviewWork(book: BookProject, step: ManualReviewAiStep): Work {
     system: step.system, prompt: step.prompt, noAuthorNotes: true, researchAgent: "review",
     apply: (b, text) => step.apply(b, text, new Date().toISOString()) };
 }
-/** A scene edited on both branches is the only conflict the autopilot can propose a merge for; anything else is the author's. */
-const aiMergeable = (conflict: MergeConflict) =>
-  conflict.kind === "scene" && conflict.ours !== undefined && conflict.theirs !== undefined;
+/** Text present on both branches (scene, field, sheet, state, string list) is the only conflict the autopilot can propose a merge for; anything else is the author's. */
+const aiMergeable = (conflict: MergeConflict) => mergeShape(conflict) !== undefined;
 function mergeConflictWork(book: BookProject, conflict: MergeConflict): Work {
   const session = book.mergeSession!;
   const { system, prompt } = buildMergeConflictPrompt(book, conflict, session.oursBranch, session.theirsBranch);
+  const what = conflict.kind === "scene" ? "La scena" : "Il contenuto";
   return { phase: book.phase, kind: "merge", title: "Unione dei branch: " + conflict.label,
-    reason: `La scena è stata modificata sia in «${session.oursBranch}» sia in «${session.theirsBranch}»: l'autopilot propone un'unica versione.`,
+    reason: `${what} è stato modificato sia in «${session.oursBranch}» sia in «${session.theirsBranch}»: l'autopilot propone un'unica versione.`,
     nextStep: "Altri conflitti dell'unione, poi la pubblicazione e la revisione editoriale dei capitoli toccati.",
     system, prompt, noAuthorNotes: true, researchAgent: null,
     apply: (b, text) => {
       if (b.mergeSession?.id !== session.id) throw new Error("L'unione è cambiata durante la richiesta: risposta scartata.");
-      chooseMerge(b.mergeSession, conflict.id, "proposal", validateSceneProposal(text));
+      chooseMerge(b.mergeSession, conflict.id, "proposal", text);
       b.previousError = undefined;
     } };
 }
@@ -1390,7 +1389,7 @@ export class AutopilotRunner {
           break;
         }
         // A merge waiting for decisions comes first and nothing else may change the book meanwhile.
-        // In autopilot mode the AI proposes only the scenes edited on both branches; the rest stays with the author.
+        // In autopilot mode the AI proposes the text conflicts present on both branches; the rest stays with the author.
         let mergeWork: Work | undefined;
         if (book.mergeSession) {
           const session = book.mergeSession;

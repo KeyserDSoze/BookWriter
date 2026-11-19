@@ -6,10 +6,11 @@ import {
 import { host } from "../core/host";
 import { BookNotFound, getBookForMutation, saveBook, withExclusiveLock } from "../core/store";
 import { retryStamp } from "../core/retry-policy";
+import { isReleasedBook } from "../domain/execution-authority";
 import { narrativeStateJson } from "../core/narrative-state";
 import { getRetrySchedule } from "../infrastructure/retry-schedule";
 import {
-  compareGitHubCommits, createGitHubBranch, listGitHubBranches, pushGitHubBook, readGitHubBranchHead,
+  compareGitHubCommits, createGitHubBranch, deleteGitHubBranch, listGitHubBranches, pushGitHubBook, readGitHubBranchHead,
   readGitHubSnapshot, readGitHubSnapshotAt, RemoteConflict, validateRemote,
   type GitHubBranch, type RemoteBookSnapshot,
 } from "../infrastructure/github-sync";
@@ -141,27 +142,53 @@ async function baseOf(local: Confirmed, commit: string | null): Promise<BookProj
 /** Bring in what the repository has that this book does not. Fast-forward when nothing was changed here,
  * otherwise a three-way merge against the common ancestor. */
 export function pullBook(bookId: string, options: { mode?: MergeSession["mode"]; signal?: AbortSignal } = {}): Promise<MergeOutcome> {
+  return withBookGit(bookId, () => pullLocked(bookId, options));
+}
+async function pullLocked(bookId: string, options: { mode?: MergeSession["mode"]; signal?: AbortSignal }): Promise<MergeOutcome> {
+  const local = await load(bookId);
+  const baseline = local.remote.lastSyncedCommit;
+  // A light read first: most of the time nothing moved and the whole snapshot need not be fetched.
+  const tip = await readGitHubBranchHead(here(local), options.signal);
+  if (tip === null) throw new RemoteConflict("Il branch «" + local.remote.branch + "» non esiste più su GitHub: nessuna modifica applicata.");
+  if (tip === baseline) return { state: "current", commit: baseline };
+  const snapshot = await snapshotOf(here(local), local, options.signal);
+  if (snapshot.head === baseline) return { state: "current", commit: baseline };
+  const cmp = await compareGitHubCommits(here(local), baseline, snapshot.head, options.signal);
+  if (cmp.status === "identical" || cmp.status === "behind")
+    throw new RemoteConflict("Il branch GitHub è tornato indietro rispetto all'ultima versione sincronizzata: nessuna modifica applicata.");
+  if (cmp.status === "ahead" && !isDirty(local) && !await host().readOutbox(bookId)) {
+    await adopt(bookId, local, snapshot, local.remote.branch);
+    return { state: "fast_forwarded", commit: snapshot.head };
+  }
+  return mergeVersions(bookId, local, {
+    kind: "pull", mode: options.mode ?? "author", oursBranch: local.remote.branch, theirsBranch: local.remote.branch,
+    oursCommit: baseline, theirsCommit: snapshot.head, baseCommit: cmp.mergeBase ?? undefined, expectedHead: snapshot.head,
+    theirs: snapshot, base: await baseOf(local, cmp.mergeBase),
+  });
+}
+
+/**
+ * The server gives the book back. Everything is saved first (what others pushed is merged, conflicts stop it),
+ * then a commit without the authority marker is published; only after that the server stops running the book.
+ */
+export function releaseBookToClient(bookId: string): Promise<{ commit: string }> {
   return withBookGit(bookId, async () => {
+    const before = await load(bookId);
+    if (!before.executionAuthority || isReleasedBook(before)) throw new Error("Il libro non è affidato a questo server o è già stato rilasciato.");
+    if ((await pullLocked(bookId, { mode: "author" })).state === "needs_resolution")
+      throw new RemoteConflict("Ci sono conflitti da decidere: concludi o annulla l'unione prima di rilasciare il libro.");
     const local = await load(bookId);
-    const baseline = local.remote.lastSyncedCommit;
-    // A light read first: most of the time nothing moved and the whole snapshot need not be fetched.
-    const tip = await readGitHubBranchHead(here(local), options.signal);
-    if (tip === null) throw new RemoteConflict("Il branch «" + local.remote.branch + "» non esiste più su GitHub: nessuna modifica applicata.");
-    if (tip === baseline) return { state: "current", commit: baseline };
-    const snapshot = await snapshotOf(here(local), local, options.signal);
-    if (snapshot.head === baseline) return { state: "current", commit: baseline };
-    const cmp = await compareGitHubCommits(here(local), baseline, snapshot.head, options.signal);
-    if (cmp.status === "identical" || cmp.status === "behind")
-      throw new RemoteConflict("Il branch GitHub è tornato indietro rispetto all'ultima versione sincronizzata: nessuna modifica applicata.");
-    if (cmp.status === "ahead" && !isDirty(local) && !await host().readOutbox(bookId)) {
-      await adopt(bookId, local, snapshot, local.remote.branch);
-      return { state: "fast_forwarded", commit: snapshot.head };
-    }
-    return mergeVersions(bookId, local, {
-      kind: "pull", mode: options.mode ?? "author", oursBranch: local.remote.branch, theirsBranch: local.remote.branch,
-      oursCommit: baseline, theirsCommit: snapshot.head, baseCommit: cmp.mergeBase ?? undefined, expectedHead: snapshot.head,
-      theirs: snapshot, base: await baseOf(local, cmp.mergeBase),
+    const result = await pushGitHubBook(bookId, local.remote.allowPublicSync === true, { release: true });
+    await host().transaction(bookId, record => {
+      const authority = record.book.executionAuthority;
+      if (!authority || record.book.status === "running") throw new RemoteConflict("Il libro è cambiato durante il rilascio.");
+      record.book.executionAuthority = { ...authority, releasedAt: new Date().toISOString(), releasedCommit: result.commit };
+      record.book.status = "paused";
+      record.book.previousError = "Libro rilasciato al client: la repository non nomina più il server e qui non viene più eseguito.";
+      if (record.book.remote) record.book.remote = { ...record.book.remote, autoSync: false };
+      delete record.outbox; delete record.retrySchedule;
     });
+    return { commit: result.commit };
   });
 }
 
@@ -208,6 +235,22 @@ export function createBranch(bookId: string, input: { name: string; from?: strin
   });
 }
 
+/** Delete a branch, only when everything it holds is already in the current branch (like `git branch -d`). */
+export function deleteBranch(bookId: string, branch: string): Promise<{ deleted: string; commit: string }> {
+  return withBookGit(bookId, async () => {
+    const local = await load(bookId);
+    const target = validateRemote({ ...here(local), branch }).branch;
+    if (target === local.remote.branch) throw new Error("Il branch corrente non si elimina: passa prima a un altro branch.");
+    const tip = await readGitHubBranchHead(onBranch(local, target));
+    if (!tip) throw new Error("Il branch «" + target + "» non esiste.");
+    const cmp = await compareGitHubCommits(here(local), local.remote.lastSyncedCommit, tip);
+    if (cmp.status !== "identical" && cmp.status !== "behind")
+      throw new RemoteConflict("Il branch «" + target + "» ha modifiche che non sono in «" + local.remote.branch + "»: uniscilo prima, poi eliminalo.");
+    await deleteGitHubBranch(onBranch(local, target));
+    return { deleted: target, commit: tip };
+  });
+}
+
 /** Merge another branch into the current one. Nothing is published until every conflict has a decision. */
 export function startBranchMerge(bookId: string, input: { from: string; mode?: MergeSession["mode"] }): Promise<MergeOutcome> {
   return withBookGit(bookId, async () => {
@@ -228,7 +271,7 @@ export function startBranchMerge(bookId: string, input: { from: string; mode?: M
   });
 }
 
-/** The author's decisions; unknown ids and proposals on anything but a two-sided scene are refused. */
+/** The author's decisions; unknown ids and proposals on anything but a text unit present on both sides are refused. */
 export function resolveMerge(bookId: string, mergeId: string, decisions: Record<string, { choice: MergeChoice; proposal?: string }>): Promise<{ unresolved: number }> {
   return withBookGit(bookId, async () => {
     const local = await load(bookId, true);

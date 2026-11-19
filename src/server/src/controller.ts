@@ -4,8 +4,8 @@ import {
   retryIsDue, serverCommandEnvelopeSchema, serverCommandDigestInput, currentStamp, bookEditing, forceCloseCycle,
   drainGitHubOutbox, saveToGitHubNow, pushManualGitHubBook,
   validateRemote, inspectRepository, inspectGitHubDestination, githubPublicationBlocker,
-  pullBook, switchBranch, createBranch, startBranchMerge, resolveMerge, abortMerge, finishMerge, listBookBranches, isMergeReady,
-  type MergeOutcome, type ServerCommand,
+  pullBook, releaseBookToClient, deleteBranch, isReleasedBook, prepareGitHubImport, compareGitHubCommits, withBookGit, pushGitHubBook, switchBranch, createBranch, startBranchMerge, resolveMerge, abortMerge, finishMerge, listBookBranches, isMergeReady,
+  type MergeOutcome, type ServerCommand, type GitHubHandoffRequest,
   type HostRuntime, type HostBookRecord, type BookProject, type Activity, type ServerCommandEnvelope,
   type ServerBookCreationInput,
 } from "@engine/index";
@@ -41,14 +41,27 @@ export class Controller {
   private configuring = false;
   private readonly handoffs: HandoffService;
   constructor(readonly store: FileBookStore, readonly runtime: HostRuntime, readonly serverId: string,
-    private readonly isCurrent: (client: Client) => boolean = () => true) {
+    private readonly isCurrent: (client: Client) => boolean = () => true,
+    private readonly credentials?: { stage(bookId: string, token: string): Promise<void>; drop(bookId: string): Promise<void>; revoke(bookId: string): Promise<void> }) {
     this.handoffs = new HandoffService(store, serverId, isCurrent);
   }
   adopt(client: Client, body: { handoffId: string; epoch: string; book: unknown; activities: unknown }) {
     return this.track(this.handoffs.adopt(client, body, () => this.accepting()));
   }
+  /** Adoption of a book that already lives on GitHub: read by the server with `git`, never uploaded. */
+  adoptGitHub(client: Client, body: GitHubHandoffRequest) {
+    if (!this.credentials) throw new ApiError(503, "credentials", "Gestione delle credenziali non disponibile.");
+    const credentials = this.credentials;
+    return this.track(this.handoffs.adoptGitHub(client, body, () => this.accepting(), {
+      stage: credentials.stage, drop: credentials.drop,
+      inspect: (bookId, remote) => this.runtime.withBookScope(bookId, () => inspectRepository(remote)),
+      read: (bookId, remote) => this.runtime.withBookScope(bookId, () => prepareGitHubImport(remote)),
+      compare: (bookId, remote, a, b) => this.runtime.withBookScope(bookId, () => compareGitHubCommits(remote, a, b)),
+      publish: (bookId, consentPublic) => withBookGit(bookId, () => pushGitHubBook(bookId, consentPublic, { adopt: true })).then(() => undefined),
+    }));
+  }
   cancelHandoff(client: Client, handoffId: string, bookId: string) {
-    return this.track(this.handoffs.cancel(client, handoffId, bookId, () => this.accepting()));
+    return this.track(this.handoffs.cancel(client, handoffId, bookId, () => this.accepting(), this.credentials?.drop));
   }
   get busy(): boolean { return this.runners.size > 0 || this.effects.size > 0; }
   private track<T>(promise: Promise<T>, set = this.operations): Promise<T> {
@@ -112,6 +125,7 @@ export class Controller {
         await this.store.serial("$commands:" + id, () => this.store.serial("$run-admission", async () => {
           if (this.shuttingDown || this.configuring || this.runners.size >= 2 || this.runners.has(id)) return;
           const record = await this.store.read(id);
+          if (record && isReleasedBook(record.book)) return;
           if (record?.retrySchedule && retryIsDue(record.retrySchedule, Date.now()))
             this.launch(id, { generation: record.retrySchedule.generation, runId: record.retrySchedule.runId });
         }));
@@ -194,6 +208,7 @@ export class Controller {
           throw new ApiError(409, "command_reused", "Identificativo già usato con un'altra richiesta.");
         return previous;
       }
+      if (isReleasedBook(record.book)) throw new ApiError(409, "released", "Il libro è stato rilasciato al client: il server non esegue più comandi.");
       this.accepting();
       if (expected !== bookEtag(record)) throw new ApiError(412, "revision", "Il libro è cambiato: ricarica lo stato e conserva la tua bozza.");
       const last = record.watermarks?.[client.id] ?? 0;
@@ -203,6 +218,9 @@ export class Controller {
         throw new ApiError(409, "merge_pending", "Un'unione di branch attende le tue decisioni: concludila o annullala prima di avviare l'autopilot.");
       if ((cmd.type === "save_github" || cmd.type === "connect_github") && record.book.mergeSession)
         throw new ApiError(409, "merge_pending", "Un'unione di branch attende le tue decisioni: concludila o annullala prima di salvare su GitHub.");
+      if (cmd.type === "release_book" && (record.book.status === "running" || record.book.mergeSession || this.runners.has(id) ||
+          ["requested", "started"].includes(record.runAuthorization?.state ?? "")))
+        throw new ApiError(409, "release_blocked", "Metti in pausa l'autopilot e concludi le unioni prima di rilasciare il libro.");
       if (isGit(cmd) && (record.book.status === "running" || ["requested", "started"].includes(record.runAuthorization?.state ?? "") || this.runners.has(id)))
         throw new ApiError(409, "runner_busy", "Metti in pausa l'autopilot prima di operare sui branch.");
       if (cmd.type === "start" && record.retrySchedule)
@@ -222,7 +240,7 @@ export class Controller {
         const runId = cmd.type === "retry_now" ? record.retrySchedule!.runId : randomUUID();
         record.runAuthorization = { commandId: envelope.commandId, runId, state: "requested" };
         receipt.result = { runId }; effect = true; receipt.state = "accepted";
-      } else if (cmd.type === "pause" || cmd.type === "stop_after_task" || cmd.type === "save_github" || cmd.type === "connect_github" || isGit(cmd)) {
+      } else if (cmd.type === "pause" || cmd.type === "stop_after_task" || cmd.type === "save_github" || cmd.type === "connect_github" || cmd.type === "release_book" || isGit(cmd)) {
         if (cmd.type === "pause" || cmd.type === "stop_after_task") {
           delete record.retrySchedule;
           if (record.book.previousError?.startsWith("In attesa di retry long-term:")) delete record.book.previousError;
@@ -341,6 +359,10 @@ export class Controller {
         result = { stopAfterTaskRequested: true };
       } else if (isGit(cmd)) {
         result = await this.gitEffect(id, cmd);
+      } else if (cmd.type === "release_book") {
+        this.accepting();
+        result = await releaseBookToClient(id);
+        await this.credentials?.revoke(id).catch(() => undefined);
       } else if (cmd.type === "save_github") {
         this.accepting();
         await this.pullBeforeWork(id);
@@ -381,7 +403,7 @@ export class Controller {
           return receipt;
         });
       }
-      if (cmd.type === "save_github" || cmd.type === "connect_github" || isGit(cmd)) state = "uncertain";
+      if (cmd.type === "save_github" || cmd.type === "connect_github" || cmd.type === "release_book" || isGit(cmd)) state = "uncertain";
       if (cmd.type === "start" || cmd.type === "retry_now") await this.store.transaction(id, record => {
         if (record.runAuthorization?.commandId === envelope.commandId) record.runAuthorization.state = "stopped";
       });
@@ -407,6 +429,7 @@ export class Controller {
       case "git_merge": return this.afterMerge(id, await startBranchMerge(id, { from: cmd.from, mode: cmd.mode }), cmd.mode);
       case "git_create_branch": return createBranch(id, { name: cmd.name, from: cmd.from, switchTo: cmd.switchTo });
       case "git_switch_branch": return switchBranch(id, cmd.branch);
+      case "git_delete_branch": return deleteBranch(id, cmd.branch);
       case "git_merge_resolve": return resolveMerge(id, cmd.mergeId, cmd.decisions);
       case "git_merge_finish": return finishMerge(id);
       case "git_merge_abort": await abortMerge(id, cmd.mergeId); return { aborted: true };

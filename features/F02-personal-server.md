@@ -70,7 +70,7 @@ I contratti `src/server/test/controller-lifecycle.test.mjs` coprono anche ammiss
 ### T4 — Autorità e comandi end-to-end
 
 - [ ] Migrazione del formato libro per autorità/epoca, import/fork sicuri e blocco versioni incompatibili.
-- [ ] Handoff idempotente e recuperabile, stop/restituzione al locale e gestione di ACK persi. _Fatto per libri locali senza GitHub, a senso unico; mancano GitHub e il ritorno al locale._
+- [ ] Handoff idempotente e recuperabile, stop/restituzione al locale e gestione di ACK persi. _Fatto per libri locali senza GitHub (a senso unico) e per libri GitHub con adozione e rilascio ([ADR 0170](../ADR/0170-github-book-adoption-and-release.md)); resta la prova con GitHub reale._
 - [ ] Facade locale/remota per **tutti** i comandi, inclusi AI edit/merge, impostazioni, dossier e controlli editoriali.
 - [ ] Repliche e cursori commit atomici IndexedDB, scope per libro, fence e nessun auto-resume locale di run server.
 - [ ] Modifiche concorrenti e bozze offline separate; rimozione locale distinta da eliminazione condivisa.

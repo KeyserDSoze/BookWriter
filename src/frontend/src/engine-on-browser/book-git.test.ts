@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, newBook, type BookProject } from "@engine/domain/type
 import { projectBook } from "@engine/domain/narrarium";
 import { MemoryGitHub } from "@engine/testing/memory-git";
 import { pushGitHubBook } from "@engine/infrastructure/github-sync";
-import { abortMerge, createBranch, finishMerge, listBookBranches, pullBook, resolveMerge, startBranchMerge, switchBranch } from "@engine/application/book-git";
+import { abortMerge, createBranch, deleteBranch, finishMerge, listBookBranches, pullBook, resolveMerge, startBranchMerge, switchBranch } from "@engine/application/book-git";
 import { chooseMerge } from "@engine/domain/book-merge";
 import { encryptLocal } from "../infrastructure/crypto";
 import { getBook, getDb, saveBook, saveSettings } from "../infrastructure/db";
@@ -123,6 +123,20 @@ describe("pull, branch e unione sul motore condiviso", () => {
     expect((await startBranchMerge(book.id, { from: "bozza" })).state).toBe("current");
     await expect(createBranch(book.id, { name: "bozza" })).rejects.toThrow("esiste già");
     await expect(createBranch(book.id, { name: "bookwriter-lock/x" })).rejects.toThrow();
+  });
+
+  it("un branch si elimina solo se è già dentro quello corrente; mai il corrente, mai uno con modifiche proprie", async () => {
+    await createBranch(book.id, { name: "bozza" });
+    await createBranch(book.id, { name: "prova" });
+    await expect(deleteBranch(book.id, "main")).rejects.toThrow("corrente");
+    expect(await deleteBranch(book.id, "prova")).toMatchObject({ deleted: "prova" });
+    expect(memory.refs.has("prova")).toBe(false);
+    await expect(deleteBranch(book.id, "prova")).rejects.toThrow("non esiste");
+    // bozza gets its own work: it is no longer contained in main.
+    await external("bozza", copy => { copy.chapters[0]!.scenes[0]!.text = TEXT.replace("Chiusura.", "Chiusura, di notte."); });
+    await expect(deleteBranch(book.id, "bozza")).rejects.toThrow("uniscilo prima");
+    expect(memory.refs.has("bozza")).toBe(true);
+    await expect(deleteBranch(book.id, "bookwriter-lock/x")).rejects.toThrow();
   });
 
   it("le proposte di testo valgono solo sulle scene presenti nei due rami", async () => {

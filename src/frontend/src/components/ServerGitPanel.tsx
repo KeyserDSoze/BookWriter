@@ -44,7 +44,7 @@ export function ServerGitPanel({ book, busy, act, command }: {
         <label className="block">Se ci sono conflitti
           <select className="field" value={mode} onChange={event => setMode(event.target.value as Mode)}>
             <option value="author">Decido io</option>
-            <option value="autopilot">L'autopilot propone le scene modificate in entrambi</option>
+            <option value="autopilot">L'autopilot propone i testi modificati in entrambi</option>
           </select></label>
         {mode === "autopilot" && <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/>
           <span>Autorizzo l'invio al modello delle scene in conflitto e del canone, segreti compresi</span></label>}
@@ -80,6 +80,12 @@ export function ServerGitPanel({ book, busy, act, command }: {
               {others.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}</select></label>
           <Button type="submit" variant="outline" disabled={locked || !target || !aiReady}>Unisci</Button>
         </form>
+        <div className="space-y-1">
+          <p className="muted text-sm">Un branch si elimina solo se è già dentro «{remote.branch}»: il server lo verifica.</p>
+          <Button type="button" variant="outline" disabled={locked || !target} onClick={() => {
+            if (target && window.confirm(`Eliminare il branch «${target}» da GitHub? Si può solo se tutto ciò che contiene è già in «${remote.branch}».`)) command({ type: "git_delete_branch", branch: target });
+          }}>Elimina il branch selezionato</Button>
+        </div>
       </>}
     </>}
     {session && <div className="space-y-3" role="region" aria-label="Unione in corso">
