@@ -14,6 +14,10 @@ export function explainAutopilotError(message: string): AutopilotErrorHelp {
     meaning: "Un limite di spesa, contesto o spazio impedisce di proseguire in sicurezza.",
     action: "Controlla il limite indicato prima di riprendere: i tentativi automatici non lo rimuovono.", retryMayHelp: false,
   };
+  if (/Remediation non autorizzata: prova narrativa legacy|Checkpoint di remediation: prova narrativa della prossima scena/i.test(message)) return {
+    meaning: "Il testo citato dal rilievo non coincide più con la prosa del segmento che deve essere corretto. Per sicurezza la correzione non viene applicata e non si perde il testo già approvato in precedenza.",
+    action: "Controlla il checkpoint dal pannello Redazione. Se il messaggio riguarda una scena già corretta, aggiorna il client: il gate non deve rivalidarla. Se riguarda invece la scena successiva, serve una nuova review supervisiva di quel capitolo; non riabilitare il passo forzando la prova.", retryMayHelp: false,
+  };
   if (/Prova narrativa non presente|citazione.*(letteral|segmento)|revisore ha citato una scena/i.test(message)) return {
     meaning: "Il revisore ha citato una frase che non coincide con il segmento affidato a lui. Il rapporto è stato scartato: questo tentativo non ha modificato il libro.",
     action: "Puoi riprovare lo stesso task. Con i tentativi automatici attivi, il nuovo prompt spiega lo scarto e chiede di copiare la citazione esatta. Se continua, scegli un modello diverso.", retryMayHelp: true,

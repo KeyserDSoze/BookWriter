@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## 0.34.2 — 2026-11-19 — Ripresa corretta delle remediation editoriali su più scene
+
+- Corretto il gate della remediation: quando il capitolo ha più scene da correggere, il controllo rivalida soltanto la citazione narrativa della **prossima scena**. Le citazioni delle scene già riscritte non devono tornare al testo originario e non bloccano più la ripresa; il testo e il giudizio già salvati restano intatti.
+- La seconda scena viene ancora bloccata se la sua citazione è davvero assente o obsoleta: nessun bypass del controllo editoriale. Aggiunto il test esatto «prima scena già corretta, seconda da correggere» e una spiegazione UI dedicata in caso di prova non corrente.
+
 ## 0.34.1 — 2026-11-19 — Server: sostituzione dei file su Windows e diagnosi della CI
 
 - **Windows:** la sostituzione atomica dei file del server riprova brevemente quando il sistema rifiuta (`EPERM`/`EACCES`/`EBUSY`) perché un altro lettore ha il file aperto: due esecuzioni della CI Windows avevano fallito proprio lì. La sostituzione resta atomica, nessun file parziale è visibile.

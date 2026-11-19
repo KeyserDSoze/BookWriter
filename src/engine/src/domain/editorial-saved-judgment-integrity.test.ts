@@ -81,6 +81,39 @@ describe("Integrità del giudizio persistito nella remediation",()=>{
     cycle.judgment!.verdict="freeze";
     expect(()=>repairPrompt(book,cycle,"s1")).toThrow(/giudizio salvato/);
   });
+  it("riprende la seconda scena anche se la riconciliazione salvata contiene l'ancora della prima scena ormai riscritta",()=>{
+    const {book,cycle}=fixture(),ch=book.chapters[0]!;
+    const passIndex=cycle.reports.findIndex(r=>r.role==="narrative"&&r.segmentIndex===0);
+    const segment=chapterSegments(ch)[0]!;
+    const extra=validateReport(cycle,"narrative",segment,chapterSegments(ch).length,JSON.stringify({
+      verdict:"issues",summary:"La frase può essere resa più diretta senza cambiare fatti o punto di vista.",memoryNote:"",
+      findings:[{sceneId:"s1",category:"stile",severity:"minor",evidence:"Mara vede il guardiano",
+        reason:"Il dettaglio richiede una formulazione più netta e leggibile.",remediation:"Spostare il guardiano all'inizio della frase."}],
+    }),ch,book);
+    cycle.reports[passIndex]=extra;
+    const s1=cycle.reports.flatMap(r=>r.findings).filter(f=>f.sceneId==="s1");
+    const s2=cycle.reports.flatMap(r=>r.findings).filter(f=>f.sceneId==="s2");
+    expect(s1).toHaveLength(2); expect(s2).toHaveLength(1);
+    const chosen=s1[0]!.id;
+    const decisions=[...s1,...s2].map(f=>({findingId:f.id,action:f.id===chosen||f.sceneId==="s2"?"accept":"reject",
+      rationale:"La scelta è motivata dalla prova letterale e mantiene invariato il contenuto narrativo.",
+      remediation:f.id===chosen||f.sceneId==="s2"?"Semplificare la frase mantenendo invariati i dettagli narrativi.":""}));
+    cycle.judgment=validateJudgment(cycle,JSON.stringify({
+      reasoning:"Valuto i due rilievi sullo stesso frammento e scelgo una sola correzione concreta.",decisions,
+      recommendationReconciliations:[{findingIds:s1.map(f=>f.id),resolution:"choose_one",evidenceAssessment:"adequate_for_selected_edits",
+        rationale:"La prima proposta è più coerente con il tono e preserva meglio il dettaglio del guardiano.",
+        missingEvidence:"Serve verificare che il guardiano resti descritto senza aggiungere fatti o informazioni nuove.",
+        nextCheck:"Rileggere la frase completa nella recensione successiva della scena."}],
+    }),ch,book);
+    cycle.stage="repair";
+    ch.scenes[0]!.text="Mara entra e descrive con precisione il guardiano vicino al portone.";
+    ch.scenes[0]!.status="draft";
+    cycle.repairCursor=1;
+    expect(repairPrompt(book,cycle,"s2").prompt).toContain("Mara racconta con calma");
+    expect(editorialRecoveryProblem(book)).toBeUndefined();
+    ch.scenes[1]!.text="Il salone è deserto e silenzioso.";
+    expect(()=>repairPrompt(book,cycle,"s2")).toThrow(/prova narrativa della prossima scena/);
+  });
   it("blocca la prova della scena da riparare, senza modificare il testo",()=>{
     const {book,cycle}=fixture(),ch=book.chapters[0]!;
     ch.scenes[0]!.text="Mara non incontra nessuno all'ingresso.";

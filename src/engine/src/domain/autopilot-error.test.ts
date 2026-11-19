@@ -6,6 +6,12 @@ import { missingModelRoutes } from "./model-routes";
 import { correctiveRetryNote, ReplyRejectedError } from "../application/reply-rejected";
 
 describe("Spiegazioni degli errori e route effettive", () => {
+  it("spiega la remediation con ancora obsoleta senza dichiararla rimediabile con un retry cieco",()=>{
+    const help=explainAutopilotError("Remediation non autorizzata: prova narrativa legacy, manomessa o non più presente nel segmento.");
+    expect(help.meaning).toContain("non coincide più");
+    expect(help.action).toContain("nuova review");
+    expect(help.retryMayHelp).toBe(false);
+  });
   it("spiega lo scarto di una prova letterale senza affermare che sia un problema di rete", () => {
     const help = explainAutopilotError("Prova narrativa non presente letteralmente nel segmento esaminato.");
     expect(help.meaning).toContain("rapporto è stato scartato");
