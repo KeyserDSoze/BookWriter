@@ -5,6 +5,7 @@
 - **Adozione e rilascio ([ADR 0170](../ADR/0170-github-book-adoption-and-release.md)):** un libro già su GitHub si affida al server senza inviare il testo: il client blocca la propria copia, il server legge la repository con `git`, pubblica il marcatore di autorità e lavora. «Riporta il libro sul dispositivo» salva tutto, toglie il marcatore, revoca il PAT delegato e restituisce il libro, che sul client torna locale e pulito rispetto alla versione rilasciata. Il PAT viaggia solo con il consenso della delega, mai nell'impronta della ricevuta.
 - **Autopilot sui conflitti di testo:** oltre alle scene propone una versione unita per campi di testo, voci di memoria, stato corrente, timeline e liste; capitoli, struttura e schede narrative restano all'autore. Una proposta non valida non decide nulla.
 - **Eliminare un ramo** solo se già interamente nel ramo corrente. Le variabili di proxy e dei certificati passano ai soli comandi di rete di `git`.
+- **Windows:** la sostituzione atomica dei file del server riprova brevemente quando il sistema rifiuta (`EPERM`/`EACCES`/`EBUSY`) perché un altro lettore ha il file aperto: due esecuzioni della CI Windows avevano fallito proprio lì. La sostituzione resta atomica, nessun file parziale è visibile.
 - Esclusi di proposito: rebase e cherry-pick (riscrivono la storia), tag, pull request. Non provato con GitHub reale né con un proxy reale; il server resta sperimentale, da sorgente.
 
 ## 0.33.0 — 2026-11-19 — Git sul server: cartella di lavoro, pull, branch e unioni curate dall'autopilot

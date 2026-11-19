@@ -89,6 +89,18 @@ export function unsafeKeys(value: unknown, depth = 0): boolean {
     ["__proto__", "constructor", "prototype"].includes(key) || unsafeKeys(entry, depth + 1));
 }
 
+/** Windows refuses to replace a file another handle (a reader, an indexer) has open for an instant: the
+ * replacement itself stays atomic, so a short bounded retry never exposes a partial file. */
+async function renameReplacing(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try { await fs.rename(from, to); return; }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (attempt >= 12 || process.platform !== "win32" || code !== "EPERM" && code !== "EACCES" && code !== "EBUSY") throw error;
+      await new Promise(done => setTimeout(done, 15 * (attempt + 1)));
+    }
+  }
+}
 export async function atomicJson(path: string, value: unknown): Promise<void> {
   const bytes = Buffer.from(JSON.stringify(value));
   if (bytes.byteLength > MAX_FILE_BYTES) throw new Error("Archivio oltre 80 MiB: nessun dato troncato.");
@@ -107,7 +119,7 @@ export async function atomicJson(path: string, value: unknown): Promise<void> {
   const handle = await fs.open(temp, "wx", 0o600);
   try {
     await handle.writeFile(bytes); await handle.sync(); await handle.close();
-    await fs.rename(temp, path);
+    await renameReplacing(temp, path);
     if (process.platform !== "win32") {
       const directory = await fs.open(parent, "r");
       try { await directory.sync(); } finally { await directory.close(); }
