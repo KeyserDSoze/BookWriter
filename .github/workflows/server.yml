@@ -47,4 +47,14 @@ jobs:
         run: npm run build
       - name: Run real file and OS-lock contracts, and the host contract shared with the browser
         working-directory: src/server
-        run: npm test
+        shell: bash
+        run: |
+          set +e
+          npm test 2>&1 | tee "$RUNNER_TEMP/server-test.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            # The log of a public run needs an account; the first failing tests as one annotation do not.
+            summary=$(grep -E "^not ok|^# Subtest|^  error:|^    [A-Za-z].*(Error|rror:)|expected:|actual:|operator:" "$RUNNER_TEMP/server-test.log" | grep -B1 -A6 "^not ok" | head -60 | cut -c1-240 | paste -sd '|' -)
+            echo "::error title=Server tests failed::${summary}"
+          fi
+          exit $code
