@@ -1,6 +1,6 @@
 {
   "name": "bookwriter-personal-server",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Server personale sperimentale per BookWriter, distribuito come pacchetto CLI pubblico.",
   "type": "module",
   "engines": {

@@ -13,6 +13,7 @@ test("systemd unit runs the supervisor CLI with the exact data root", () => {
   assert.match(unit, /WantedBy=default\.target/);
   assert.ok(unit.includes("/cli.mjs") && unit.includes(' start --data-root "\/home\/user\/BookWriter data"'));
   assert.match(unit, /NoNewPrivileges=true/);
+  assert.doesNotMatch(unit, /^WorkingDirectory=/m);
   assert.doesNotMatch(unit, /PAT|token/);
 });
 

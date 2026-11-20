@@ -1,5 +1,9 @@
 # Changelog — BookWriter
 
+## 0.35.7 — 2026-11-20 — Autostart systemd-user verificato
+
+- Corretto l'unit file generato da `setup --autostart`: systemd non accetta quote su `WorkingDirectory`, e il supervisore non richiede una directory di lavoro nel servizio. La chiave dati resta passata esplicitamente con `--data-root`. Test impedisce la regressione. Pacchetto server 0.1.5.
+
 ## 0.35.6 — 2026-11-20 — Autostart Linux del server personale
 
 - `npx bookwriter-personal-server setup --autostart` installa un servizio **systemd-user** soltanto per BookWriter e lo avvia. Usa il CLI contenuto nel runtime npm e lo stesso `--data-root`; non modifica tunnel Cloudflare né altri servizi. Se l'utente non è lingered, il comando mostra il passo `sudo loginctl enable-linger <utente>` necessario per il riavvio senza login.

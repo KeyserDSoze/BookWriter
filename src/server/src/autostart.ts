@@ -25,7 +25,6 @@ Type=simple
 ExecStart=${exec}
 Restart=on-failure
 RestartSec=5
-WorkingDirectory=${quote(resolve(dataRoot))}
 NoNewPrivileges=true
 
 [Install]
