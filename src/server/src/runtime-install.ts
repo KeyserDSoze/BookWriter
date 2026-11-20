@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import * as fs from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, posix, win32 } from "node:path";
 import { trustedNpmReleaseMetadata } from "./npm-release";
 
 export const PACKAGE_NAME = "bookwriter-personal-server" as const;
@@ -95,14 +95,15 @@ export function assertSupportedNode(version = process.versions.node): void {
     throw new Error(`Node.js ${MINIMUM_NODE.join(".")} o successivo è richiesto.`);
 }
 export function defaultDataRoot(env: NodeJS.ProcessEnv = process.env, platform = process.platform): string {
-  if (env.BOOKWRITER_DATA_ROOT) return resolve(env.BOOKWRITER_DATA_ROOT);
+  const path = platform === "win32" ? win32 : posix;
+  if (env.BOOKWRITER_DATA_ROOT) return path.resolve(env.BOOKWRITER_DATA_ROOT);
   if (platform === "win32") {
-    const base = env.APPDATA ?? join(homedir(), "AppData", "Roaming");
-    return resolve(base, "BookWriter", "data");
+    const base = env.APPDATA ?? path.join(homedir(), "AppData", "Roaming");
+    return path.resolve(base, "BookWriter", "data");
   }
-  if (platform === "darwin") return resolve(homedir(), "Library", "Application Support", "BookWriter");
+  if (platform === "darwin") return path.resolve(env.HOME ?? homedir(), "Library", "Application Support", "BookWriter");
   const xdg = env.XDG_DATA_HOME;
-  return resolve(xdg && (xdg.startsWith("/") || /^[A-Za-z]:\\/.test(xdg)) ? xdg : join(homedir(), ".local", "share"), "bookwriter");
+  return path.resolve(xdg && xdg.startsWith("/") ? xdg : path.join(env.HOME ?? homedir(), ".local", "share"), "bookwriter");
 }
 export function sanitizedNpmEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const names = [

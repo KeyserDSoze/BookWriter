@@ -1,5 +1,9 @@
 # Changelog — BookWriter
 
+## 0.35.1 — 2026-11-20 — Percorsi CLI deterministici fra Linux e Windows
+
+- Corretto il calcolo delle directory predefinite del CLI npm: la simulazione Linux ora usa le regole POSIX anche quando i test girano su Windows, evitando un falso percorso `D:\home\…`. Il comportamento Windows reale usa invece `path.win32`. Nessun cambiamento ai dati o ai token.
+
 ## 0.35.0 — 2026-11-20 — Pacchetto npm, aggiornamenti supervisionati e Cloudflare dedicato
 
 - **Pacchetto npm `bookwriter-personal-server`:** `npx setup/start/status/update/doctor`, runtime in `<dati>/private/npm-runtime`, installazioni senza script e `npm audit signatures` prima dell'attivazione. Il repository non viene clonato e il progetto frontend non viene compilato sul PC dell'autore.
