@@ -7,7 +7,7 @@ vi.mock("@engine/infrastructure/ai", () => ({ callModel: modelCall }));
 vi.mock("@engine/application/writer-guard", () => ({ withWriterGuard: writerGuard }));
 import { createEditorialCycle } from "@engine/domain/editorial-board";
 import type { ChapterHistoricalDossier } from "@engine/domain/historical-research";
-import { AutopilotRunner } from "@engine/application/autopilot";
+import { AutopilotRunner, validateEditorialSummaryReply } from "@engine/application/autopilot";
 
 function book(): BookProject {
   const b=newBook("Mara protegge la chiave di un castello.", "Romanzo", "Sobrio", "Adulti");
@@ -84,6 +84,10 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(prompts.filter(x=>x.kind==="summarize")).toHaveLength(1);
     expect(prompts.filter(x=>x.kind==="chapterReaders").every(x=>
       !x.prompt.includes("passaggio segreto"))).toBe(true);
+    const summaryPrompt=prompts.find(x=>x.kind==="summarize")?.prompt;
+    expect(summaryPrompt).toContain("6000");
+    expect(summaryPrompt).toContain("9000");
+    expect(summaryPrompt).toContain("25 caratteri effettivi");
     expect(prompts.filter(x=>x.kind==="chapterAudit").some(x=>
       x.prompt.includes("passaggio segreto"))).toBe(true);
     expect((await listActivities(source.id)).filter(a=>a.phase==="chapterReview")).toHaveLength(14);
@@ -124,6 +128,50 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
       inputTokens:243,outputTokens:72,
     }]);
     expect(history).toHaveLength(14);
+  });
+  it("rifiuta sinossi JSON troppo lunghe con un limite leggibile e non congela",async()=>{
+    expect(()=>validateEditorialSummaryReply(JSON.stringify({
+      chapterSummary:"x".repeat(6001),
+      bookSummary:"Una sinossi valida del libro, lunga abbastanza per superare la soglia minima.",
+    }))).toThrow(/6000 caratteri/);
+    expect(()=>validateEditorialSummaryReply(JSON.stringify({
+      chapterSummary:"Mara entra nel castello e parla con il guardiano.",
+      bookSummary:"x".repeat(9001),
+    }))).toThrow(/9000 caratteri/);
+    expect(()=>validateEditorialSummaryReply(JSON.stringify({
+      chapterSummary:" ",
+      bookSummary:"Una sinossi valida del libro, lunga abbastanza per superare la soglia minima.",
+    }))).toThrow(/almeno 25 caratteri effettivi/);
+
+    const source=book();
+    source.bookSummary="Il libro non è ancora stato consolidato.";
+    await saveBook(source,false);
+    modelCall.mockImplementation(async(kind:string)=>{
+      const text=kind==="chapterJudge"?judgment(false):
+        kind==="summarize"?JSON.stringify({
+          chapterSummary:"Mara entra nel castello dopo una breve conversazione con il guardiano.",
+          bookSummary:"x".repeat(9001),
+        }):report(false);
+      return {text,endpointId:"openai",modelId:"review-model",
+        inputTokens:243,outputTokens:72};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const saved=(await getBook(source.id))!;
+    expect(saved.status).toBe("error");
+    expect(saved.editorialCycle).toMatchObject({
+      stage:"summary",summaryCursor:0,
+      judgment:{verdict:"freeze"},
+    });
+    expect(saved.chapters[0]!.frozenAt).toBeUndefined();
+    expect(saved.chapters[0]!.summary).toBeUndefined();
+    expect(saved.chapters[0]!.bookSummaryAtFreeze).toBeUndefined();
+    expect(saved.bookSummary).toBe("Il libro non è ancora stato consolidato.");
+    const history=await listActivities(source.id);
+    expect(history.filter(x=>x.title.includes("Sinossi"))).toMatchObject([{
+      status:"failed",aiRequested:true,
+      inputTokens:243,outputTokens:72,
+      error:expect.stringMatching(/9000 caratteri/),
+    }]);
   });
   it("accetta un rilievo motivato, corregge la scena, aggiorna memoria e riesegue i 12 controlli",async()=>{
     const source=book();await saveBook(source,false);

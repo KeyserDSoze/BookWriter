@@ -19,6 +19,7 @@ import {buildSharedTransferPack} from "./narrative-transfer-sharing";
 import { describeEntities, describeEvents } from "./knowledge";
 import { estimateTextTokens } from "./model-token-limits";
 import { toolParameters, type ToolSchema } from "./structured-output";
+import { EDITORIAL_BOOK_SUMMARY_MAX_CHARS, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS, isValidEditorialSummary } from "./editorial-summary";
 import { relevantKnowledge } from "./knowledge-index";
 import { EXTRA_READER_ROLES, isReaderRole, parseEditorialProfiles, profileSnapshotSchema, profileStamp, selectedWriter, writerInstructions,
   directorInstructions, maxEditorialRounds, writerRules, type WriterRule,
@@ -1868,11 +1869,8 @@ export function assertSavedEditorialFreezeJudgmentIntegrity(
       cursor >= segments.length)
     throw new Error("Checkpoint di congelamento: cursore delle sinossi mancante o fuori intervallo.");
   if (cursor > 0) {
-    const validSummary = (value: unknown, maximum: number) =>
-      typeof value === "string" && value.length >= 25 &&
-      value.length <= maximum && value.trim().length >= 25;
-    if (!validSummary(cycle.runningChapterSummary, 6000) ||
-        !validSummary(cycle.runningBookSummary, 9000))
+    if (!isValidEditorialSummary(cycle.runningChapterSummary, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS) ||
+        !isValidEditorialSummary(cycle.runningBookSummary, EDITORIAL_BOOK_SUMMARY_MAX_CHARS))
       throw new Error("Checkpoint di congelamento: sinossi progressive mancanti o non valide.");
   }
   // Do not reimplement a weaker 1:1 check: validateJudgment already checks

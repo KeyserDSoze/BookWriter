@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import {
   PACKAGE_NAME, RuntimeInstaller, assertExactSemver, defaultDataRoot, parseUpdateRequest,
   sanitizedNpmEnvironment, supervisedChildEnvironment, superviseServer, doctorChecks, isDirectCliInvocation,
-  readAdminBootstrap, requestLocalClientToken, rotateLocalAdminBootstrap,
+  readAdminBootstrap, readBootstrapCodeFile, requestLocalClientToken, rotateLocalAdminBootstrap, setLocalAdminBootstrap,
 } from "../dist/cli.mjs";
 
 const here = fileURLToPath(new URL("..", import.meta.url));
@@ -84,14 +84,18 @@ test("semver, default user-local root and sanitized npm environment", () => {
 
 test("admin code and client token creation stay loopback, and secrets never become arguments", async t => {
   const root = await tempRoot(t); const privateDir = join(root, "private"); await fs.mkdir(privateDir, { recursive: true });
-  await fs.writeFile(join(privateDir, "admin-bootstrap.txt"), "bootstrap-segreto-locale\n", { mode: 0o600 });
-  assert.equal(await readAdminBootstrap(root), "bootstrap-segreto-locale");
+  await fs.writeFile(join(privateDir, "admin-bootstrap.txt"), "bootstrap-segreto-locale-abbastanza-lungo\n", { mode: 0o600 });
+  assert.equal(await readAdminBootstrap(root), "bootstrap-segreto-locale-abbastanza-lungo");
+  const customPath = join(privateDir, "custom-code.txt");
+  await fs.writeFile(customPath, "codice-scelto-da-autore-lungo-e-privato\n", { mode: 0o600 });
+  assert.equal(await readBootstrapCodeFile(customPath), "codice-scelto-da-autore-lungo-e-privato");
   const calls = [];
   const fakeFetch = async (url, init = {}) => {
     calls.push({ url, init });
     if (url.endsWith("/admin/api/login")) return new Response(JSON.stringify({ csrf: "csrf-locale" }), {
       status: 200, headers: { "set-cookie": "bw_admin=abc; HttpOnly; Secure" } });
     if (url.endsWith("/admin/api/token")) return Response.json({ token: "token-cliente", clientId: "11111111-1111-4111-8111-111111111111" });
+    if (url.endsWith("/admin/api/bootstrap/set")) return Response.json({ changed: true });
     return new Response("", { status: 404 });
   };
   await assert.rejects(requestLocalClientToken({ dataRoot: root, label: "Client", scopes: ["read", "admin"], fetchImpl: fakeFetch }), /Permessi/);
@@ -102,9 +106,14 @@ test("admin code and client token creation stay loopback, and secrets never beco
     return Response.json({ code: "codice-nuovo-locale" });
   };
   assert.equal(await rotateLocalAdminBootstrap({ dataRoot: root, fetchImpl: rotate }), "codice-nuovo-locale");
+  const customCode = await readBootstrapCodeFile(customPath);
+  await setLocalAdminBootstrap({ dataRoot: root, code: customCode, fetchImpl: fakeFetch });
+  const setCall = calls.at(-1);
+  assert.equal(setCall.url, "http://127.0.0.1:24105/admin/api/bootstrap/set");
+  assert.equal(JSON.parse(setCall.init.body).code, customCode);
   assert.equal(result.token, "token-cliente");
-  assert.equal(calls.length, 2); assert.match(calls[0].url, /^http:\/\/127\.0\.0\.1:24105/);
-  assert.equal(JSON.parse(calls[0].init.body).code, "bootstrap-segreto-locale");
+  assert.equal(calls.length, 4); assert.match(calls[0].url, /^http:\/\/127\.0\.0\.1:24105/);
+  assert.equal(JSON.parse(calls[0].init.body).code, "bootstrap-segreto-locale-abbastanza-lungo");
   assert.equal(calls[1].init.headers.Cookie, "bw_admin=abc"); assert.equal(calls[1].init.headers["X-CSRF-Token"], "csrf-locale");
   await assert.rejects(requestLocalClientToken({ dataRoot: root, label: "Client", scopes: ["read"], adminOrigin: "https://gw.example.org", fetchImpl: fakeFetch }), /loopback/);
 });

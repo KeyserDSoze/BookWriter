@@ -115,6 +115,15 @@ npx --yes bookwriter-personal-server rotate-admin-code --data-root "$HOME/BookWr
 
 La rotazione scrive il nuovo codice nel file, aggiorna l'hash e invalida le sessioni admin esistenti. I token client già emessi non cambiano: per revocarli usa il pannello admin.
 
+Per scegliere tu stesso il nuovo codice (32–200 caratteri visibili), senza inserirlo negli argomenti o nella cronologia della shell:
+
+```bash
+npx --yes bookwriter-personal-server set-admin-code \
+  --data-root "$HOME/BookWriter-server-data"
+```
+
+Il comando lo legge dal terminale senza eco. In automazione locale è possibile usare `--code-file /percorso/file-0600`; il file deve essere regolare, senza link e non leggibile dal gruppo o da altri. Dopo la conferma anche qui tutte le sessioni admin vengono invalidate. Il pannello web amministrativo espone le stesse due azioni: «Imposta questo codice» e «Genera un nuovo codice casuale».
+
 ## Cloudflare: già pronto oppure da attivare
 
 ### Se hai già configurato Cloudflare

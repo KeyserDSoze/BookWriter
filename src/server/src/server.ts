@@ -465,6 +465,13 @@ export async function startPersonalServer(options: ServerOptions) {
         const code = await auth.rotateBootstrap();
         json(res, 200, { code }); return;
       }
+      if (path === "/admin/api/bootstrap/set" && req.method === "POST") {
+        const body = z.object({ code: z.string().min(32).max(200)
+          .refine(value => value === value.trim() && !/[\u0000-\u001f\u007f]/u.test(value), "Codice amministratore non valido.") })
+          .strict().parse(await readBody(req, 4096));
+        await auth.replaceBootstrap(body.code);
+        json(res, 200, { changed: true }); return;
+      }
       if (path === "/admin/api/status" && req.method === "GET") {
         json(res, 200, { serverId: installation.serverId, fingerprint, apiPort, ...auth.list(),
           allowedAiBases: installation.allowedAiBases, origins: installation.origins,

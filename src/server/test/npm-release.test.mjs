@@ -81,7 +81,7 @@ test("API advertises and accepts only the exact signed npm version under the CLI
     assert.equal(info.available, true); assert.equal(info.canRequest, true); assert.equal(info.latestVersion, VERSION); assert.equal(info.signed, true);
     const update = await nativeFetch(base + "/api/v1/updates", {
       method: "POST", headers: { ...auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ installedVersion: "0.1.7", version: VERSION, confirmed: true }),
+      body: JSON.stringify({ installedVersion: "0.1.8", version: VERSION, confirmed: true }),
     });
     assert.equal(update.status, 202, await update.text());
     const installer = new RuntimeInstaller({ dataRoot: root });
@@ -114,7 +114,7 @@ test("without the npx supervisor the client sees a version but cannot request a 
     assert.equal(read.status, 200);
     const info = await read.json(); assert.equal(info.available, true); assert.equal(info.canRequest, false); assert.match(info.message, /npx/);
     const update = await nativeFetch(base + "/api/v1/updates", { method: "POST",
-      headers: { apikey: token.token, "Content-Type": "application/json" }, body: JSON.stringify({ installedVersion: "0.1.7", version: VERSION, confirmed: true }) });
+      headers: { apikey: token.token, "Content-Type": "application/json" }, body: JSON.stringify({ installedVersion: "0.1.8", version: VERSION, confirmed: true }) });
     assert.equal(update.status, 409);
   } finally { globalThis.fetch = nativeFetch; await service.close(); }
 }));

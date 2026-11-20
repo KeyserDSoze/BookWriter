@@ -6,6 +6,8 @@ Quando il direttore editoriale ha completato i 12 controlli per ogni segmento e 
 
 Da v0.11.80 il modello deve restituire due stringhe con **almeno 25 caratteri effettivi dopo aver ignorato gli spazi esterni**. Non bastano 25 spazi, tab o righe vuote. Restano i limiti già previsti: massimo 6.000 caratteri per il riassunto del capitolo e 9.000 per quello del libro. Il testo non viene tagliato o riscritto da questo controllo.
 
+Se il modello restituisce una risposta sintatticamente JSON corretta ma supera uno dei due limiti, il validatore distingue il campo interessato e indica il limite esatto invece di presentare un generico errore di formato. Il testo restituito viene rifiutato, non abbreviato, e il nuovo tentativo correttivo deve compattare il riassunto progressivo eliminando ripetizioni e dettagli non essenziali.
+
 Prima di salvare una risposta del modello, il sistema ricontrolla che il capitolo e il **segmento di sinossi** siano proprio quelli della richiesta inviata. La matrice dei 12 revisori e il giudizio freeze devono comunque essere integri e correnti.
 
 ## Se il modello restituisce soltanto spazi

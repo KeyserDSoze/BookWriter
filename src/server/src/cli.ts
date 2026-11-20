@@ -8,20 +8,26 @@ import {
   sanitizedNpmEnvironment, superviseServer,
 } from "./runtime-install";
 import { autostartStatus, configureAutostart } from "./autostart";
-import { readAdminBootstrap, requestLocalClientToken, rotateLocalAdminBootstrap } from "./admin-client";
+import {
+  readAdminBootstrap, readBootstrapCodeFile, requestLocalClientToken, rotateLocalAdminBootstrap, setLocalAdminBootstrap,
+} from "./admin-client";
 
-const HELP = `Uso:\n  npx ${PACKAGE_NAME} setup [--data-root DIRECTORY] [--autostart] [--no-prompt]\n  npx ${PACKAGE_NAME} start [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} status\n  npx ${PACKAGE_NAME} doctor\n  npx ${PACKAGE_NAME} update [--data-root DIRECTORY] [--to VERSION]\n`;
-interface ParsedCommand { command: string; dataRoot?: string; requestedVersion?: string; noPrompt?: boolean; autostart?: boolean; label?: string; scopes?: string[] }
+const HELP = `Uso:\n  npx ${PACKAGE_NAME} setup [--data-root DIRECTORY] [--autostart] [--no-prompt]\n  npx ${PACKAGE_NAME} start [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} status [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} doctor [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} admin-code [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} rotate-admin-code [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} set-admin-code [--data-root DIRECTORY] [--code-file FILE-0600]\n  npx ${PACKAGE_NAME} client-token [--data-root DIRECTORY] [--label NAME] [--scope read,write,run,update]\n  npx ${PACKAGE_NAME} update [--data-root DIRECTORY] [--to VERSION]\n`;
+interface ParsedCommand { command: string; dataRoot?: string; requestedVersion?: string; noPrompt?: boolean; autostart?: boolean; label?: string; scopes?: string[]; codeFile?: string }
 function parseCommand(argv: readonly string[]): ParsedCommand {
   const command = argv[0];
   if (!command || command === "--help" || command === "help") return { command: "help" };
-  if (!["setup", "start", "status", "doctor", "admin-code", "rotate-admin-code", "client-token", "update"].includes(command)) throw new Error(`Comando non riconosciuto.\n${HELP}`);
+  if (!["setup", "start", "status", "doctor", "admin-code", "rotate-admin-code", "set-admin-code", "client-token", "update"].includes(command)) throw new Error(`Comando non riconosciuto.\n${HELP}`);
   const parsed: ParsedCommand = { command };
   for (let index = 1; index < argv.length; index++) {
     const flag = argv[index];
-    if (flag === "--data-root" && ["setup", "start", "status", "doctor", "admin-code", "rotate-admin-code", "client-token", "update"].includes(command)) {
+    if (flag === "--data-root" && ["setup", "start", "status", "doctor", "admin-code", "rotate-admin-code", "set-admin-code", "client-token", "update"].includes(command)) {
       const value = argv[++index]; if (!value || value.startsWith("--")) throw new Error("--data-root richiede una directory.");
       parsed.dataRoot = value; continue;
+    }
+    if (flag === "--code-file" && command === "set-admin-code") {
+      const value = argv[++index]; if (!value || value.startsWith("--")) throw new Error("--code-file richiede un file privato 0600.");
+      parsed.codeFile = value; continue;
     }
     if (flag === "--label" && command === "client-token") {
       const value = argv[++index]; if (!value || value.length > 80 || value.startsWith("--")) throw new Error("--label richiede un nome di 1-80 caratteri.");
@@ -67,6 +73,29 @@ export function doctorChecks(platform = process.platform,
   return checks;
 }
 function output(line: string): void { process.stdout.write(`${line}\n`); }
+export async function readPrivateTerminalCode(prompt = "Nuovo codice amministratore (32–200 caratteri): "): Promise<string> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY || !process.stdin.setRawMode)
+    throw new Error("Serve un terminale interattivo. In alternativa usa --code-file con un file privato 0600.");
+  const chunks: Buffer[] = [];
+  process.stdout.write(prompt);
+  process.stdin.setRawMode(true); process.stdin.resume();
+  try {
+    for await (const chunk of process.stdin) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+      for (const byte of bytes) {
+        if (byte === 3) throw new Error("Operazione annullata.");
+        if (byte === 10 || byte === 13) { process.stdout.write("\n"); return Buffer.concat(chunks).toString("utf8"); }
+        if (byte === 8 || byte === 127) { if (chunks.length) { chunks.pop(); process.stdout.write("\b \b"); } continue; }
+        if (byte < 32 || byte === 127) continue;
+        chunks.push(Buffer.from([byte])); process.stdout.write("*");
+        if (chunks.length > 200) throw new Error("Il codice supera i 200 caratteri.");
+      }
+    }
+    throw new Error("Input del codice terminato prima dell'invio.");
+  } finally {
+    process.stdin.setRawMode(false); process.stdin.pause();
+  }
+}
 export async function main(argv = process.argv.slice(2), environment: NodeJS.ProcessEnv = process.env): Promise<number> {
   let parsed: ParsedCommand;
   try { parsed = parseCommand(argv); } catch (error) { process.stderr.write(`${error instanceof Error ? error.message : "Comando non valido."}\n`); return 2; }
@@ -110,6 +139,12 @@ export async function main(argv = process.argv.slice(2), environment: NodeJS.Pro
       const code = await rotateLocalAdminBootstrap({ dataRoot });
       output("Il vecchio codice amministratore è stato revocato.");
       output(`NUOVO CODICE (file e terminale locali): ${code}`);
+      return 0;
+    }
+    if (parsed.command === "set-admin-code") {
+      const code = parsed.codeFile ? await readBootstrapCodeFile(resolve(parsed.codeFile)) : await readPrivateTerminalCode();
+      await setLocalAdminBootstrap({ dataRoot, code });
+      output("Il codice scelto è attivo. Tutte le sessioni admin precedenti sono state invalidate; il codice non è stato mostrato né passato negli argomenti.");
       return 0;
     }
     if (parsed.command === "client-token") {
@@ -156,4 +191,6 @@ if (isDirectCliInvocation()) process.exitCode = await main();
 
 export * from "./runtime-install";
 
-export { readAdminBootstrap, requestLocalClientToken, rotateLocalAdminBootstrap } from "./admin-client";
+export {
+  readAdminBootstrap, readBootstrapCodeFile, requestLocalClientToken, rotateLocalAdminBootstrap, setLocalAdminBootstrap,
+} from "./admin-client";

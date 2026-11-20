@@ -20,7 +20,8 @@ import { RemoteWriterLost } from "../infrastructure/github-lease";
 import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, blockedByRoundLimit, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, forceCloseCycle, judgeBatchesOf, mandatoryRuleRejections, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, judgeToolSchema, REVIEW_REPORT_TOOL, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
 import { SUBMIT_TOOL_NOTE, describeUnder, toolOutputAvailable, toolParameters, type ToolSchema } from "../domain/structured-output";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
-import { synopsisBeforeChapter } from "../domain/editorial-summary";
+import { EDITORIAL_BOOK_SUMMARY_MAX_CHARS, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS, EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS,
+  isValidEditorialSummary, synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
 import { declaredModelTokenLimits, estimateTextTokens } from "../domain/model-token-limits";
@@ -66,11 +67,11 @@ const MEMORY_COMPACTION_RULE = "Mantieni la memoria COMPATTA: ogni voce di chara
 // A non-empty JSON string can still contain only whitespace. Do not let
 // apparent length from spaces/newlines become a frozen, unusable synopsis.
 const meaningfulSummary = (maximum: number) => z.string().max(maximum)
-  .refine(value => value.trim().length >= 25,
-    "La sinossi deve contenere almeno 25 caratteri significativi.");
+  .refine(value => value.trim().length >= EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS,
+    `La sinossi deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi.`);
 const editorialSummarySchema = z.object({
-  chapterSummary: meaningfulSummary(6000),
-  bookSummary: meaningfulSummary(9000),
+  chapterSummary: meaningfulSummary(EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS),
+  bookSummary: meaningfulSummary(EDITORIAL_BOOK_SUMMARY_MAX_CHARS),
 });
 const impactSchema = z.object({
   rationale: z.string(),
@@ -87,8 +88,8 @@ const OUTLINE_DESCRIPTIONS: Readonly<Record<string, string>> = {
 };
 const CHAPTER_PLAN_TOOL = toolParameters(chapterSchema, OUTLINE_DESCRIPTIONS);
 const EDITORIAL_SUMMARY_TOOL = toolParameters(editorialSummarySchema, {
-  chapterSummary: "Sinossi progressiva del capitolo fino a questo segmento (almeno 25 caratteri significativi, max 6000).",
-  bookSummary: "Sinossi progressiva del libro con quanto è stato realmente raccontato (almeno 25 caratteri significativi, max 9000).",
+  chapterSummary: `Sinossi progressiva del capitolo fino a questo segmento (almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi, max ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS}).`,
+  bookSummary: `Sinossi progressiva compatta del libro con quanto è stato realmente raccontato (almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi, max ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS}).`,
 });
 const IMPACT_TOOL = toolParameters(impactSchema, {
   rationale: "Motivazione dell'analisi d'impatto.",
@@ -240,6 +241,36 @@ async function launchReviewsAhead(
 function parseJson(raw: string): unknown {
   return parseJsonReply(raw);
 }
+
+/** Validate the two editorial summaries before they can reach freeze or a later checkpoint. */
+export function validateEditorialSummaryReply(raw: string): { chapterSummary: string; bookSummary: string } {
+  const reply = parseJson(raw);
+  if (!reply || typeof reply !== "object" || Array.isArray(reply))
+    throw new Error("La risposta della sinossi deve essere un oggetto JSON con chapterSummary e bookSummary.");
+  const record = reply as Record<string, unknown>;
+
+  const chapter = record.chapterSummary;
+  if (typeof chapter !== "string")
+    throw new Error("La risposta della sinossi deve contenere chapterSummary come stringa.");
+  if (chapter.trim().length < EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS)
+    throw new Error(`La sinossi del capitolo deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi.`);
+  if (chapter.length > EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS)
+    throw new Error(`La sinossi del capitolo supera il limite di ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS} caratteri. Compattala senza tagliare una frase a metà.`);
+
+  const book = record.bookSummary;
+  if (typeof book !== "string")
+    throw new Error("La risposta della sinossi deve contenere bookSummary come stringa.");
+  if (book.trim().length < EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS)
+    throw new Error(`La sinossi del libro deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi.`);
+  if (book.length > EDITORIAL_BOOK_SUMMARY_MAX_CHARS)
+    throw new Error(`La sinossi del libro supera il limite di ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS} caratteri. Compattala eliminando ripetizioni e dettagli non essenziali.`);
+
+  if (!isValidEditorialSummary(chapter, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS) ||
+      !isValidEditorialSummary(book, EDITORIAL_BOOK_SUMMARY_MAX_CHARS))
+    throw new Error("La risposta della sinossi non rispetta i limiti richiesti.");
+  return editorialSummarySchema.parse(reply);
+}
+
 function outlineText(book: BookProject): string {
   return book.chapters.map(ch => `${ch.number}. ${ch.title}: ${ch.purpose}\n${ch.scenes.map(s => `  - ${s.id}: ${s.title}: ${s.objective}`).join("\n")}`).join("\n");
 }
@@ -916,6 +947,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
           prompt: [
             "Aggiorna due sinossi progressive senza spoiler aggiuntivi e senza inventare fatti.",
             "Restituisci SOLO JSON {\"chapterSummary\":\"...\",\"bookSummary\":\"...\"}.",
+            `Limiti obbligatori: chapterSummary deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi e al massimo ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS}; bookSummary almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi e al massimo ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS}. Compatta entrambe le sinossi, usa la precedente come base e aggiungi solo gli eventi essenziali del segmento; elimina ripetizioni e dettagli non necessari, senza tagliare una frase a metà.`,
             "Riassunto capitolo fino ad ora: " + (cycle.runningChapterSummary ?? ""),
             "Riassunto libro precedente: " + (cycle.runningBookSummary ??
               (book.chapters.some(other => other.number > chapter.number && other.frozenAt)
@@ -930,7 +962,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
             assertProfilesCurrent(current);
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             if (!ch) throw new Error("Sessione di sintesi non valida: capitolo assente.");
-            const data = editorialSummarySchema.parse(parseJson(text));
+            const data = validateEditorialSummaryReply(text);
             if (!current.forcedClose) {
               assertEditorialReviewCoverage(b, current, true);
               // Check once more on the exact book revision being committed;

@@ -4,11 +4,28 @@ import { join, resolve } from "node:path";
 import type { ServerScope } from "@engine/domain/personal-server";
 
 const SCOPES = new Set<ServerScope>(["read", "write", "run", "update"]);
+export async function readBootstrapCodeFile(path: string): Promise<string> {
+  const info = await fs.lstat(path);
+  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size < 32 || info.size > 201 ||
+      process.platform !== "win32" && (info.mode & 0o077) !== 0)
+    throw new Error("Il file del nuovo codice deve essere regolare, privato (0600), senza link e contenere 32–200 caratteri.");
+  const handle = await fs.open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (opened.dev !== info.dev || opened.ino !== info.ino) throw new Error("Il file del codice è cambiato durante la lettura.");
+    const text = await handle.readFile("utf8");
+    const code = text.endsWith("\n") ? text.slice(0, -1) : text;
+    if (code.length < 32 || code.length > 200 || code !== code.trim() || /[\u0000-\u001f\u007f]/u.test(code))
+      throw new Error("Il nuovo codice deve avere 32–200 caratteri visibili, senza ritorni a capo o spazi iniziali/finali.");
+    return code;
+  } finally { await handle.close(); }
+}
 export async function readAdminBootstrap(dataRoot: string): Promise<string> {
   const path = join(resolve(dataRoot), "private", "admin-bootstrap.txt");
   const info = await fs.lstat(path);
-  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 256)
-    throw new Error("Codice amministratore non leggibile o non regolare.");
+  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size < 33 || info.size > 201 ||
+      process.platform !== "win32" && (info.mode & 0o077) !== 0)
+    throw new Error("Codice amministratore non leggibile, non regolare o non privato (richiesto 0600). ");
   const handle = await fs.open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   try {
     const opened = await handle.stat();
@@ -77,4 +94,16 @@ export async function rotateLocalAdminBootstrap(options: Omit<LocalClientTokenOp
   const result = await response.json() as { code?: unknown };
   if (typeof result.code !== "string") throw new Error("Nuovo codice amministratore non valido.");
   return result.code;
+}
+
+export async function setLocalAdminBootstrap(options: Omit<LocalClientTokenOptions, "label" | "scopes"> & { code: string }): Promise<void> {
+  const { code } = options;
+  if (code.length < 32 || code.length > 200 || code !== code.trim() || /[\u0000-\u001f\u007f]/u.test(code))
+    throw new Error("Il nuovo codice deve avere 32–200 caratteri visibili, senza ritorni a capo o spazi iniziali/finali.");
+  const session = await localAdminSession({ ...options, dataRoot: options.dataRoot, label: "", scopes: [] });
+  const response = await (options.fetchImpl ?? fetch)(session.origin + "/admin/api/bootstrap/set", {
+    method: "POST", redirect: "error", credentials: "omit", headers: { Origin: session.origin,
+      "Content-Type": "application/json", Cookie: session.cookie, "X-CSRF-Token": session.csrf }, body: JSON.stringify({ code }),
+  });
+  if (!response.ok) throw new Error("Il codice amministratore non è stato impostato.");
 }

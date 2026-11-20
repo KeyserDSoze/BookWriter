@@ -597,6 +597,19 @@ test("admin bootstrap rotation requires a valid admin session and revokes the fo
     const newStatus = await fetch(admin + "/admin/api/login", { method: "POST", headers: { Origin: admin, "Content-Type": "application/json" },
       body: JSON.stringify({ code: nextCode }) });
     assert.equal(newStatus.status, 200);
+    const newSession = await newStatus.json(); const newCookie = newStatus.headers.get("set-cookie").split(";", 1)[0];
+    const customCode = "codice-scelto-da-autore-confrasi-32-caratteri";
+    const custom = await fetch(admin + "/admin/api/bootstrap/set", { method: "POST", headers: {
+      Origin: admin, Cookie: newCookie, "X-CSRF-Token": newSession.csrf, "Content-Type": "application/json" },
+      body: JSON.stringify({ code: customCode }) });
+    assert.equal(custom.status, 200);
+    assert.equal((await fs.readFile(join(root, "private", "admin-bootstrap.txt"), "utf8")).trim(), customCode);
+    const rejectedNew = await fetch(admin + "/admin/api/login", { method: "POST", headers: { Origin: admin, "Content-Type": "application/json" },
+      body: JSON.stringify({ code: nextCode }) });
+    assert.equal(rejectedNew.status, 401, "custom code revokes the generated code");
+    const acceptedCustom = await fetch(admin + "/admin/api/login", { method: "POST", headers: { Origin: admin, "Content-Type": "application/json" },
+      body: JSON.stringify({ code: customCode }) });
+    assert.equal(acceptedCustom.status, 200);
     const staleSession = await fetch(admin + "/admin/api/status", { headers: { Cookie: cookie } });
     assert.equal(staleSession.status, 401, "rotation invalidates existing admin sessions");
   } finally { await server.close(); await release(); }

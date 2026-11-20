@@ -11,6 +11,11 @@ const secret = () => randomBytes(32).toString("base64url");
 const constantMatch = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const MAX_CLIENTS = 100;
+export function assertAdminBootstrapCode(value: string): string {
+  if (value.length < 32 || value.length > 200 || value !== value.trim() || /[\u0000-\u001f\u007f]/u.test(value))
+    throw new Error("Il codice amministratore deve avere 32–200 caratteri visibili, senza ritorni a capo o spazi iniziali/finali.");
+  return value;
+}
 const clientSchema = z.object({
   id: z.string().uuid(), label: z.string().min(1).max(80), hash: z.string().length(64),
   scopes: z.array(serverScopeSchema).min(1).max(4), createdAt: z.number(), revoked: z.boolean(),
@@ -32,12 +37,13 @@ export type Client = z.infer<typeof clientSchema>;
 async function bootstrapCode(path: string): Promise<string> {
   try {
     const info = await fs.lstat(path);
-    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size !== 44 ||
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size < 33 || info.size > 201 ||
         process.platform !== "win32" && (info.mode & 0o077) !== 0)
       throw new Error("File di bootstrap locale non valido o non privato: nessuna rigenerazione automatica.");
     const text = await fs.readFile(path, "utf8");
-    if (!/^[A-Za-z0-9_-]{43}\n$/.test(text)) throw new Error("Codice di bootstrap locale non valido.");
-    return text.slice(0, -1);
+    if (!text.endsWith("\n") || text.slice(0, -1).includes("\n") || text.includes("\r"))
+      throw new Error("Codice di bootstrap locale non valido.");
+    return assertAdminBootstrapCode(text.slice(0, -1));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     const code = secret();
@@ -66,7 +72,15 @@ export class Auth {
       const code = await bootstrapCode(join(store.root, "private", "admin-bootstrap.txt"));
       state = { version: 1, bootstrapHash: hash(code), clients: [], failureWindow: Date.now(), failures: 0 };
       await atomicJson(path, state);
-    } else state = authSchema.parse(stored);
+    } else {
+      state = authSchema.parse(stored);
+      const code = await bootstrapCode(join(store.root, "private", "admin-bootstrap.txt"));
+      const durableHash = hash(code);
+      if (state.bootstrapHash !== durableHash) {
+        state = { ...state, bootstrapHash: durableHash, failures: 0, failureWindow: Date.now() };
+        await atomicJson(path, state);
+      }
+    }
     return new Auth(store, vault, path, state);
   }
   private async change<T>(action: (state: AuthState) => T | Promise<T>): Promise<T> {
@@ -76,28 +90,37 @@ export class Auth {
       authSchema.parse(next); await atomicJson(this.path, next); this.state = next; return result;
     });
   }
-  async rotateBootstrap(): Promise<string> {
+  async replaceBootstrap(value: string): Promise<void> {
+    const code = assertAdminBootstrapCode(value);
     const path = join(this.store.root, "private", "admin-bootstrap.txt");
-    const old = await fs.readFile(path, "utf8");
+    await this.store.serial("$auth", async () => {
+      const old = await fs.readFile(path, "utf8");
+      const next = structuredClone(this.state);
+      next.bootstrapHash = hash(code); next.failures = 0; next.failureWindow = Date.now();
+      authSchema.parse(next);
+      const temporary = path + ".new-" + randomUUID();
+      const handle = await fs.open(temporary, "wx", 0o600);
+      try {
+        await handle.writeFile(code + "\n"); await handle.sync(); await handle.close();
+        await fs.rename(temporary, path);
+      } catch (error) {
+        await handle.close().catch(() => undefined); await fs.unlink(temporary).catch(() => undefined); throw error;
+      }
+      try {
+        await atomicJson(this.path, next); this.state = next; this.sessions.clear();
+      } catch (error) {
+        const rollback = path + ".rollback-" + randomUUID();
+        const file = await fs.open(rollback, "wx", 0o600);
+        try { await file.writeFile(old); await file.sync(); await file.close(); await fs.rename(rollback, path); }
+        finally { await file.close().catch(() => undefined); await fs.unlink(rollback).catch(() => undefined); }
+        throw error;
+      }
+    });
+  }
+  async rotateBootstrap(): Promise<string> {
     const code = secret();
-    const temporary = path + ".new-" + randomUUID();
-    const handle = await fs.open(temporary, "wx", 0o600);
-    try {
-      await handle.writeFile(code + "\n"); await handle.sync(); await handle.close();
-      await fs.rename(temporary, path);
-    } catch (error) { await handle.close().catch(() => undefined); await fs.unlink(temporary).catch(() => undefined); throw error; }
-    try {
-      await this.change(state => { state.bootstrapHash = hash(code); state.failures = 0; state.failureWindow = Date.now(); });
-      this.sessions.clear();
-      return code;
-    } catch (error) {
-      // Restore the former code if the durable auth hash could not be updated.
-      const rollback = path + ".rollback-" + randomUUID();
-      const file = await fs.open(rollback, "wx", 0o600);
-      try { await file.writeFile(old); await file.sync(); await file.close(); await fs.rename(rollback, path); }
-      finally { await file.close().catch(() => undefined); await fs.unlink(rollback).catch(() => undefined); }
-      throw error;
-    }
+    await this.replaceBootstrap(code);
+    return code;
   }
   authenticate(token: string | undefined, scope?: ServerScope): Client {
     if (!token || token.length > 200) throw new ApiError(401, "unauthorized", "Token del server assente o non valido.");

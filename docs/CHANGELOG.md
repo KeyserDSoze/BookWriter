@@ -1,5 +1,15 @@
 # Changelog — BookWriter
 
+## 0.35.11 — 2026-11-20 — Sinossi editoriali oltre limite validate con precisione
+
+- Il ciclo editoriale ora distingue i limiti delle due sinossi: `chapterSummary` massimo 6.000 caratteri, `bookSummary` massimo 9.000, entrambi con almeno 25 caratteri effettivi. Il prompt indica al modello come compattare il JSON, mentre il validatore non tronca né congela testo troppo lungo.
+- Aggiunti test per limiti di 6.000/9.000 caratteri, sinossi whitespace, uso osservato e conservazione di canone, capitolo e sinossi precedenti.
+
+## 0.35.10 — 2026-11-20 — Codice amministratore scelto dall'autore
+
+- `set-admin-code` permette di scegliere un nuovo codice da terminale senza eco e senza passarlo negli argomenti; accetta anche un `--code-file` regolare e privato. Il pannello admin web offre sia la scelta personale sia la generazione casuale, invalida le sessioni precedenti e non espone il codice al client BookWriter.
+- Il riavvio riconcilia in modo conservativo il file bootstrap privato con l'hash server; server npm 0.1.8.
+
 ## 0.35.9 — 2026-11-20 — Codice admin rotabile e token client da terminale
 
 - CLI: `admin-code` legge il codice locale, `rotate-admin-code` lo sostituisce e invalida le sessioni admin, `client-token` crea nel terminale un token con scope scelti usando solo l'admin loopback 24105. Nessuno dei segreti passa negli argomenti della shell.

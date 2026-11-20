@@ -3,11 +3,18 @@ export const ADMIN_HTML = `<!doctype html>
 <title>BookWriter · Server personale</title><link rel="stylesheet" href="/admin.css">
 <body><main>
 <h1>Server personale BookWriter</h1>
-<p>Amministrazione solo locale. Non inoltrare la porta 24105 nel tunnel. I file del libro e il vault non sono E2EE.</p>
+<p>Amministrazione autenticata: loopback 24105 di default, oppure hostname HTTPS esplicito se abilitato. Il file private/admin-bootstrap.txt resta locale. I file del libro e il vault non sono E2EE.</p>
 <form id="login"><label>Codice dal file private/admin-bootstrap.txt <input id="bootstrap" type="password" autocomplete="off" required></label>
 <button>Accedi</button></form>
 <section id="panel" hidden><h2>Identità e connessioni</h2><pre id="identity"></pre>
 <button id="refresh" type="button">Aggiorna stato</button>
+<details><summary>Codice amministratore</summary>
+<p>Il codice protegge anche l'accesso remoto quando questo pannello è pubblicato. Dopo la modifica tutte le sessioni admin si chiudono.</p>
+<form id="bootstrap-custom"><label>Nuovo codice scelto (32–200 caratteri) <input id="bootstrap-new" type="password" autocomplete="new-password" minlength="32" maxlength="200" required></label>
+<label>Ripeti il nuovo codice <input id="bootstrap-confirm" type="password" autocomplete="new-password" minlength="32" maxlength="200" required></label>
+<button>Imposta questo codice</button></form>
+<button id="bootstrap-rotate" type="button">Genera un nuovo codice casuale e mostralo una volta</button>
+</details>
 <button id="pairing" type="button">Abbina un client · codice per 5 minuti</button><pre id="code"></pre>
 <div id="pending"></div><h3>Token dei client</h3><div id="clients"></div>
 <form id="issue"><label>Nome del client <input id="label" maxlength="80" required></label>
@@ -29,7 +36,7 @@ export const ADMIN_HTML = `<!doctype html>
 <button id="tunnel-restart" type="button">Riavvia solo il connettore dedicato</button>
 <button id="tunnel-remove" type="button">Rimuovi il token dedicato e arresta il connettore</button>
 <p>BookWriter richiede cloudflared 2025.4.0 o successivo per <code>--token-file</code>. Nel pannello Cloudflare devono già esistere hostname, route e DNS verso il connettore. Il token deve autorizzare soltanto il connector necessario. Con questa modalità non si usa alcun comando arbitrario e non viene accettato <code>--url</code>.</p>
-</section><p id="notice" role="status"></p></main><script src="/admin.js"></script></body></html>`;
+</section><pre id="bootstrap-rotated"></pre><p id="notice" role="status"></p></main><script src="/admin.js"></script></body></html>`;
 
 export const ADMIN_CSS = `:root{font-family:system-ui,sans-serif;color-scheme:light dark}body{margin:0}
 main{max-width:58rem;margin:auto;padding:1.25rem}form{display:grid;gap:.75rem;margin:1rem 0}
@@ -87,6 +94,20 @@ el("refresh").onclick=run(refresh);
 el("pairing").onclick=run(async()=>{const p=await call("pairing",{});el("code").textContent=p.code;notice("Codice monouso. Il client richiederà anche l'approvazione locale.");});
 el("issue").onsubmit=run(async()=>{const n=await call("token",{label:el("label").value,scopes:["read","write","run",...(el("update").checked?["update"]:[])]});
  el("token").textContent=n.token;await refresh();});
+function bootstrapChanged(message, code="") {
+ csrf="";el("panel").hidden=true;el("login").hidden=false;el("bootstrap-new").value="";el("bootstrap-confirm").value="";
+ el("bootstrap").value="";el("bootstrap-rotated").textContent=code;notice(message);
+}
+el("bootstrap-custom").onsubmit=run(async()=>{
+ const code=el("bootstrap-new").value, confirmCode=el("bootstrap-confirm").value;
+ if(code!==confirmCode) { notice("I due codici non coincidono."); return; }
+ if(!confirm("Impostare il codice scelto? Tutte le sessioni admin saranno chiuse.")) return;
+ await call("bootstrap/set",{code});bootstrapChanged("Codice scelto attivo. Accedi di nuovo con il nuovo valore.");
+});
+el("bootstrap-rotate").onclick=run(async()=>{
+ if(!confirm("Generare e mostrare una sola volta un nuovo codice casuale? Il codice attuale sarà revocato.")) return;
+ const result=await call("bootstrap/rotate",{});bootstrapChanged("Nuovo codice casuale attivo: copialo subito e accedi di nuovo.",result.code);
+});
 el("network").onsubmit=run(async()=>{if(!confirm("Approvi queste destinazioni AI e origini del client?"))return;
  const lines=id=>el(id).value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean);
  await call("network",{allowedAiBases:lines("bases"),origins:lines("origins"),publicUrl:el("public").value,adminPublicUrl:el("admin-public").value,allowRemoteAdmin:el("remote-admin").checked});

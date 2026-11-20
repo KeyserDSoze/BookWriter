@@ -1,5 +1,15 @@
 import type { Chapter } from "./types";
 
+export const EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS = 25;
+export const EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS = 6000;
+export const EDITORIAL_BOOK_SUMMARY_MAX_CHARS = 9000;
+
+export function isValidEditorialSummary(value: unknown, maximum: number): value is string {
+  return typeof value === "string" &&
+    value.length <= maximum &&
+    value.trim().length >= EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS;
+}
+
 /**
  * Restore the last validated public synopsis before a retroactive edit.
  * Newer chapters preserve their full rolling synopsis at freeze. Old data
