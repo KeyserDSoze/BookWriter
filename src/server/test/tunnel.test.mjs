@@ -11,7 +11,7 @@ async function temporary(action) {
   const base = process.platform === "win32" ? tmpdir() : process.env.BOOKWRITER_TEST_TMP ?? "/tmp/opencode";
   await fs.mkdir(base, { recursive: true, mode: 0o700 });
   const root = await fs.mkdtemp(join(base, "bookwriter-tunnel-test-"));
-  try { return await action(root); } finally { await fs.rm(root, { recursive: true, force: true }); }
+  try { return await action(root); } finally { await fs.rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); }
 }
 
 class FakeChild extends EventEmitter {
