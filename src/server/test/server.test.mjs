@@ -575,3 +575,29 @@ test("remote admin is visible by default after public URL is configured; explici
     assert.equal((await fetch(admin + "/")).status, 200, "loopback remains available after remote disable");
   } finally { await server.close(); await release(); }
 }));
+
+test("admin bootstrap rotation requires a valid admin session and revokes the former code", async () => temporary(async root => {
+  const release = await lockDataRoot(root);
+  const server = await startPersonalServer({ root, adminPort: 0, apiPort: 0, git: false });
+  const admin = `http://127.0.0.1:${server.adminPort}`;
+  try {
+    const oldCode = (await fs.readFile(join(root, "private", "admin-bootstrap.txt"), "utf8")).trim();
+    const login = await fetch(admin + "/admin/api/login", { method: "POST", headers: { Origin: admin, "Content-Type": "application/json" },
+      body: JSON.stringify({ code: oldCode }) });
+    const session = await login.json(); const cookie = login.headers.get("set-cookie").split(";", 1)[0];
+    const rotate = await fetch(admin + "/admin/api/bootstrap/rotate", { method: "POST", headers: {
+      Origin: admin, Cookie: cookie, "X-CSRF-Token": session.csrf, "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(rotate.status, 200);
+    const { code: nextCode } = await rotate.json();
+    assert.notEqual(nextCode, oldCode);
+    assert.equal((await fs.readFile(join(root, "private", "admin-bootstrap.txt"), "utf8")).trim(), nextCode);
+    const statusOld = await fetch(admin + "/admin/api/login", { method: "POST", headers: { Origin: admin, "Content-Type": "application/json" },
+      body: JSON.stringify({ code: oldCode }) });
+    assert.equal(statusOld.status, 401);
+    const newStatus = await fetch(admin + "/admin/api/login", { method: "POST", headers: { Origin: admin, "Content-Type": "application/json" },
+      body: JSON.stringify({ code: nextCode }) });
+    assert.equal(newStatus.status, 200);
+    const staleSession = await fetch(admin + "/admin/api/status", { headers: { Cookie: cookie } });
+    assert.equal(staleSession.status, 401, "rotation invalidates existing admin sessions");
+  } finally { await server.close(); await release(); }
+}));

@@ -460,6 +460,11 @@ export async function startPersonalServer(options: ServerOptions) {
       }
       const cookie = /(?:^|;\s*)bw_admin=([A-Za-z0-9_-]+)/.exec(header(req, "cookie") ?? "")?.[1];
       auth.adminSession(cookie, req.method === "POST" ? header(req, "x-csrf-token") ?? "" : undefined);
+      if (path === "/admin/api/bootstrap/rotate" && req.method === "POST") {
+        z.object({}).strict().parse(await readBody(req, 4096));
+        const code = await auth.rotateBootstrap();
+        json(res, 200, { code }); return;
+      }
       if (path === "/admin/api/status" && req.method === "GET") {
         json(res, 200, { serverId: installation.serverId, fingerprint, apiPort, ...auth.list(),
           allowedAiBases: installation.allowedAiBases, origins: installation.origins,

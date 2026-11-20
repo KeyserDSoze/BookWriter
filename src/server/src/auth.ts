@@ -76,6 +76,29 @@ export class Auth {
       authSchema.parse(next); await atomicJson(this.path, next); this.state = next; return result;
     });
   }
+  async rotateBootstrap(): Promise<string> {
+    const path = join(this.store.root, "private", "admin-bootstrap.txt");
+    const old = await fs.readFile(path, "utf8");
+    const code = secret();
+    const temporary = path + ".new-" + randomUUID();
+    const handle = await fs.open(temporary, "wx", 0o600);
+    try {
+      await handle.writeFile(code + "\n"); await handle.sync(); await handle.close();
+      await fs.rename(temporary, path);
+    } catch (error) { await handle.close().catch(() => undefined); await fs.unlink(temporary).catch(() => undefined); throw error; }
+    try {
+      await this.change(state => { state.bootstrapHash = hash(code); state.failures = 0; state.failureWindow = Date.now(); });
+      this.sessions.clear();
+      return code;
+    } catch (error) {
+      // Restore the former code if the durable auth hash could not be updated.
+      const rollback = path + ".rollback-" + randomUUID();
+      const file = await fs.open(rollback, "wx", 0o600);
+      try { await file.writeFile(old); await file.sync(); await file.close(); await fs.rename(rollback, path); }
+      finally { await file.close().catch(() => undefined); await fs.unlink(rollback).catch(() => undefined); }
+      throw error;
+    }
+  }
   authenticate(token: string | undefined, scope?: ServerScope): Client {
     if (!token || token.length > 200) throw new ApiError(401, "unauthorized", "Token del server assente o non valido.");
     const digest = hash(token);

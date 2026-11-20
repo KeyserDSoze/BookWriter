@@ -46,6 +46,7 @@ Il comando `update` è sempre un'azione locale esplicita e non arresta né modif
 - amministrazione: solo loopback su `http://127.0.0.1:24105`;
 - API: solo porta 24106; l'eventuale tunnel deve inoltrare esclusivamente questa porta;
 - il pannello amministrativo non va esposto su Internet;
+- comandi `admin-code`, `client-token` e `rotate-admin-code` lavorano solo sull'admin loopback 24105;
 - il token Cloudflare si inserisce nel pannello amministrativo loopback, mai negli argomenti della shell o del client SPA;
 - il server gestisce un connettore `cloudflared` dedicato con token-file; non installa il binario e non modifica, arresta o aggiorna tunnel/servizi già presenti.
 

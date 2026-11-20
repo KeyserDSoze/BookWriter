@@ -9,6 +9,7 @@ import { spawnSync } from "node:child_process";
 import {
   PACKAGE_NAME, RuntimeInstaller, assertExactSemver, defaultDataRoot, parseUpdateRequest,
   sanitizedNpmEnvironment, supervisedChildEnvironment, superviseServer, doctorChecks, isDirectCliInvocation,
+  readAdminBootstrap, requestLocalClientToken, rotateLocalAdminBootstrap,
 } from "../dist/cli.mjs";
 
 const here = fileURLToPath(new URL("..", import.meta.url));
@@ -79,6 +80,33 @@ test("semver, default user-local root and sanitized npm environment", () => {
   assert.equal(env.BOOKWRITER_CLOUDFLARE_TOKEN, undefined);
   const childEnv = supervisedChildEnvironment({ PATH: "/bin", BOOKWRITER_DATA_ROOT: "/data" });
   assert.deepEqual(childEnv, { PATH: "/bin", BOOKWRITER_SUPERVISED: "1", NPM_CONFIG_UPDATE_NOTIFIER: "false" });
+});
+
+test("admin code and client token creation stay loopback, and secrets never become arguments", async t => {
+  const root = await tempRoot(t); const privateDir = join(root, "private"); await fs.mkdir(privateDir, { recursive: true });
+  await fs.writeFile(join(privateDir, "admin-bootstrap.txt"), "bootstrap-segreto-locale\n", { mode: 0o600 });
+  assert.equal(await readAdminBootstrap(root), "bootstrap-segreto-locale");
+  const calls = [];
+  const fakeFetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (url.endsWith("/admin/api/login")) return new Response(JSON.stringify({ csrf: "csrf-locale" }), {
+      status: 200, headers: { "set-cookie": "bw_admin=abc; HttpOnly; Secure" } });
+    if (url.endsWith("/admin/api/token")) return Response.json({ token: "token-cliente", clientId: "11111111-1111-4111-8111-111111111111" });
+    return new Response("", { status: 404 });
+  };
+  await assert.rejects(requestLocalClientToken({ dataRoot: root, label: "Client", scopes: ["read", "admin"], fetchImpl: fakeFetch }), /Permessi/);
+  const result = await requestLocalClientToken({ dataRoot: root, label: "Client", scopes: ["read", "write", "run"], fetchImpl: fakeFetch });
+  const rotate = async (url, init = {}) => {
+    if (url.endsWith("/admin/api/login")) return new Response(JSON.stringify({ csrf: "csrf-rotate" }), {
+      status: 200, headers: { "set-cookie": "bw_admin=rotate; HttpOnly; Secure" } });
+    return Response.json({ code: "codice-nuovo-locale" });
+  };
+  assert.equal(await rotateLocalAdminBootstrap({ dataRoot: root, fetchImpl: rotate }), "codice-nuovo-locale");
+  assert.equal(result.token, "token-cliente");
+  assert.equal(calls.length, 2); assert.match(calls[0].url, /^http:\/\/127\.0\.0\.1:24105/);
+  assert.equal(JSON.parse(calls[0].init.body).code, "bootstrap-segreto-locale");
+  assert.equal(calls[1].init.headers.Cookie, "bw_admin=abc"); assert.equal(calls[1].init.headers["X-CSRF-Token"], "csrf-locale");
+  await assert.rejects(requestLocalClientToken({ dataRoot: root, label: "Client", scopes: ["read"], adminOrigin: "https://gw.example.org", fetchImpl: fakeFetch }), /loopback/);
 });
 
 test("strict bounded update request schema", async t => {

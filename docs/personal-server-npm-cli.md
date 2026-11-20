@@ -89,6 +89,32 @@ Configurazione consigliata:
 oppure lo stesso hostname può puntare a 24105: il listener admin inoltra **solo** `/api/v1/*` alla API 24106. Tutto il resto (`/`, `/admin.js`, `/admin/api/*`) resta il pannello admin autenticato. La porta 24105 è sempre ascoltata solo su loopback; è Cloudflare a portarla fuori.
 
 Il web login usa bootstrap locale, cookie `HttpOnly; Secure` su HTTPS, scadenza 30 minuti e CSRF. È comunque raccomandato proteggere l'hostname admin con Cloudflare Access. Nessun bypass del login è possibile per il client dell'app.
+## Codice admin e token client
+
+Il codice admin è una credenziale statica del pannello, non un token client. Non passarlo mai negli argomenti di un comando, URL, GitHub, ZIP o chat.
+
+Leggere il codice sul solo PC server:
+
+```bash
+npx --yes bookwriter-personal-server admin-code --data-root "$HOME/BookWriter-server-data"
+```
+
+Creare un token client senza metterlo nella shell:
+
+```bash
+npx --yes bookwriter-personal-server client-token   --data-root "$HOME/BookWriter-server-data"   --label "PC autore"   --scope read,write,run
+```
+
+Il token compare una sola volta nel terminale. Incollalo nel client in **Impostazioni → Server personale → Token BookWriter**, insieme all'URL `https://gw.opencode.zone` (o il tuo hostname API). Il comando usa solo l'admin loopback 24105, legge il codice dal file e non invia il codice al client web.
+
+Se il codice admin è stato esposto, ruotalo:
+
+```bash
+npx --yes bookwriter-personal-server rotate-admin-code --data-root "$HOME/BookWriter-server-data"
+```
+
+La rotazione scrive il nuovo codice nel file, aggiorna l'hash e invalida le sessioni admin esistenti. I token client già emessi non cambiano: per revocarli usa il pannello admin.
+
 ## Cloudflare: già pronto oppure da attivare
 
 ### Se hai già configurato Cloudflare

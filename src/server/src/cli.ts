@@ -8,19 +8,28 @@ import {
   sanitizedNpmEnvironment, superviseServer,
 } from "./runtime-install";
 import { autostartStatus, configureAutostart } from "./autostart";
+import { readAdminBootstrap, requestLocalClientToken, rotateLocalAdminBootstrap } from "./admin-client";
 
 const HELP = `Uso:\n  npx ${PACKAGE_NAME} setup [--data-root DIRECTORY] [--autostart] [--no-prompt]\n  npx ${PACKAGE_NAME} start [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} status\n  npx ${PACKAGE_NAME} doctor\n  npx ${PACKAGE_NAME} update [--data-root DIRECTORY] [--to VERSION]\n`;
-interface ParsedCommand { command: string; dataRoot?: string; requestedVersion?: string; noPrompt?: boolean; autostart?: boolean }
+interface ParsedCommand { command: string; dataRoot?: string; requestedVersion?: string; noPrompt?: boolean; autostart?: boolean; label?: string; scopes?: string[] }
 function parseCommand(argv: readonly string[]): ParsedCommand {
   const command = argv[0];
   if (!command || command === "--help" || command === "help") return { command: "help" };
-  if (!["setup", "start", "status", "doctor", "update"].includes(command)) throw new Error(`Comando non riconosciuto.\n${HELP}`);
+  if (!["setup", "start", "status", "doctor", "admin-code", "rotate-admin-code", "client-token", "update"].includes(command)) throw new Error(`Comando non riconosciuto.\n${HELP}`);
   const parsed: ParsedCommand = { command };
   for (let index = 1; index < argv.length; index++) {
     const flag = argv[index];
-    if (flag === "--data-root" && ["setup", "start", "status", "doctor", "update"].includes(command)) {
+    if (flag === "--data-root" && ["setup", "start", "status", "doctor", "admin-code", "rotate-admin-code", "client-token", "update"].includes(command)) {
       const value = argv[++index]; if (!value || value.startsWith("--")) throw new Error("--data-root richiede una directory.");
       parsed.dataRoot = value; continue;
+    }
+    if (flag === "--label" && command === "client-token") {
+      const value = argv[++index]; if (!value || value.length > 80 || value.startsWith("--")) throw new Error("--label richiede un nome di 1-80 caratteri.");
+      parsed.label = value; continue;
+    }
+    if (flag === "--scope" && command === "client-token") {
+      const value = argv[++index]; if (!value) throw new Error("--scope richiede read,write,run oppure read,write,run,update.");
+      parsed.scopes = value.split(",").map(scope => scope.trim()); continue;
     }
     if (flag === "--no-prompt" && command === "setup") { parsed.noPrompt = true; continue; }
     if (flag === "--autostart" && command === "setup") { parsed.autostart = true; continue; }
@@ -91,6 +100,25 @@ export async function main(argv = process.argv.slice(2), environment: NodeJS.Pro
       output(`Autostart: ${await autostartStatus(environment.HOME) ?? "non configurato"}`);
       return active || state ? 0 : 1;
     }
+    if (parsed.command === "admin-code") {
+      const code = await readAdminBootstrap(dataRoot);
+      output(`Codice amministratore (segreto locale): ${code}`);
+      output("Non incollarlo nei comandi pubblici, nei log o nei repository. Ruotalo se è stato esposto.");
+      return 0;
+    }
+    if (parsed.command === "rotate-admin-code") {
+      const code = await rotateLocalAdminBootstrap({ dataRoot });
+      output("Il vecchio codice amministratore è stato revocato.");
+      output(`NUOVO CODICE (file e terminale locali): ${code}`);
+      return 0;
+    }
+    if (parsed.command === "client-token") {
+      const result = await requestLocalClientToken({ dataRoot, label: parsed.label ?? "Client BookWriter",
+        scopes: parsed.scopes ?? ["read", "write", "run"] });
+      output(`TOKEN CLIENT (mostrato una sola volta): ${result.token}`);
+      output("Incollalo nel client in Impostazioni → Server personale → Token BookWriter. Non incollarlo in URL, ZIP, GitHub o chat.");
+      return 0;
+    }
     if (parsed.command === "doctor") {
       const checks = doctorChecks();
       for (const check of checks) output(`${check.ok ? "OK" : "ERRORE"} · ${check.name}: ${check.detail}`);
@@ -127,3 +155,5 @@ export function isDirectCliInvocation(metaUrl = import.meta.url, executable = pr
 if (isDirectCliInvocation()) process.exitCode = await main();
 
 export * from "./runtime-install";
+
+export { readAdminBootstrap, requestLocalClientToken, rotateLocalAdminBootstrap } from "./admin-client";

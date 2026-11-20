@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## 0.35.9 — 2026-11-20 — Codice admin rotabile e token client da terminale
+
+- CLI: `admin-code` legge il codice locale, `rotate-admin-code` lo sostituisce e invalida le sessioni admin, `client-token` crea nel terminale un token con scope scelti usando solo l'admin loopback 24105. Nessuno dei segreti passa negli argomenti della shell.
+- Il client mostra i comandi e consente di incollare il token già creato; il codice admin non viene inviato alla SPA. Pubblicato server npm 0.1.7.
+
 ## 0.35.7 — 2026-11-20 — Autostart systemd-user verificato
 
 - Corretto l'unit file generato da `setup --autostart`: systemd non accetta quote su `WorkingDirectory`, e il supervisore non richiede una directory di lavoro nel servizio. La chiave dati resta passata esplicitamente con `--data-root`. Test impedisce la regressione. Pacchetto server 0.1.5.

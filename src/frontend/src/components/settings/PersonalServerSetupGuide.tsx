@@ -7,7 +7,7 @@ type Text = {
   title: string; intro: string; warning: string; language: string; platform: string;
   prerequisites: string; source: string; guide: string; copy: string; copied: string; download: string;
   opensAdmin: string; firstStart: string; next: string; npm: string; sourceZip: string; node: string; git: string; cloudflare: string;
-  scriptName: string; rootHint: string; workingFolder: string; folders: string; cloudflareSteps: string;
+  scriptName: string; rootHint: string; workingFolder: string; folders: string; cloudflareSteps: string; tokens: string;
 };
 
 const COPY: Record<Language, Text> = {
@@ -25,6 +25,7 @@ const COPY: Record<Language, Text> = {
     rootHint: "Su Linux, --autostart installa un servizio utente systemd che riparte con il PC; può richiedere all'amministratore di abilitare il lingering con loginctl. Su Windows il servizio non è ancora incluso. Scegli --data-root prima: qui BookWriter conserva libri, vault, token, log e runtime npm. Non deve essere una cartella GitHub Drive/Dropbox, né una directory con permessi condivisi. Conservane il percorso: lo stesso comando start usa sempre lo stesso --data-root.",
     workingFolder: "Dove eseguire il comando",
     folders: "Prima crea o scegli una cartella privata per dati (quella usata da --data-root). Puoi lanciare npx da qualunque directory: il pacchetto resta nella cache npm, ma il programma e i dati sono in --data-root. Non cambia i file del libro solo perché hai eseguito il comando in un'altra cartella.",
+    tokens: "Dopo setup, sul PC server esegui npx ... admin-code per leggere il codice admin e npx ... client-token per creare un token del client. Il token viene mostrato una sola volta nel terminale: incollalo nel campo Token BookWriter del client, con URL https://gw.opencode.zone. Se hai mai pubblicato il codice admin, prima esegui rotate-admin-code: il vecchio smette di funzionare.",
     cloudflareSteps: "Cloudflare: se hai già tunnel, hostname e route verso http://127.0.0.1:24106, sei pronto: apri 24105, verifica il token BookWriter e non avviare o modificare altri cloudflared. Se non hai ancora il tunnel, crealo nella console Cloudflare con route/DNS, installa cloudflared ≥2025.4.0 sul PC server, poi inserisci in 24105 solo il token nel pannello Cloudflare. Il token non va mai nel client o nella shell. BookWriter avvia un connettore dedicato e non tocca i tunnel altrui.",
   },
   en: {
@@ -41,6 +42,7 @@ const COPY: Record<Language, Text> = {
     rootHint: "On Linux, --autostart installs a user systemd service that starts again at boot; the administrator may need to enable user lingering with loginctl. Windows service installation is not included yet. Choose --data-root first: it holds books, vault, tokens, logs and npm runtimes. Do not put it in Drive/Dropbox or a shared-permission folder. Reuse exactly the same --data-root for every start.",
     workingFolder: "Where to run the command",
     folders: "Create or choose the private data folder first. npx may run from any terminal directory: the package lives in npm's cache, while BookWriter stores program runtimes and data under --data-root. Running npx somewhere else does not move existing books.",
+    tokens: "After setup, on the server PC run npx ... admin-code to read the admin code and npx ... client-token to create a client token. It is printed once: paste it in the client's BookWriter Token field with URL https://gw.opencode.zone. If the admin code was exposed, run rotate-admin-code first; the old code stops working.",
     cloudflareSteps: "Cloudflare: if a tunnel, hostname and route to http://127.0.0.1:24106 already exist, you are ready: open 24105 and do not start or change other cloudflared connectors. Otherwise create the tunnel and DNS/route in Cloudflare, install cloudflared ≥2025.4.0, then enter only the token in the 24105 Cloudflare panel. Never place it in the client or shell. BookWriter starts a dedicated connector without touching other tunnels.",
   },
   es: {
@@ -57,6 +59,7 @@ const COPY: Record<Language, Text> = {
     rootHint: "En Linux, --autostart instala un servicio de usuario systemd que se inicia al reiniciar; quizá el administrador deba habilitar lingering con loginctl. Windows no incluye aún el servicio. Elige --data-root antes: contiene libros, vault, tokens, registros y runtimes npm. No lo pongas en Drive/Dropbox ni en una carpeta de permisos compartidos. Usa exactamente el mismo --data-root en cada arranque.",
     workingFolder: "Dónde ejecutar el comando",
     folders: "Crea o elige primero la carpeta privada de datos. Puedes ejecutar npx desde cualquier directorio: el paquete queda en la caché de npm y BookWriter guarda datos/runtime en --data-root. Ejecutar desde otra carpeta no mueve los libros existentes.",
+    tokens: "Tras setup, en el servidor ejecuta npx ... admin-code para leer el código admin y npx ... client-token para crear un token del cliente. Se muestra una vez: pégalo en el cliente con URL https://gw.opencode.zone. Si el código admin se expuso, ejecuta rotate-admin-code primero; el anterior deja de funcionar.",
     cloudflareSteps: "Cloudflare: si ya existen el túnel, hostname y route hacia http://127.0.0.1:24106, está listo: abre 24105 y no inicies ni modifiques otros cloudflared. Si no existe, crea túnel y DNS/route en Cloudflare, instala cloudflared ≥2025.4.0 y escribe solo el token en el panel Cloudflare de 24105. No lo pongas en el cliente o la shell. BookWriter inicia un conector dedicado sin tocar túneles ajenos.",
   },
 };
@@ -89,6 +92,9 @@ function shellCommands(platform: Platform, language: Language): string {
   return `${prepare}
 npx --yes bookwriter-personal-server setup${autostart} --data-root "${data}"
 npx --yes bookwriter-personal-server doctor --data-root "${data}"
+# Read/create one-time secrets on this server PC only:
+npx --yes bookwriter-personal-server admin-code --data-root "${data}"
+npx --yes bookwriter-personal-server client-token --data-root "${data}" --label "PC autore" --scope read,write,run
 npx --yes bookwriter-personal-server start --data-root "${data}"
 ${update}
 npx --yes bookwriter-personal-server update --data-root "${data}"`;
@@ -148,6 +154,7 @@ export function PersonalServerSetupGuide() {
       <a className="underline underline-offset-2" href={links.guide} target="_blank" rel="noreferrer">{copy.guide}</a>
       <a className="underline underline-offset-2" href={links.repository} target="_blank" rel="noreferrer">GitHub</a>
     </div>
+    <p className="rounded border border-slate-300 p-3 text-sm dark:border-slate-700"><strong>Token client</strong><br/>{copy.tokens}</p>
     <h3 className="font-semibold">{copy.prerequisites}</h3>
     <h3 className="font-semibold">{copy.source}</h3>
     <p className="muted text-sm"><strong>{copy.workingFolder}:</strong> {copy.folders}</p>
