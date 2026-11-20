@@ -1,5 +1,9 @@
 # Changelog — BookWriter
 
+## 0.35.3 — 2026-11-20 — Entrypoint CLI npm dai collegamenti `.bin`
+
+- Risolto `npx bookwriter-personal-server --help`: npm avvia il binario tramite un collegamento in `.bin`, non dal percorso diretto del file. Il guard entrypoint ora risolve il symlink con `realpath` prima del confronto. Aggiunto test sul collegamento npm. Pacchetto server 0.1.2.
+
 ## 0.35.2 — 2026-11-20 — Verifica finale del supervisore npm
 
 - Confronto SemVer senza precisione floating point e con ordine prerelease ASCII, inclusi identificativi numerici lunghi. Il pannello non può considerare più recente una versione ordinata in modo errato dalla lingua del sistema.

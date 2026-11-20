@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import serverPackage from "../package.json";
 import {
@@ -107,8 +108,15 @@ export async function main(argv = process.argv.slice(2), environment: NodeJS.Pro
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  process.exitCode = await main();
+export function isDirectCliInvocation(metaUrl = import.meta.url, executable = process.argv[1]): boolean {
+  if (!executable) return false;
+  try {
+    const modulePath = realpathSync.native(fileURLToPath(metaUrl));
+    const executablePath = realpathSync.native(resolve(executable));
+    return modulePath === executablePath;
+  } catch { return import.meta.url === (pathToFileURL(resolve(executable)).href); }
 }
+
+if (isDirectCliInvocation()) process.exitCode = await main();
 
 export * from "./runtime-install";

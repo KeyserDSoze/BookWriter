@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import {
   PACKAGE_NAME, RuntimeInstaller, assertExactSemver, defaultDataRoot, parseUpdateRequest,
-  sanitizedNpmEnvironment, supervisedChildEnvironment, superviseServer, doctorChecks,
+  sanitizedNpmEnvironment, supervisedChildEnvironment, superviseServer, doctorChecks, isDirectCliInvocation,
 } from "../dist/cli.mjs";
 
 const here = fileURLToPath(new URL("..", import.meta.url));
@@ -241,6 +241,14 @@ test("supervisor preserves active runtime and request when signature audit fails
   assert.equal(result.state, "failed");
   assert.equal(result.message, "Aggiornamento non riuscito. La versione attiva precedente resta disponibile.");
   assert.equal(starts, 2);
+});
+
+test("npm .bin symlink is recognised as the direct CLI entry point", async t => {
+  if (process.platform === "win32") return;
+  const root = await tempRoot(t), target = join(root, "cli.mjs"), link = join(root, "bookwriter-server");
+  await fs.writeFile(target, "#!/usr/bin/env node\n"); await fs.symlink(target, link);
+  assert.equal(isDirectCliInvocation(new URL("file://" + target).href, link), true);
+  assert.equal(isDirectCliInvocation(new URL("file://" + target).href, join(root, "other.mjs")), false);
 });
 
 test("published package metadata, workflow and CLI package are intentionally narrow", () => {
