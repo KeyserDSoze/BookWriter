@@ -342,7 +342,11 @@ test("guida installazione server: lingue, link verificabili e script locale senz
   await guide.getByLabel(/Lingua guida|Guide language|Idioma de la guía/).selectOption("en");
   await expect(guide.getByRole("heading", { name: "Install the server with npm" })).toBeVisible();
   await guide.getByLabel("Operating system").selectOption("windows");
+  await expect(guide.locator("pre")).toContainText("New-Item -ItemType Directory -Force");
+  await expect(guide.locator("pre")).toContainText("Set-Location");
   await expect(guide.locator("pre")).toContainText("bookwriter-personal-server setup");
+  await expect(guide).toContainText("24106");
+  await expect(guide).toContainText("24105");
   const download = page.waitForEvent("download");
   await guide.getByRole("button", { name: "Download preparation script" }).click();
   const file = await download;
@@ -359,7 +363,7 @@ test("guida installazione server: lingue, link verificabili e script locale senz
   expect(linuxFile.suggestedFilename()).toBe("bookwriter-server-setup.sh");
   const linuxPath = await linuxFile.path();
   const linuxText = await (await import("node:fs/promises")).readFile(linuxPath!, "utf8");
-  expect(linuxText).toContain("#!/usr/bin/env bash"); expect(linuxText).toContain("bookwriter-personal-server doctor"); expect(linuxText).toContain("bookwriter-personal-server start");
+  expect(linuxText).toContain("#!/usr/bin/env bash"); expect(linuxText).toContain("mkdir -p"); expect(linuxText).toContain("cd "); expect(linuxText).toContain("bookwriter-personal-server doctor"); expect(linuxText).toContain("bookwriter-personal-server start");
   await guide.getByLabel("Guide language").selectOption("es");
   await expect(guide.getByRole("heading", { name: "Instala el servidor con npm" })).toBeVisible();
   await expect(guide.getByRole("button", { name: "Descargar script de preparación" })).toBeEnabled();

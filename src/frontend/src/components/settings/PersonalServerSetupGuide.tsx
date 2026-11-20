@@ -7,7 +7,7 @@ type Text = {
   title: string; intro: string; warning: string; language: string; platform: string;
   prerequisites: string; source: string; guide: string; copy: string; copied: string; download: string;
   opensAdmin: string; firstStart: string; next: string; npm: string; sourceZip: string; node: string; git: string; cloudflare: string;
-  scriptName: string; rootHint: string;
+  scriptName: string; rootHint: string; workingFolder: string; folders: string; cloudflareSteps: string;
 };
 
 const COPY: Record<Language, Text> = {
@@ -21,7 +21,11 @@ const COPY: Record<Language, Text> = {
     firstStart: "Primo avvio: leggi il codice in private/admin-bootstrap.txt nella cartella dati scelta e usalo nel pannello amministrativo.",
     next: "Se la pagina npm mostra 404, la prima release non è ancora stata pubblicata: usa il pulsante ZIP solo come fallback. Il server non pubblica libri né effettua chiamate AI finché non colleghi un token e avvii esplicitamente un libro. Il pannello admin è solo loopback; non esporlo con un tunnel.",
     npm: "Pacchetto npm ufficiale", cloudflare: "Guida tunnel Cloudflare", sourceZip: "Scarica il sorgente ZIP (fallback)", node: "Scarica Node.js 22.14 o successivo", git: "Scarica Git 2.32 o successivo",
-    scriptName: "assistente-bookwriter-server", rootHint: "La cartella dati deve restare privata e fuori da cartelle sincronizzate. Su Linux installa anche flock (util-linux); Windows usa PowerShell per il lock.",
+    scriptName: "assistente-bookwriter-server",
+    rootHint: "Scegli --data-root prima: qui BookWriter conserva libri, vault, token, log e runtime npm. Non deve essere una cartella GitHub Drive/Dropbox, né una directory con permessi condivisi. Conservane il percorso: lo stesso comando start usa sempre lo stesso --data-root.",
+    workingFolder: "Dove eseguire il comando",
+    folders: "Prima crea o scegli una cartella privata per dati (quella usata da --data-root). Puoi lanciare npx da qualunque directory: il pacchetto resta nella cache npm, ma il programma e i dati sono in --data-root. Non cambia i file del libro solo perché hai eseguito il comando in un'altra cartella.",
+    cloudflareSteps: "Cloudflare: se hai già tunnel, hostname e route verso http://127.0.0.1:24106, sei pronto: apri 24105, verifica il token BookWriter e non avviare o modificare altri cloudflared. Se non hai ancora il tunnel, crealo nella console Cloudflare con route/DNS, installa cloudflared ≥2025.4.0 sul PC server, poi inserisci in 24105 solo il token nel pannello Cloudflare. Il token non va mai nel client o nella shell. BookWriter avvia un connettore dedicato e non tocca i tunnel altrui.",
   },
   en: {
     title: "Install the server with npm",
@@ -33,7 +37,11 @@ const COPY: Record<Language, Text> = {
     firstStart: "First start: read private/admin-bootstrap.txt in the data directory you selected and enter that code in the admin panel.",
     next: "If npm shows 404, the first release is not published yet: use the ZIP fallback. The server does not publish books or call AI until you connect a token and explicitly start a book. The admin panel is loopback-only; never expose it through a tunnel.",
     npm: "Official npm package", cloudflare: "Cloudflare tunnel guide", sourceZip: "Download source ZIP (fallback)", node: "Download Node.js 22.14 or later", git: "Download Git 2.32 or later",
-    scriptName: "bookwriter-server-setup", rootHint: "Keep the data directory private and outside synchronized folders. Linux also needs flock (util-linux); Windows uses PowerShell for the lock.",
+    scriptName: "bookwriter-server-setup",
+    rootHint: "Choose --data-root first: it holds books, vault, tokens, logs and npm runtimes. Do not put it in Drive/Dropbox or a shared-permission folder. Reuse exactly the same --data-root for every start.",
+    workingFolder: "Where to run the command",
+    folders: "Create or choose the private data folder first. npx may run from any terminal directory: the package lives in npm's cache, while BookWriter stores program runtimes and data under --data-root. Running npx somewhere else does not move existing books.",
+    cloudflareSteps: "Cloudflare: if a tunnel, hostname and route to http://127.0.0.1:24106 already exist, you are ready: open 24105 and do not start or change other cloudflared connectors. Otherwise create the tunnel and DNS/route in Cloudflare, install cloudflared ≥2025.4.0, then enter only the token in the 24105 Cloudflare panel. Never place it in the client or shell. BookWriter starts a dedicated connector without touching other tunnels.",
   },
   es: {
     title: "Instala el servidor con npm",
@@ -45,7 +53,11 @@ const COPY: Record<Language, Text> = {
     firstStart: "Primer inicio: lee private/admin-bootstrap.txt en la carpeta de datos elegida e introduce el código en el panel de administración.",
     next: "Si npm muestra 404, la primera versión aún no está publicada: usa el ZIP como alternativa. El servidor no publica libros ni llama a la IA hasta que conectes un token y arranques un libro explícitamente. El panel de administración es solo local; no lo expongas mediante un túnel.",
     npm: "Paquete npm oficial", cloudflare: "Guía de túnel Cloudflare", sourceZip: "Descargar ZIP del código (alternativa)", node: "Descargar Node.js 22.14 o posterior", git: "Descargar Git 2.32 o posterior",
-    scriptName: "preparar-servidor-bookwriter", rootHint: "La carpeta de datos debe ser privada y no estar sincronizada. En Linux también se necesita flock (util-linux); Windows usa PowerShell para el bloqueo.",
+    scriptName: "preparar-servidor-bookwriter",
+    rootHint: "Elige --data-root antes: contiene libros, vault, tokens, registros y runtimes npm. No lo pongas en Drive/Dropbox ni en una carpeta de permisos compartidos. Usa exactamente el mismo --data-root en cada arranque.",
+    workingFolder: "Dónde ejecutar el comando",
+    folders: "Crea o elige primero la carpeta privada de datos. Puedes ejecutar npx desde cualquier directorio: el paquete queda en la caché de npm y BookWriter guarda datos/runtime en --data-root. Ejecutar desde otra carpeta no mueve los libros existentes.",
+    cloudflareSteps: "Cloudflare: si ya existen el túnel, hostname y route hacia http://127.0.0.1:24106, está listo: abre 24105 y no inicies ni modifiques otros cloudflared. Si no existe, crea túnel y DNS/route en Cloudflare, instala cloudflared ≥2025.4.0 y escribe solo el token en el panel Cloudflare de 24105. No lo pongas en el cliente o la shell. BookWriter inicia un conector dedicado sin tocar túneles ajenos.",
   },
 };
 
@@ -68,12 +80,16 @@ function preferredPlatform(): Platform {
   if (typeof navigator !== "undefined" && /win/i.test(navigator.platform)) return "windows";
   return "linux";
 }
-function shellCommands(platform: Platform): string {
+function shellCommands(platform: Platform, language: Language): string {
+  const update = language === "it" ? "# Quando è disponibile un aggiornamento:" : language === "es" ? "# Cuando haya una actualización:" : "# When an update is available:";
   const data = platform === "windows" ? "$HOME\\BookWriter-server-data" : "$HOME/BookWriter-server-data";
-  return `npx --yes bookwriter-personal-server setup --data-root "${data}"
+  const folder = platform === "windows" ? "$HOME\\BookWriter-server" : "$HOME/BookWriter-server";
+  const prepare = platform === "windows" ? `New-Item -ItemType Directory -Force "${folder}" | Out-Null\nSet-Location "${folder}"` : `mkdir -p "${folder}"\ncd "${folder}"`;
+  return `${prepare}
+npx --yes bookwriter-personal-server setup --data-root "${data}"
 npx --yes bookwriter-personal-server doctor --data-root "${data}"
 npx --yes bookwriter-personal-server start --data-root "${data}"
-# Quando disponibile:
+${update}
 npx --yes bookwriter-personal-server update --data-root "${data}"`;
 }
 function script(platform: Platform): string {
@@ -81,9 +97,13 @@ function script(platform: Platform): string {
     ? `# BookWriter server npm setup (inspect before running)\n$ErrorActionPreference = "Stop"\n`
     : `#!/usr/bin/env bash\nset -eu\n`;
   const data = platform === "windows" ? "$HOME\\BookWriter-server-data" : "$HOME/BookWriter-server-data";
+  const folder = platform === "windows" ? "$HOME\\BookWriter-server" : "$HOME/BookWriter-server";
+  const prepare = platform === "windows"
+    ? `New-Item -ItemType Directory -Force "${folder}" | Out-Null\nSet-Location "${folder}"\n`
+    : `mkdir -p "${folder}"\ncd "${folder}"\n`;
   const version = `\nnode --version\nGit 2.32+ and, on Linux, flock are checked by \`npx ... doctor\`.\n`;
   void version;
-  return header + `npx --yes bookwriter-personal-server setup --data-root "${data}"\nnpx --yes bookwriter-personal-server doctor --data-root "${data}"\nnpx --yes bookwriter-personal-server start --data-root "${data}"\n# When an update is available:\n# npx --yes bookwriter-personal-server update --data-root "${data}"\n`;
+  return header + prepare + `npx --yes bookwriter-personal-server setup --data-root "${data}"\nnpx --yes bookwriter-personal-server doctor --data-root "${data}"\nnpx --yes bookwriter-personal-server start --data-root "${data}"\n# When an update is available:\n# npx --yes bookwriter-personal-server update --data-root "${data}"\n`;
 }
 function download(fileName: string, content: string): void {
   const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
@@ -97,7 +117,7 @@ export function PersonalServerSetupGuide() {
   const [platform, setPlatform] = useState<Platform>(preferredPlatform);
   const [notice, setNotice] = useState("");
   const copy = COPY[language];
-  const commands = useMemo(() => shellCommands(platform), [platform]);
+  const commands = useMemo(() => shellCommands(platform, language), [platform, language]);
   const suffix = platform === "windows" ? "ps1" : "sh";
   return <section className="panel space-y-3 p-4" aria-label="Guida installazione server personale">
     <div className="flex flex-wrap items-end gap-3">
@@ -128,11 +148,16 @@ export function PersonalServerSetupGuide() {
     </div>
     <h3 className="font-semibold">{copy.prerequisites}</h3>
     <h3 className="font-semibold">{copy.source}</h3>
+    <p className="muted text-sm"><strong>{copy.workingFolder}:</strong> {copy.folders}</p>
     <pre className="max-w-full overflow-x-auto rounded border border-slate-300 bg-slate-950 p-3 text-xs text-slate-100 dark:border-slate-700"><code>{commands}</code></pre>
     <div className="flex flex-wrap gap-2">
       <Button type="button" onClick={() => void navigator.clipboard.writeText(commands).then(() => setNotice(copy.copied), () => setNotice(commands))}>{copy.copy}</Button>
       <Button type="button" variant="outline" onClick={() => { download(`${copy.scriptName}.${suffix}`, script(platform)); setNotice(copy.download + "."); }}>{copy.download}</Button>
     </div>
+    <section className="rounded border border-slate-300 p-3 text-sm dark:border-slate-700" aria-label="Cloudflare">
+      <strong>Cloudflare</strong><p className="mt-1">{copy.cloudflareSteps}</p>
+      <a className="underline underline-offset-2" href={links.cloudflare} target="_blank" rel="noreferrer">{copy.cloudflare}</a>
+    </section>
     <p className="text-sm"><strong>{copy.opensAdmin}</strong></p>
     <p className="muted text-sm">{copy.firstStart}</p>
     <p className="muted text-sm">{copy.rootHint}</p>

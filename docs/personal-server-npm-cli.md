@@ -6,13 +6,32 @@
 
 Requisiti: Node.js **22.14+**, npm recente, Git **2.32+** per le repository del libro e, su Linux, `flock` (`util-linux`). Windows usa PowerShell per il lock. macOS non avvia il server in questa tranche.
 
+Scegli prima due percorsi distinti:
+
+- **cartella di esecuzione** `$HOME/BookWriter-server` (Linux) o `$HOME\BookWriter-server` (Windows): è solo la directory del terminale e può contenere eventuali shortcut/script;
+- **cartella dati** `$HOME/BookWriter-server-data` (Linux) o `$HOME\BookWriter-server-data` (Windows): contiene libri, vault, token, log e runtime npm. È questa la parte che devi conservare e proteggere.
+
+Linux/macOS shell:
+
 ```bash
+mkdir -p "$HOME/BookWriter-server"
+cd "$HOME/BookWriter-server"
 npx --yes bookwriter-personal-server setup --data-root "$HOME/BookWriter-server-data"
 npx --yes bookwriter-personal-server doctor --data-root "$HOME/BookWriter-server-data"
 npx --yes bookwriter-personal-server start --data-root "$HOME/BookWriter-server-data"
 ```
 
-Windows PowerShell usa lo stesso comando con il percorso `$HOME\BookWriter-server-data`.
+Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\BookWriter-server" | Out-Null
+Set-Location "$HOME\BookWriter-server"
+npx --yes bookwriter-personal-server setup --data-root "$HOME\BookWriter-server-data"
+npx --yes bookwriter-personal-server doctor --data-root "$HOME\BookWriter-server-data"
+npx --yes bookwriter-personal-server start --data-root "$HOME\BookWriter-server-data"
+```
+
+Puoi eseguire `npx` da qualunque cartella: il pacchetto va nella cache npm. **Book e segreti non seguono quella cartella corrente**: seguono sempre il valore esplicito di `--data-root`. Usa lo stesso valore a ogni setup/start/update. Il programma non legge da `--data-root` solo perché coincide con la directory corrente.
 
 `setup` non chiede PAT/API key/tunnel token. Installa una versione esatta del pacchetto in `<dati>/private/npm-runtime/versions/<version>`, senza lifecycle script (`--ignore-scripts`), e richiede `npm audit signatures` prima di attivarla. Non clona BookWriter, non esegue `npm ci` sul frontend e non compila il progetto.
 
@@ -55,19 +74,21 @@ Il client non invia URL, script, pacchetto o comando: invia solo la versione esa
 
 Massimo tre riavvii per ora. Nessun fallback a URL arbitrari o esecuzione di shell dal browser.
 
-## Cloudflare: aggiungere, non sostituire
+## Cloudflare: già pronto oppure da attivare
 
-Nel pannello amministrativo **http://127.0.0.1:24105**, nella sezione Cloudflare:
+### Se hai già configurato Cloudflare
 
-1. instilla un `cloudflared` compatibile (minimo 2025.4.0) sul server;
-2. prepara nel tuo account Cloudflare il tunnel remoto, hostname, route e DNS verso `http://127.0.0.1:24106`;
-3. inserisci il token del connettore nel campo nascosto e avvia il **connettore dedicato BookWriter**.
+Se nel tuo account esistono già **tunnel, hostname e route/DNS** che puntano a `http://127.0.0.1:24106`, non modificare nulla nel tunnel. Apri `http://127.0.0.1:24105`, completa il pairing e usa solo il pannello BookWriter. In questa macchina possono essere già presenti altri `cloudflared`: BookWriter li rileva e **non li modifica, riavvia, aggiorna o disinstalla**.
 
-Il token resta nel file privato `<dati>/private/cloudflare-tunnel-token`; non entra nel client, nei comandi, negli argomenti visibili, in ZIP/GitHub o nei log. Il server avvia solo `cloudflared tunnel run --no-autoupdate --token-file <file>` e arresta esclusivamente quel figlio.
+### Se il tunnel non esiste ancora
 
-Se `cloudflared` o un servizio esistente sono già attivi, BookWriter li rileva e mostra l'avviso: **non li ferma, aggiorna, disinstalla, modifica o riavvia**. Il connettore dedicato è separato; una modifica a un tunnel altrui richiede il pannello Cloudflare o un'azione dell'amministratore, mai BookWriter. Il pannello 24105 non deve essere inoltrato.
+1. Installa `cloudflared`: per Cloudflare serve la versione documentata del connettore, almeno `cloudflared 2025.4.0` (Git 2.32 è un requisito diverso di BookWriter).
+2. Nella console Cloudflare crea un **tunnel remoto**, hostname, route e DNS verso `http://127.0.0.1:24106`.
+3. Copia il token del connettore.
+4. Apri `http://127.0.0.1:24105`, accedi e inserisci il token nel pannello **Cloudflare**. Il token viene salvato in `<data-root>/private/cloudflare-tunnel-token`, non nel client, negli argomenti shell, nel repository GitHub o in ZIP.
+5. Premi «Salva e avvia il connettore dedicato». BookWriter esegue solo il suo connettore figlio con `--token-file` e inoltra esclusivamente l'API 24106.
 
-Il token non crea da solo route/DNS: [guida Cloudflare](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/).
+Non esporre mai la porta admin **24105**. Se il tunnel esiste già ma il token è gestito dal tuo servizio di sistema, non inserirlo o ricrearlo in BookWriter: usa il connettore esistente e continua con pairing/API. Il token non crea da solo route/DNS o hostname. [Guida Cloudflare](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/).
 
 ## Pubblicazione npm per il maintainer
 
