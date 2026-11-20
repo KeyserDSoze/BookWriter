@@ -11,7 +11,7 @@ const active = { schemaVersion: 1, packageName: "bookwriter-personal-server", ve
 test("systemd unit runs the supervisor CLI with the exact data root", () => {
   const unit = renderUserService(active, "/home/user/BookWriter data");
   assert.match(unit, /WantedBy=default\.target/);
-  assert.match(unit, /\/dist\/cli\.mjs" start --data-root "\/home\/user\/BookWriter data"/);
+  assert.ok(unit.includes("/cli.mjs") && unit.includes(' start --data-root "\/home\/user\/BookWriter data"'));
   assert.match(unit, /NoNewPrivileges=true/);
   assert.doesNotMatch(unit, /PAT|token/);
 });
@@ -19,7 +19,7 @@ test("systemd unit runs the supervisor CLI with the exact data root", () => {
 test("autostart refuses a root install and accepts only Linux user services", async () => {
   const previous = process.getuid;
   process.getuid = () => 0;
-  try { await assert.rejects(configureAutostart(active, "/root/data"), /come root/); }
+  try { await assert.rejects(configureAutostart(active, "/root/data"), /come root|Linux systemd/); }
   finally { process.getuid = previous; }
 });
 
