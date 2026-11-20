@@ -13,6 +13,10 @@
 
 - Corretto il calcolo delle directory predefinite del CLI npm: la simulazione Linux ora usa le regole POSIX anche quando i test girano su Windows, evitando un falso percorso `D:\home\…`. Il comportamento Windows reale usa invece `path.win32`. Nessun cambiamento ai dati o ai token.
 
+## 0.35.5 — 2026-11-20 — Compatibilità npm 12 del setup del server
+
+- Corretto `npm view --json` con npm 12: il risultato di una sola versione può arrivare come array di un elemento. `setup` e `update` lo accettano solo se contiene esattamente una voce, poi riapplicano schema, firma e provenienza. Pubblicazione server `0.1.3` per rendere il comando installabile da subito.
+
 ## 0.35.4 — 2026-11-20 — Guida installazione server e Cloudflare più chiara
 
 - La guida nell'app spiega ora directory di esecuzione, cache npm e `--data-root`: libri, vault, token e runtime stanno nella cartella dati scelta, mai nella directory da cui si lancia npx. Comandi completi con creazione della cartella e traduzione del commento.

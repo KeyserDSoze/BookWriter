@@ -22,7 +22,10 @@ const manifestSchema = z.object({
 
 export function trustedNpmReleaseMetadata(value: unknown, expectedVersion?: string,
   allowRegistryBootstrap = false): { version: string } {
-  const parsed = manifestSchema.safeParse(value);
+  // npm 12 returns a one-element array for some `npm view --json` invocations.
+  // It is not a list of candidates: only exactly one entry is a valid, unambiguous answer.
+  const candidate = Array.isArray(value) && value.length === 1 ? value[0] : value;
+  const parsed = manifestSchema.safeParse(candidate);
   if (!parsed.success) throw new Error("Metadati npm non validi o provenienza diversa dal repository BookWriter.");
   const latest = parsed.data.version;
   if (expectedVersion && latest !== expectedVersion) throw new Error("Versione npm diversa da quella richiesta.");

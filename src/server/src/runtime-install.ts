@@ -260,6 +260,7 @@ export class RuntimeInstaller {
     const result = await this.runNpm(["view", PACKAGE_NAME, "version", "--json"]);
     let version: unknown;
     try { version = JSON.parse(result.stdout.trim()); } catch { throw new Error("Catalogo npm non valido."); }
+    if (Array.isArray(version) && version.length === 1) version = version[0];
     assertExactSemver(version); return version;
   }
   private async assertTrustedRelease(version: string, allowRegistryBootstrap = false): Promise<void> {

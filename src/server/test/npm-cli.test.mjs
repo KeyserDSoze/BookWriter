@@ -22,13 +22,13 @@ function fakeNpm(state = {}) {
   const fake = async (command, args, options) => {
     calls.push({ command, args: [...args], options });
     if (args[0] === "view") {
-      if (args[1] === PACKAGE_NAME) return { code: 0, stdout: `${JSON.stringify(state.latest ?? "1.2.3")}\n`, stderr: "" };
+      if (args[1] === PACKAGE_NAME) return { code: 0, stdout: `${JSON.stringify([state.latest ?? "1.2.3"])}\n`, stderr: "" };
       const spec = args[1]; const version = spec.slice(PACKAGE_NAME.length + 1);
-      return { code: 0, stdout: JSON.stringify({ name: PACKAGE_NAME, version,
+      return { code: 0, stdout: JSON.stringify([{ name: PACKAGE_NAME, version,
         repository: { type: "git", url: "git+https://github.com/KeyserDSoze/BookWriter.git", directory: "src/server" },
         dist: { integrity: "sha512-" + "A".repeat(60), signatures: [{ keyid: "SHA256:key", sig: "x".repeat(40) }],
           ...(state.registryOnly ? {} : { attestations: { url: `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE_NAME}@${version}`,
-            provenance: { predicateType: "https://slsa.dev/provenance/v1" } } }) } }), stderr: "" };
+            provenance: { predicateType: "https://slsa.dev/provenance/v1" } } }) } }]), stderr: "" };
     }
     if (args[0] === "install") {
       const prefixIndex = args.indexOf("--prefix");
