@@ -16,7 +16,11 @@ export const ADMIN_HTML = `<!doctype html>
 <h2>Rete approvata</h2><p>Un URL AI locale indica QUESTO server. Non approvare reti private di altri host. Il servizio non segue redirect.</p>
 <form id="network"><label>Basi AI approvate, una per riga <textarea id="bases" rows="4" cols="70"></textarea></label>
 <label>Origini client permesse, una per riga <textarea id="origins" rows="3" cols="70"></textarea></label>
-<label>Origine HTTPS pubblica del tunnel API <input id="public" type="url"></label><button>Salva rete approvata</button></form>
+<label>Origine HTTPS pubblica della API 24106 <input id="public" type="url"></label>
+<label>Origine HTTPS distinta del pannello admin 24105 (facoltativa) <input id="admin-public" type="url"></label>
+<label><input id="remote-admin" type="checkbox" checked> Rendi visibile il pannello amministrativo su quell'origine HTTPS</label>
+<p>Default visibile: la pagina admin resta protetta dal bootstrap/login, cookie HttpOnly/Secure e CSRF. Per sicurezza aggiungi Cloudflare Access. La porta 24105 resta in loopback; il tunnel deve puntare comunque a 24106 per la API, oppure una route distinta per l'admin 24105.</p>
+<button>Salva rete approvata</button></form>
 <h2>Cloudflare</h2><p>Configura un connettore dedicato verso http://127.0.0.1:24106. Il token Cloudflare resta in un token-file protetto su questa macchina: non inserirlo nel client BookWriter. BookWriter non modifica né riavvia tunnel, servizi o configurazioni già presenti.</p>
 <pre id="tunnel-status"></pre><p id="tunnel-other"></p>
 <form id="tunnel-configure"><label>Token del connettore Cloudflare <input id="tunnel-token" type="password" autocomplete="off" maxlength="4096" required></label>
@@ -85,7 +89,7 @@ el("issue").onsubmit=run(async()=>{const n=await call("token",{label:el("label")
  el("token").textContent=n.token;await refresh();});
 el("network").onsubmit=run(async()=>{if(!confirm("Approvi queste destinazioni AI e origini del client?"))return;
  const lines=id=>el(id).value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean);
- await call("network",{allowedAiBases:lines("bases"),origins:lines("origins"),publicUrl:el("public").value});
+ await call("network",{allowedAiBases:lines("bases"),origins:lines("origins"),publicUrl:el("public").value,adminPublicUrl:el("admin-public").value,allowRemoteAdmin:el("remote-admin").checked});
  notice("Rete salvata.");await refresh();});
 el("tunnel-configure").onsubmit=run(async()=>{
  const hostname=el("tunnel-hostname").value.trim();

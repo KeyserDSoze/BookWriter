@@ -4,6 +4,11 @@
 
 - Corretto l'unit file generato da `setup --autostart`: systemd non accetta quote su `WorkingDirectory`, e il supervisore non richiede una directory di lavoro nel servizio. La chiave dati resta passata esplicitamente con `--data-root`. Test impedisce la regressione. Pacchetto server 0.1.5.
 
+## 0.35.8 — 2026-11-20 — Admin pubblico opzionale con gateway API same-origin
+
+- Il pannello amministrativo può usare un hostname HTTPS configurato (`adminPublicUrl`) oltre al loopback 24105, con `allowRemoteAdmin` visibile per default quando un URL pubblico è impostato. Una Cloudflare route verso 24105 può quindi servire sia admin sia `/api/v1/*` sullo stesso hostname: quest'ultimo viene inoltrato solo al listener locale 24106, mantenendo Host/CORS e l'apikey del protocollo API.
+- Sono consigliate due route separate (`admin.*` → 24105 e `api.*` → 24106); se si usa un solo hostname, il proxy amministrativo espone SOLO `/api/v1/*` verso la API. `Set-Cookie Secure`, SameSite Strict, login limitato e CSRF restano obbligatori. Admin locale invariato.
+
 ## 0.35.6 — 2026-11-20 — Autostart Linux del server personale
 
 - `npx bookwriter-personal-server setup --autostart` installa un servizio **systemd-user** soltanto per BookWriter e lo avvia. Usa il CLI contenuto nel runtime npm e lo stesso `--data-root`; non modifica tunnel Cloudflare né altri servizi. Se l'utente non è lingered, il comando mostra il passo `sudo loginctl enable-linger <utente>` necessario per il riavvio senza login.

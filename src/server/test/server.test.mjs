@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { randomUUID, createPublicKey, verify, createHash } from "node:crypto";
 import {
@@ -18,6 +18,18 @@ async function temporary(action) {
   const root = await fs.mkdtemp(join(base, "bookwriter-test-"));
   try { return await action(root); } finally { await fs.rm(root, { recursive: true, force: true }); }
 }
+function requestAdmin(port, { host, origin, path = "/", method = "GET", body, headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    const data = body === undefined ? undefined : JSON.stringify(body);
+    const req = httpRequest({ hostname: "127.0.0.1", port, path, method,
+      headers: { Host: host, ...(origin ? { Origin: origin } : {}), ...(data ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } : {}), ...headers } }, res => {
+      const chunks = []; res.on("data", chunk => chunks.push(chunk));
+      res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") }));
+    });
+    req.on("error", reject); if (data) req.end(data); else req.end();
+  });
+}
+
 const recordOf = book => ({ version: 1, revision: 1, book, activities: [], commands: {}, watermarks: {} });
 
 test("file transaction: book, audit and outbox share one commit; stale and throw preserve all bytes", async () => temporary(async root => {
@@ -495,5 +507,71 @@ test("restart marks requested commands and in-flight AI as uncertain, with no re
     assert.equal(replay.state, "uncertain");
     assert.equal((await server.store.read(id)).activities.length, 1);
     assert.equal(server.controller.busy, false);
+  } finally { await server.close(); await release(); }
+}));
+
+test("remote admin is visible by configured default and can use a separate HTTPS hostname", async () => temporary(async root => {
+  const release = await lockDataRoot(root);
+  const server = await startPersonalServer({ root, adminPort: 0, apiPort: 0, git: false });
+  const admin = `http://127.0.0.1:${server.adminPort}`;
+  const localOrigin = admin;
+  try {
+    const code = (await fs.readFile(join(root, "private", "admin-bootstrap.txt"), "utf8")).trim();
+    const localLogin = await fetch(admin + "/admin/api/login", { method: "POST",
+      headers: { Origin: localOrigin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    assert.equal(localLogin.status, 200);
+    const { csrf } = await localLogin.json();
+    const cookie = localLogin.headers.get("set-cookie").split(";", 1)[0];
+    const network = await fetch(admin + "/admin/api/network", { method: "POST",
+      headers: { Origin: localOrigin, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
+      body: JSON.stringify({ allowedAiBases: [], origins: ["https://ghostwriting.ws"],
+        publicUrl: "https://api.example.org", adminPublicUrl: "https://admin.example.org", allowRemoteAdmin: true }) });
+    assert.equal(network.status, 200);
+
+    const blocked = await requestAdmin(server.adminPort, { host: "evil.example.org" });
+    assert.equal(blocked.status, 403);
+    const publicPage = await requestAdmin(server.adminPort, { host: "admin.example.org" });
+    assert.equal(publicPage.status, 200, publicPage.body);
+    const publicApi = await requestAdmin(server.adminPort, { host: "admin.example.org", origin: "https://ghostwriting.ws",
+      path: "/api/v1/info?nonce=" + "a".repeat(64) });
+    assert.equal(publicApi.status, 200, JSON.stringify({body: publicApi.body, headers: publicApi.headers}));
+    const apiInfo = JSON.parse(publicApi.body);
+    assert.equal(apiInfo.serverId, (JSON.parse(await fs.readFile(join(root, "installation.json"), "utf8"))).serverId);
+    const remoteLogin = await requestAdmin(server.adminPort, { host: "admin.example.org", origin: "https://admin.example.org",
+      path: "/admin/api/login", method: "POST", body: { code } });
+    assert.equal(remoteLogin.status, 200);
+    const remoteCookie = remoteLogin.headers["set-cookie"][0];
+    assert.match(remoteCookie, /; Secure(?:;|$)/);
+    assert.match(remoteCookie, /SameSite=Strict/);
+    const status = await requestAdmin(server.adminPort, { host: "admin.example.org", path: "/admin/api/status",
+      headers: { Cookie: remoteCookie.split(";", 1)[0] } });
+    assert.equal(status.status, 200);
+    const data = JSON.parse(status.body);
+    assert.equal(data.publicUrl, "https://api.example.org"); assert.equal(data.adminPublicUrl, "https://admin.example.org");
+    assert.equal(data.allowRemoteAdmin, true);
+
+    const wrongOrigin = await requestAdmin(server.adminPort, { host: "admin.example.org", origin: "https://attacker.example",
+      path: "/admin/api/status", headers: { Cookie: remoteCookie.split(";", 1)[0] } });
+    assert.equal(wrongOrigin.status, 403);
+  } finally { await server.close(); await release(); }
+}));
+
+test("remote admin is visible by default after public URL is configured; explicit false closes it", async () => temporary(async root => {
+  const release = await lockDataRoot(root);
+  const server = await startPersonalServer({ root, adminPort: 0, apiPort: 0, git: false });
+  const admin = `http://127.0.0.1:${server.adminPort}`;
+  try {
+    const code = (await fs.readFile(join(root, "private", "admin-bootstrap.txt"), "utf8")).trim();
+    const login = await fetch(admin + "/admin/api/login", { method: "POST",
+      headers: { Origin: admin, "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    const { csrf } = await login.json(); const cookie = login.headers.get("set-cookie").split(";", 1)[0];
+    const save = async allow => fetch(admin + "/admin/api/network", { method: "POST",
+      headers: { Origin: admin, Cookie: cookie, "X-CSRF-Token": csrf, "Content-Type": "application/json" },
+      body: JSON.stringify({ allowedAiBases: [], origins: [], publicUrl: "https://gw.example.org", adminPublicUrl: "", allowRemoteAdmin: allow }) });
+    assert.equal((await save(true)).status, 200);
+    assert.equal((await requestAdmin(server.adminPort, { host: "gw.example.org" })).status, 200);
+    assert.equal((await save(false)).status, 200);
+    assert.equal((await requestAdmin(server.adminPort, { host: "gw.example.org" })).status, 403);
+    assert.equal((await fetch(admin + "/")).status, 200, "loopback remains available after remote disable");
   } finally { await server.close(); await release(); }
 }));

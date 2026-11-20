@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
+import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import { generateKeyPairSync, createPrivateKey, createHash, sign, randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
@@ -30,6 +30,9 @@ const installationSchema = z.object({
   allowedAiBases: z.array(z.string().max(500)).max(50),
   origins: z.array(z.string().max(500)).max(20),
   publicUrl: z.string().max(500).optional(),
+  adminPublicUrl: z.string().max(500).optional(),
+  /** Remote admin is expected through a separately routed Cloudflare hostname; loopback remains available. */
+  allowRemoteAdmin: z.boolean().optional().default(true),
 }).strict();
 const uuid = z.string().uuid();
 const secretText = z.string().min(1).max(4096);
@@ -103,7 +106,7 @@ export async function startPersonalServer(options: ServerOptions) {
   if (saved === undefined) {
     const keys = generateKeyPairSync("ed25519");
     installation = { version: 1, serverId: crypto.randomUUID(),
-      publicKey: keys.publicKey.export({ type: "spki", format: "der" }).toString("base64"),
+      publicKey: keys.publicKey.export({ type: "spki", format: "der" }).toString("base64"), allowRemoteAdmin: true,
       privateKey: await vault.encrypt(keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString()),
       allowedAiBases: [], origins: ["https://ghostwriting.ws"] };
     await atomicJson(installationPath, installation);
@@ -407,21 +410,52 @@ export async function startPersonalServer(options: ServerOptions) {
     common(res);
     void (async () => {
       const localOrigins = [`http://127.0.0.1:${adminPort}`, `http://localhost:${adminPort}`];
-      if (!localOrigins.map(o => new URL(o).host).includes(req.headers.host ?? "") ||
-          req.headers.origin && !localOrigins.includes(req.headers.origin))
-        throw new ApiError(403, "admin_origin", "Pannello amministrativo disponibile solo dall'origine locale.");
+      const publicAdminUrl = installation.allowRemoteAdmin !== false && (installation.adminPublicUrl ?? installation.publicUrl)
+        ? normalizeServerUrl(installation.adminPublicUrl ?? installation.publicUrl!) : undefined;
+      const publicUrl = publicAdminUrl;
+      const allowedOrigins = [...localOrigins, ...(publicUrl ? [publicUrl] : [])];
+      const remoteOriginAllowed = !!publicUrl && req.headers.host === new URL(publicUrl).host;
+      const localHostAllowed = localOrigins.map(o => new URL(o).host).includes(req.headers.host ?? "");
+      const isApiBridge = remoteOriginAllowed && /^\/api\/v1\//.test(req.url ?? "/");
+      if ((!localHostAllowed && !remoteOriginAllowed) ||
+          req.headers.origin && !isApiBridge && !allowedOrigins.includes(req.headers.origin))
+        throw new ApiError(403, "admin_origin", publicUrl
+          ? "Origine del pannello amministrativo non autorizzata. Usa l'origine pubblica configurata o il loopback locale."
+          : "Pannello amministrativo disponibile solo dall'origine locale: configura prima l'URL pubblico dal pannello 24105.");
       const path = req.url ?? "/";
+      // A remote Cloudflare route can point the SAME hostname to the admin listener.
+      // Serve the UI on / and bridge /api/v1/* to the API listener, preserving the
+      // public Host and Origin so the API still validates the hostname/CORS itself.
+      // No arbitrary upstream is accepted: it is always loopback 24106.
+      if (remoteOriginAllowed && /^\/api\/v1\//.test(path)) {
+        const upstream = httpRequest({
+          hostname: "127.0.0.1", port: apiPort, path, method: req.method,
+          headers: {
+            ...req.headers,
+            host: installation.publicUrl ? new URL(installation.publicUrl).host : req.headers.host,
+            "x-bookwriter-proxy": "same-origin-admin",
+          },
+        }, response => {
+          res.writeHead(response.statusCode ?? 502, response.headers);
+          response.pipe(res);
+        });
+        upstream.on("error", () => failure(res, new ApiError(503, "api_proxy", "API del server personale non raggiungibile.")));
+        upstream.setTimeout(130_000, () => upstream.destroy(new Error("timeout")));
+        req.pipe(upstream);
+        return;
+      }
       if (req.method === "GET" && ["/", "/admin.js", "/admin.css"].includes(path)) {
         res.writeHead(200, { "Content-Type": path === "/" ? "text/html; charset=utf-8" :
           path === "/admin.css" ? "text/css; charset=utf-8" : "text/javascript; charset=utf-8" });
         res.end(path === "/" ? ADMIN_HTML : path === "/admin.css" ? ADMIN_CSS : ADMIN_JS); return;
       }
-      if (req.method === "POST" && !localOrigins.includes(req.headers.origin ?? ""))
-        throw new ApiError(403, "admin_csrf", "Origine locale richiesta.");
+      if (req.method === "POST" && !allowedOrigins.includes(req.headers.origin ?? ""))
+        throw new ApiError(403, "admin_csrf", "Origine amministrativa non autorizzata.");
       if (path === "/admin/api/login" && req.method === "POST") {
         const body = z.object({ code: secretText }).strict().parse(await readBody(req, 4096));
         const session = await auth.login(body.code);
-        res.setHeader("Set-Cookie", `bw_admin=${session.cookie}; HttpOnly; SameSite=Strict; Path=/admin/; Max-Age=1800`);
+        const secure = req.headers.origin?.startsWith("https://") === true ? "; Secure" : "";
+        res.setHeader("Set-Cookie", `bw_admin=${session.cookie}; HttpOnly; SameSite=Strict; Path=/admin/; Max-Age=1800${secure}`);
         json(res, 200, { csrf: session.csrf }); return;
       }
       const cookie = /(?:^|;\s*)bw_admin=([A-Za-z0-9_-]+)/.exec(header(req, "cookie") ?? "")?.[1];
@@ -429,7 +463,9 @@ export async function startPersonalServer(options: ServerOptions) {
       if (path === "/admin/api/status" && req.method === "GET") {
         json(res, 200, { serverId: installation.serverId, fingerprint, apiPort, ...auth.list(),
           allowedAiBases: installation.allowedAiBases, origins: installation.origins,
-          publicUrl: installation.publicUrl ?? "", busy: controller.busy, git: gitStatus,
+          publicUrl: installation.publicUrl ?? "", adminPublicUrl: installation.adminPublicUrl ?? installation.publicUrl ?? "",
+          allowRemoteAdmin: installation.allowRemoteAdmin !== false,
+          busy: controller.busy, git: gitStatus,
           tunnel: tunnelManager.status() }); return;
       }
       if (path === "/admin/api/token" && req.method === "POST") {
@@ -463,11 +499,14 @@ export async function startPersonalServer(options: ServerOptions) {
       }
       if (path === "/admin/api/network" && req.method === "POST") {
         const body = z.object({ allowedAiBases: z.array(z.string().max(500)).max(50),
-          origins: z.array(z.string().max(500)).max(20), publicUrl: z.string().max(500) })
+          origins: z.array(z.string().max(500)).max(20), publicUrl: z.string().max(500),
+          adminPublicUrl: z.string().max(500).optional(), allowRemoteAdmin: z.boolean().optional() })
           .strict().parse(await readBody(req, 16_384));
         const next = { ...installation, allowedAiBases: body.allowedAiBases.map(base => normalizeEndpoint(base)),
           origins: body.origins.map(origin => normalizeServerUrl(origin)),
-          publicUrl: body.publicUrl ? normalizeServerUrl(body.publicUrl) : undefined };
+          publicUrl: body.publicUrl ? normalizeServerUrl(body.publicUrl) : undefined,
+          adminPublicUrl: body.adminPublicUrl ? normalizeServerUrl(body.adminPublicUrl) : undefined,
+          allowRemoteAdmin: body.allowRemoteAdmin ?? installation.allowRemoteAdmin ?? true };
         await controller.configure(async () => { await atomicJson(installationPath, next); installation = next; });
         json(res, 200, { saved: true }); return;
       }

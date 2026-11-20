@@ -76,6 +76,19 @@ Il client non invia URL, script, pacchetto o comando: invia solo la versione esa
 
 Massimo tre riavvii per ora. Nessun fallback a URL arbitrari o esecuzione di shell dal browser.
 
+
+### Admin pubblico su Cloudflare
+
+Di default, quando imposti l’URL pubblico, il pannello admin è **visibile su quell’hostname** se Cloudflare lo instrada a 24105. Puoi disattivarlo con «Rendi visibile il pannello amministrativo» oppure usare un `adminPublicUrl` separato.
+
+Configurazione consigliata:
+
+- `bookwriter-api.example.org` → `http://127.0.0.1:24106`;
+- `bookwriter-admin.example.org` → `http://127.0.0.1:24105`;
+
+oppure lo stesso hostname può puntare a 24105: il listener admin inoltra **solo** `/api/v1/*` alla API 24106. Tutto il resto (`/`, `/admin.js`, `/admin/api/*`) resta il pannello admin autenticato. La porta 24105 è sempre ascoltata solo su loopback; è Cloudflare a portarla fuori.
+
+Il web login usa bootstrap locale, cookie `HttpOnly; Secure` su HTTPS, scadenza 30 minuti e CSRF. È comunque raccomandato proteggere l'hostname admin con Cloudflare Access. Nessun bypass del login è possibile per il client dell'app.
 ## Cloudflare: già pronto oppure da attivare
 
 ### Se hai già configurato Cloudflare
