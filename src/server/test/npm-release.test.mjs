@@ -118,3 +118,10 @@ test("without the npx supervisor the client sees a version but cannot request a 
     assert.equal(update.status, 409);
   } finally { globalThis.fetch = nativeFetch; await service.close(); }
 }));
+
+test("SemVer prerelease order is ASCII and numeric identifiers never pass through floating point", async () => {
+  const big = "0.2.0-999999999999999999999999";
+  const current = "0.2.0-999999999999999999999998";
+  assert.equal((await checkNpmServerRelease(current, async () => Response.json(packument({ version: big })))).available, true);
+  assert.equal((await checkNpmServerRelease("0.2.0-B", async () => Response.json(packument({ version: "0.2.0-a" })))).available, true, "ASCII B sorts before a");
+});

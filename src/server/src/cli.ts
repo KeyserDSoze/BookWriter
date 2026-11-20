@@ -64,7 +64,7 @@ export async function main(argv = process.argv.slice(2), environment: NodeJS.Pro
   try {
     if (parsed.command === "setup") {
       assertSupportedNode();
-      const active = await installer.installVersion(serverPackage.version);
+      const active = await installer.installVersion(serverPackage.version, { bootstrapRegistryRelease: true });
       output(`BookWriter Personal Server ${active.version} installato in ${dataRoot}.`);
       output(`Avvia con: npx ${PACKAGE_NAME} start`);
       output("Amministrazione locale: http://127.0.0.1:24105 (la porta non va esposta). API locale: 24106.");

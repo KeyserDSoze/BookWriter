@@ -20,7 +20,8 @@ const manifestSchema = z.object({
   }).passthrough(),
 }).passthrough();
 
-export function trustedNpmReleaseMetadata(value: unknown, expectedVersion?: string): { version: string } {
+export function trustedNpmReleaseMetadata(value: unknown, expectedVersion?: string,
+  allowRegistryBootstrap = false): { version: string } {
   const parsed = manifestSchema.safeParse(value);
   if (!parsed.success) throw new Error("Metadati npm non validi o provenienza diversa dal repository BookWriter.");
   const latest = parsed.data.version;
@@ -29,7 +30,8 @@ export function trustedNpmReleaseMetadata(value: unknown, expectedVersion?: stri
   const attested = !!parsed.data.dist.signatures?.length &&
     (provenanceType === "https://slsa.dev/provenance/v1" || provenanceType === "https://slsa.dev/provenance/v0.2") &&
     parsed.data.dist.attestations?.url === `https://registry.npmjs.org/-/npm/v1/attestations/${NPM_SERVER_PACKAGE}@${latest}`;
-  if (!attested) throw new Error("La release npm non ha firma del registry e attestazione di provenienza richieste.");
+  if (!attested && !(allowRegistryBootstrap && latest === "0.1.0" && latest === expectedVersion && !!parsed.data.dist.signatures?.length))
+    throw new Error("La release npm non ha firma del registry e attestazione di provenienza richieste.");
   return { version: latest };
 }
 
@@ -48,10 +50,13 @@ function compare(a: string, b: string): number {
   const parsed = (value: string) => {
     const core = value.split("+", 1)[0]!;
     const [numbers, prerelease] = core.split("-", 2);
-    return { numbers: numbers!.split(".").map(Number), prerelease: prerelease ?? "" };
+    return { numbers: numbers!.split("."), prerelease: prerelease ?? "" };
   };
   const left = parsed(a), right = parsed(b);
-  for (let i = 0; i < 3; i++) { if (left.numbers[i]! !== right.numbers[i]!) return left.numbers[i]! - right.numbers[i]!; }
+  for (let i = 0; i < 3; i++) {
+    const l = left.numbers[i]!, r = right.numbers[i]!;
+    if (l !== r) return l.length !== r.length ? l.length - r.length : l < r ? -1 : 1;
+  }
   if (!left.prerelease && right.prerelease) return 1;
   if (left.prerelease && !right.prerelease) return -1;
   if (!left.prerelease && !right.prerelease) return 0;
@@ -60,9 +65,13 @@ function compare(a: string, b: string): number {
     if (l[i] === undefined) return -1; if (r[i] === undefined) return 1;
     if (l[i] === r[i]) continue;
     const ln = /^\d+$/.test(l[i]!), rn = /^\d+$/.test(r[i]!);
-    if (ln && rn) return Number(l[i]) - Number(r[i]);
+    if (ln && rn) {
+      const left = l[i]!.replace(/^0+/, "") || "0", right = r[i]!.replace(/^0+/, "") || "0";
+      return left.length !== right.length ? left.length - right.length : left === right ? 0 : left < right ? -1 : 1;
+    }
     if (ln !== rn) return ln ? -1 : 1;
-    return l[i]!.localeCompare(r[i]!);
+    // SemVer's ASCII lexical order, not locale/case-fold ordering.
+    return l[i]! === r[i]! ? 0 : l[i]! < r[i]! ? -1 : 1;
   }
   return 0;
 }

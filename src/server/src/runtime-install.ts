@@ -53,6 +53,7 @@ export interface ActiveRuntime {
 export interface CommandResult { code: number; stdout: string; stderr: string }
 export interface CommandOptions { cwd: string; env: NodeJS.ProcessEnv; timeoutMs?: number }
 export type CommandRunner = (command: string, args: readonly string[], options: CommandOptions) => Promise<CommandResult>;
+export interface InstallOptions { bootstrapRegistryRelease?: boolean }
 export interface RuntimeInstallerOptions {
   dataRoot: string;
   npmBinary?: string;
@@ -261,18 +262,18 @@ export class RuntimeInstaller {
     try { version = JSON.parse(result.stdout.trim()); } catch { throw new Error("Catalogo npm non valido."); }
     assertExactSemver(version); return version;
   }
-  private async assertTrustedRelease(version: string): Promise<void> {
+  private async assertTrustedRelease(version: string, allowRegistryBootstrap = false): Promise<void> {
     const result = await this.runNpm(["view", `${PACKAGE_NAME}@${version}`, "--json"]);
     let metadata: unknown;
     try { metadata = JSON.parse(result.stdout); } catch { throw new Error("Metadati npm non validi."); }
-    trustedNpmReleaseMetadata(metadata, version);
+    trustedNpmReleaseMetadata(metadata, version, allowRegistryBootstrap);
   }
-    async installVersion(requested: string | "latest" = "latest"): Promise<ActiveRuntime> {
+    async installVersion(requested: string | "latest" = "latest", options: InstallOptions = {}): Promise<ActiveRuntime> {
     assertSupportedNode();
     await ensureDataRoot(this.dataRoot);
     const version = requested === "latest" ? await this.latestVersion() : requested;
     assertExactSemver(version);
-    await this.assertTrustedRelease(version);
+    await this.assertTrustedRelease(version, options.bootstrapRegistryRelease === true);
     await fs.mkdir(join(this.runtimeRoot, "versions"), { recursive: true, mode: 0o700 });
     const staging = join(this.runtimeRoot, `staging-${this.uuid()}`);
     const destination = join(this.runtimeRoot, "versions", version);
@@ -434,7 +435,7 @@ export async function superviseServer(options: SupervisorOptions): Promise<Child
     process.once("SIGINT", onSigint); process.once("SIGTERM", onSigterm);
   }
   try {
-    if (!await installer.activeRuntime()) await installer.installVersion(options.currentVersion);
+    if (!await installer.activeRuntime()) await installer.installVersion(options.currentVersion, { bootstrapRegistryRelease: true });
     for (;;) {
       const active = await installer.activeRuntime();
       if (!active) throw new Error("Runtime attivo non disponibile.");

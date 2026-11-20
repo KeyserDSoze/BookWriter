@@ -71,6 +71,21 @@ Il token non crea da solo route/DNS: [guida Cloudflare](https://developers.cloud
 
 ## Pubblicazione npm per il maintainer
 
+Per il bootstrap una tantum, dal checkout verificato e con 2FA del tuo account npm:
+
+```bash
+cd src/frontend
+npm ci --no-audit --no-fund
+cd ../server
+npm run typecheck
+npm run build
+npm test
+npm login
+npm publish --access public
+```
+
+Non aggiungere `--ignore-scripts` al publish del maintainer: qui deve eseguire `prepack` (build + test) su questo checkout. Il primo 0.1.0 riceve la firma del registry; l'avvio bootstrap la accetta soltanto perché quella versione è proprio il pacchetto invocato. Le versioni successive, distribuite dall'action, richiedono attestazione di provenienza.
+
 Il workflow [`publish-server-npm.yml`](../.github/workflows/publish-server-npm.yml) pubblica `bookwriter-personal-server` sui tag `server-vX.Y.Z` con OIDC e provenance, senza `NPM_TOKEN`. Prima del primo tag occorre una sola configurazione su npmjs.com:
 
 - package: `bookwriter-personal-server`;

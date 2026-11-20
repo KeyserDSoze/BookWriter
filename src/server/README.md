@@ -35,7 +35,7 @@ La directory predefinita è `BOOKWRITER_DATA_ROOT`, se impostata; altrimenti:
 - Linux: `$XDG_DATA_HOME/bookwriter`, o `~/.local/share/bookwriter`;
 - macOS è indicato per completezza come `~/Library/Application Support/BookWriter`, ma l'avvio è rifiutato.
 
-`setup` crea una directory privata e installa una versione verificata del runtime npm in `<data-root>/private/npm-runtime`. Le richieste di installazione e aggiornamento usano soltanto il pacchetto fisso `bookwriter-personal-server`, versioni semver esatte, installazioni senza script e `npm audit signatures`. Token e credenziali non sono memorizzati nello stato npm.
+`setup` crea una directory privata e installa la versione appena invocata: nel solo bootstrap 0.1.0 ammette la firma npm del registry, mentre ogni aggiornamento richiede anche l'attestazione di provenienza del runtime npm in `<data-root>/private/npm-runtime`. Le richieste di installazione e aggiornamento usano soltanto il pacchetto fisso `bookwriter-personal-server`, versioni semver esatte, installazioni senza script e `npm audit signatures`. Token e credenziali non sono memorizzati nello stato npm.
 
 `start` supervisiona esclusivamente il processo server figlio che avvia. Resta in primo piano e inoltra `SIGINT`/`SIGTERM`. Se il server scrive una richiesta valida in `private/update-request.json` e si arresta ordinatamente, il supervisore installa quella versione esatta, ne verifica il pacchetto e le firme npm, la attiva e riavvia il server. Sono ammessi al massimo tre riavvii di aggiornamento all'ora. Un aggiornamento non valido o non verificato lascia attiva la versione precedente; il risultato privo di dettagli sensibili viene scritto in `private/update-result.json`.
 

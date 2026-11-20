@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## 0.35.2 — 2026-11-20 — Verifica finale del supervisore npm
+
+- Confronto SemVer senza precisione floating point e con ordine prerelease ASCII, inclusi identificativi numerici lunghi. Il pannello non può considerare più recente una versione ordinata in modo errato dalla lingua del sistema.
+- Bootstrap 0.1.0 esclusivamente con firma del registry: gli update successivi richiedono attestazione di provenienza. Chiuso il percorso tra supervisore attivo, richiesta mentre il server gira, arresto del solo figlio e nuova esecuzione; runtime già presente attivato solo se i byte coincidono con il pacchetto appena verificato.
+
 ## 0.35.1 — 2026-11-20 — Percorsi CLI deterministici fra Linux e Windows
 
 - Corretto il calcolo delle directory predefinite del CLI npm: la simulazione Linux ora usa le regole POSIX anche quando i test girano su Windows, evitando un falso percorso `D:\home\…`. Il comportamento Windows reale usa invece `path.win32`. Nessun cambiamento ai dati o ai token.

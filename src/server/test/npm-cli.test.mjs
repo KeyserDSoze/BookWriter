@@ -27,8 +27,8 @@ function fakeNpm(state = {}) {
       return { code: 0, stdout: JSON.stringify({ name: PACKAGE_NAME, version,
         repository: { type: "git", url: "git+https://github.com/KeyserDSoze/BookWriter.git", directory: "src/server" },
         dist: { integrity: "sha512-" + "A".repeat(60), signatures: [{ keyid: "SHA256:key", sig: "x".repeat(40) }],
-          attestations: { url: `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE_NAME}@${version}`,
-            provenance: { predicateType: "https://slsa.dev/provenance/v1" } } } }), stderr: "" };
+          ...(state.registryOnly ? {} : { attestations: { url: `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE_NAME}@${version}`,
+            provenance: { predicateType: "https://slsa.dev/provenance/v1" } } }) } }), stderr: "" };
     }
     if (args[0] === "install") {
       const prefixIndex = args.indexOf("--prefix");
@@ -100,6 +100,15 @@ test("strict bounded update request schema", async t => {
   await assert.rejects(installer.writeUpdateResult({ ...result, message: "errore arbitrario" }), /risultato|Schema/i);
   await fs.writeFile(join(root, "private", "update-request.json"), "x".repeat(20_000));
   await assert.rejects(installer.readUpdateRequest(), /too|grande|limite/i);
+});
+
+test("the first 0.1.0 bootstrap accepts the registry signature, never a later update without provenance", async t => {
+  const root = await tempRoot(t); const npm = fakeNpm({ registryOnly: true });
+  const installer = new RuntimeInstaller({ dataRoot: root, runner: npm.runner, uuid: () => "safe-stage" });
+  await assert.rejects(installer.installVersion("0.2.0"), /attestazione|provenienza/);
+  const active = await installer.installVersion("0.1.0", { bootstrapRegistryRelease: true });
+  assert.equal(active.version, "0.1.0");
+  await assert.rejects(installer.installVersion("0.2.0"), /attestazione|provenienza/);
 });
 
 test("runtime installation audits signatures before atomic activation", async t => {
