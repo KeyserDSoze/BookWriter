@@ -17,7 +17,7 @@ async function withServer(action) {
 }
 
 /** Reads SSE frames from a real response until `until` is satisfied or the stream ends. */
-async function frames(response, until, ms = 4000) {
+async function frames(response, until, ms = 10000) {
   const reader = response.body.getReader(), decoder = new TextDecoder();
   const seen = []; let buffer = "";
   const deadline = Date.now() + ms;

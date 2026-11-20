@@ -4,7 +4,7 @@
 
 > Stato: **prima applicazione local-first e in evoluzione**. Le funzionalità descritte sono obiettivi di prodotto, non ancora un'applicazione pronta per la produzione.
 
-La pagina **Impostazioni → Server personale** contiene ora la guida di preparazione in italiano, inglese e spagnolo, link ufficiali, copia dei comandi e download locale degli script PowerShell/Bash. Sono assistenti source-only, non installer firmati.
+La pagina **Impostazioni → Server personale** contiene ora installazione/aggiornamento via `npx bookwriter-personal-server` in italiano, inglese e spagnolo, link ufficiali, copia dei comandi e download locale degli script PowerShell/Bash. Sono assistenti source-only, non installer firmati.
 
 ## In sviluppo: retry a due livelli e server personale opzionale
 

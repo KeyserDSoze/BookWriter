@@ -9,10 +9,16 @@ const shared = {
 };
 await build({
   absWorkingDir: root, entryPoints: ["src/server/src/main.ts"], outfile: "src/server/dist/server.mjs",
-  bundle: true, platform: "node", target: "node22", format: "esm", sourcemap: true,
+  bundle: true, sourcesContent: false, platform: "node", target: "node22", format: "esm", sourcemap: true,
   define: { "import.meta.env.DEV": "false" }, ...shared,
 });
 await build({
+  absWorkingDir: root, entryPoints: ["src/server/src/cli.ts"], outfile: "src/server/dist/cli.mjs",
+  bundle: true, sourcesContent: false, platform: "node", target: "node22", format: "esm", sourcemap: true,
+  banner: { js: "#!/usr/bin/env node" }, define: { "import.meta.env.DEV": "false" },
+  ...shared,
+});
+await build({
   absWorkingDir: root, entryPoints: ["src/server/src/testing.ts"], outfile: "src/server/dist/testing.mjs",
-  bundle: true, platform: "node", target: "node22", format: "esm", ...shared,
+  bundle: true, sourcesContent: false, platform: "node", target: "node22", format: "esm", ...shared,
 });

@@ -1,6 +1,8 @@
 # F02 — Server personale, motore unico e sincronizzazione dei client
 
 - Stato: **prima tranche sperimentale implementata nel sorgente; feature completa non disponibile**.
+- [x] Pacchetto npm CLI (`npx setup/start/status/doctor/update`), supervisore, aggiornamento firmato da registry/attestazione, pannello client e workflow OIDC ([ADR 0171](../ADR/0171-npm-server-package-supervised-updates-and-cloudflare-connector.md)). Prima pubblicazione npm non eseguita: serve la relazione Trusted Publisher del proprietario del package.
+- [x] Connettore Cloudflare dedicato, gestito dal pannello locale 24105; altri cloudflared/servizi restano invariati. Route/DNS e installazione di cloudflared restano all'autore.
 - Data: 2026-11-19.
 - [ADR 0167](../ADR/0167-optional-personal-server-and-shared-engine.md) · [Guida progettuale](../docs/personal-server.md) · [Contratto tecnico](../docs/personal-server-protocol.md).
 - Nessuna issue o PR aperta da questa attività; nessuna versione, data di rilascio o pubblicazione promessa.

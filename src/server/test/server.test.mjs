@@ -214,7 +214,7 @@ test("network classification rejects metadata, private, mapped and transition ad
 });
 
 test("the web research adapter permits exactly the two supported Wikipedia origins", () => {
-  for (const origin of ["https://it.wikipedia.org", "https://en.wikipedia.org", "https://api.github.com"])
+  for (const origin of ["https://it.wikipedia.org", "https://en.wikipedia.org", "https://api.github.com", "https://registry.npmjs.org"])
     assert.equal(isBuiltInOutboundOrigin(new URL(origin)), true);
   for (const origin of ["http://en.wikipedia.org", "https://en.wikipedia.org.example.test", "https://en.wikipedia.org:8443"])
     assert.equal(isBuiltInOutboundOrigin(new URL(origin)), false);

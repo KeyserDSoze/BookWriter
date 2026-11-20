@@ -17,7 +17,14 @@ export const ADMIN_HTML = `<!doctype html>
 <form id="network"><label>Basi AI approvate, una per riga <textarea id="bases" rows="4" cols="70"></textarea></label>
 <label>Origini client permesse, una per riga <textarea id="origins" rows="3" cols="70"></textarea></label>
 <label>Origine HTTPS pubblica del tunnel API <input id="public" type="url"></label><button>Salva rete approvata</button></form>
-<h2>Cloudflare</h2><p>Configura un tunnel dedicato verso http://127.0.0.1:24106. Il token Cloudflare resta in un token-file protetto su questa macchina: non inserirlo nel client BookWriter. Questo pannello non modifica né riavvia i tunnel esistenti.</p>
+<h2>Cloudflare</h2><p>Configura un connettore dedicato verso http://127.0.0.1:24106. Il token Cloudflare resta in un token-file protetto su questa macchina: non inserirlo nel client BookWriter. BookWriter non modifica né riavvia tunnel, servizi o configurazioni già presenti.</p>
+<pre id="tunnel-status"></pre><p id="tunnel-other"></p>
+<form id="tunnel-configure"><label>Token del connettore Cloudflare <input id="tunnel-token" type="password" autocomplete="off" maxlength="4096" required></label>
+<label>Hostname HTTPS pubblico, facoltativo (sola indicazione) <input id="tunnel-hostname" type="url" maxlength="500"></label>
+<button>Salva e avvia il connettore dedicato</button></form>
+<button id="tunnel-restart" type="button">Riavvia solo il connettore dedicato</button>
+<button id="tunnel-remove" type="button">Rimuovi il token dedicato e arresta il connettore</button>
+<p>BookWriter richiede cloudflared 2025.4.0 o successivo per <code>--token-file</code>. Nel pannello Cloudflare devono già esistere hostname, route e DNS verso il connettore. Il token deve autorizzare soltanto il connector necessario. Con questa modalità non si usa alcun comando arbitrario e non viene accettato <code>--url</code>.</p>
 </section><p id="notice" role="status"></p></main><script src="/admin.js"></script></body></html>`;
 
 export const ADMIN_CSS = `:root{font-family:system-ui,sans-serif;color-scheme:light dark}body{margin:0}
@@ -37,10 +44,21 @@ async function call(path, body) {
  const data = await response.json(); if(!response.ok) throw new Error(data.message || "Operazione non completata."); return data;
 }
 function run(action) { return event => { event.preventDefault(); Promise.resolve().then(action).catch(e => notice(e.message)); }; }
+function showTunnel(t) {
+  el("tunnel-status").textContent = "Stato: " + (t.process === "running" ? "avviato" : t.process === "failed" ? "errore" : "arrestato")
+    + "\\nAbilitato: " + (t.enabled ? "sì" : "no") + "\\nConfigurato: " + (t.configured ? "sì" : "no")
+    + "\\ncloudflared: " + (t.binaryAvailable ? "rilevato con versione leggibile" : "non rilevato")
+    + (t.hostname ? "\\nHostname: " + t.hostname : "") + (t.lastError ? "\\n" + t.lastError : "");
+  el("tunnel-other").textContent = t.otherConnectorDetected
+    ? "Altri cloudflared già presenti: non vengono modificati e questo connettore BookWriter resta separato."
+    : "Nessun altro connettore rilevato. La rilevazione è indicativa e non modifica servizi.";
+  if(t.hostname) el("tunnel-hostname").value=t.hostname;
+}
 async function refresh() {
  const s = await call("status");
  el("identity").textContent = "Server: " + s.serverId + "\\nImpronta: " + s.fingerprint + "\\nPorta API: " + s.apiPort + "\\nGitHub: " + (s.git.mode === "git" ? "git " + s.git.version + " (cartelle di lavoro)" : "API REST (" + (s.git.reason || "git non disponibile") + ")");
  el("bases").value = s.allowedAiBases.join("\\n"); el("origins").value = s.origins.join("\\n"); el("public").value = s.publicUrl;
+ showTunnel(s.tunnel);
  el("clients").replaceChildren();
  for(const c of s.clients) {
   const p = document.createElement("p"); p.textContent = c.label + " · " + c.scopes.join(", ") + (c.revoked ? " · revocato " : " ");
@@ -68,4 +86,11 @@ el("issue").onsubmit=run(async()=>{const n=await call("token",{label:el("label")
 el("network").onsubmit=run(async()=>{if(!confirm("Approvi queste destinazioni AI e origini del client?"))return;
  const lines=id=>el(id).value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean);
  await call("network",{allowedAiBases:lines("bases"),origins:lines("origins"),publicUrl:el("public").value});
- notice("Rete salvata.");await refresh();});`;
+ notice("Rete salvata.");await refresh();});
+el("tunnel-configure").onsubmit=run(async()=>{
+ const hostname=el("tunnel-hostname").value.trim();
+ const status=await call("tunnel/configure",{token:el("tunnel-token").value,...(hostname?{hostname}:{})});
+ el("tunnel-token").value="";showTunnel(status);notice(status.process === "running" ? "Connettore Cloudflare dedicato avviato." : "Configurazione salvata; verifica lo stato del connettore.");});
+el("tunnel-restart").onclick=run(async()=>{showTunnel(await call("tunnel/restart",{}));notice("Riavvio richiesto solo al connettore BookWriter.");});
+el("tunnel-remove").onclick=run(async()=>{if(!confirm("Rimuovere il token Cloudflare dedicato e arrestare solo il connettore BookWriter?"))return;
+ showTunnel(await call("tunnel/remove",{}));el("tunnel-token").value="";el("tunnel-hostname").value="";notice("Token dedicato rimosso. Altri tunnel non sono stati modificati.");});`;

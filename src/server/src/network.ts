@@ -21,7 +21,7 @@ export function publicAddress(address: string): boolean {
     !/^2001:db8:/i.test(address) && !/^2002:/i.test(address);
 }
 
-const builtInOrigins = new Set(["https://api.github.com", "https://it.wikipedia.org", "https://en.wikipedia.org"]);
+const builtInOrigins = new Set(["https://api.github.com", "https://registry.npmjs.org", "https://it.wikipedia.org", "https://en.wikipedia.org"]);
 export const isBuiltInOutboundOrigin = (url: URL): boolean => builtInOrigins.has(url.origin);
 
 /** Node-only fetch adapter. DNS is checked AND pinned in the actual connection;

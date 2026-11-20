@@ -1,6 +1,12 @@
 # Server personale — stato reale e prove da sorgente
 
-> **Tranche sperimentale: l'interfaccia è su Pages (0.32.1); il server si avvia da sorgente.** Non sono disponibili installer, servizi gestiti o aggiornamenti remoti firmati. Le correzioni di review descritte qui sono nella 0.32.1 del frontend e nel sorgente del server. Non usare manoscritti o credenziali reali per il primo collaudo.
+> **Tranche sperimentale: frontend da Pages; server installabile dal pacchetto npm con `npx`, oppure da sorgente.** Gli aggiornamenti del pacchetto usano firme npm + attestazione di provenienza, ma non esistono ancora installer di sistema/servizi gestiti o binari firmati. La prima pubblicazione npm richiede una configurazione una tantum del Trusted Publisher. Non usare manoscritti o credenziali reali per il primo collaudo.
+
+## Installazione npm e Cloudflare
+
+La prima installazione non clona più il repository e non compila il progetto. La pagina **Impostazioni → Server personale** mostra i comandi `npx`, i link npm/Node/Git e gli script `.ps1`/`.sh`. Il comando completo e i requisiti sono in [personal-server-npm-cli.md](personal-server-npm-cli.md). Il pacchetto è `bookwriter-personal-server`; la prima pubblicazione richiede una volta il Trusted Publisher npm per la workflow `publish-server-npm.yml`.
+
+Il client può vedere versione installata/ultima release e richiedere l’aggiornamento al supervisore `npx`. Il server accetta solo la versione npm esatta, firmata/attestata e più recente; nessun URL/script del browser. Il connettore Cloudflare dedicato si configura nel pannello loopback **24105** con un token-file; altri connector già presenti restano invariati.
 
 ## Cosa è implementato
 
@@ -56,9 +62,17 @@ In **Impostazioni → Server personale → Scarica il sorgente e prepara il serv
 
 Il pulsante scarica solo un assistente **source-only**, non un installer né un updater. Non esegue comandi dal browser, non contiene token e non firma l'applicazione. Dopo la preparazione l'autore avvia ancora manualmente `node dist/server.mjs --data-root ...` e apre il pannello loopback 24105.
 
-## Come provarlo su Linux
+## Come provarlo con npm o da sorgente su Linux
 
 Prerequisiti: Node 22, dipendenze di sviluppo del progetto installabili dal lockfile esistente, `flock`, filesystem locale e directory privata. Non usare NFS/SMB o una cartella sincronizzata.
+
+```bash
+npx --yes bookwriter-personal-server setup --data-root "$HOME/BookWriter-test-data"
+npx --yes bookwriter-personal-server doctor --data-root "$HOME/BookWriter-test-data"
+npx --yes bookwriter-personal-server start --data-root "$HOME/BookWriter-test-data"
+```
+
+Fallback da sorgente per sviluppo del repository:
 
 ```bash
 cd src/frontend

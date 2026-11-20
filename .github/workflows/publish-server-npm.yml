@@ -1,0 +1,72 @@
+name: Publish personal server npm package
+
+on:
+  push:
+    tags:
+      - "server-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish bookwriter-personal-server
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v5
+
+      - name: Configure Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Require recent npm for trusted publishing
+        run: |
+          npm install --global npm@latest
+          npm --version
+          node --version
+
+      - name: Install frontend build dependencies
+        working-directory: src/frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify engine and server
+        run: |
+          cd src/frontend
+          npm run typecheck
+          cd ../server
+          npm run typecheck
+          npm run build
+          npm test
+
+      - name: Validate tag and package version
+        run: |
+          VERSION=${GITHUB_REF_NAME#server-v}
+          node -e 'const p=require("./src/server/package.json"); const expected=process.argv[1]; if(p.name!=="bookwriter-personal-server" || p.version!==expected) process.exit(1);' "$VERSION"
+
+      - name: Inspect npm package allowlist
+        working-directory: src/server
+        run: |
+          npm pack --dry-run --json --ignore-scripts > /tmp/bookwriter-server-pack.json
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const report = JSON.parse(fs.readFileSync("/tmp/bookwriter-server-pack.json", "utf8"));
+            const entries = Array.isArray(report) ? report : Object.values(report);
+            const paths = entries.flatMap(entry => entry.files.map(file => file.path));
+            const required = ["dist/cli.mjs", "dist/server.mjs", "package.json", "README.md"];
+            for (const path of required) if (!paths.includes(path)) throw new Error(`File npm obbligatorio mancante: ${path}`);
+            const allowed = /^(?:dist\/(?:cli|server)\.mjs(?:\.map)?|package\.json|README\.md)$/;
+            const forbidden = paths.filter(path => !allowed.test(path));
+            if (forbidden.length) throw new Error(`File non ammessi nel pacchetto: ${forbidden.join(", ")}`);
+            if (paths.some(path => /(?:\.ts$|token|secret|credential|test)/i.test(path))) throw new Error("File sensibile o sorgente nel pacchetto npm.");
+          '
+
+      # Configure npm Trusted Publisher for repository KeyserDSoze/BookWriter and this exact
+      # workflow filename (publish-server-npm.yml); no NPM_TOKEN is used or stored in the job.
+      - name: Publish public package with provenance
+        working-directory: src/server
+        run: npm publish --access public --provenance

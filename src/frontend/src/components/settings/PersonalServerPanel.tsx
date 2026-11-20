@@ -7,7 +7,8 @@ import {
   connectPersonalServer, createPersonalServerBook, disconnectPersonalServer, finishPairPersonalServer,
   pairPersonalServer, personalServerConfiguration, personalServerConnection, probePersonalServer,
   pendingPersonalServerCreation, provisionPersonalServer, resumePersonalServerCreation,
-  setPersonalServerBookPat, syncPersonalServer, type PendingServerPairing, type ServerConfigurationReview,
+  setPersonalServerBookPat, syncPersonalServer, personalServerUpdateStatus, requestPersonalServerUpdate,
+  type PendingServerPairing, type ServerConfigurationReview,
 } from "../../infrastructure/personal-server-client";
 import { Button } from "../ui/button";
 import { PersonalServerSetupGuide } from "./PersonalServerSetupGuide";
@@ -35,6 +36,8 @@ export function PersonalServerPanel({ settings, settingsDirty, book, onChanged, 
   const [keyActions, setKeyActions] = useState<Record<string, "delegate" | "revoke">>({});
   const [review, setReview] = useState<ServerConfigurationReview>();
   const [configurationError, setConfigurationError] = useState("");
+  const [updateInfo, setUpdateInfo] = useState<import("@engine/domain/personal-server").ServerUpdateInfo>();
+  const [updateError, setUpdateError] = useState("");
   const [templateId, setTemplateId] = useState<string>();
   const [delegatePat, setDelegatePat] = useState(false);
   const [pendingCreation, setPendingCreation] = useState<Awaited<ReturnType<typeof pendingPersonalServerCreation>>>();
@@ -65,6 +68,9 @@ export function PersonalServerPanel({ settings, settingsDirty, book, onChanged, 
     void personalServerConfiguration().then(value => {
       if (mounted) setReview(value);
     }).catch(error => { if (mounted) setConfigurationError(error instanceof Error ? error.message : "Configurazione server non verificabile."); });
+    setUpdateInfo(undefined); setUpdateError("");
+    void personalServerUpdateStatus().then(value => { if (mounted) setUpdateInfo(value); })
+      .catch(error => { if (mounted) setUpdateError(error instanceof Error ? error.message : "Controllo aggiornamenti non disponibile."); });
     return () => { mounted = false; };
   }, [connection?.id, connection?.baseUrl]);
   const execute = (action: () => Promise<void>) => {
@@ -259,6 +265,31 @@ export function PersonalServerPanel({ settings, settingsDirty, book, onChanged, 
         })}>Revoca PAT delegato</Button>}
       </div>
     </section>}
+    <section className="panel min-w-0 space-y-3 p-4" aria-label="Versione server e aggiornamenti">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Versione e aggiornamenti del server</h2>
+          <p className="muted text-sm">Il client legge la versione dal server; l'aggiornamento usa il pacchetto npm verificato sul supervisore locale. Nessun URL, script o pacchetto fornito dal browser viene eseguito.</p>
+        </div>
+        <Button type="button" variant="outline" disabled={busy || !connection} onClick={() => execute(async () => {
+          setUpdateError(""); setUpdateInfo(await personalServerUpdateStatus());
+        })}>Controlla versione del server</Button>
+      </div>
+      {info && <p className="text-sm">Ultima versione rilevata nel collegamento: <strong>{info.serverVersion}</strong>.</p>}
+      {updateInfo && <div className="rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700" role="status">
+        <p><strong>{updateInfo.packageName}</strong>: installata {updateInfo.installedVersion}{updateInfo.latestVersion ? ` · npm ${updateInfo.latestVersion}` : ""}.</p>
+        <p className="muted">{updateInfo.message}</p>
+        {updateInfo.lastUpdate && <p className={updateInfo.lastUpdate.state === "failed" ? "mt-2 text-amber-700 dark:text-amber-300" : "mt-2 text-emerald-700 dark:text-emerald-300"}>
+          Ultimo aggiornamento: {updateInfo.lastUpdate.state === "completed" ? "completato" : "non riuscito"}, da {updateInfo.lastUpdate.fromVersion} a {updateInfo.lastUpdate.version}. {updateInfo.lastUpdate.message}</p>}
+        {updateInfo.available && updateInfo.canRequest && updateInfo.latestVersion && <Button type="button" className="mt-3" disabled={busy} onClick={() => execute(async () => {
+          if (!updateInfo?.latestVersion || !window.confirm(`Aggiornare il server da ${updateInfo.installedVersion} a ${updateInfo.latestVersion}? Il supervisore fermerà il server in modo ordinato, verificherà firma/attestazione npm e ripartirà solo dopo un'installazione riuscita.`)) return;
+          await requestPersonalServerUpdate(updateInfo.installedVersion, updateInfo.latestVersion);
+          setNotice("Aggiornamento accettato. Il server si sta fermando in modo ordinato e il supervisore npx lo riavvia dalla versione npm verificata. Attendi, poi premi «Verifica server».");
+          setUpdateInfo(undefined);
+        })}>Aggiorna server a {updateInfo.latestVersion}</Button>}
+      </div>}
+      {updateError && <p className="text-sm" role="alert">{updateError}</p>}
+    </section>
     <PersonalServerSetupGuide/>
   </div>;
 }

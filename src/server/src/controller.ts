@@ -73,6 +73,16 @@ export class Controller {
     if (this.shuttingDown || this.configuring)
       throw new ApiError(503, "maintenance", "Il server si sta fermando o sta aggiornando la configurazione: nessun nuovo comando accettato.");
   }
+  /** Same exclusivity as configuration, but maintenance stays latched until the process exits. */
+  requestUpdate<T>(action: () => Promise<T>): Promise<T> {
+    return this.track(this.store.serial("$run-admission", async () => {
+      this.accepting();
+      if (this.busy || this.operations.size > 1) throw new ApiError(409, "running", "Metti in pausa i libri e attendi i comandi/effetti GitHub prima di aggiornare.");
+      this.configuring = true;
+      try { return await withExclusiveLock("bookwriter:github-outbox", { busy: BUSY_LOCK }, action); }
+      catch (error) { this.configuring = false; throw error; }
+    }));
+  }
   /** Serialises configuration with run admission, not with an entire model call. */
   configure<T>(action: () => Promise<T>): Promise<T> {
     return this.track(this.store.serial("$run-admission", async () => {

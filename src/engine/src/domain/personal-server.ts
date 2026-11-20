@@ -37,6 +37,25 @@ export const serverConfigurationSchema = z.object({
   githubBooks: z.array(z.string().uuid()).max(200),
 }).strict();
 export type ServerConfiguration = z.infer<typeof serverConfigurationSchema>;
+export const serverUpdateInfoSchema = z.object({
+  packageName: z.literal("bookwriter-personal-server"), installedVersion: z.string().max(60),
+  latestVersion: z.string().max(60).optional(), available: z.boolean(), canRequest: z.boolean(), signed: z.boolean(),
+  reason: z.enum(["not_published", "no_trusted_release", "unavailable", "up_to_date"]).optional(),
+  message: z.string().max(800),
+  lastUpdate: z.object({ schemaVersion: z.literal(1), requestId: z.string().uuid(),
+    state: z.enum(["completed", "failed"]), version: z.string().max(60), fromVersion: z.string().max(60),
+    at: z.string().datetime(), message: z.string().max(400) }).strict().optional(),
+}).strict();
+export type ServerUpdateInfo = z.infer<typeof serverUpdateInfoSchema>;
+const exactSemverSchema = z.string().max(100).regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/).refine(value => {
+  const pre = value.split("+", 1)[0]!.split("-", 2)[1];
+  return !pre || pre.split(".").every(part => !/^\d+$/.test(part) || part === "0" || !part.startsWith("0"));
+}, "Identificatore prerelease semver non valido.");
+export const serverUpdateRequestSchema = z.object({
+  version: exactSemverSchema,
+  installedVersion: z.string().max(60), confirmed: z.literal(true),
+}).strict();
+export type ServerUpdateRequest = z.infer<typeof serverUpdateRequestSchema>;
 
 /** A configuration-only template for a NEW server book. It deliberately excludes prose,
  * memory, knowledge, worldbuilding, web-research consent, chapter synopses, repository and

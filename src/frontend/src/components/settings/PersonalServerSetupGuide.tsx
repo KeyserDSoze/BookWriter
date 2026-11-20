@@ -6,55 +6,57 @@ type Platform = "windows" | "linux";
 type Text = {
   title: string; intro: string; warning: string; language: string; platform: string;
   prerequisites: string; source: string; guide: string; copy: string; copied: string; download: string;
-  opensAdmin: string; firstStart: string; next: string; sourceZip: string; node: string; git: string;
+  opensAdmin: string; firstStart: string; next: string; npm: string; sourceZip: string; node: string; git: string; cloudflare: string;
   scriptName: string; rootHint: string;
 };
 
 const COPY: Record<Language, Text> = {
   it: {
-    title: "Scarica il sorgente e prepara il server",
-    intro: "Questo pannello rende disponibili subito i comandi, le dipendenze e i link ufficiali. Il server parte da sorgente: non è ancora un installer firmato e non si aggiorna da solo.",
-    warning: "Sicurezza: leggi lo script prima di eseguirlo. Il download del repository contiene codice non compilato; npm usa il lockfile esistente. Nessun comando viene eseguito dal browser.",
+    title: "Installa il server con npm",
+    intro: "Il server si installa dal pacchetto npm pubblico e lo aggiorna con firme/attestazioni del registro. Non serve clonare il repository né compilare: `npx` prepara l’area dati, verifica le firme npm e avvia il server. Gli installer di sistema restano sperimentali.",
+    warning: "Sicurezza: leggi lo script prima di eseguirlo. Lo script prepara soltanto il pacchetto npm; i comandi `npm install` eseguiti da npx scaricano artefatti firmati dal registro. Nessun comando viene eseguito dal browser.",
     language: "Lingua guida", platform: "Sistema operativo", prerequisites: "1. Installa i prerequisiti",
-    source: "2. Apri il progetto sorgente", guide: "Guida completa", copy: "Copia i comandi", copied: "Comandi copiati.",
+    source: "2. Esegui npx e avvia il server", guide: "Guida completa", copy: "Copia i comandi", copied: "Comandi copiati.",
     download: "Scarica lo script di preparazione", opensAdmin: "Poi apri http://127.0.0.1:24105",
     firstStart: "Primo avvio: leggi il codice in private/admin-bootstrap.txt nella cartella dati scelta e usalo nel pannello amministrativo.",
-    next: "Il server non pubblica libri né effettua chiamate AI finché non colleghi un token e avvii esplicitamente un libro. Il pannello admin è solo loopback; non esporlo con un tunnel.",
-    sourceZip: "Scarica il sorgente ZIP", node: "Scarica Node.js 22 o successivo", git: "Scarica Git 2.32 o successivo",
-    scriptName: "assistente-bookwriter-server", rootHint: "La cartella dati predefinita mostrata nel comando deve restare privata e fuori da cartelle sincronizzate.",
+    next: "Se la pagina npm mostra 404, la prima release non è ancora stata pubblicata: usa il pulsante ZIP solo come fallback. Il server non pubblica libri né effettua chiamate AI finché non colleghi un token e avvii esplicitamente un libro. Il pannello admin è solo loopback; non esporlo con un tunnel.",
+    npm: "Pacchetto npm ufficiale", cloudflare: "Guida tunnel Cloudflare", sourceZip: "Scarica il sorgente ZIP (fallback)", node: "Scarica Node.js 22.14 o successivo", git: "Scarica Git 2.32 o successivo",
+    scriptName: "assistente-bookwriter-server", rootHint: "La cartella dati deve restare privata e fuori da cartelle sincronizzate. Su Linux installa anche flock (util-linux); Windows usa PowerShell per il lock.",
   },
   en: {
-    title: "Download the source and prepare the server",
-    intro: "This panel provides the commands, prerequisites and official links immediately. The server currently runs from source: this is not a signed installer and it cannot update itself yet.",
-    warning: "Security: inspect the script before running it. The repository archive contains uncompiled source; npm uses the checked-in lockfile. The browser never runs these commands.",
+    title: "Install the server with npm",
+    intro: "The server installs from the public npm package and verifies npm signatures and installs without scripts. No repository clone or build is required: `npx` prepares the data directory, verifies registry attestations and starts the server. OS installers are still experimental.",
+    warning: "Security: inspect the script before running it. The script only prepares the npm package; npx downloads registry-signed artifacts. The browser never runs these commands.",
     language: "Guide language", platform: "Operating system", prerequisites: "1. Install prerequisites",
-    source: "2. Open the source project", guide: "Full guide", copy: "Copy commands", copied: "Commands copied.",
+    source: "2. Run npx and start the server", guide: "Full guide", copy: "Copy commands", copied: "Commands copied.",
     download: "Download preparation script", opensAdmin: "Then open http://127.0.0.1:24105",
     firstStart: "First start: read private/admin-bootstrap.txt in the data directory you selected and enter that code in the admin panel.",
-    next: "The server does not publish books or call AI until you connect a token and explicitly start a book. The admin panel is loopback-only; never expose it through a tunnel.",
-    sourceZip: "Download source ZIP", node: "Download Node.js 22 or later", git: "Download Git 2.32 or later",
-    scriptName: "bookwriter-server-setup", rootHint: "Keep the data directory shown in the command private and outside synchronized folders.",
+    next: "If npm shows 404, the first release is not published yet: use the ZIP fallback. The server does not publish books or call AI until you connect a token and explicitly start a book. The admin panel is loopback-only; never expose it through a tunnel.",
+    npm: "Official npm package", cloudflare: "Cloudflare tunnel guide", sourceZip: "Download source ZIP (fallback)", node: "Download Node.js 22.14 or later", git: "Download Git 2.32 or later",
+    scriptName: "bookwriter-server-setup", rootHint: "Keep the data directory private and outside synchronized folders. Linux also needs flock (util-linux); Windows uses PowerShell for the lock.",
   },
   es: {
-    title: "Descarga el código y prepara el servidor",
-    intro: "Este panel muestra inmediatamente los comandos, requisitos y enlaces oficiales. El servidor se ejecuta desde el código: aún no es un instalador firmado ni puede actualizarse solo.",
-    warning: "Seguridad: revisa el script antes de ejecutarlo. El archivo contiene código sin compilar; npm usa el lockfile incluido. El navegador nunca ejecuta estos comandos.",
+    title: "Instala el servidor con npm",
+    intro: "El servidor se instala desde el paquete público de npm y solo actualiza versiones firmadas/atestadas por el registro. No hace falta clonar ni compilar: `npx` prepara los datos, verifica las firmas npm y arranca el servidor. Los instaladores del sistema siguen siendo experimentales.",
+    warning: "Seguridad: revisa el script antes de ejecutarlo. El script solo prepara el paquete npm; npx descarga artefactos firmados por el registro. El navegador nunca ejecuta estos comandos.",
     language: "Idioma de la guía", platform: "Sistema operativo", prerequisites: "1. Instala los requisitos",
-    source: "2. Abre el proyecto fuente", guide: "Guía completa", copy: "Copiar comandos", copied: "Comandos copiados.",
+    source: "2. Ejecuta npx y arranca el servidor", guide: "Guía completa", copy: "Copiar comandos", copied: "Comandos copiados.",
     download: "Descargar script de preparación", opensAdmin: "Después abre http://127.0.0.1:24105",
     firstStart: "Primer inicio: lee private/admin-bootstrap.txt en la carpeta de datos elegida e introduce el código en el panel de administración.",
-    next: "El servidor no publica libros ni llama a la IA hasta que conectes un token y arranques un libro explícitamente. El panel de administración es solo local; no lo expongas mediante un túnel.",
-    sourceZip: "Descargar ZIP del código", node: "Descargar Node.js 22 o posterior", git: "Descargar Git 2.32 o posterior",
-    scriptName: "preparar-servidor-bookwriter", rootHint: "La carpeta de datos mostrada debe ser privada y no estar dentro de carpetas sincronizadas.",
+    next: "Si npm muestra 404, la primera versión aún no está publicada: usa el ZIP como alternativa. El servidor no publica libros ni llama a la IA hasta que conectes un token y arranques un libro explícitamente. El panel de administración es solo local; no lo expongas mediante un túnel.",
+    npm: "Paquete npm oficial", cloudflare: "Guía de túnel Cloudflare", sourceZip: "Descargar ZIP del código (alternativa)", node: "Descargar Node.js 22.14 o posterior", git: "Descargar Git 2.32 o posterior",
+    scriptName: "preparar-servidor-bookwriter", rootHint: "La carpeta de datos debe ser privada y no estar sincronizada. En Linux también se necesita flock (util-linux); Windows usa PowerShell para el bloqueo.",
   },
 };
 
 const links = {
+  npm: "https://www.npmjs.com/package/bookwriter-personal-server",
   source: "https://github.com/KeyserDSoze/BookWriter/archive/refs/heads/main.zip",
   repository: "https://github.com/KeyserDSoze/BookWriter",
   guide: "https://github.com/KeyserDSoze/BookWriter/blob/main/docs/personal-server-development.md",
   node: "https://nodejs.org/en/download",
   git: "https://git-scm.com/downloads",
+  cloudflare: "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel-api/",
 };
 
 function preferredLanguage(): Language {
@@ -67,36 +69,21 @@ function preferredPlatform(): Platform {
   return "linux";
 }
 function shellCommands(platform: Platform): string {
-  return platform === "windows" ? `git clone https://github.com/KeyserDSoze/BookWriter.git $HOME\\BookWriter
-Set-Location $HOME\\BookWriter
-Set-Location src\\frontend
-npm ci --no-audit --no-fund
-Set-Location ..\\server
-npm run typecheck
-npm run build
-node dist/server.mjs --data-root "$HOME\\BookWriter-server-data"` : `git clone https://github.com/KeyserDSoze/BookWriter.git "$HOME/BookWriter"
-cd "$HOME/BookWriter/src/frontend"
-npm ci --no-audit --no-fund
-cd ../server
-npm run typecheck
-npm run build
-node dist/server.mjs --data-root "$HOME/BookWriter-server-data"`;
+  const data = platform === "windows" ? "$HOME\\BookWriter-server-data" : "$HOME/BookWriter-server-data";
+  return `npx --yes bookwriter-personal-server setup --data-root "${data}"
+npx --yes bookwriter-personal-server doctor --data-root "${data}"
+npx --yes bookwriter-personal-server start --data-root "${data}"
+# Quando disponibile:
+npx --yes bookwriter-personal-server update --data-root "${data}"`;
 }
 function script(platform: Platform): string {
-  return platform === "windows" ? `# BookWriter server source setup (inspect before running)\n` +
-`param([string]$Target = "$HOME\\BookWriter")\n$ErrorActionPreference = "Stop"\n` +
-`if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "Git 2.32+ is required." }\n` +
-`$gitParts = ((git --version) -replace 'git version ', '').Split('.')
-$gitMajor = [int]$gitParts[0]; $gitMinor = [int]$gitParts[1]
-if ($gitMajor -lt 2 -or ($gitMajor -eq 2 -and $gitMinor -lt 32)) { throw "Git 2.32+ is required." }\n` +
-`if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "Node.js 22+ is required." }\n` +
-`$nodeMajor = [int]((node -p "process.versions.node.split('.')[0]") 2>$null)\nif ($nodeMajor -lt 22) { throw "Node.js 22+ is required." }\n` +
-`if (Test-Path $Target) { throw "Target already exists: $Target. Choose another folder." }\n` +
-`git clone ${links.repository}.git $Target\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n` +
-`Push-Location "$Target\\src\\frontend"\nnpm ci --no-audit --no-fund\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n` +
-`Pop-Location\nPush-Location "$Target\\src\\server"\nnpm run typecheck\nnpm run build\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n` +
-`Pop-Location\nWrite-Host "Ready. Start with: node dist/server.mjs --data-root '$HOME\\BookWriter-server-data'"\nWrite-Host "Run the start command from: $Target\\src\\server"` :
-`#!/usr/bin/env bash\nset -eu\nTARGET="\${1:-$HOME/BookWriter}"\ncommand -v git >/dev/null || { echo "Git 2.32+ is required" >&2; exit 1; }\nGIT_VERSION="$(git --version | awk '{print $3}')"\nGIT_MAJOR="$(printf '%s' "$GIT_VERSION" | cut -d. -f1)"\nGIT_MINOR="$(printf '%s' "$GIT_VERSION" | cut -d. -f2)"\n[ "$GIT_MAJOR" -gt 2 ] || { [ "$GIT_MAJOR" -eq 2 ] && [ "$GIT_MINOR" -ge 32 ]; } || { echo "Git 2.32+ is required" >&2; exit 1; }\ncommand -v flock >/dev/null || { echo "flock (util-linux) is required on Linux" >&2; exit 1; }\ncommand -v node >/dev/null || { echo "Node.js 22+ is required" >&2; exit 1; }\nNODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"\n[ "$NODE_MAJOR" -ge 22 ] || { echo "Node.js 22+ is required" >&2; exit 1; }\n[ ! -e "$TARGET" ] || { echo "Target already exists: $TARGET" >&2; exit 1; }\ngit clone ${links.repository}.git "$TARGET"\ncd "$TARGET/src/frontend"\nnpm ci --no-audit --no-fund\ncd ../server\nnpm run typecheck\nnpm run build\necho "Ready. Start with: node dist/server.mjs --data-root \\$HOME/BookWriter-server-data"\necho "Run that command from: $TARGET/src/server"\n`;
+  const header = platform === "windows"
+    ? `# BookWriter server npm setup (inspect before running)\n$ErrorActionPreference = "Stop"\n`
+    : `#!/usr/bin/env bash\nset -eu\n`;
+  const data = platform === "windows" ? "$HOME\\BookWriter-server-data" : "$HOME/BookWriter-server-data";
+  const version = `\nnode --version\nGit 2.32+ and, on Linux, flock are checked by \`npx ... doctor\`.\n`;
+  void version;
+  return header + `npx --yes bookwriter-personal-server setup --data-root "${data}"\nnpx --yes bookwriter-personal-server doctor --data-root "${data}"\nnpx --yes bookwriter-personal-server start --data-root "${data}"\n# When an update is available:\n# npx --yes bookwriter-personal-server update --data-root "${data}"\n`;
 }
 function download(fileName: string, content: string): void {
   const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
@@ -133,6 +120,8 @@ export function PersonalServerSetupGuide() {
     <div className="flex flex-wrap gap-3 text-sm">
       <a className="underline underline-offset-2" href={links.node} target="_blank" rel="noreferrer">{copy.node}</a>
       <a className="underline underline-offset-2" href={links.git} target="_blank" rel="noreferrer">{copy.git}</a>
+      <a className="underline underline-offset-2" href={links.cloudflare} target="_blank" rel="noreferrer">{copy.cloudflare}</a>
+      <a className="underline underline-offset-2" href={links.npm} target="_blank" rel="noreferrer">{copy.npm}</a>
       <a className="underline underline-offset-2" href={links.source} rel="noreferrer">{copy.sourceZip}</a>
       <a className="underline underline-offset-2" href={links.guide} target="_blank" rel="noreferrer">{copy.guide}</a>
       <a className="underline underline-offset-2" href={links.repository} target="_blank" rel="noreferrer">GitHub</a>

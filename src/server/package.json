@@ -1,13 +1,44 @@
 {
-  "name": "bookwriter-server",
-  "private": true,
+  "name": "bookwriter-personal-server",
   "version": "0.1.0",
+  "description": "Server personale sperimentale per BookWriter, distribuito come pacchetto CLI pubblico.",
   "type": "module",
-  "engines": { "node": ">=22.0.0" },
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "bin": {
+    "bookwriter-server": "dist/cli.mjs"
+  },
+  "files": [
+    "dist/cli.mjs",
+    "dist/server.mjs",
+    "dist/cli.mjs.map",
+    "dist/server.mjs.map",
+    "README.md"
+  ],
   "scripts": {
     "typecheck": "node ../frontend/node_modules/typescript/bin/tsc -p tsconfig.json",
     "build": "node build.mjs",
     "start": "node dist/server.mjs",
-    "test": "node --test test/*.test.mjs"
-  }
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm run build && npm run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KeyserDSoze/BookWriter.git",
+    "directory": "src/server"
+  },
+  "homepage": "https://github.com/KeyserDSoze/BookWriter#readme",
+  "bugs": {
+    "url": "https://github.com/KeyserDSoze/BookWriter/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "license": "UNLICENSED",
+  "os": [
+    "win32",
+    "linux"
+  ]
 }

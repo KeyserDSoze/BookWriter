@@ -1,11 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
-import { generateKeyPairSync, createPrivateKey, createHash, sign } from "node:crypto";
+import { generateKeyPairSync, createPrivateKey, createHash, sign, randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import {
   z, serverScopeSchema, cloudSettingsSchema, normalizeServerUrl, SERVER_API_VERSION,
   handoffRequestSchema, githubHandoffRequestSchema, handoffResolveSchema, serverBookCreationInputSchema,
-  installHostRuntime, type HostBookRecord, type BookProject,
+  serverUpdateRequestSchema, installHostRuntime, type HostBookRecord, type BookProject,
   readGitHubExecutionAuthority, subscribeLiveAi, currentLiveAi,
 } from "@engine/index";
 import frontendPackage from "../../frontend/package.json";
@@ -19,6 +19,9 @@ import { GitWorkspaces, type GitWorkspaceOptions } from "./git";
 import { Controller, bookEtag } from "./controller";
 import { Auth, type Client } from "./auth";
 import { ApiError, badRequest } from "./errors";
+import { CloudflareTunnelManager } from "./tunnel";
+import { RuntimeInstaller } from "./runtime-install";
+import { checkNpmServerRelease } from "./npm-release";
 import { ADMIN_HTML, ADMIN_JS, ADMIN_CSS } from "./ui";
 
 const installationSchema = z.object({
@@ -30,6 +33,14 @@ const installationSchema = z.object({
 }).strict();
 const uuid = z.string().uuid();
 const secretText = z.string().min(1).max(4096);
+const tunnelToken = z.string().min(1).max(4096).refine(value => !/[\r\n\0]/.test(value), "Token non valido.");
+const tunnelHostname = z.string().max(500).refine(value => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !!url.hostname && !url.username && !url.password && !url.search && !url.hash;
+  } catch { return false; }
+}, "Hostname HTTPS non valido.");
+const tunnelConfigureSchema = z.object({ token: tunnelToken, hostname: tunnelHostname.optional() }).strict();
 const createSchema = z.strictObject({ commandId: uuid, ...serverBookCreationInputSchema.shape });
 const provisionSchema = z.object({
   consent: z.literal(true), settings: cloudSettingsSchema,
@@ -135,6 +146,9 @@ export async function startPersonalServer(options: ServerOptions) {
   const controller = new Controller(store, host.runtime, installation.serverId, client => auth.isCurrent(client),
     { stage: host.stageBookPat, drop: host.dropBookPat, revoke: host.revokeBookPat });
   try { await controller.recover(); } catch (error) { host.dispose(); throw error; }
+  const tunnelManager = new CloudflareTunnelManager({ root: options.root });
+  // A connector failure is visible in the local admin panel but never prevents the BookWriter server from starting.
+  try { await tunnelManager.start(); } catch { /* The manager stores only fixed, public failure messages. */ }
   const streams = new Set<() => void>();
   const commits = new Set<(id: string) => void>();
   store.onCommit = id => { for (const onCommit of commits) onCommit(id); };
@@ -349,8 +363,42 @@ export async function startPersonalServer(options: ServerOptions) {
       }
       if (url.pathname === "/api/v1/updates" && req.method === "GET") {
         requireScope("read");
-        json(res, 200, { available: false, reason: "no_trusted_release",
-          message: "Nessuna distribuzione firmata e collaudata è configurata. Nessun URL o script del client viene eseguito." }); return;
+        const installer = new RuntimeInstaller({ dataRoot: options.root });
+        const [release, lastUpdate] = await Promise.all([checkNpmServerRelease(serverPackage.version), installer.readUpdateResult().catch(() => undefined)]);
+        const supervised = process.env.BOOKWRITER_SUPERVISED === "1";
+        const hasUpdateScope = client.scopes.includes("update");
+        json(res, 200, {
+          ...release,
+          canRequest: release.canRequest && supervised && hasUpdateScope,
+          ...(release.available && !hasUpdateScope ? { message: "Il token collegato non ha il permesso separato «update». Rilancia l'emissione del token dal pannello locale 24105 oppure usa npx update sul server." } : supervised ? {} : { message: release.available
+            ? "Versione npm verificata disponibile. Esegui il server con npx bookwriter-personal-server start: il processo diretto non può eseguire l'aggiornamento supervisionato."
+            : release.message }),
+          ...(lastUpdate ? { lastUpdate } : {}),
+        }); return;
+      }
+      if (url.pathname === "/api/v1/updates" && req.method === "POST") {
+        requireScope("update");
+        if (process.env.BOOKWRITER_SUPERVISED !== "1")
+          throw new ApiError(409, "no_supervisor", "Aggiornamento remoto non disponibile: avvia il server con npx bookwriter-personal-server start.");
+        const body = serverUpdateRequestSchema.parse(await readBody(req, 4096));
+        requireScope("update");
+        if (body.installedVersion !== serverPackage.version)
+          throw new ApiError(412, "version", "La versione del server è cambiata: aggiorna il pannello prima di riprovare.");
+        const release = await checkNpmServerRelease(serverPackage.version);
+        if (!release.available || !release.signed || !release.latestVersion || release.latestVersion !== body.version)
+          throw new ApiError(409, "release", "La versione richiesta non è l'ultima release npm firmata e attestata: nessun aggiornamento avviato.");
+        const installer = new RuntimeInstaller({ dataRoot: options.root });
+        await controller.requestUpdate(async () => {
+          const previous = await installer.readUpdateRequest();
+          if (previous && (previous.version !== body.version || previous.source !== "client"))
+            throw new ApiError(409, "update_pending", "Esiste già una richiesta di aggiornamento diversa: attendi il supervisore o controlla il risultato.");
+          const last = await installer.readUpdateResult().catch(() => undefined);
+          const shouldRearm = !!previous && last?.requestId === previous.requestId && last.state === "failed";
+          if (!previous || shouldRearm) await installer.writeUpdateRequest({ schemaVersion: 1, packageName: "bookwriter-personal-server",
+            version: body.version, requestedAt: new Date().toISOString(), requestId: randomUUID(), source: "client" });
+        });
+        json(res, 202, { accepted: true, version: body.version,
+          message: "Richiesta scritta. Il supervisore npx fermerà ordinatamente il server, verificherà il pacchetto e lo riavvierà solo dopo un'installazione valida." }); return;
       }
       throw new ApiError(404, "route", "Operazione API non disponibile.");
     })().catch(error => failure(res, error));
@@ -381,7 +429,8 @@ export async function startPersonalServer(options: ServerOptions) {
       if (path === "/admin/api/status" && req.method === "GET") {
         json(res, 200, { serverId: installation.serverId, fingerprint, apiPort, ...auth.list(),
           allowedAiBases: installation.allowedAiBases, origins: installation.origins,
-          publicUrl: installation.publicUrl ?? "", busy: controller.busy, git: gitStatus }); return;
+          publicUrl: installation.publicUrl ?? "", busy: controller.busy, git: gitStatus,
+          tunnel: tunnelManager.status() }); return;
       }
       if (path === "/admin/api/token" && req.method === "POST") {
         const body = z.object({ label: z.string().min(1).max(80), scopes: z.array(serverScopeSchema).min(1).max(4),
@@ -398,6 +447,19 @@ export async function startPersonalServer(options: ServerOptions) {
       if (path === "/admin/api/approve" && req.method === "POST") {
         const body = z.object({ id: uuid }).strict().parse(await readBody(req, 4096));
         await auth.approvePairing(body.id); json(res, 200, { approved: true }); return;
+      }
+      if (path === "/admin/api/tunnel/configure" && req.method === "POST") {
+        const body = tunnelConfigureSchema.parse(await readBody(req, 8192));
+        await tunnelManager.configure(body);
+        json(res, 200, await tunnelManager.start()); return;
+      }
+      if (path === "/admin/api/tunnel/restart" && req.method === "POST") {
+        z.object({}).strict().parse(await readBody(req, 8192));
+        json(res, 200, await tunnelManager.restart()); return;
+      }
+      if (path === "/admin/api/tunnel/remove" && req.method === "POST") {
+        z.object({}).strict().parse(await readBody(req, 8192));
+        json(res, 200, await tunnelManager.remove()); return;
       }
       if (path === "/admin/api/network" && req.method === "POST") {
         const body = z.object({ allowedAiBases: z.array(z.string().max(500)).max(50),
@@ -419,16 +481,18 @@ export async function startPersonalServer(options: ServerOptions) {
   }
   try { adminPort = await listen(admin, adminPort); apiPort = await listen(api, apiPort); }
   catch (error) {
-    admin.close(); api.close(); host.dispose(); throw error;
+    admin.close(); api.close(); await tunnelManager.close(); host.dispose(); throw error;
   }
   controller.startScheduler();
   return {
     apiPort, adminPort, controller, auth, store, runtime: host.runtime, git: gitStatus,
+    get tunnel() { return tunnelManager.status(); },
     allowedBases: () => [...installation.allowedAiBases],
     close: async () => {
       for (const close of streams) close();
       const closing = [api, admin].map(server => new Promise<void>(done => { server.close(() => done()); server.closeAllConnections(); }));
-      await controller.close(); await Promise.all(closing); await workspaces?.close(); host.dispose();
+      await controller.close(); await Promise.all(closing); await tunnelManager.close();
+      await workspaces?.close(); host.dispose();
     },
   };
 }

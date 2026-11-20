@@ -1,5 +1,12 @@
 # Changelog — BookWriter
 
+## 0.35.0 — 2026-11-20 — Pacchetto npm, aggiornamenti supervisionati e Cloudflare dedicato
+
+- **Pacchetto npm `bookwriter-personal-server`:** `npx setup/start/status/update/doctor`, runtime in `<dati>/private/npm-runtime`, installazioni senza script e `npm audit signatures` prima dell'attivazione. Il repository non viene clonato e il progetto frontend non viene compilato sul PC dell'autore.
+- **Aggiornamento dal client:** il server legge l'ultima release npm, mostra firma/attestazione e versione, richiede scope `update` e conferma della versione esatta; il supervisore arresta solo il proprio processo figlio, installa e verifica il pacchetto, poi riparte. Nessun URL o script dal client. Processo diretto `node dist/server.mjs` non può chiedere l'aggiornamento remoto.
+- **Cloudflare:** pannello locale 24105 con token-file dedicato e connettore figlio; altri `cloudflared`, servizi e tunnel esistenti vengono solo rilevati e mai modificati/riavviati. Route/DNS restano nella console Cloudflare dell'autore.
+- **Pubblicazione npm:** workflow OIDC con provenance e pacchetto ristretto a dist/README. Il primo release richiede una pubblicazione una tantum 0.1.0 dal maintainer, poi la configurazione del Trusted Publisher su npmjs.com; nessun `NPM_TOKEN` nel repository. Senza quell'autorizzazione esterna il package non esiste ancora e la UI indica il limite.
+
 ## 0.34.3 — 2026-11-19 — Guida server integrata e multilingua
 
 - **Server personale:** la pagina Impostazioni ora contiene una guida in italiano, inglese e spagnolo con link visibili a Node.js, Git, repository, ZIP del sorgente e documentazione. Comandi separati Windows PowerShell/Linux Bash, copia e download locale di script source-only. Sono script preparatori da ispezionare, non installer/updater firmati; il browser non li esegue e non espone il pannello admin tramite rete.

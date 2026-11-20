@@ -334,14 +334,15 @@ test("guida installazione server: lingue, link verificabili e script locale senz
   await page.goto("/impostazioni?tab=server");
   const guide = page.getByRole("region", { name: "Guida installazione server personale" });
   await expect(guide).toBeVisible();
-  await expect(guide.getByRole("heading", { name: /Scarica il sorgente e prepara il server|Download the source and prepare the server|Descarga el código y prepara el servidor/ })).toBeVisible();
+  await expect(guide.getByRole("heading", { name: /Installa il server con npm|Install the server with npm|Instala el servidor con npm/ })).toBeVisible();
+  await expect(guide.getByRole("link", { name: /Pacchetto npm ufficiale|Official npm package|Paquete npm oficial/ })).toHaveAttribute("href", "https://www.npmjs.com/package/bookwriter-personal-server");
   await expect(guide.getByRole("link", { name: "GitHub", exact: true })).toHaveAttribute("href", "https://github.com/KeyserDSoze/BookWriter");
   await expect(guide.getByRole("link", { name: /Scarica il sorgente ZIP|Download source ZIP|Descargar ZIP del código/ })).toHaveAttribute("href", /KeyserDSoze\/BookWriter\/archive\/refs\/heads\/main\.zip/);
   await expect(guide.getByRole("link", { name: /Guida completa|Full guide|Guía completa/ })).toHaveAttribute("href", /personal-server-development\.md/);
   await guide.getByLabel(/Lingua guida|Guide language|Idioma de la guía/).selectOption("en");
-  await expect(guide.getByRole("heading", { name: "Download the source and prepare the server" })).toBeVisible();
+  await expect(guide.getByRole("heading", { name: "Install the server with npm" })).toBeVisible();
   await guide.getByLabel("Operating system").selectOption("windows");
-  await expect(guide.locator("pre")).toContainText("Set-Location");
+  await expect(guide.locator("pre")).toContainText("bookwriter-personal-server setup");
   const download = page.waitForEvent("download");
   await guide.getByRole("button", { name: "Download preparation script" }).click();
   const file = await download;
@@ -349,7 +350,7 @@ test("guida installazione server: lingue, link verificabili e script locale senz
   const path = await file.path();
   expect(path).toBeTruthy();
   const text = await (await import("node:fs/promises")).readFile(path!, "utf8");
-  expect(text).toContain("git clone"); expect(text).toContain("npm ci --no-audit --no-fund"); expect(text).toContain("inspect before running");
+  expect(text).toContain("npx --yes bookwriter-personal-server setup"); expect(text).toContain("bookwriter-personal-server update"); expect(text).toContain("bookwriter-personal-server start"); expect(text).toContain("inspect before running");
   expect(text).not.toContain("apikey"); expect(text).not.toContain("--force");
   await guide.getByLabel("Operating system").selectOption("linux");
   const linuxDownload = page.waitForEvent("download");
@@ -358,9 +359,51 @@ test("guida installazione server: lingue, link verificabili e script locale senz
   expect(linuxFile.suggestedFilename()).toBe("bookwriter-server-setup.sh");
   const linuxPath = await linuxFile.path();
   const linuxText = await (await import("node:fs/promises")).readFile(linuxPath!, "utf8");
-  expect(linuxText).toContain("#!/usr/bin/env bash"); expect(linuxText).toContain("flock (util-linux)"); expect(linuxText).toContain("Git 2.32+");
+  expect(linuxText).toContain("#!/usr/bin/env bash"); expect(linuxText).toContain("bookwriter-personal-server doctor"); expect(linuxText).toContain("bookwriter-personal-server start");
   await guide.getByLabel("Guide language").selectOption("es");
-  await expect(guide.getByRole("heading", { name: "Descarga el código y prepara el servidor" })).toBeVisible();
+  await expect(guide.getByRole("heading", { name: "Instala el servidor con npm" })).toBeVisible();
   await expect(guide.getByRole("button", { name: "Descargar script de preparación" })).toBeEnabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
+
+test("la versione npm del server si aggiorna solo tramite supervisore verificato", async ({ page }) => {
+  const keys = generateKeyPairSync("ed25519");
+  const publicKey = keys.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+  const serverId = randomUUID(), token = "synthetic-personal-server-" + "u".repeat(40);
+  let requested: unknown;
+  await page.route("http://127.0.0.1:24106/**", async route => {
+    const request = route.request(), url = new URL(request.url());
+    const headers = { "Access-Control-Allow-Origin": "http://127.0.0.1:5173", "Access-Control-Allow-Headers": "apikey,content-type,if-match",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Access-Control-Expose-Headers": "ETag" };
+    if (request.method() === "OPTIONS") { await route.fulfill({ status: 204, headers }); return; }
+    if (url.pathname === "/api/v1/info") {
+      const nonce = url.searchParams.get("nonce")!;
+      await route.fulfill({ headers, json: { apiVersion: 1, serverVersion: "0.1.0", engineVersion: "0.35.0", bookFormatVersion: BOOK_FORMAT_VERSION,
+        serverId, publicKey, fingerprint: createHash("sha256").update(Buffer.from(publicKey, "base64")).digest("hex"), nonce,
+        signature: sign(null, Buffer.from(nonce + "\n" + serverId + "\n" + publicKey), keys.privateKey).toString("base64") } }); return;
+    }
+    if (url.pathname === "/api/v1/session") { await route.fulfill({ headers, json: { clientId: randomUUID(), label: "Test", scopes: ["read", "write", "run", "update"] } }); return; }
+    if (url.pathname === "/api/v1/updates") {
+      if (request.method() === "POST") { requested = request.postDataJSON(); await route.fulfill({ status: 202, headers, json: { accepted: true } }); return; }
+      await route.fulfill({ headers, json: { packageName: "bookwriter-personal-server", installedVersion: "0.1.0", latestVersion: "0.2.0",
+        available: true, canRequest: true, signed: true, message: "Pubblicata con firma npm e attestazione di provenienza." } }); return;
+    }
+    if (url.pathname === "/api/v1/settings") {
+      await route.fulfill({ headers: { ...headers, ETag: '"config:1"' }, json: { revision: 1, settings: projectSettings(DEFAULT_SETTINGS), endpointKeys: [], githubBooks: [] } }); return;
+    }
+    await route.fulfill({ status: 404, headers, json: {} });
+  });
+  page.on("dialog", dialog => dialog.accept());
+  await page.goto("/impostazioni?tab=server");
+  await page.getByRole("textbox", { name: "URL del server" }).fill("http://127.0.0.1:24106");
+  await page.getByLabel("Token BookWriter (header apikey)", { exact: true }).fill(token);
+  await page.getByRole("button", { name: "Verifica server", exact: true }).click();
+  await expect(page.getByText(/Identità firmata ricevuta/)).toBeVisible();
+  await page.getByRole("button", { name: "Collega server", exact: true }).click();
+  await expect(page.getByText(/Connessione verificata e token cifrato/)).toBeVisible();
+  const updates = page.getByRole("region", { name: "Versione server e aggiornamenti" });
+  await expect(updates.getByText(/installata 0\.1\.0 · npm 0\.2\.0/)).toBeVisible();
+  await updates.getByRole("button", { name: "Aggiorna server a 0.2.0" }).click();
+  await expect.poll(() => requested).toEqual({ installedVersion: "0.1.0", version: "0.2.0", confirmed: true });
+  await expect(page.getByText(/Aggiornamento accettato/)).toBeVisible();
 });

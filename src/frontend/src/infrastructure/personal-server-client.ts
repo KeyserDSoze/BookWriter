@@ -550,3 +550,18 @@ export async function listPersonalServerBranches(bookId: string): Promise<Person
   const response = await connectionRequest(connection, `/api/v1/books/${bookId}/branches`, { maxBytes: 1_048_576 });
   return branchListSchema.parse(response.data);
 }
+
+export async function personalServerUpdateStatus(): Promise<import("@engine/domain/personal-server").ServerUpdateInfo> {
+  const { serverUpdateInfoSchema } = await import("@engine/domain/personal-server");
+  const connection = await personalServerConnection();
+  if (!connection) throw new Error("Collega prima il server.");
+  const response = await connectionRequest(connection, "/api/v1/updates", { maxBytes: 16 * 1024 });
+  return serverUpdateInfoSchema.parse(response.data);
+}
+export async function requestPersonalServerUpdate(installedVersion: string, version: string): Promise<void> {
+  const { serverUpdateRequestSchema } = await import("@engine/domain/personal-server");
+  const connection = await personalServerConnection();
+  if (!connection) throw new Error("Collega prima il server.");
+  const body = serverUpdateRequestSchema.parse({ installedVersion, version, confirmed: true });
+  await connectionRequest(connection, "/api/v1/updates", { method: "POST", body, maxBytes: 16 * 1024 });
+}
