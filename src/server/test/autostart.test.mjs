@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 const active = { schemaVersion: 1, packageName: "bookwriter-personal-server", version: "0.1.4", activatedAt: "2026-11-20T00:00:00.000Z",
   packageRoot: "/home/user/data/private/npm-runtime/versions/0.1.4", serverPath: "/home/user/data/private/npm-runtime/versions/0.1.4/dist/server.mjs" };
 
-test("systemd unit runs the supervisor CLI with the exact data root", () => {
+test("systemd unit runs the supervisor CLI with the exact data root", { skip: process.platform !== "linux" }, () => {
   const unit = renderUserService(active, "/home/user/BookWriter data");
   assert.match(unit, /WantedBy=default\.target/);
   assert.ok(unit.includes("/cli.mjs") && unit.includes(' start --data-root "\/home\/user\/BookWriter data"'));
