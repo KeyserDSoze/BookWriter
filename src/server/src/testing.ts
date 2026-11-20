@@ -16,3 +16,4 @@ export { MemoryGitHub } from "@engine/testing/memory-git";
 export { projectBook } from "@engine/domain/narrarium";
 export { pullBook, startBranchMerge, finishMerge } from "@engine/index";
 export { checkNpmServerRelease, NPM_SERVER_PACKAGE } from "./npm-release";
+export * from "./autostart";

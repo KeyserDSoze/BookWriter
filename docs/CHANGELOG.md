@@ -1,5 +1,10 @@
 # Changelog — BookWriter
 
+## 0.35.6 — 2026-11-20 — Autostart Linux del server personale
+
+- `npx bookwriter-personal-server setup --autostart` installa un servizio **systemd-user** soltanto per BookWriter e lo avvia. Usa il CLI contenuto nel runtime npm e lo stesso `--data-root`; non modifica tunnel Cloudflare né altri servizi. Se l'utente non è lingered, il comando mostra il passo `sudo loginctl enable-linger <utente>` necessario per il riavvio senza login.
+- La guida multilingua distingue correttamente cartella di esecuzione, cache npm e cartella dati `--data-root`; mostra comandi completi e, per Cloudflare, separa tunnel già configurato e nuovo tunnel. Pacchetto server `0.1.4`.
+
 ## 0.35.3 — 2026-11-20 — Entrypoint CLI npm dai collegamenti `.bin`
 
 - Risolto `npx bookwriter-personal-server --help`: npm avvia il binario tramite un collegamento in `.bin`, non dal percorso diretto del file. Il guard entrypoint ora risolve il symlink con `realpath` prima del confronto. Aggiunto test sul collegamento npm. Pacchetto server 0.1.2.

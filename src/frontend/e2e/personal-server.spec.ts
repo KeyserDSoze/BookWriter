@@ -361,6 +361,7 @@ test("guida installazione server: lingue, link verificabili e script locale senz
   await guide.getByRole("button", { name: "Download preparation script" }).click();
   const linuxFile = await linuxDownload;
   expect(linuxFile.suggestedFilename()).toBe("bookwriter-server-setup.sh");
+
   const linuxPath = await linuxFile.path();
   const linuxText = await (await import("node:fs/promises")).readFile(linuxPath!, "utf8");
   expect(linuxText).toContain("#!/usr/bin/env bash"); expect(linuxText).toContain("mkdir -p"); expect(linuxText).toContain("cd "); expect(linuxText).toContain("bookwriter-personal-server doctor"); expect(linuxText).toContain("bookwriter-personal-server start");

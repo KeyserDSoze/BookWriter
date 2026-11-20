@@ -16,7 +16,7 @@ Linux/macOS shell:
 ```bash
 mkdir -p "$HOME/BookWriter-server"
 cd "$HOME/BookWriter-server"
-npx --yes bookwriter-personal-server setup --data-root "$HOME/BookWriter-server-data"
+npx --yes bookwriter-personal-server setup --autostart --data-root "$HOME/BookWriter-server-data"
 npx --yes bookwriter-personal-server doctor --data-root "$HOME/BookWriter-server-data"
 npx --yes bookwriter-personal-server start --data-root "$HOME/BookWriter-server-data"
 ```
@@ -32,6 +32,8 @@ npx --yes bookwriter-personal-server start --data-root "$HOME\BookWriter-server-
 ```
 
 Puoi eseguire `npx` da qualunque cartella: il pacchetto va nella cache npm. **Book e segreti non seguono quella cartella corrente**: seguono sempre il valore esplicito di `--data-root`. Usa lo stesso valore a ogni setup/start/update. Il programma non legge da `--data-root` solo perché coincide con la directory corrente.
+
+Su Linux, aggiungere `--autostart` a `setup` crea il servizio utente `bookwriter-personal-server.service`, lo abilita e lo avvia. Per ripartire dopo il reboot anche senza un login dell'utente può essere necessario `sudo loginctl enable-linger <utente>`; il comando lo segnala. Su Windows un servizio automatico non è ancora incluso e `setup --autostart` rifiuta esplicitamente.
 
 `setup` non chiede PAT/API key/tunnel token. Installa una versione esatta del pacchetto in `<dati>/private/npm-runtime/versions/<version>`, senza lifecycle script (`--ignore-scripts`), e richiede `npm audit signatures` prima di attivarla. Non clona BookWriter, non esegue `npm ci` sul frontend e non compila il progetto.
 

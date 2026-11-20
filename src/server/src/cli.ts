@@ -7,9 +7,10 @@ import {
   RuntimeInstaller, assertExactSemver, assertSupportedNode, defaultDataRoot, PACKAGE_NAME,
   sanitizedNpmEnvironment, superviseServer,
 } from "./runtime-install";
+import { autostartStatus, configureAutostart } from "./autostart";
 
-const HELP = `Uso:\n  npx ${PACKAGE_NAME} setup [--data-root DIRECTORY] [--no-prompt]\n  npx ${PACKAGE_NAME} start [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} status\n  npx ${PACKAGE_NAME} doctor\n  npx ${PACKAGE_NAME} update [--data-root DIRECTORY] [--to VERSION]\n`;
-interface ParsedCommand { command: string; dataRoot?: string; requestedVersion?: string; noPrompt?: boolean }
+const HELP = `Uso:\n  npx ${PACKAGE_NAME} setup [--data-root DIRECTORY] [--autostart] [--no-prompt]\n  npx ${PACKAGE_NAME} start [--data-root DIRECTORY]\n  npx ${PACKAGE_NAME} status\n  npx ${PACKAGE_NAME} doctor\n  npx ${PACKAGE_NAME} update [--data-root DIRECTORY] [--to VERSION]\n`;
+interface ParsedCommand { command: string; dataRoot?: string; requestedVersion?: string; noPrompt?: boolean; autostart?: boolean }
 function parseCommand(argv: readonly string[]): ParsedCommand {
   const command = argv[0];
   if (!command || command === "--help" || command === "help") return { command: "help" };
@@ -22,6 +23,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand {
       parsed.dataRoot = value; continue;
     }
     if (flag === "--no-prompt" && command === "setup") { parsed.noPrompt = true; continue; }
+    if (flag === "--autostart" && command === "setup") { parsed.autostart = true; continue; }
     if (flag === "--to" && command === "update") {
       const value = argv[++index]; if (!value) throw new Error("--to richiede una versione semver esatta.");
       assertExactSemver(value); parsed.requestedVersion = value; continue;
@@ -67,7 +69,11 @@ export async function main(argv = process.argv.slice(2), environment: NodeJS.Pro
       assertSupportedNode();
       const active = await installer.installVersion(serverPackage.version, { bootstrapRegistryRelease: true });
       output(`BookWriter Personal Server ${active.version} installato in ${dataRoot}.`);
-      output(`Avvia con: npx ${PACKAGE_NAME} start`);
+      if (parsed.autostart) {
+        const configured = await configureAutostart(active, dataRoot, environment);
+        output(configured.message);
+        output(`Unità: ${configured.servicePath}`);
+      } else output(`Avvia con: npx ${PACKAGE_NAME} start --data-root "${dataRoot}"`);
       output("Amministrazione locale: http://127.0.0.1:24105 (la porta non va esposta). API locale: 24106.");
       return 0;
     }
@@ -82,6 +88,7 @@ export async function main(argv = process.argv.slice(2), environment: NodeJS.Pro
       const state = await installer.installerState(); const active = await installer.activeRuntime();
       output(`Pacchetto: ${PACKAGE_NAME}`); output(`Directory dati: ${dataRoot}`);
       output(`Versione attiva: ${active?.version ?? state?.activeVersion ?? "non configurata"}`);
+      output(`Autostart: ${await autostartStatus(environment.HOME) ?? "non configurato"}`);
       return active || state ? 0 : 1;
     }
     if (parsed.command === "doctor") {
