@@ -5,7 +5,7 @@ import { PromptExceedsContextError } from "./context-guard";
 import { ReplyRejectedError } from "./reply-rejected";
 import { ProviderHeaderTimeoutError } from "../infrastructure/ai-header-timeout";
 import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
-import { EmptyProviderContentError, MalformedProviderContentError, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
+import { EmptyProviderContentError, EmptyToolCallError, MalformedProviderContentError, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
 import { AiBudgetStop } from "../domain/ai-budget";
 import { BookRevisionConflict } from "../core/errors";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
@@ -22,6 +22,8 @@ describe("classificazione fail-closed dei retry automatici", () => {
     ["JSON illeggibile", new ProviderResponseReadError("Il provider AI non ha restituito JSON valido.")],
     ["connessione persa", new ProviderResponseReadError("Connessione con il provider interrotta durante lo streaming AI.")],
     ["risposta vuota", new EmptyProviderContentError("openai", "m")],
+    ["reasoning senza risposta", new EmptyProviderContentError("openai", "m", undefined, true)],
+    ["funzione chiamata con {}", new EmptyToolCallError("openai", "m")],
     ["contenuto malformato", new MalformedProviderContentError("openai", "m")],
     ["risposta scartata", new ReplyRejectedError(new ZodError([]))],
   ])("ritenta: %s", (_name, error) => expect(isAutoRetryable(error)).toBe(true));
@@ -31,6 +33,7 @@ describe("classificazione fail-closed dei retry automatici", () => {
     ["valore non Error", "HTTP 503"],
     ["prompt oltre il contesto", new PromptExceedsContextError("Prompt troppo grande.")],
     ["risposta troncata", new TruncatedProviderContentError("openai", "m")],
+    ["limite finito durante il reasoning", new TruncatedProviderContentError("openai", "m", undefined, true)],
     ["stream oltre il limite", new ProviderResponseReadError("Lo stream AI ha superato il limite di sicurezza di dimensione.")],
     ["reasoning senza testo", new ProviderResponseReadError("Il modello ha esaurito il limite di lunghezza o di contesto prima di scrivere la risposta.")],
     ["HTTP 400", new Error("Errore del provider AI (HTTP 400). Verifica.")],

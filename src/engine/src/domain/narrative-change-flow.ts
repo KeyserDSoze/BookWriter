@@ -41,6 +41,12 @@ export function reopenForRewrite(book: BookProject, sceneIds: readonly string[],
     return;
   }
   for (const chapter of chapters) { chapter.frozenAt = undefined; chapter.summary = undefined; chapter.bookSummaryAtFreeze = undefined; }
+  // With no later frozen chapter the book synopsis was the one of a reopened chapter: back to the previous
+  // snapshot, as every other reopening does. Later freezes (and their synopsis) stay as they are. Legacy
+  // chapters without any snapshot keep the synopsis as it was: a style edit is never blocked by it.
+  if (!book.chapters.some(chapter => chapter.number > earliest.number && chapter.frozenAt)) {
+    try { book.bookSummary = synopsisBeforeChapter(book.chapters, earliest.number); } catch { /* legacy: unchanged */ }
+  }
   // A running review of the same or a later chapter can no longer pass the prior-freeze gate.
   const active = book.editorialCycle && book.chapters.find(c => c.id === book.editorialCycle!.chapterId);
   if (active && active.number >= earliest.number) {

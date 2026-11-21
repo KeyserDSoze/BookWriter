@@ -124,6 +124,13 @@ describe("Guardia sul giudizio freeze salvato prima del summary",()=>{
     expect(editorialRecoveryProblem(book)).toMatch(/sinossi progressive/);
     cycle.runningChapterSummary=
       "Nel primo incontro Mara vede il guardiano davanti al portone.";
+    cycle.runningBookSummary=undefined;
+    // Since the hierarchical synopses only the last segment writes the book synopsis.
+    expect(()=>assertSavedEditorialFreezeJudgmentIntegrity(book,cycle)).not.toThrow();
+    cycle.runningBookSummary="corta";
+    expect(()=>assertSavedEditorialFreezeJudgmentIntegrity(book,cycle))
+      .toThrow(/sinossi progressive/);
+    cycle.runningBookSummary=undefined;
     cycle.summaryCursor=2;
     expect(()=>assertSavedEditorialFreezeJudgmentIntegrity(book,cycle))
       .toThrow(/cursore delle sinossi/);

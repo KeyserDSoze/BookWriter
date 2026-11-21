@@ -28,8 +28,11 @@ export class EmptyProviderContentError extends ProviderContentError {
   constructor(
     endpointId: string, modelId: string,
     usage?: { prompt_tokens?: unknown; completion_tokens?: unknown },
+    afterReasoning = false,
   ) {
-    super("Il provider AI ha risposto senza testo utilizzabile.", endpointId, modelId, usage);
+    super(afterReasoning
+      ? "Il modello ha terminato dopo il ragionamento senza scrivere la risposta: nessun testo applicato. Se si ripete, abbassa il thinking per questo compito."
+      : "Il provider AI ha risposto senza testo utilizzabile.", endpointId, modelId, usage);
     this.name = "EmptyProviderContentError";
   }
 }
@@ -43,13 +46,27 @@ export class MalformedProviderContentError extends ProviderContentError {
     this.name = "MalformedProviderContentError";
   }
 }
+/** The forced submit function was called with `{}`: no result, but a new attempt usually delivers it. */
+export class EmptyToolCallError extends ProviderContentError {
+  constructor(
+    endpointId: string, modelId: string,
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown },
+  ) {
+    super("Il modello ha chiamato la funzione di consegna con argomenti vuoti (\"{}\"): nessun risultato. Nessuna modifica applicata. Se si ripete, imposta «Output strutturato» su Disattivato per questo endpoint o togli il tag «tools» a questo modello.",
+      endpointId, modelId, usage);
+    this.name = "EmptyToolCallError";
+  }
+}
 /** The model stopped on its length/context limit: the text is cut mid-way and must never become canon. */
 export class TruncatedProviderContentError extends ProviderContentError {
   constructor(
     endpointId: string, modelId: string,
     usage?: { prompt_tokens?: unknown; completion_tokens?: unknown },
+    duringReasoning = false,
   ) {
-    super("Risposta troncata: il modello si è fermato per limite di lunghezza o di contesto. Nessun testo applicato. Con un modello che ragiona, il ragionamento consuma lo stesso limite di output della risposta: alza il «Max output» sulla piattaforma e i token di output del modello nelle Impostazioni, abbassa il thinking, oppure aumenta il contesto (LM Studio) o riduci il capitolo.",
+    super(duringReasoning
+      ? "Il modello ha esaurito il limite di output o di contesto mentre ragionava, prima di scrivere la risposta: nessun testo applicato. Il ragionamento consuma lo stesso limite della risposta: abbassa il thinking per questo compito, alza i token di output del modello nelle Impostazioni e il «Max output» sulla piattaforma, oppure aumenta il contesto (LM Studio)."
+      : "Risposta troncata: il modello si è fermato per limite di lunghezza o di contesto. Nessun testo applicato. Con un modello che ragiona, il ragionamento consuma lo stesso limite di output della risposta: alza il «Max output» sulla piattaforma e i token di output del modello nelle Impostazioni, abbassa il thinking, oppure aumenta il contesto (LM Studio) o riduci il capitolo.",
       endpointId, modelId, usage);
     this.name = "TruncatedProviderContentError";
   }

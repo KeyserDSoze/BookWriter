@@ -89,6 +89,16 @@ describe("Motore di modifica: regole pure", () => {
     reopenForRewrite(style, ["scene:001:002"], "single");
     expect(style.chapters.map(c => !!c.frozenAt)).toEqual([false, true]);
     expect(style.bookSummary).toBe("Elena incontra Markus, che sa del Consiglio.");
+    // Reopening the last frozen chapter: its synopsis must not stand as the one «until the previous chapter».
+    const last = knowledgeBook();
+    reopenForRewrite(last, ["scene:002:001"], "single");
+    expect(last.chapters.map(c => !!c.frozenAt)).toEqual([true, false]);
+    expect(last.bookSummary).toBe("Elena cerca il fratello e trova un indizio.");
+    // Legacy chapters with no snapshot and no synopsis never block a style edit: the synopsis stays as it was.
+    const legacy = knowledgeBook();
+    legacy.chapters[0]!.bookSummaryAtFreeze = undefined; legacy.chapters[0]!.summary = undefined;
+    expect(() => reopenForRewrite(legacy, ["scene:002:001"], "single")).not.toThrow();
+    expect(legacy.bookSummary).toBe("Elena incontra Markus, che sa del Consiglio.");
   });
   it("dopo le riscritture la modifica resta in revisione fino al nuovo congelamento, poi è completata", () => {
     const book = knowledgeBook();

@@ -114,4 +114,32 @@ describe("Piano dei capitoli in più passi per i libri lunghi", () => {
     expect(calls[0]!.prompt).toContain("Crea un piano completo");
     expect((await getBook(book.id))!.phase).toBe("prose");
   });
+
+  it("un capitolo restituito nel formato del piano completo dà le sue scene, mai un libro più corto", async () => {
+    const book = outlineBook(7);
+    await saveBook(book, false);
+    const runner = new AutopilotRunner();
+    const oneChapter = JSON.stringify({ chapters: [{ title: "Capitolo 1", purpose: "Scopo del capitolo 1",
+      scenes: [{ title: "Arrivo", objective: "Arrivare alla stazione" }, { title: "Partenza", objective: "Lasciare la città" }] }] });
+    script(runner, [list(7), oneChapter]);
+    await runner.run(book.id, async () => undefined);
+    const saved = (await getBook(book.id))!;
+    expect(saved.chapters).toHaveLength(7);
+    expect(saved.chapters[0]!.scenes.map(scene => scene.title)).toEqual(["Arrivo", "Partenza"]);
+    expect(saved.chapters[1]!.scenes).toHaveLength(0);
+    expect(saved.phase).toBe("outline");
+  });
+
+  it("un piano completo con un numero di capitoli diverso da quello chiesto non viene applicato", async () => {
+    const book = outlineBook(3);
+    await saveBook(book, false);
+    const runner = new AutopilotRunner();
+    script(runner, [JSON.stringify({ chapters: [{ title: "C1", purpose: "Scopo del capitolo 1",
+      scenes: [{ title: "Scena", objective: "Obiettivo della scena" }] }] })]);
+    await runner.run(book.id, async () => undefined);
+    const saved = (await getBook(book.id))!;
+    expect(saved.status).toBe("error");
+    expect(saved.previousError).toMatch(/esattamente 3 capitoli/);
+    expect(saved.chapters).toEqual([]);
+  });
 });

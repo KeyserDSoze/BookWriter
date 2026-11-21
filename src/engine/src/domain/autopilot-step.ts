@@ -4,6 +4,7 @@ import { parseEditorialProfiles } from "./editorial-profiles";
 import { activeManualReview } from "./manual-review";
 import { describeManualReview } from "./manual-review-flow";
 import { scenesNeedingSummary } from "./scene-summaries";
+import { memoryNeedsCompaction } from "./memory-delta";
 import type { RetrySchedule } from "../core/retry-policy";
 
 export type PipelineStage = "ideation" | "planning" | "writing" | "editing" | "done";
@@ -160,6 +161,9 @@ export function describeNextAutopilotStep(book: BookProject, operational?: { ret
             chapterNumber: ready.number, detail: "Il capitolo viene congelato solo dopo il giudizio del direttore e le eventuali correzioni." });
         } catch { return view("Profili della redazione da verificare.", { blocked: "Apri Modelli e redazione e correggi i profili." }); }
       }
+      if (!book.revision && memoryNeedsCompaction(book.memory))
+        return view("Compattazione della memoria narrativa.", {
+          detail: "La memoria è troppo grande per i prompt: prima vengono tolti gli eventi ripetuti, poi il modello riassume la cronologia o le schede senza perdere fatti." });
       for (const chapter of book.chapters) {
         const scene = chapter.scenes.find(s => s.status !== "canon");
         if (scene) return view(`Scrittura della ${sceneLabel(chapter, scene)}.`, {
@@ -218,10 +222,15 @@ export function describeNextAutopilotStep(book: BookProject, operational?: { ret
         case "reconcile":
           return view(`Aggiornamento della memoria dopo le correzioni del ${where}.`, {
             acceptsAuthorNotes: true, chapterNumber: chapter.number });
-        case "summary":
+        case "summary": {
+          let total = 0;
+          try { total = chapterSegments(chapter).length; } catch { /* the board panel explains invalid chapters */ }
+          const at = Math.min((cycle.summaryCursor ?? 0) + 1, total);
           return view(cycle.forcedClose
             ? `Sinossi e congelamento del ${where}, chiuso senza altra verifica (${cycle.forcedClose.by === "author" ? "decisione dell'autore" : "decisione del direttore"}).`
-            : `Sinossi e congelamento del ${where}.`, { chapterNumber: chapter.number });
+            : `Sinossi e congelamento del ${where}.`, { chapterNumber: chapter.number,
+            detail: total > 1 ? `Segmento ${at} di ${total}: la sinossi del libro si aggiorna solo con l'ultimo, poi il capitolo viene congelato.` : undefined });
+        }
         case "blocked":
           if (book.directorDecidesWhenBlocked === true && !cycle.judgment)
             return view(`Il direttore chiude da solo il ${where}: le tornate previste sono finite.`, { chapterNumber: chapter.number });

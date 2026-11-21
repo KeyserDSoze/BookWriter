@@ -9,6 +9,8 @@ export interface StreamCompletion {
     finish_reason?: string;
   }>;
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+  /** Characters of reasoning the provider streamed; never the reasoning itself. */
+  reasoningCharacters?: number;
 }
 
 export const CHAT_STREAM_TIMEOUT_MS = 600_000;
@@ -198,15 +200,13 @@ export async function readChatCompletionStream(
       // A terminated connection without [DONE] is not an accepted result.
       if(!done)throw invalid();
     }
-    if(!text.trim() && !toolArgs.trim())throw new ProviderResponseReadError(finishReason==="length"
-      ? "Il modello ha esaurito il limite di lunghezza o di contesto prima di scrivere la risposta (di solito per il reasoning). Nessun output applicato: aumenta il contesto in LM Studio o abbassa il thinking."
-      : reasoningChars>0
-      ? "Il provider ha terminato dopo il reasoning ma senza testo finale: nessun output applicato."
-      : "Il provider ha terminato senza generare una risposta testuale: nessun output applicato.");
+    // A reply without text (reasoning only, or cut by the length limit) is still a complete stream: the
+    // caller rejects it with the provider usage, so a possibly billed attempt is accounted for.
     completed=true;
     return {choices:[{message:{content:text,
       ...(toolArgs.trim()?{tool_calls:[{function:{...(toolName===undefined?{}:{name:toolName}),arguments:toolArgs}}]}:{})},
-      ...(finishReason===undefined?{}:{finish_reason:finishReason})}],usage};
+      ...(finishReason===undefined?{}:{finish_reason:finishReason})}],usage,
+      ...(reasoningChars>0?{reasoningCharacters:reasoningChars}:{})};
   } catch(e){
     if(signal.aborted)throw new DOMException("Generazione interrotta.", "AbortError");
     if(expired)throw timeout();

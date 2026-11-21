@@ -98,7 +98,8 @@ describe("Direttore editoriale a lotti con limite di input", () => {
       required: string[]; properties: { decisions: { description: string; items: { required: string[]; properties: Record<string, { enum?: string[] }> } } } };
     expect(schema.required).toEqual(["reasoning", "decisions"]);
     expect(schema.properties.decisions.description).toContain("OGNI rilievo");
-    expect(schema.properties.decisions.items.required).toEqual(["findingId", "action", "rationale"]);
+    // remediation is required in the function (empty for a reject): a constrained call drops fields with a default.
+    expect(schema.properties.decisions.items.required).toEqual(["findingId", "action", "rationale", "remediation"]);
     expect(schema.properties.decisions.items.properties.findingId!.enum).toEqual(allFindings(cycle).map(f => f.id));
     // No finding of this cycle needs the optional structured reviews.
     expect(schema.properties.decisions.items.properties.narrativeReview).toBeUndefined();
@@ -132,5 +133,25 @@ describe("Direttore editoriale a lotti con limite di input", () => {
     expect(judgeBatchesOf(cycle)).toEqual([]);
     cycle.judgeBatches = [{ findingIds: ["x"], raw: 5 as never, critique: false, ruleChecks: false }];
     expect(judgeBatchesOf(cycle)).toEqual([]);
+    // A batch the final merge could not parse would make every later batch fail: it is dropped too.
+    const first = allFindings(cycle)[0]!.id;
+    cycle.judgeBatches = [{ findingIds: [first], critique: false, ruleChecks: false, raw: JSON.stringify({
+      reasoning: "Lotto salvato con una correzione più lunga del limite di una decisione.",
+      decisions: [{ findingId: first, action: "accept", rationale: "La frase va corretta con attenzione.",
+        remediation: "Riscrivere la frase. ".repeat(90) }] }) }];
+    expect(judgeBatchesOf(cycle)).toEqual([]);
+  });
+  it("un lotto che accoglie una proposta troppo lunga senza scrivere la correzione è rifiutato e non viene salvato", () => {
+    const { book, cycle } = fixture();
+    const chapter = book.chapters[0]!;
+    const finding = allFindings(cycle)[0]!;
+    finding.remediation = "Valutare una variazione di ritmo senza cambiare i fatti. ".repeat(30).trim();
+    expect(finding.remediation.length).toBeGreaterThan(1600);
+    const scope = { findingIds: new Set([finding.id]), critique: false, ruleChecks: false };
+    expect(() => recordJudgeBatch(book, cycle, chapter, scope, JSON.stringify({
+      reasoning: "Il lotto è stato valutato criticamente, senza dare per corretti i rapporti dei revisori.",
+      decisions: [{ findingId: finding.id, action: "accept", rationale: "La variazione di ritmo è necessaria.", remediation: "" }],
+    }))).toThrow(/senza remediation concreta/);
+    expect(cycle.judgeBatches).toBeUndefined();
   });
 });

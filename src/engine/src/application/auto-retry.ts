@@ -2,7 +2,7 @@ import type { EndpointProfile } from "../domain/types";
 import { PromptExceedsContextError } from "./context-guard";
 import { ProviderHeaderTimeoutError } from "../infrastructure/ai-header-timeout";
 import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
-import { EmptyProviderContentError, MalformedProviderContentError, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
+import { EmptyProviderContentError, EmptyToolCallError, MalformedProviderContentError, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
 import { ReplyRejectedError } from "./reply-rejected";
 
 export const DEFAULT_AUTO_RETRIES = 2;
@@ -32,7 +32,7 @@ export function isAutoRetryable(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   if (DETERMINISTIC_LIMIT.test(error.message)) return false;
   if (error instanceof ProviderResponseReadError || error instanceof EmptyProviderContentError ||
-      error instanceof MalformedProviderContentError) return true;
+      error instanceof MalformedProviderContentError || error instanceof EmptyToolCallError) return true;
   return TRANSIENT_PROVIDER.test(error.message);
 }
 

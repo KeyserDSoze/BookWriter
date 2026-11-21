@@ -3,6 +3,10 @@ import type { Chapter } from "./types";
 export const EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS = 25;
 export const EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS = 6000;
 export const EDITORIAL_BOOK_SUMMARY_MAX_CHARS = 9000;
+/** Lengths asked of the model, well below the hard limits: a synopsis that grows at every
+ * segment and every chapter would otherwise reach the limit and be rejected. */
+export const EDITORIAL_CHAPTER_SUMMARY_TARGET_CHARS = 2500;
+export const EDITORIAL_BOOK_SUMMARY_TARGET_CHARS = 6000;
 
 export function isValidEditorialSummary(value: unknown, maximum: number): value is string {
   return typeof value === "string" &&

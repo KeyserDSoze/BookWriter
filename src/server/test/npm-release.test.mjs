@@ -79,9 +79,10 @@ test("API advertises and accepts only the exact signed npm version under the CLI
     assert.equal(read.status, 200);
     const info = await read.json();
     assert.equal(info.available, true); assert.equal(info.canRequest, true); assert.equal(info.latestVersion, VERSION); assert.equal(info.signed, true);
+    const installedVersion = JSON.parse(await fs.readFile(new URL("../package.json", import.meta.url), "utf8")).version;
     const update = await nativeFetch(base + "/api/v1/updates", {
       method: "POST", headers: { ...auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ installedVersion: "0.1.8", version: VERSION, confirmed: true }),
+      body: JSON.stringify({ installedVersion, version: VERSION, confirmed: true }),
     });
     assert.equal(update.status, 202, await update.text());
     const installer = new RuntimeInstaller({ dataRoot: root });

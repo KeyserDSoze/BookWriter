@@ -474,6 +474,7 @@ export async function startPersonalServer(options: ServerOptions) {
       }
       if (path === "/admin/api/status" && req.method === "GET") {
         json(res, 200, { serverId: installation.serverId, fingerprint, apiPort, ...auth.list(),
+          serverVersion: serverPackage.version, engineVersion: frontendPackage.version,
           allowedAiBases: installation.allowedAiBases, origins: installation.origins,
           publicUrl: installation.publicUrl ?? "", adminPublicUrl: installation.adminPublicUrl ?? installation.publicUrl ?? "",
           allowRemoteAdmin: installation.allowRemoteAdmin !== false,

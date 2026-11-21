@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { knowledgeBook } from "./__fixtures__/knowledge";
-import { describeEntities, describeEvents, emptyKnowledge, knowledgeBaseSchema, mergeKnowledgeReply, parseKnowledge,
+import { describeEntities, describeEvents, emptyKnowledge, knowledgeBaseSchema, mergeKnowledgeReply, mergeKnowledgeWithMemory, parseKnowledge,
   syncKnowledgeWithMemory } from "./knowledge";
 import { analyzeImpact, dependentEvents, entityReferences, entityState, eventState, relevantKnowledge, timelineOrders } from "./knowledge-index";
 
@@ -47,6 +47,42 @@ describe("Knowledge base narrativa", () => {
     const kb = syncKnowledgeWithMemory(emptyKnowledge(), { characters: { Ada: "Una testimone." }, locations: {}, items: { Chiave: "Apre il registro." }, factions: {} }, now);
     expect(kb.entities.map(e => [e.id, e.status, e.origin])).toEqual([["character:ada", "draft", "written"], ["item:chiave", "draft", "written"]]);
     expect(syncKnowledgeWithMemory(kb, { characters: { Ada: "x" }, locations: {}, items: {}, factions: {} }, now).entities).toHaveLength(2);
+  });
+  it("una voce di memoria che la risposta definisce come alias diventa quella scheda, non una seconda", () => {
+    const memory = { characters: { Mara: "La protagonista.", Lena: "Una pescatrice." }, locations: {}, items: {}, factions: {} };
+    const reply = { entities: [{ type: "character", name: "Mara Venturi", aliases: ["Mara"], summary: "Cerca il padre." }],
+      events: [{ title: "Mara incontra Lena", involves: ["Mara", "Lena"] }] };
+    const kb = mergeKnowledgeWithMemory(emptyKnowledge(), memory, reply, { origin: "written", reason: "r", now });
+    const characters = kb.entities.filter(e => e.type === "character");
+    expect(characters.map(e => e.name).sort()).toEqual(["Lena", "Mara Venturi"]);
+    const mara = characters.find(e => e.name === "Mara Venturi")!;
+    expect(mara.aliases).toEqual(["Mara"]);
+    expect(kb.events[0]!.involves).toEqual([mara.id, characters.find(e => e.name === "Lena")!.id]);
+    // Without a reply it is the plain memory sync.
+    expect(mergeKnowledgeWithMemory(emptyKnowledge(), memory, undefined, { origin: "written", reason: "r", now }).entities
+      .map(e => e.name)).toEqual(["Mara", "Lena"]);
+    // A collision with a sheet that already exists is still the model's error, said with the names.
+    const existing = syncKnowledgeWithMemory(emptyKnowledge(), memory, now);
+    expect(() => mergeKnowledgeWithMemory(existing, memory, reply, { origin: "written", reason: "r", now }))
+      .toThrow(/«Mara» di «Mara Venturi»/);
+  });
+  it("alias ripetuti o uguali al nome della scheda non sono un errore; una collisione con un'altra scheda dice quale", () => {
+    const kb = knowledgeBook().knowledge!;
+    const merged = mergeKnowledgeReply(kb, { entities: [{ type: "character", name: "Elena", aliases: ["elena", "La detective", "la detective "] }] },
+      { origin: "written", reason: "r", now });
+    expect(merged.entities.find(e => e.id === "character:elena")!.aliases).toContain("La detective");
+    expect(merged.entities.find(e => e.id === "character:elena")!.aliases.filter(a => a.toLowerCase().trim() === "la detective")).toHaveLength(1);
+    expect(merged.entities.find(e => e.id === "character:elena")!.aliases.map(a => a.toLowerCase())).not.toContain("elena");
+    expect(() => mergeKnowledgeReply(kb, { entities: [{ type: "character", name: "Elena", aliases: ["Markus"] }] },
+      { origin: "written", reason: "r", now })).toThrow(/«Markus» di «Elena»/);
+  });
+  it("un evento con lo stesso titolo a meno di punteggiatura e maiuscole è lo stesso evento", () => {
+    const kb = knowledgeBook().knowledge!;
+    const before = kb.events.length;
+    const merged = mergeKnowledgeReply(kb, { events: [{ title: "incontro con l'informatore!", summary: "Elena incontra Markus al porto." }] },
+      { origin: "written", reason: "r", now });
+    expect(merged.events).toHaveLength(before);
+    expect(merged.events.find(e => e.title === "Incontro con l'informatore")!.summary).toBe("Elena incontra Markus al porto.");
   });
   it("una scheda bozza che rispecchia ancora la memoria la segue; una scheda toccata dall'autore no", () => {
     const empty = { characters: {}, locations: {}, items: {}, factions: {} };

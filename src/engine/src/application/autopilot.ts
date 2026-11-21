@@ -5,11 +5,12 @@ import { launchModelCall, ReviewCallPool, startLiveFor, type LaunchInput } from 
 import { finishLiveAi } from "../infrastructure/ai-observability";
 import { taskReasoningChoice } from "../domain/task-reasoning";
 import { ProviderResponseReadError } from "../infrastructure/ai-completion-response";
-import { keepObservedUsageOnRejectedReply, TruncatedProviderContentError } from "../infrastructure/ai-provider-error";
+import { keepObservedUsageOnRejectedReply, ProviderContentError } from "../infrastructure/ai-provider-error";
 import { assertScenePlausible } from "../domain/prose-sanity";
-import { applyMemoryResponse, assertCompactionShrinks, DELTA_REPLY_RULE, DELTA_REPLY_RULE_NO_SUMMARY,
-  MEMORY_DELTA_DESCRIPTIONS, MEMORY_FULL_DESCRIPTIONS, memoryDeltaToolShape,
-  memoryNeedsCompaction, memorySchema } from "../domain/memory-delta";
+import { applyMemoryResponse, applyTimelineCompaction, assertCompactionShrinks, COMPACT_TIMELINE_DESCRIPTIONS, COMPACT_TIMELINE_TARGET,
+  compactionStage, compactTimelineSchema, DELTA_REPLY_RULE, DELTA_REPLY_RULE_NO_SUMMARY,
+  MEMORY_COMPACTION_DESCRIPTIONS, MEMORY_DELTA_DESCRIPTIONS, memoryCompactionToolShape, memoryDeltaToolShape,
+  memoryNeedsCompaction, withoutRepeatedEvents } from "../domain/memory-delta";
 import { AUTO_RETRY_BACKOFF, DEFAULT_AUTO_RETRIES, endpointAutoRetry, isAutoRetryable, retryDelay } from "./auto-retry";
 import { correctiveRetryNote, ReplyRejectedError } from "./reply-rejected";
 import { PromptExceedsContextError } from "./context-guard";
@@ -17,10 +18,11 @@ import { parseJsonReply } from "../domain/json-reply";
 import { BookRevisionConflict, getBook, loadSettings, saveActivity, saveBook, saveBookAndActivity } from "../core/store";
 import { withWriterGuard } from "./writer-guard";
 import { RemoteWriterLost } from "../infrastructure/github-lease";
-import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, blockedByRoundLimit, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, forceCloseCycle, judgeBatchesOf, mandatoryRuleRejections, nextJudgmentScope, nextReviewSlot, recordJudgeBatch, judgeToolSchema, REVIEW_REPORT_TOOL, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
+import { acceptedRepairs, adjudicationPrompt, archiveEditorialRound, assertCurrentEditorialReconcileStep, assertEditorialReviewCoverage, assertSavedEditorialFreezeJudgmentIntegrity, assertCurrentEditorialSummaryStep, beginNextRound, blockOnMandatoryRules, blockedByRoundLimit, captureEditorialReconcileStep, chapterSegments, createEditorialCycle, cycleRoles, forceCloseCycle, judgeBatchesOf, mandatoryRuleRejections, nextJudgmentScope, nextReviewSlot, PromptBlockTooLarge, recordJudgeBatch, judgeToolSchema, REVIEW_REPORT_TOOL, repairPrompt, reviewConcurrency, reviewerPrompt, reviewerTask, reviewSlotAt, validateJudgment, validateReport } from "../domain/editorial-board";
 import { SUBMIT_TOOL_NOTE, describeUnder, toolOutputAvailable, toolParameters, type ToolSchema } from "../domain/structured-output";
 import { assertCurrentHistoricalPromptDossier, captureHistoricalPromptDossier } from "../domain/historical-research";
-import { EDITORIAL_BOOK_SUMMARY_MAX_CHARS, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS, EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS,
+import { EDITORIAL_BOOK_SUMMARY_MAX_CHARS, EDITORIAL_BOOK_SUMMARY_TARGET_CHARS, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS,
+  EDITORIAL_CHAPTER_SUMMARY_TARGET_CHARS, EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS,
   isValidEditorialSummary, synopsisBeforeChapter } from "../domain/editorial-summary";
 import { assertPriorChaptersFrozen, completeContinuityRecheck } from "../domain/cross-chapter-continuity";
 import { routeFor } from "../domain/types";
@@ -36,7 +38,7 @@ import { persistResearchLog, runResearchQueries } from "./web-research";
 import { ManualReviewChanged, nextManualReviewStep, type ManualReviewAiStep } from "../domain/manual-review-flow";
 import { buildMergeConflictPrompt, chooseMerge, isMergeReady, mergeShape, unresolvedConflicts, type MergeConflict } from "../domain/book-merge";
 import { describeEntities, describeEvents, emptyKnowledge, KNOWLEDGE_REPLY_DESCRIPTIONS, KNOWLEDGE_REPLY_SHAPE, knowledgeReplySchema,
-  mergeKnowledgeReply, syncKnowledgeWithMemory,
+  mergeKnowledgeWithMemory,
   MEMORY_FOLDER, findEntity, type KnowledgeBase } from "../domain/knowledge";
 import { analyzeImpact, dependentEvents, relevantKnowledge, timelineEvents } from "../domain/knowledge-index";
 import { activeChange, changeAnalysisSchema, changeById, detectFactDrift, knownNames, replaceEntitySheet, replaceEventSheet,
@@ -63,7 +65,9 @@ const chapterSchema = z.object({
 });
 // The editorial board never truncates canon: it refuses oversized memory.
 // Every memory update must therefore keep entries short and merged.
-const MEMORY_COMPACTION_RULE = "Mantieni la memoria COMPATTA: ogni voce di characters/locations/factions/items/secrets al massimo 900 caratteri (stato attuale, non cronaca), unisci i duplicati, timeline con al massimo 60 eventi essenziali (riassumi i più vecchi), currentState al massimo 2500 caratteri.";
+const MEMORY_COMPACTION_RULE = "Mantieni la memoria COMPATTA: ogni voce di characters/locations/factions/items/secrets al massimo 900 caratteri (stato attuale, non cronaca), unisci le voci duplicate, currentState al massimo 2500 caratteri; la cronologia viene compattata a parte quando serve.";
+/** Local pass, timeline, entries and one more: beyond this the next step's refusal is not about size. */
+const MAX_COMPACTIONS_IN_A_ROW = 4;
 // A non-empty JSON string can still contain only whitespace. Do not let
 // apparent length from spaces/newlines become a frozen, unusable synopsis.
 const meaningfulSummary = (maximum: number) => z.string().max(maximum)
@@ -88,14 +92,18 @@ const OUTLINE_DESCRIPTIONS: Readonly<Record<string, string>> = {
 };
 const CHAPTER_PLAN_TOOL = toolParameters(chapterSchema, OUTLINE_DESCRIPTIONS);
 const EDITORIAL_SUMMARY_TOOL = toolParameters(editorialSummarySchema, {
-  chapterSummary: `Sinossi progressiva del capitolo fino a questo segmento (almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi, max ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS}).`,
-  bookSummary: `Sinossi progressiva compatta del libro con quanto è stato realmente raccontato (almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi, max ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS}).`,
+  chapterSummary: `Sinossi completa del capitolo (almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi, possibilmente non più di ${EDITORIAL_CHAPTER_SUMMARY_TARGET_CHARS}, max ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS}).`,
+  bookSummary: `Sinossi compatta del libro fino a questo capitolo compreso, con quanto è stato realmente raccontato (almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi, possibilmente non più di ${EDITORIAL_BOOK_SUMMARY_TARGET_CHARS}, max ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS}).`,
+});
+const EDITORIAL_CHAPTER_SUMMARY_TOOL = toolParameters(editorialSummarySchema.pick({ chapterSummary: true }), {
+  chapterSummary: `Sinossi progressiva del capitolo fino a questo segmento (almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri significativi, possibilmente non più di ${EDITORIAL_CHAPTER_SUMMARY_TARGET_CHARS}, max ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS}).`,
 });
 const IMPACT_TOOL = toolParameters(impactSchema, {
   rationale: "Motivazione dell'analisi d'impatto.",
   affectedSceneIds: "ID esatti delle scene canoniche coinvolte; vuoto se l'istruzione riguarda solo il futuro.",
 });
-const MEMORY_COMPACTION_TOOL = toolParameters(memorySchema, MEMORY_FULL_DESCRIPTIONS);
+const MEMORY_COMPACTION_TOOL = toolParameters(z.object(memoryCompactionToolShape()), MEMORY_COMPACTION_DESCRIPTIONS);
+const TIMELINE_COMPACTION_TOOL = toolParameters(compactTimelineSchema, COMPACT_TIMELINE_DESCRIPTIONS);
 const KNOWLEDGE_GENERATION_TOOL = toolParameters(
   knowledgeReplySchema.required({ entities: true, events: true, timelines: true }), KNOWLEDGE_REPLY_DESCRIPTIONS);
 
@@ -111,6 +119,8 @@ type Work = {
   system?: string;
   /** Task-internal housekeeping: pending author notes must stay pending. */
   noAuthorNotes?: boolean;
+  /** A memory compaction stage: counted so a next step that keeps refusing the memory stops the run. */
+  compaction?: boolean;
   /** Web research group of this task; null = never, absent = derived from the kind. */
   researchAgent?: ResearchAgent | null;
   /** The reply is one JSON object: models with the tools role may deliver it as function-call arguments. */
@@ -242,33 +252,40 @@ function parseJson(raw: string): unknown {
   return parseJsonReply(raw);
 }
 
+/** One synopsis field of a reply: the message tells the model how far it is from the limit, for the corrective retry. */
+function checkedSummary(record: Record<string, unknown>, key: "chapterSummary" | "bookSummary"): string {
+  const value = record[key];
+  const [label, max, target] = key === "chapterSummary"
+    ? ["La sinossi del capitolo", EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS, EDITORIAL_CHAPTER_SUMMARY_TARGET_CHARS] as const
+    : ["La sinossi del libro", EDITORIAL_BOOK_SUMMARY_MAX_CHARS, EDITORIAL_BOOK_SUMMARY_TARGET_CHARS] as const;
+  if (typeof value !== "string")
+    throw new Error(`La risposta della sinossi deve contenere ${key} come stringa.`);
+  if (value.trim().length < EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS)
+    throw new Error(`${label} deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi.`);
+  if (value.length > max)
+    throw new Error(`${label} è di ${value.length} caratteri e supera il limite di ${max} caratteri: riscrivila intorno a ${target} caratteri, riducendo le parti più vecchie a poche frasi ed eliminando ripetizioni e dettagli non essenziali, senza tagliare una frase a metà.`);
+  return value;
+}
+
 /** Validate the two editorial summaries before they can reach freeze or a later checkpoint. */
 export function validateEditorialSummaryReply(raw: string): { chapterSummary: string; bookSummary: string } {
   const reply = parseJson(raw);
   if (!reply || typeof reply !== "object" || Array.isArray(reply))
     throw new Error("La risposta della sinossi deve essere un oggetto JSON con chapterSummary e bookSummary.");
   const record = reply as Record<string, unknown>;
-
-  const chapter = record.chapterSummary;
-  if (typeof chapter !== "string")
-    throw new Error("La risposta della sinossi deve contenere chapterSummary come stringa.");
-  if (chapter.trim().length < EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS)
-    throw new Error(`La sinossi del capitolo deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi.`);
-  if (chapter.length > EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS)
-    throw new Error(`La sinossi del capitolo supera il limite di ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS} caratteri. Compattala senza tagliare una frase a metà.`);
-
-  const book = record.bookSummary;
-  if (typeof book !== "string")
-    throw new Error("La risposta della sinossi deve contenere bookSummary come stringa.");
-  if (book.trim().length < EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS)
-    throw new Error(`La sinossi del libro deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi.`);
-  if (book.length > EDITORIAL_BOOK_SUMMARY_MAX_CHARS)
-    throw new Error(`La sinossi del libro supera il limite di ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS} caratteri. Compattala eliminando ripetizioni e dettagli non essenziali.`);
-
+  const chapter = checkedSummary(record, "chapterSummary");
+  const book = checkedSummary(record, "bookSummary");
   if (!isValidEditorialSummary(chapter, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS) ||
       !isValidEditorialSummary(book, EDITORIAL_BOOK_SUMMARY_MAX_CHARS))
     throw new Error("La risposta della sinossi non rispetta i limiti richiesti.");
   return editorialSummarySchema.parse(reply);
+}
+/** Intermediate segments update only the chapter synopsis; a book synopsis sent anyway is ignored. */
+export function validateEditorialChapterSummaryReply(raw: string): { chapterSummary: string } {
+  const reply = parseJson(raw);
+  if (!reply || typeof reply !== "object" || Array.isArray(reply))
+    throw new Error("La risposta della sinossi deve essere un oggetto JSON con chapterSummary.");
+  return { chapterSummary: checkedSummary(reply as Record<string, unknown>, "chapterSummary") };
 }
 
 function outlineText(book: BookProject): string {
@@ -410,6 +427,8 @@ function applyFullPlan(b: BookProject, parsed: z.infer<typeof chapterSchema>): v
   const required = b.startMode === "synopsis" ? b.authorChapterSynopses ?? [] : [];
   if (required.length && parsed.chapters.length !== required.length)
     throw new Error(`Il piano deve avere esattamente ${required.length} capitoli come la tua sinossi, ma il modello ne ha proposti ${parsed.chapters.length}. Nessun piano applicato: riprendi per ripeterlo, eventualmente con un'indicazione.`);
+  if (!required.length && b.targetChapterCount && parsed.chapters.length !== b.targetChapterCount)
+    throw new Error(`Il piano deve avere esattamente ${b.targetChapterCount} capitoli come hai chiesto, ma il modello ne ha proposti ${parsed.chapters.length}. Nessun piano applicato: riprendi per ripeterlo.`);
   b.chapters = parsed.chapters.map((chapter, ci): Chapter => ({
     id: chapterIdFor(ci), number: ci + 1, title: required[ci]?.title ?? chapter.title, purpose: chapter.purpose,
     scenes: scenesFor(ci, chapter.scenes),
@@ -451,10 +470,16 @@ function outlineChapterWork(book: BookProject, chapter: Chapter, base: string,
       : `Scene del capitolo ${chapter.number + 1}`,
     prompt: `Pianifica le scene SOLO del capitolo ${chapter.number} «${chapter.title}» (scopo: ${chapter.purpose}). ${synopsis ? `La sinossi dell'autore per questo capitolo è VINCOLANTE: distribuisci TUTTI i suoi eventi nelle scene, senza spostarli in altri capitoli: ${synopsis}. ` : ""}Più scene ("paragrafi" Narrarium), con obiettivo narrativo, conflitto, causa ed effetto, indizi distribuiti e payoff successivi, coerenti con gli altri capitoli del piano. Restituisci ESCLUSIVAMENTE un oggetto JSON valido in questo formato: {"scenes":[{"title":"...","objective":"..."}]}. Niente Markdown o testo extra.\n\n${base}`,
     apply: (b, text) => {
-      const raw = parseJson(text) as { chapters?: unknown } | null;
-      // A model that answers with the whole plan anyway is accepted as before.
-      if (raw && typeof raw === "object" && Array.isArray(raw.chapters))
-        return applyFullPlan(b, chapterSchema.parse(raw));
+      let raw = parseJson(text) as { chapters?: unknown } | null;
+      if (raw && typeof raw === "object" && Array.isArray(raw.chapters)) {
+        const plan = chapterSchema.parse(raw);
+        // The whole plan anyway: accepted only when it really holds every chapter of the list.
+        if (plan.chapters.length === b.chapters.length) return applyFullPlan(b, plan);
+        // One chapter in the full-plan format: its scenes are the ones asked for, never a shorter book.
+        if (plan.chapters.length !== 1)
+          throw new Error(`Il modello ha restituito ${plan.chapters.length} capitoli invece delle scene del capitolo ${chapter.number}: nessun piano applicato.`);
+        raw = { scenes: plan.chapters[0]!.scenes } as { chapters?: unknown };
+      }
       const parsed = chapterScenesSchema.parse(raw);
       const index = b.chapters.findIndex(ch => ch.id === chapter.id);
       const target = b.chapters[index];
@@ -501,9 +526,9 @@ function knowledgeGenerationWork(book: BookProject): Work {
     apply: (b, text) => {
       const previous = b.knowledge ?? emptyKnowledge(true);
       const now = new Date().toISOString();
-      let next = mergeKnowledgeReply(previous, parseJson(text), { origin: written.length ? "written" : "planned",
+      // Every memory entry has a sheet when the reply is merged, so the events can cite those names.
+      const next = mergeKnowledgeWithMemory(previous, b.memory, parseJson(text), { origin: written.length ? "written" : "planned",
         reason: "Generazione della knowledge base", now, sceneIds: sceneIdsOf(b) });
-      next = syncKnowledgeWithMemory(next, b.memory, now);
       if (!next.entities.length) throw new Error("Nessuna scheda generata: servono almeno i personaggi principali.");
       b.knowledge = { ...next, pending: undefined, generatedAt: now };
       delete b.knowledge.pending;
@@ -527,9 +552,11 @@ function applyKnowledgeUpdate(b: BookProject, raw: unknown, reason: string,
   const hasKnowledge = !!reply && typeof reply === "object" && reply.knowledge !== undefined;
   if (options.required && !hasKnowledge)
     throw new Error("La risposta non contiene \"knowledge\": restituisci le schede nuove o cambiate e gli eventi, oppure \"knowledge\":{} se nulla è cambiato.");
-  if (hasKnowledge)
-    kb = mergeKnowledgeReply(kb, reply!.knowledge, { origin: "written", reason, now, sceneIds: sceneIdsOf(b), ...(sceneId ? { defaultSceneId: sceneId } : {}) });
-  kb = syncKnowledgeWithMemory(kb, b.memory, now, options.previousMemory);
+  // The memory delta of this same reply can introduce a name that the sheets then cite: the memory is
+  // synced around the merge (see mergeKnowledgeWithMemory).
+  kb = mergeKnowledgeWithMemory(kb, b.memory, hasKnowledge ? reply!.knowledge : undefined,
+    { origin: "written", reason, now, sceneIds: sceneIdsOf(b), previousMemory: options.previousMemory,
+      ...(sceneId ? { defaultSceneId: sceneId } : {}) });
   const extra = knowledgeUpdateSchema.parse(reply ?? {});
   const scene = sceneId ? allScenes(b).find(s => s.id === sceneId) : undefined;
   if (scene && extra.sceneEntities?.length) for (const name of extra.sceneEntities) {
@@ -543,6 +570,8 @@ function applyKnowledgeUpdate(b: BookProject, raw: unknown, reason: string,
   b.knowledge = kb;
 }
 const KNOWLEDGE_DELTA_RULE = "Knowledge base: aggiungi SEMPRE al JSON la chiave \"knowledge\":{\"entities\":[...],\"events\":[...]} nel formato " + KNOWLEDGE_REPLY_SHAPE + ", con le schede NUOVE e quelle ESISTENTI che questo testo cambia (stesso nome; solo i campi cambiati: riassunto, attributi, relazioni) e gli eventi accaduti; \"knowledge\":{} se nulla è cambiato. Aggiungi anche \"sceneEntities\":[nomi delle schede presenti nella scena]. Gli eventi accaduti nella scena omettono sceneIds (si collegano a questa scena). Non ripetere schede invariate.";
+/** Re-reading text already consolidated must not recreate its events (they only merge on the same title). */
+const KNOWLEDGE_REREAD_NOTE = "Le schede e gli eventi di questo testo sono GIÀ nella knowledge base: non ricrearli. Aggiorna solo quelli che la correzione ha cambiato (con lo stesso nome o titolo) e aggiungi soltanto eventi davvero nuovi; se nulla è cambiato usa \"knowledge\":{}.";
 const knowledgeActive = (book: BookProject) => !!book.knowledge && !book.knowledge.pending;
 /** Function parameters of a memory update: the delta fields, plus the sheets when the knowledge base is active. */
 function memoryUpdateTool(options: { sceneSummary: boolean; knowledge: boolean; sceneEntities: boolean;
@@ -562,21 +591,54 @@ function memoryUpdateTool(options: { sceneSummary: boolean; knowledge: boolean; 
   });
 }
 
-/** Shrinks canon memory so later prompts (and the model's context) can carry it. The reply must
- * be the complete memory and must be clearly smaller, otherwise the task fails instead of looping. */
+/** Shrinks canon memory so later prompts (and the model's context) can carry it. Exact repeats are removed
+ * locally first (runner); then a short reply per stage: the timeline alone when it is too long, otherwise
+ * only the entries to rewrite or remove. A stage that does not really shrink fails instead of looping. */
 function memoryCompactionWork(book: BookProject): Work {
+  const memory = book.memory;
+  if (compactionStage(memory) === "timeline") {
+    return {
+      phase: book.phase, kind: "consolidate", noAuthorNotes: true, compaction: true, json: TIMELINE_COMPACTION_TOOL,
+      title: "Compattazione della cronologia narrativa",
+      reason: `La cronologia ha ${memory.timeline.length} eventi, troppi per i prompt: va riassunta in pochi eventi essenziali senza perdere fatti.`,
+      nextStep: "Compattazione delle schede se serve, poi riprende il lavoro dal punto in cui si era fermato",
+      prompt: [
+        `Compatta la cronologia narrativa: ora ha ${memory.timeline.length} eventi e deve averne AL MASSIMO ${COMPACT_TIMELINE_TARGET}.`,
+        "Mantieni l'ordine cronologico. Unisci gli eventi duplicati o riformulati; raggruppa in un solo evento le azioni minori consecutive della stessa scena; elimina gesti, sensazioni e descrizioni. Conserva decisioni, scoperte, rivelazioni, spostamenti, conflitti, ferite e perdite. Non inventare nulla e non aggiungere interpretazioni.",
+        'Ogni evento al massimo 300 caratteri, senza numerazione. Restituisci ESCLUSIVAMENTE JSON {"timeline":[<eventi compattati in ordine, ciascuno fra virgolette>]}.',
+        "CRONOLOGIA ATTUALE:\n" + memory.timeline.map((event, i) => `${i + 1}. ${event}`).join("\n"),
+        "STATO ATTUALE (solo come riferimento, non va restituito):\n" + memory.currentState,
+      ].join("\n\n"),
+      apply: (b, text) => { b.memory = applyTimelineCompaction(b.memory, parseJson(text)); },
+    };
+  }
+  const longEntries = (["characters", "locations", "factions", "items", "secrets"] as const)
+    .flatMap(category => Object.entries(memory[category]).filter(([, value]) => value.length > 600)
+      .map(([name, value]) => `${category} «${name}» (${value.length} caratteri)`)).slice(0, 40);
   return {
-    phase: book.phase, kind: "consolidate", noAuthorNotes: true, json: MEMORY_COMPACTION_TOOL,
+    phase: book.phase, kind: "consolidate", noAuthorNotes: true, compaction: true, json: MEMORY_COMPACTION_TOOL,
     title: "Compattazione della memoria narrativa",
     reason: "La memoria del libro è troppo grande per i prompt e per il contesto del modello: va riassunta senza perdere i fatti ancora utili.",
     nextStep: "Riprende il lavoro dal punto in cui si era fermato",
-    prompt: "Compatta la memoria narrativa. Mantieni TUTTI i fatti e i segreti ancora rilevanti, unisci i duplicati, elimina i dettagli esauriti e i personaggi o luoghi secondari non più utili. " +
-      "Al massimo 14 voci per categoria (characters/locations/factions/items/secrets), ognuna di al massimo 600 caratteri; timeline con al massimo 40 eventi essenziali (riassumi i più vecchi); currentState al massimo 2000 caratteri. Non inventare nulla. " +
-      'Restituisci ESCLUSIVAMENTE JSON valido con la memoria COMPLETA: {"characters":{},"locations":{},"factions":{},"items":{},"secrets":{},"timeline":[],"currentState":""}.\n\nMEMORIA ATTUALE:\n' +
-      JSON.stringify(book.memory),
+    prompt: "Compatta la memoria narrativa. Riscrivi in forma compatta le voci lunghe come SCHEDE DI STATO (chi o cosa è, tratti, relazioni, cosa sa, dove si trova, cosa possiede: non la cronaca delle azioni), al massimo 600 caratteri ciascuna; unisci le voci duplicate; elimina personaggi, luoghi e oggetti secondari esauriti. " +
+      "Mantieni TUTTI i fatti e i segreti ancora rilevanti; non inventare nulla. Al massimo 14 voci per categoria; currentState al massimo 2000 caratteri. La cronologia (timeline) resta com'è e non va restituita. " +
+      'Restituisci ESCLUSIVAMENTE JSON con SOLO le voci riscritte e quelle da eliminare, sostituendo i testi fra < >: {"mode":"delta","characters":{"<nome>":"<scheda compatta>"},"locations":{},"factions":{},"items":{},"secrets":{},"remove":{"characters":[<nomi esauriti, fra virgolette>]},"currentState":"<stato attuale compatto>"}. Le voci che non elenchi restano invariate.' +
+      (longEntries.length ? "\n\nVOCI DA ACCORCIARE:\n" + longEntries.join("\n") : "") +
+      "\n\nMEMORIA ATTUALE:\n" + JSON.stringify(memory),
     apply: (b, text) => {
-      const update = applyMemoryResponse(b.memory, parseJson(text));
-      if (update.mode !== "full") throw new Error("La compattazione deve restituire la memoria completa, non un delta.");
+      const reply = parseJson(text);
+      if (!reply || typeof reply !== "object" || Array.isArray(reply))
+        throw new Error('La compattazione deve restituire un oggetto JSON {"mode":"delta",...} con le voci riscritte o da eliminare.');
+      // The timeline has its own stage: an entry compaction never adds, drops or rewrites events.
+      const { timeline, timelineAdd: _added, sceneSummary: _summary, ...rest } = reply as Record<string, unknown>;
+      // A whole memory (legacy format) carries the events; any other reply lists only the entries to rewrite,
+      // so an entry it does not mention (a secret, a place) is never dropped by a missing "mode".
+      const whole = rest.mode !== "delta" && Array.isArray(timeline) && timeline.length > 0;
+      const remove = rest.remove && typeof rest.remove === "object" && !Array.isArray(rest.remove)
+        ? Object.fromEntries(Object.entries(rest.remove).filter(([key]) => key !== "timeline")) : rest.remove;
+      const update = whole
+        ? applyMemoryResponse(b.memory, { ...rest, timeline: b.memory.timeline })
+        : applyMemoryResponse(b.memory, { ...rest, mode: "delta", ...(remove === undefined ? {} : { remove }) });
       assertCompactionShrinks(b.memory, update.memory);
       b.memory = update.memory;
     },
@@ -894,10 +956,13 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
           nextStep: "Prossimo segmento di memoria oppure nuova votazione della redazione",
           prompt: [
             "Aggiorna il canone dopo una correzione editoriale. Mantieni i fatti precedenti ancora veri; non inventare.",
+            "La MEMORIA PRECEDENTE contiene già gli eventi di questo capitolo, registrati quando è stato scritto: NON aggiungerli di nuovo a timelineAdd, nemmeno riformulati. " +
+              "Cambia solo ciò che la correzione ha reso diverso: aggiorna le schede interessate, elimina con remove.timeline gli eventi diventati falsi e aggiungi soltanto fatti davvero nuovi. " +
+              "Se questo segmento non cambia nulla rispetto alla memoria, restituisci un delta vuoto con currentState invariato.",
             "Rispondi SOLO con le modifiche alla memoria in JSON valido.",
             DELTA_REPLY_RULE_NO_SUMMARY,
             MEMORY_COMPACTION_RULE,
-            ...(withKnowledge ? [KNOWLEDGE_DELTA_RULE, knowledgeIndexText(book.knowledge!)] : []),
+            ...(withKnowledge ? [KNOWLEDGE_DELTA_RULE, KNOWLEDGE_REREAD_NOTE, knowledgeIndexText(book.knowledge!)] : []),
             "MEMORIA PRECEDENTE: " + checkpoint.memoryJson,
             "SCENA " + segment.sceneId + ", SEGMENTO " + (checkpoint.cursor + 1) +
               "/" + checkpoint.segmentCount + ":\n" + segment.text,
@@ -939,21 +1004,36 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         const index = cycle.summaryCursor!;
         const segment = segments[index];
         if (!segment) throw new Error("Segmento di riassunto mancante.");
+        // Only the chapter's last segment writes the book synopsis, from the synopsis frozen with the
+        // previous chapter: re-sending a running book synopsis that already contained this chapter
+        // duplicated it and pushed the reply past its limit.
+        const closing = index === segments.length - 1;
+        // book.bookSummary can already contain this chapter (style-only reopen of the last frozen chapter in
+        // older versions): the snapshot frozen with the previous chapter is the safe starting point. It equals
+        // book.bookSummary in the normal flow; legacy chapters without a snapshot keep the previous behaviour.
+        const priorSnapshot = book.chapters.filter(other => other.number < chapter.number && other.frozenAt)
+          .sort((a, b) => b.number - a.number)[0]?.bookSummaryAtFreeze;
+        const previousBook = book.chapters.some(other => other.number > chapter.number && other.frozenAt)
+          ? synopsisBeforeChapter(book.chapters, chapter.number) : priorSnapshot ?? book.bookSummary ?? "";
+        const runningChapter = cycle.runningChapterSummary ?? "";
+        const sized = (text: string) => `(${text.length} caratteri)`;
         return {
-          phase: "chapterReview", kind: "summarize", json: EDITORIAL_SUMMARY_TOOL,
-          title: "Sinossi del capitolo e del libro " + (index+1) + "/" + segments.length,
+          phase: "chapterReview", kind: "summarize", json: closing ? EDITORIAL_SUMMARY_TOOL : EDITORIAL_CHAPTER_SUMMARY_TOOL,
+          title: (closing ? "Sinossi del capitolo e del libro " : "Sinossi del capitolo ") + (index+1) + "/" + segments.length,
           reason: "Compattare il contesto per i revisori dei capitoli successivi senza perdere il canone verificato.",
-          nextStep: "Prossima sinossi oppure congelamento e avanzamento al capitolo seguente",
+          nextStep: closing ? "Congelamento e avanzamento al capitolo seguente" : "Prossimo segmento della sinossi",
           prompt: [
-            "Aggiorna due sinossi progressive senza spoiler aggiuntivi e senza inventare fatti.",
-            "Restituisci SOLO JSON {\"chapterSummary\":\"...\",\"bookSummary\":\"...\"}.",
-            `Limiti obbligatori: chapterSummary deve contenere almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi e al massimo ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS}; bookSummary almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi e al massimo ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS}. Compatta entrambe le sinossi, usa la precedente come base e aggiungi solo gli eventi essenziali del segmento; elimina ripetizioni e dettagli non necessari, senza tagliare una frase a metà.`,
-            "Riassunto capitolo fino ad ora: " + (cycle.runningChapterSummary ?? ""),
-            "Riassunto libro precedente: " + (cycle.runningBookSummary ??
-              (book.chapters.some(other => other.number > chapter.number && other.frozenAt)
-                ? synopsisBeforeChapter(book.chapters, chapter.number) : book.bookSummary ?? "")),
-            "Segmento letto: " + segment.sceneId + "\n" + segment.text,
-            "Il riassunto del libro deve descrivere quanto è stato realmente raccontato ai lettori.",
+            closing ? "Chiudi le sinossi del capitolo e del libro senza spoiler aggiuntivi e senza inventare fatti."
+              : "Aggiorna la sinossi progressiva del capitolo senza spoiler aggiuntivi e senza inventare fatti.",
+            closing ? "Restituisci SOLO JSON {\"chapterSummary\":\"...\",\"bookSummary\":\"...\"}."
+              : "Restituisci SOLO JSON {\"chapterSummary\":\"...\"}.",
+            `chapterSummary: sinossi del capitolo ${chapter.number} ${closing ? "COMPLETA" : "fino a questo segmento"}, almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi e possibilmente non più di ${EDITORIAL_CHAPTER_SUMMARY_TARGET_CHARS} (limite assoluto ${EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS}). Parti dalla sinossi del capitolo qui sotto e aggiungi solo gli eventi essenziali del segmento; se si allunga, comprimi le parti più vecchie.`,
+            ...(closing ? [`bookSummary: sinossi del libro fino a questo capitolo compreso, almeno ${EDITORIAL_SUMMARY_MIN_EFFECTIVE_CHARS} caratteri effettivi e possibilmente non più di ${EDITORIAL_BOOK_SUMMARY_TARGET_CHARS} (limite assoluto ${EDITORIAL_BOOK_SUMMARY_MAX_CHARS}). Parti dalla sinossi del libro qui sotto (capitoli precedenti), riduci ogni capitolo precedente a poche frasi, i più vecchi ancora di più, e aggiungi il capitolo ${chapter.number} in forma breve. Descrivi solo quanto è stato realmente raccontato ai lettori.`] : []),
+            "Sono SINOSSI, non racconti: chi fa cosa, decisioni, scoperte, rivelazioni e cambiamenti, in frasi brevi. Niente descrizioni sensoriali, gesti minori o dialoghi riportati, niente ripetizioni e nessuna frase tagliata a metà.",
+            ...(closing ? ["Sinossi del libro fino al capitolo precedente " + sized(previousBook) + ": " +
+              (previousBook || "(nessuna: è il primo capitolo)")] : []),
+            "Sinossi del capitolo fino al segmento precedente " + sized(runningChapter) + ": " + (runningChapter || "(inizio del capitolo)"),
+            "Segmento letto" + (closing ? " (ultimo del capitolo)" : "") + ": " + segment.sceneId + "\n" + segment.text,
           ].join("\n\n"),
           apply: (b, text) => {
             // Guard the EXACT stage/chapter/segment associated with this reply
@@ -962,6 +1042,17 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
             assertProfilesCurrent(current);
             const ch = b.chapters.find(x => x.id === cycle.chapterId);
             if (!ch) throw new Error("Sessione di sintesi non valida: capitolo assente.");
+            if (!closing) {
+              const partial = validateEditorialChapterSummaryReply(text);
+              if (!current.forcedClose) {
+                assertEditorialReviewCoverage(b, current, true);
+                assertSavedEditorialFreezeJudgmentIntegrity(b, current);
+              }
+              current.runningChapterSummary = partial.chapterSummary;
+              delete current.runningBookSummary;
+              current.summaryCursor = current.summaryCursor! + 1;
+              return;
+            }
             const data = validateEditorialSummaryReply(text);
             if (!current.forcedClose) {
               assertEditorialReviewCoverage(b, current, true);
@@ -1011,7 +1102,7 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
           phase: "revision", kind: "revision", json: IMPACT_TOOL, title: "Analisi d'impatto della correzione",
           reason: "Individuare le scene da cambiare e i rimandi narrativi da rivalidare.",
           nextStep: "Revisione retroattiva delle scene coinvolte",
-          prompt: `L'autore ha impartito questa istruzione PRIORITARIA: "${rev.instruction}". Identifica gli ID delle scene canoniche coinvolte direttamente o indirettamente, senza inventare ID. Se nessuna scena già scritta va cambiata (l'istruzione riguarda solo il futuro), restituisci un elenco vuoto. Rispondi ESCLUSIVAMENTE JSON {"rationale":"...","affectedSceneIds":["scene:001:001"]}.\n\n${base}`,
+          prompt: `L'autore ha impartito questa istruzione PRIORITARIA: "${rev.instruction}". Identifica gli ID delle scene canoniche coinvolte direttamente o indirettamente, copiandoli esattamente dal piano e senza inventare ID. Se nessuna scena già scritta va cambiata (l'istruzione riguarda solo il futuro), restituisci un elenco vuoto. Rispondi ESCLUSIVAMENTE JSON {"rationale":"<motivazione>","affectedSceneIds":[<ID esatti delle scene coinvolte, fra virgolette>]}.\n\n${base}`,
           apply: (b, text) => {
             const impact = impactSchema.parse(parseJson(text));
             const request = b.revision;
@@ -1041,12 +1132,14 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         const withKnowledge = knowledgeActive(book);
         return {
           phase: "revision", kind: "consolidate", title: "Memoria narrativa dopo la revisione",
+          // Only the scene whose text is in the prompt can be summarized; the others keep their
+          // «to update» mark and get a summary from their own text before the next review.
           json: memoryUpdateTool({ sceneSummary: false, knowledge: withKnowledge, sceneEntities: false,
-            sceneSummaryIds: rewritten.map(scene => scene.id) }),
+            sceneSummaryIds: last ? [last.id] : [] }),
           reason: "Allineare personaggi, segreti, oggetti e cronologia alle scene riscritte.",
           nextStep: "Nuova redazione dei capitoli toccati e ripresa della scrittura",
-          prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}` +
-            ` Aggiungi anche "sceneSummaries":{"ID scena":"riassunto fedele della scena riscritta in 2-4 frasi"} per OGNI scena riscritta.` +
+          prompt: `L'autore ha chiesto questa revisione: "${rev.instruction}". Sono state riscritte ${rewritten.length} scene: ${rewritten.map(scene => scene.id + " «" + scene.title + "»").join("; ")}. Aggiorna lo stato canonico perché rifletta la NUOVA versione del libro: mantieni i fatti ancora validi, correggi quelli cambiati dalla revisione, non inventare. Gli eventi delle scene riscritte sono già nella cronologia: elimina con remove.timeline quelli resi falsi dalla revisione e aggiungi a timelineAdd solo i fatti nuovi, mai di nuovo quelli già presenti. Tieni i segreti protetti nei metadati. ${MEMORY_COMPACTION_RULE} ${DELTA_REPLY_RULE_NO_SUMMARY}` +
+            (last ? ` Aggiungi anche "sceneSummaries":{"${last.id}":"riassunto fedele della scena riscritta qui sotto in 2-4 frasi"}: solo per questa scena, di cui vedi il testo.` : "") +
             (withKnowledge ? ` ${KNOWLEDGE_DELTA_RULE}\n\n${knowledgeIndexText(book.knowledge!)}` : "") +
             `${changeContext}\n\nULTIMA SCENA RISCRITTA:\n${last?.text ?? "Nessuna"}\n\nCONTESTO:\n${base}`,
           apply: (b, text) => {
@@ -1058,9 +1151,9 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
             b.memory = memory;
             applyKnowledgeUpdate(b, reply, "Aggiornamento dopo la revisione: " + rev.instruction.slice(0, 200), { previousMemory, required: withKnowledge });
             const summaries = knowledgeUpdateSchema.parse(reply ?? {}).sceneSummaries ?? {};
-            for (const id of current.affectedSceneIds) {
-              const target = allScenes(b).find(s => s.id === id);
-              if (target && summaries[id]) { target.summary = summaries[id]; delete target.summaryStale; }
+            const target = last ? allScenes(b).find(s => s.id === last.id) : undefined;
+            if (target && current.affectedSceneIds.includes(target.id) && summaries[target.id]) {
+              target.summary = summaries[target.id]; delete target.summaryStale;
             }
             closeRevision(b, current);
           },
@@ -1076,9 +1169,10 @@ function nextWork(book: BookProject, judgeInputTokens?: number, judgeOutputToken
         apply: (b, text) => {
           const target = allScenes(b).find(x => x.id === sceneId);
           if (!target || !b.revision) throw new Error("Revisione non più applicabile.");
+          // JSON, a code block or a rewrite that dropped most of the scene never becomes canon.
+          assertScenePlausible(text, target.text);
           const op = b.revision.changeOperationId ? changeById(b, b.revision.changeOperationId) : undefined;
           if (op) {
-            assertScenePlausible(text, target.text);
             op.report = [...op.report, { sceneId, at: new Date().toISOString(), drift: detectFactDrift(target.text, text, knownNames(b)) }].slice(-400);
             op.updatedAt = new Date().toISOString();
           }
@@ -1094,9 +1188,15 @@ const PLANNING_PHASES: readonly Phase[] = ["brainstorm", "validate", "audience",
 /** Leave the revision phase: back to an interrupted review, to writing, or to planning. */
 export function closeRevision(book: BookProject, rev: RevisionRequest): void {
   const change = rev.changeOperationId ? changeById(book, rev.changeOperationId) : undefined;
+  // A scene that was waiting for its final review or its memory update when the author intervened resumes
+  // that step: otherwise its canon would never reach the memory (or its draft would be written again).
+  const waiting = !book.editorialCycle && (rev.beforePhase === "review" || rev.beforePhase === "consolidate")
+    ? allScenes(book).find(scene => scene.id === book.currentSceneId) : undefined;
+  const resume = waiting && (rev.beforePhase === "consolidate" ? waiting.status === "canon" : waiting.status === "draft")
+    ? waiting : undefined;
   book.revision = undefined;
-  book.currentSceneId = undefined;
-  book.phase = book.editorialCycle ? "chapterReview" : book.chapters.length ? "prose" :
+  book.currentSceneId = resume?.id;
+  book.phase = resume ? rev.beforePhase : book.editorialCycle ? "chapterReview" : book.chapters.length ? "prose" :
     PLANNING_PHASES.includes(rev.beforePhase) ? rev.beforePhase : "brainstorm";
   if (change) settleAfterRewrite(book, change, new Date().toISOString());
 }
@@ -1401,6 +1501,8 @@ export class AutopilotRunner {
       let rejectedReplyReason = "";
       /** Consecutive replies discarded because the author edited the book meanwhile. */
       let authorConflicts = 0;
+      /** Compactions applied in a row: a next step that keeps refusing the memory must not erode it forever. */
+      let compactionsInARow = 0;
       /** Web research already done for the current task, keyed like the retries. */
       const research = new Map<string, { round: number; entries: ResearchEntry[] }>();
       const pool = new ReviewCallPool();
@@ -1533,17 +1635,41 @@ export class AutopilotRunner {
         const judgeInputTokens = declaredJudgeInputBudget(planning, book);
         const judgeOutputTokens = declaredJudgeOutputBudget(planning, book);
         const judgeTools = judgeUsesTools(planning, book);
+        let compact = false;
         if (mergeWork) work = mergeWork;
         else if (manual) work = manualReviewWork(book, manual);
         else try {
-          work = book.phase === "prose" && !book.editorialCycle && !book.revision &&
-            memoryNeedsCompaction(book.memory) ? memoryCompactionWork(book) : nextWork(book, judgeInputTokens, judgeOutputTokens, judgeTools);
+          compact = book.phase === "prose" && !book.editorialCycle && !book.revision && memoryNeedsCompaction(book.memory);
+          work = compact ? null : nextWork(book, judgeInputTokens, judgeOutputTokens, judgeTools);
         } catch (error) {
-          // The editorial board refuses oversized canon memory; compact it instead of stopping.
-          if (error instanceof Error && !book.revision &&
-              /compattare la memoria|Memoria pertinente troppo ampia/.test(error.message))
-            work = memoryCompactionWork(book);
+          // Only canon memory that is too large for the board is compacted; any other oversized block
+          // (brief, constraints, sources, prose) stops with its own cause instead of eroding the memory.
+          if (error instanceof PromptBlockTooLarge && error.memoryDerived && !book.revision) { compact = true; work = null; }
           else throw error;
+        }
+        if (compact) {
+          if (compactionsInARow >= MAX_COMPACTIONS_IN_A_ROW)
+            throw new Error(`La memoria è stata compattata ${compactionsInARow} volte di seguito ma il passo successivo la trova ancora troppo grande. ` +
+              "Nessuna altra compattazione automatica: accorcia o elimina a mano le voci più lunghe nella pagina Mondo, oppure usa un modello più capace, poi riprendi.");
+          // Exact repeats of the same event go first, locally: no model call and nothing reworded.
+          const local = withoutRepeatedEvents(book.memory);
+          if (local.removed) {
+            book.memory = local.memory;
+            const now = new Date().toISOString();
+            try {
+              await saveBookAndActivity(book, { id: crypto.randomUUID(), bookId, runId, phase: book.phase,
+                title: "Compattazione locale della cronologia",
+                reason: "La cronologia conteneva copie identiche degli stessi eventi: tolte senza chiamare il modello, tenendo la prima.",
+                nextStep: memoryNeedsCompaction(local.memory) ? "Compattazione della memoria con il modello"
+                  : "Riprende il lavoro dal punto in cui si era fermato",
+                status: "succeeded", aiRequested: false, createdAt: now, endedAt: now,
+                summary: shortSummary(`Rimossi ${local.removed} eventi ripetuti dalla cronologia.`) }, token);
+            } catch (error) { if (error instanceof BookRevisionConflict) continue; throw error; }
+            compactionsInARow++;
+            await onUpdate();
+            continue;
+          }
+          work = memoryCompactionWork(book);
         }
         if (!work) {
           if (book.phase === "audience" && book.audienceReviews.length >= 5) {
@@ -1673,6 +1799,7 @@ export class AutopilotRunner {
           // current inside the SAME IndexedDB transaction as canon + audit.
           // A non-cooperating writer can update after getBook above.
           await saveBookAndActivity(latest, started, commitToken);
+          compactionsInARow = work.compaction ? compactionsInARow + 1 : 0;
           resumePending = false; resumed = undefined; cyclesUsed = 0;
           finishLiveAi(started.id,"completata");
           retries = 0;
@@ -1681,7 +1808,7 @@ export class AutopilotRunner {
           research.delete(retryKey);
           await onUpdate();
         } catch (error) {
-          const message=error instanceof ProviderResponseReadError || error instanceof TruncatedProviderContentError ||
+          const message=error instanceof ProviderResponseReadError || error instanceof ProviderContentError ||
             error instanceof PromptExceedsContextError?error.message:
             error instanceof Error && error.name==="ProviderHeaderTimeoutError"?error.message:
             error instanceof AuthorEditDuringTask ? error.message : error instanceof BookRevisionConflict ? new AuthorEditDuringTask().message :
@@ -1803,11 +1930,15 @@ export class AutopilotRunner {
       }
       if (current) {
         const now = new Date().toISOString();
+        // After the run started, a stop is usually about the next step (e.g. a block too long), not about the lock.
+        const stoppedStep = sessionStarted && !(error instanceof RemoteWriterLost);
         await saveActivity({
           id: crypto.randomUUID(), bookId, runId, phase: current.phase,
-          title: "Verifica scrittura esclusiva",
-          reason: "Controllo di concorrenza locale e lease remoto prima della generazione AI.",
-          nextStep: "Verifica lo stato del lock in Archivio prima di riprendere.",
+          title: stoppedStep ? "Autopilot fermato prima del passo successivo" : "Verifica scrittura esclusiva",
+          reason: stoppedStep ? "Il passo successivo non è partito: la causa è indicata nell'errore."
+            : "Controllo di concorrenza locale e lease remoto prima della generazione AI.",
+          nextStep: stoppedStep ? "Correggi la causa indicata, poi riprendi."
+            : "Verifica lo stato del lock in Archivio prima di riprendere.",
           status: signal.aborted && !(error instanceof RemoteWriterLost) ? "cancelled" : "failed",
           error: message, createdAt: now, endedAt: now,
         });

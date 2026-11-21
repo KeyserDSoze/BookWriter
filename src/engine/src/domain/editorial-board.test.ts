@@ -192,7 +192,11 @@ describe("Redazione indipendente dei capitoli",()=>{
       decisions:[{findingId:"fake",action:"reject",rationale:"Non è fondato"}]}))).toThrow();
     expect(()=>validateJudgment(c,JSON.stringify({reasoning:base,
       decisions:[{findingId:id,action:"accept",rationale:"Va corretto con attenzione",
-        remediation:""}]}))).toThrow(/remediation/i);
+        remediation:"Rifai"}]}))).toThrow(/remediation/i);
+    // An accept with no correction at all (e.g. a function call that left it empty) adopts the reviewer's own proposal.
+    const adopted=validateJudgment(c,JSON.stringify({reasoning:base,
+      decisions:[{findingId:id,action:"accept",rationale:"Va corretto con attenzione"}]}));
+    expect(adopted.decisions[0]!.remediation).toBe(c.reports[0]!.findings[0]!.remediation);
     c.judgment=validateJudgment(c,JSON.stringify({reasoning:base,
       decisions:[{findingId:id,action:"accept",
         rationale:"La battuta è incompatibile con il dossier del personaggio.",
@@ -202,6 +206,23 @@ describe("Redazione indipendente dei capitoli",()=>{
     const prompt=repairPrompt(b,c,"s-1").prompt;
     expect(prompt).toContain("Rendere la frase sommessa");
     expect(prompt).toContain("Mara incontra");
+  });
+  it("non adotta (né taglia) una proposta del revisore più lunga di quanto una decisione può contenere",()=>{
+    const b=sample(),c=createEditorialCycle("ch-1"),seg=chapterSegments(b.chapters[0]!)[0]!;
+    const long=JSON.parse(report("s-1",true));
+    long.findings[0].remediation="Riscrivere il dialogo in un tono più sommesso. ".repeat(38).trim();
+    expect(long.findings[0].remediation.length).toBeGreaterThan(1600);
+    c.reports.push(validateReport(c,"style",seg,2,JSON.stringify(long),b.chapters[0]!));
+    const id=c.reports[0]!.findings[0]!.id;
+    const base="Dopo l'analisi del testo preferisco verificare l'intervento.";
+    // Adopting it would save a judgment that fails its own schema at the next repair step.
+    expect(()=>validateJudgment(c,JSON.stringify({reasoning:base,
+      decisions:[{findingId:id,action:"accept",rationale:"Va corretto con attenzione",remediation:""}]})))
+      .toThrow(/senza remediation concreta.*1600/);
+    c.judgment=validateJudgment(c,JSON.stringify({reasoning:base,
+      decisions:[{findingId:id,action:"accept",rationale:"Va corretto con attenzione",
+        remediation:"Rendere il dialogo sommesso."}]}));
+    expect(()=>repairPrompt(b,c,"s-1")).not.toThrow();
   });
   it("dopo tre tornate di riparazione si blocca e NON finge di aver congelato",()=>{
     const cycle=createEditorialCycle("ch-1");

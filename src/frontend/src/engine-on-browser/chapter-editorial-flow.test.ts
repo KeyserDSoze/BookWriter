@@ -210,6 +210,95 @@ describe("Ciclo di redazione per capitolo nel runner",()=>{
     expect(updated?.chapters[0]?.scenes[0]?.summaryStale).toBeUndefined();
     expect(tasks.filter(x=>x==="summarize")).toHaveLength(2);
   });
+  it("con più segmenti la sinossi del libro si scrive una sola volta, all'ultimo, dalla sinossi del capitolo precedente",async()=>{
+    const source=book();
+    source.chapters[0]!.scenes.push({id:"scene-2",number:2,title:"Cortile",objective:"Entrare nel cortile",
+      text:"Mara attraversa il cortile e trova la torre chiusa.",status:"canon",summary:"Mara nel cortile."});
+    source.bookSummary="Prima del castello Mara riceve una chiave dal padre.";
+    await saveBook(source,false);
+    const summaries:string[]=[];
+    modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
+      if(kind==="chapterJudge")return {text:judgment(false),endpointId:"test",modelId:"Judge"};
+      if(kind==="summarize"){
+        summaries.push(prompt);
+        // An intermediate reply that still sends a (too long) book synopsis: ignored, not rejected.
+        return {text:JSON.stringify(summaries.length===1
+          ?{chapterSummary:"Mara entra nel castello e saluta il guardiano.",bookSummary:"x".repeat(9500)}
+          :{chapterSummary:"Mara entra nel castello e trova la torre chiusa nel cortile.",
+            bookSummary:"Mara riceve la chiave dal padre, entra nel castello e trova la torre chiusa."}),
+          endpointId:"test",modelId:"Luna"};
+      }
+      return {text:report(false),endpointId:"test",modelId:"Reviewer"};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const updated=(await getBook(source.id))!;
+    expect(updated.status).toBe("completed");
+    expect(summaries).toHaveLength(2);
+    expect(summaries[0]).toContain('Restituisci SOLO JSON {"chapterSummary":"..."}.');
+    expect(summaries[0]).not.toContain("bookSummary");
+    expect(summaries[0]).not.toContain("Prima del castello");
+    expect(summaries[1]).toContain("bookSummary");
+    expect(summaries[1]).toContain("Prima del castello Mara riceve una chiave dal padre.");
+    expect(summaries[1]).toContain("Mara entra nel castello e saluta il guardiano.");
+    expect(summaries[1]).toContain("(ultimo del capitolo)");
+    expect(updated.chapters[0]!.summary).toBe("Mara entra nel castello e trova la torre chiusa nel cortile.");
+    expect(updated.bookSummary).toBe("Mara riceve la chiave dal padre, entra nel castello e trova la torre chiusa.");
+    expect(updated.chapters[0]!.bookSummaryAtFreeze).toBe(updated.bookSummary);
+  });
+  it("la sinossi del libro parte da quella congelata col capitolo precedente, anche se quella corrente contiene già il capitolo",async()=>{
+    const source=book();
+    Object.assign(source.chapters[0]!,{frozenAt:"2026-11-10T10:00:00.000Z",summary:"Mara entra nel castello.",
+      bookSummaryAtFreeze:"Mara riceve la chiave dal padre ed entra nel castello."});
+    source.chapters.push({id:"ch-2",number:2,title:"La torre",purpose:"Scoperta",
+      scenes:[{id:"scene-2",number:1,title:"Torre",objective:"Trovare la torre",
+        text:"Mara sale le scale della torre e trova una porta chiusa a chiave.",status:"canon",summary:"Mara trova la torre."}]});
+    // Left by a style-only reopen of the last frozen chapter in older versions: chapter 2 is already in it.
+    source.bookSummary="Mara riceve la chiave dal padre ed entra nel castello. Nella torre trova una porta chiusa.";
+    await saveBook(source,false);
+    const summaries:string[]=[];
+    modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
+      if(kind==="chapterJudge")return {text:judgment(false),endpointId:"test",modelId:"Judge"};
+      if(kind==="summarize"){
+        summaries.push(prompt);
+        return {text:JSON.stringify({chapterSummary:"Mara sale nella torre e trova una porta chiusa a chiave.",
+          bookSummary:"Mara riceve la chiave dal padre, entra nel castello e trova nella torre una porta chiusa."}),
+          endpointId:"test",modelId:"Luna"};
+      }
+      return {text:report(false),endpointId:"test",modelId:"Reviewer"};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const updated=(await getBook(source.id))!;
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toContain("Mara riceve la chiave dal padre ed entra nel castello.");
+    expect(summaries[0]).not.toContain("Nella torre trova una porta chiusa.");
+    expect(updated.chapters[1]!.frozenAt).toBeTruthy();
+    expect(updated.bookSummary).toBe("Mara riceve la chiave dal padre, entra nel castello e trova nella torre una porta chiusa.");
+  });
+  it("con un capitolo precedente congelato senza snapshot né riassunto (dati legacy) la sinossi parte da quella del libro, senza fermarsi",async()=>{
+    const source=book();
+    source.chapters[0]!.frozenAt="2026-11-10T10:00:00.000Z";
+    source.chapters.push({id:"ch-2",number:2,title:"La torre",purpose:"Scoperta",
+      scenes:[{id:"scene-2",number:1,title:"Torre",objective:"Trovare la torre",
+        text:"Mara sale le scale della torre e trova una porta chiusa a chiave.",status:"canon",summary:"Mara trova la torre."}]});
+    source.bookSummary="Mara riceve la chiave dal padre ed entra nel castello.";
+    await saveBook(source,false);
+    const summaries:string[]=[];
+    modelCall.mockImplementation(async(kind:string,_system:string,prompt:string)=>{
+      if(kind==="chapterJudge")return {text:judgment(false),endpointId:"test",modelId:"Judge"};
+      if(kind==="summarize"){
+        summaries.push(prompt);
+        return {text:JSON.stringify({chapterSummary:"Mara sale nella torre e trova una porta chiusa a chiave.",
+          bookSummary:"Mara riceve la chiave dal padre, entra nel castello e trova nella torre una porta chiusa."}),
+          endpointId:"test",modelId:"Luna"};
+      }
+      return {text:report(false),endpointId:"test",modelId:"Reviewer"};
+    });
+    await new AutopilotRunner().run(source.id,async()=>undefined);
+    const updated=(await getBook(source.id))!;
+    expect(updated.status).toBe("completed");
+    expect(summaries[0]).toContain("Mara riceve la chiave dal padre ed entra nel castello.");
+    expect(updated.chapters[1]!.frozenAt).toBeTruthy();
+  });
   it("scarta il report dello storico quando un restore cambia l'estratto senza cambiare updatedAt, poi lo rifà sulla fonte nuova",async()=>{
     const source=book();
     source.phase="chapterReview";

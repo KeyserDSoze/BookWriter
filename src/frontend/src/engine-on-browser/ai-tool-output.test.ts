@@ -48,9 +48,18 @@ describe("Output strutturato via tools", () => {
       messages: Array<{ content: string }> };
     expect(sent.tools).toHaveLength(1);
     expect(sent.tools![0]!.function.name).toBe("submit_result");
-    expect(sent.tool_choice).toEqual({ type: "function", function: { name: "submit_result" } });
+    expect(sent.tool_choice).toBe("required");
     expect(sent.messages[0]!.content).toContain("submit_result");
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("toglie l'involucro o la doppia codifica che alcuni modelli mettono negli argomenti", async () => {
+    const { settings, book } = fixture(true);
+    for (const args of ['{"arguments":{"verdict":"freeze"}}', JSON.stringify('{"verdict":"freeze"}'),
+      '{"result":"{\\"verdict\\":\\"freeze\\"}"}']) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(toolMessage(args))));
+      expect((await call(settings, book, true)).text).toBe('{"verdict":"freeze"}');
+    }
   });
 
   it("senza tag tools, senza schema, con uno schema senza campi obbligatori o con l'opzione disattivata resta il protocollo testuale", async () => {

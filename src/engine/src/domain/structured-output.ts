@@ -66,6 +66,9 @@ export function toolOutputAvailable(endpoint: EndpointProfile, modelId: string):
   return declaredModelCapabilities(endpoint, modelId).includes("tools");
 }
 
+/** One function only, so "required" forces exactly it. The object form naming the function is ignored by
+ * llama.cpp (it falls back to "auto", without the grammar) while "required" is understood by llama.cpp,
+ * LM Studio, vLLM and the hosted OpenAI-compatible APIs. */
 export function toolRequestFields(schema: ToolSchema): { tools: unknown[]; tool_choice: unknown } {
   return {
     tools: [{
@@ -76,8 +79,29 @@ export function toolRequestFields(schema: ToolSchema): { tools: unknown[]; tool_
         parameters: schema,
       },
     }],
-    tool_choice: { type: "function", function: { name: SUBMIT_TOOL_NAME } },
+    tool_choice: "required",
   };
+}
+
+/** Some models wrap the result (`{"arguments":{…}}`, `{"result":{…}}`) or encode it twice as a JSON string.
+ * Unwrap only when the outer value lacks the required fields and the single inner value has all of them;
+ * anything else is returned unchanged and goes to the normal validation. */
+export function normalizeToolArguments(args: string, schema: ToolSchema): string {
+  const required = Array.isArray(schema.required) ? schema.required.filter((key): key is string => typeof key === "string") : [];
+  if (!required.length) return args;
+  const complete = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object" && !Array.isArray(value) &&
+    required.every(key => Object.prototype.hasOwnProperty.call(value, key));
+  const parse = (text: string): unknown => { try { return JSON.parse(text) as unknown; } catch { return undefined; } };
+  const outer = parse(args);
+  const doubled = typeof outer === "string";
+  const value = doubled ? parse(outer) : outer;
+  if (complete(value)) return doubled ? JSON.stringify(value) : args;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return args;
+  const inner = Object.values(value);
+  if (inner.length !== 1) return args;
+  const candidate = typeof inner[0] === "string" ? parse(inner[0]) : inner[0];
+  return complete(candidate) ? JSON.stringify(candidate) : args;
 }
 
 /** The arguments of the submit call in a reply message, or undefined when the model answered in text.

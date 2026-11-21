@@ -10,6 +10,18 @@ export function explainAutopilotError(message: string): AutopilotErrorHelp {
     meaning: "Il servizio o la configurazione non consentono la richiesta. Ripetere lo stesso tentativo non corregge chiavi, permessi o indirizzi.",
     action: "Controlla endpoint, modello e credenziale nelle Impostazioni prima di riprendere.", retryMayHelp: false,
   };
+  if (/troppo lungo per la redazione/i.test(message)) return {
+    meaning: "Un testo che i revisori devono ricevere per intero (brief, vincoli dell'autore, fonti o prosa) supera il limite del loro prompt. Non viene tagliato e la memoria narrativa non c'entra.",
+    action: "Accorcia il testo indicato nel messaggio (brief e vincoli nelle impostazioni del libro, fonti nel dossier, oppure dividi il capitolo), poi riprendi.", retryMayHelp: false,
+  };
+  if (/compattata \d+ volte di seguito/i.test(message)) return {
+    meaning: "La memoria narrativa è stata compattata più volte, ma il passo successivo la trova ancora troppo ampia: un'altra compattazione automatica la consumerebbe senza risolvere.",
+    action: "Apri Mondo → Memoria e accorcia o elimina le voci più lunghe o ripetute, oppure usa un modello più capace per la compattazione, poi riprendi.", retryMayHelp: false,
+  };
+  if (/mentre ragionava|dopo il ragionamento senza scrivere/i.test(message)) return {
+    meaning: "Il modello ha usato il limite di output o di contesto per ragionare e non ha scritto la risposta. Nessun testo è stato applicato; i token usati restano contabilizzati.",
+    action: "Abbassa il thinking per questo compito, alza i token di output del modello nelle Impostazioni o il contesto caricato in LM Studio, poi riprendi.", retryMayHelp: false,
+  };
   if (/budget|contesto|troppo (grande|lungo)|quota|memoria.*limite/i.test(message)) return {
     meaning: "Un limite di spesa, contesto o spazio impedisce di proseguire in sicurezza.",
     action: "Controlla il limite indicato prima di riprendere: i tentativi automatici non lo rimuovono.", retryMayHelp: false,

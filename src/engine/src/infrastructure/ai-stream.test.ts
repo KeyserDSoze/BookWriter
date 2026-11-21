@@ -55,14 +55,28 @@ describe("SSE Chat Completions e controllo reasoning",()=>{
     await expect(callModel("prose","S","P",settings,book,new AbortController().signal))
       .resolves.toMatchObject({text:"Testo completo"});
   });
-  it("spiega il caso reasoning senza testo finale per esaurimento del contesto",async()=>{
+  it("spiega il caso reasoning senza testo finale per esaurimento del contesto, conservando l'usage",async()=>{
+    const {settings,book}=fixture();
     const onlyReasoning=[
       'data: {"choices":[{"index":0,"delta":{"reasoning_content":"penso..."}}]}\n\n',
-      'data: {"choices":[{"index":0,"delta":{},"finish_reason":"length"}]}\n\n',
+      'data: {"choices":[{"index":0,"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":40,"completion_tokens":4096}}\n\n',
       'data: [DONE]\n\n',
     ];
-    await expect(readChatCompletionStream(sse(onlyReasoning),new AbortController().signal))
-      .rejects.toThrow(/esaurito il limite di lunghezza o di contesto/);
+    const stream=await readChatCompletionStream(sse(onlyReasoning),new AbortController().signal);
+    expect(stream).toMatchObject({choices:[{message:{content:""},finish_reason:"length"}],reasoningCharacters:8});
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(sse(onlyReasoning)));
+    const cut=await callModel("prose","S","P",settings,book,new AbortController().signal)
+      .catch((e:unknown)=>e) as {name:string;message:string;inputTokens?:number;outputTokens?:number};
+    expect(cut.name).toBe("TruncatedProviderContentError");
+    expect(cut.message).toMatch(/mentre ragionava, prima di scrivere la risposta/);
+    expect([cut.inputTokens,cut.outputTokens]).toEqual([40,4096]);
+    const stopped=onlyReasoning.map(event=>event.replace('"finish_reason":"length"','"finish_reason":"stop"'));
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(sse(stopped)));
+    const empty=await callModel("prose","S","P",settings,book,new AbortController().signal)
+      .catch((e:unknown)=>e) as {name:string;message:string;outputTokens?:number};
+    expect(empty.name).toBe("EmptyProviderContentError");
+    expect(empty.message).toMatch(/dopo il ragionamento senza scrivere la risposta/);
+    expect(empty.outputTokens).toBe(4096);
   });
   it("assembla eventi suddivisi su chunk e espone deltas provider soltanto se presenti",async()=>{
     const deltas:Array<{kind:string;text:string}>=[];
@@ -110,7 +124,6 @@ describe("SSE Chat Completions e controllo reasoning",()=>{
       ['data: {"error":{"message":"Secret"}}\n\n','data: [DONE]\n\n'],
       ['data: {json invalido}\n\n','data: [DONE]\n\n'],
       ['data: {"choices":[{"delta":{"content":{"bad":1}}}]}\n\n','data: [DONE]\n\n'],
-      ['data: [DONE]\n\n'],
     ]) {
       await expect(readChatCompletionStream(sse(events),new AbortController().signal))
         .rejects.toThrow(/Stream AI|Il provider ha terminato/);
@@ -119,6 +132,11 @@ describe("SSE Chat Completions e controllo reasoning",()=>{
       headers:{"content-type":"text/event-stream"}});
     await expect(readChatCompletionStream(big,new AbortController().signal))
       .rejects.toThrow(/Stream AI|Il provider ha terminato/);
+    // A complete stream without text is rejected by callModel, which keeps any usage.
+    const {settings,book}=fixture();
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(sse(['data: [DONE]\n\n'])));
+    await expect(callModel("prose","S","P",settings,book,new AbortController().signal))
+      .rejects.toMatchObject({name:"EmptyProviderContentError"});
   });
   it("un ragionamento lungo (molti byte di buste SSE, poco testo) non supera il limite della risposta",async()=>{
     const envelope=(delta:string)=>'data: {"id":"chatcmpl-0123456789abcdef","object":"chat.completion.chunk","created":1763250000,"model":"muse-glimmer-30b","system_fingerprint":"fp_0123456789","choices":[{"index":0,"delta":{"reasoning_content":"'+delta+'"},"finish_reason":null}]}\n\n';

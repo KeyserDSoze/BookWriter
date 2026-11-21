@@ -4,7 +4,7 @@ import { effectiveReasoningEffort } from "../domain/task-reasoning";
 import { decryptLocal } from "../core/store";
 import { cachedTokensFromUsage, validTokenCount } from "../domain/ai-usage";
 import { assertChatModelCapability } from "../domain/model-capabilities";
-import { EmptyProviderContentError, MalformedProviderContentError, TruncatedProviderContentError } from "./ai-provider-error";
+import { EmptyProviderContentError, EmptyToolCallError, MalformedProviderContentError, TruncatedProviderContentError } from "./ai-provider-error";
 import { readChatCompletionJson } from "./ai-completion-response";
 import { chatReasoningEffort, endpointStreamMode, chatStreamTimeoutSeconds, readChatCompletionStream,
   type AiStreamDelta } from "./ai-stream";
@@ -12,9 +12,8 @@ import { lmStudioNativeProtocol, lmStudioNativeEndpoint, lmStudioNativeReasoning
   readLmStudioNativeStream, type LmStudioPhase, type AiTransportStats } from "./lmstudio-native";
 import { fetchChatCompletionHeaders, ProviderHeaderTimeoutError } from "./ai-header-timeout";
 import { localEndpointTimeoutHint } from "./local-endpoint-probe";
-import { SUBMIT_TOOL_NOTE, hasEmptyToolCall, hasRequiredFields, toolCallArguments, toolOutputAvailable, toolRequestFields,
-  type ToolSchema } from "../domain/structured-output";
-import { ProviderContentError } from "./ai-provider-error";
+import { SUBMIT_TOOL_NOTE, hasEmptyToolCall, hasRequiredFields, normalizeToolArguments, toolCallArguments, toolOutputAvailable,
+  toolRequestFields, type ToolSchema } from "../domain/structured-output";
 
 export type ModelAnswer = {
   text: string;
@@ -73,6 +72,20 @@ function responseTextContent(content: unknown): string | undefined {
     texts.push(candidate.text);
   }
   return texts.join("\n");
+}
+/** Whether a reply message holds any answer (text or the submit function's arguments). */
+function messageCarriesText(message: unknown): boolean {
+  if (!message || typeof message !== "object") return false;
+  if (responseTextContent((message as { content?: unknown }).content)?.trim()) return true;
+  return toolCallArguments(message) !== undefined;
+}
+/** Reasoning counted by the stream reader, or the reasoning field of a JSON reply; its text is never read. */
+function reasoningWasEmitted(payload: unknown, message: unknown): boolean {
+  const streamed = (payload as { reasoningCharacters?: unknown } | null)?.reasoningCharacters;
+  if (typeof streamed === "number" && streamed > 0) return true;
+  if (!message || typeof message !== "object") return false;
+  const { reasoning_content: content, reasoning } = message as { reasoning_content?: unknown; reasoning?: unknown };
+  return typeof content === "string" && content.trim() !== "" || typeof reasoning === "string" && reasoning.trim() !== "";
 }
 
 /** Select only explicitly supported Chat Completions output parameter.
@@ -214,30 +227,32 @@ export async function callModel(
   if (!Array.isArray(data.choices) || !data.choices.length) throw invalid();
   const first: unknown = data.choices[0];
   if (!first || typeof first !== "object" || Array.isArray(first)) throw invalid();
+  const message: unknown = (first as {message?: unknown}).message;
+  // Only whether the model reasoned, never its reasoning: an empty or cut reply then gets a precise cause.
+  const reasoned = reasoningWasEmitted(payload, message);
   // A reply cut by the length/context limit looks like valid prose: never accept it.
   if ((first as { finish_reason?: unknown }).finish_reason === "length")
-    throw new TruncatedProviderContentError(endpoint.id, assignment.modelId, data.usage);
-  const message: unknown = (first as {message?: unknown}).message;
+    throw new TruncatedProviderContentError(endpoint.id, assignment.modelId, data.usage,
+      reasoned && !messageCarriesText(message));
   if (!message || typeof message !== "object" || Array.isArray(message)) throw invalid();
   const content: unknown = (message as {content?: unknown}).content;
   // A structured reply carries the result as the arguments of the forced function call.
   const toolText = structured ? toolCallArguments(message) : undefined;
   if (toolText !== undefined) return {
-    text: toolText.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
+    text: normalizeToolArguments(toolText, toolSchema!).trim(), endpointId: endpoint.id, modelId: assignment.modelId,
     inputTokens: validTokenCount(data.usage?.prompt_tokens),
     outputTokens: validTokenCount(data.usage?.completion_tokens),
     cachedInputTokens: cachedTokensFromUsage(data.usage), delivery: "function",
   };
   if (structured && toolText === undefined && hasEmptyToolCall(message) &&
-      (typeof content !== "string" || !content.trim())) throw new ProviderContentError(
-    "Il modello ha chiamato la funzione di consegna con argomenti vuoti (\"{}\"): nessun risultato. Nessuna modifica applicata. Se si ripete, imposta «Output strutturato» su Disattivato per questo endpoint o togli il tag «tools» a questo modello.",
+      (typeof content !== "string" || !content.trim())) throw new EmptyToolCallError(
     endpoint.id, assignment.modelId, data.usage);
   if (content === null || content === undefined) throw new EmptyProviderContentError(
-    endpoint.id, assignment.modelId, data.usage);
+    endpoint.id, assignment.modelId, data.usage, reasoned);
   const text = responseTextContent(content);
   if (text === undefined) throw invalid();
   if (!text.trim()) throw new EmptyProviderContentError(
-    endpoint.id, assignment.modelId, data.usage);
+    endpoint.id, assignment.modelId, data.usage, reasoned);
   return {
     text: text.trim(), endpointId: endpoint.id, modelId: assignment.modelId,
     inputTokens: validTokenCount(data.usage?.prompt_tokens),

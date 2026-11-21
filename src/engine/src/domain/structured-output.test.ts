@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { REVIEW_REPORT_TOOL } from "./editorial-board";
-import { describeUnder, hasRequiredFields, toolParameters } from "./structured-output";
+import { describeUnder, hasRequiredFields, normalizeToolArguments, toolParameters, toolRequestFields } from "./structured-output";
 
 type Node = { type?: string; description?: string; required?: string[]; properties?: Record<string, Node>; items?: Node;
   enum?: string[]; const?: string; additionalProperties?: unknown };
@@ -37,6 +37,24 @@ describe("Parametri della funzione derivati dallo schema di validazione", () => 
     expect(hasRequiredFields(undefined)).toBe(false);
     expect(hasRequiredFields(toolParameters(z.object({ a: z.string().optional() })))).toBe(false);
     expect(hasRequiredFields(toolParameters(z.object({ a: z.string() })))).toBe(true);
+  });
+
+  it("forza l'unica funzione con «required», la forma che anche llama.cpp rispetta", () => {
+    const fields = toolRequestFields(toolParameters(z.object({ a: z.string() })));
+    expect(fields.tool_choice).toBe("required");
+    expect(fields.tools).toHaveLength(1);
+  });
+
+  it("toglie solo involucri sicuri dagli argomenti, il resto va alla validazione invariato", () => {
+    const schema = toolParameters(z.object({ verdict: z.string(), notes: z.string().optional() }));
+    expect(normalizeToolArguments('{"verdict":"freeze"}', schema)).toBe('{"verdict":"freeze"}');
+    expect(normalizeToolArguments('{ "verdict" : "freeze" }', schema)).toBe('{ "verdict" : "freeze" }');
+    expect(normalizeToolArguments('{"parameters":{"verdict":"repair","notes":"x"}}', schema)).toBe('{"verdict":"repair","notes":"x"}');
+    expect(normalizeToolArguments(JSON.stringify('{"verdict":"freeze"}'), schema)).toBe('{"verdict":"freeze"}');
+    expect(normalizeToolArguments('{"a":{"verdict":"x"},"b":1}', schema)).toBe('{"a":{"verdict":"x"},"b":1}');
+    expect(normalizeToolArguments('{"wrap":{"other":1}}', schema)).toBe('{"wrap":{"other":1}}');
+    expect(normalizeToolArguments("non json", schema)).toBe("non json");
+    expect(normalizeToolArguments('{"x":1}', { type: "object" })).toBe('{"x":1}');
   });
 
   it("i revisori hanno tutti la stessa funzione, con i campi del rapporto spiegati", () => {

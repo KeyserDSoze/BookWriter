@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyMemoryResponse, assertCompactionShrinks, DELTA_REPLY_RULE, DELTA_REPLY_RULE_NO_SUMMARY,
-  memoryNeedsCompaction } from "./memory-delta";
+import { applyMemoryResponse, applyTimelineCompaction, assertCompactionShrinks, compactionStage, DELTA_REPLY_RULE,
+  DELTA_REPLY_RULE_NO_SUMMARY, memoryNeedsCompaction, withoutRepeatedEvents } from "./memory-delta";
 import { newBook } from "./types";
 
 const base = () => {
@@ -63,5 +63,84 @@ describe("Aggiornamento della memoria a delta", () => {
     expect(DELTA_REPLY_RULE).toContain('"mode":"delta"');
     expect(DELTA_REPLY_RULE).toContain("sceneSummary");
     expect(DELTA_REPLY_RULE_NO_SUMMARY).not.toContain("sceneSummary");
+    expect(DELTA_REPLY_RULE_NO_SUMMARY).toContain('"timeline":[');
+    expect(DELTA_REPLY_RULE).toMatch(/SCHEDA DI STATO/);
+    // The format example can never be applied by mistake: it is not valid JSON.
+    const example = DELTA_REPLY_RULE.slice(DELTA_REPLY_RULE.indexOf("{"), DELTA_REPLY_RULE.lastIndexOf("}") + 1);
+    expect(() => JSON.parse(example)).toThrow();
+  });
+});
+
+describe("Cronologia senza copie e compattazione a stadi", () => {
+  it("non aggiunge di nuovo un evento già registrato, anche con punteggiatura o maiuscole diverse", () => {
+    const previous = base();
+    previous.timeline = ["Kaza non ruggisce, si sposta di lato a testa bassa"];
+    const result = applyMemoryResponse(previous, { mode: "delta", timelineAdd: [
+      "kaza non ruggisce si sposta di lato a testa bassa.", "Bomo posa la prima pietra sulla ghiaia",
+      "Bomo posa la prima pietra sulla ghiaia!", "Mara arriva", "Mara arriva"] });
+    expect(result.memory.timeline).toEqual(["Kaza non ruggisce, si sposta di lato a testa bassa",
+      "Bomo posa la prima pietra sulla ghiaia", "Mara arriva", "Mara arriva"]);
+  });
+  it("toglie gli eventi resi falsi indicati dal modello e poi aggiunge la nuova versione", () => {
+    const previous = base();
+    previous.timeline = ["Mara arriva", "Kaza zoppica per una ferita alla zampa", "Ivo chiude il porto"];
+    const result = applyMemoryResponse(previous, { mode: "delta",
+      remove: { timeline: ["kaza zoppica per una ferita alla zampa", "Evento inesistente"] },
+      timelineAdd: ["Kaza cammina sano e controlla il suono"] });
+    expect(result.memory.timeline).toEqual(["Mara arriva", "Ivo chiude il porto", "Kaza cammina sano e controlla il suono"]);
+  });
+  it("la compattazione locale toglie solo le copie identiche e tiene la prima", () => {
+    const memory = base();
+    memory.timeline = ["Bomo allinea le pietre sulla ghiaia", "Mara arriva", "Bomo allinea le pietre sulla ghiaia.",
+      "Mara arriva", "BOMO ALLINEA LE PIETRE SULLA GHIAIA"];
+    const local = withoutRepeatedEvents(memory);
+    expect(local.removed).toBe(2);
+    expect(local.memory.timeline).toEqual(["Bomo allinea le pietre sulla ghiaia", "Mara arriva", "Mara arriva"]);
+    expect(memory.timeline).toHaveLength(5);
+    expect(withoutRepeatedEvents(local.memory).removed).toBe(0);
+  });
+  it("sceglie prima la cronologia quando è troppo lunga, poi le schede", () => {
+    const memory = base();
+    expect(compactionStage(memory)).toBe("entries");
+    memory.timeline = Array.from({ length: 61 }, (_, i) => "Evento numero " + i + " della storia");
+    expect(compactionStage(memory)).toBe("timeline");
+  });
+  it("sceglie la cronologia anche con pochi eventi se sono loro a pesare più delle schede", () => {
+    const memory = base();
+    memory.timeline = Array.from({ length: 50 }, (_, i) => `Evento ${i}: ` + "Mara cerca il padre nel porto vecchio. ".repeat(9));
+    expect(compactionStage(memory)).toBe("timeline");
+    // Within the compacted size the entries are the problem again: no second timeline stage.
+    memory.timeline = memory.timeline.slice(0, 40);
+    expect(compactionStage(memory)).toBe("entries");
+    memory.timeline = Array.from({ length: 50 }, (_, i) => "Evento numero " + i);
+    memory.characters = Object.fromEntries(Array.from({ length: 30 }, (_, i) => ["P" + i, "x".repeat(800)]));
+    expect(compactionStage(memory)).toBe("entries");
+  });
+  it("accetta una cronologia compattata solo se è davvero più breve e senza numerazione", () => {
+    const memory = base();
+    memory.timeline = Array.from({ length: 90 }, (_, i) => "Evento numero " + i + " della lunga storia del porto");
+    const essential = Array.from({ length: 6 }, (_, i) => "Fase " + (i + 1) + " della ricerca del padre");
+    const compacted = applyTimelineCompaction(memory, { timeline: ["1. Mara arriva al porto e incontra Ivo", "2) Ivo chiude il porto", ...essential] });
+    expect(compacted.timeline).toEqual(["Mara arriva al porto e incontra Ivo", "Ivo chiude il porto", ...essential]);
+    expect(compacted.characters).toEqual(memory.characters);
+    expect(memory.timeline).toHaveLength(90);
+    expect(() => applyTimelineCompaction(memory, { timeline: ["Mara arriva al porto", "Ivo chiude il porto"] })).toThrow(/almeno 8/);
+    expect(() => applyTimelineCompaction(memory, { timeline: [] })).toThrow(/vuota/);
+    expect(() => applyTimelineCompaction(memory, { timeline: Array.from({ length: 61 }, (_, i) => "Evento " + i) }))
+      .toThrow(/al massimo 40/);
+    expect(() => applyTimelineCompaction(memory, { timeline: ["x".repeat(401)] })).toThrow(/400 caratteri/);
+    expect(() => applyTimelineCompaction(memory, { events: ["a"] })).toThrow(/timeline/);
+  });
+  it("una riduzione minore del 15% basta solo se risolve davvero il problema", () => {
+    const before = base();
+    before.characters = { ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => ["P" + i, "x".repeat(800)])),
+      Lungo: "y".repeat(1700) };
+    const after = structuredClone(before);
+    after.characters.Lungo = "y".repeat(800);
+    expect(() => assertCompactionShrinks(before, after)).not.toThrow();
+    const stillLong = structuredClone(before);
+    stillLong.characters.Lungo = "y".repeat(1500);
+    expect(() => assertCompactionShrinks(before, stillLong)).toThrow(/15%/);
+    expect(() => assertCompactionShrinks(before, structuredClone(before))).toThrow(/15%/);
   });
 });

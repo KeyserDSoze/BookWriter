@@ -205,6 +205,19 @@ function snapshotOf(entity: KnowledgeEntity): EntitySnapshot {
   return structuredClone({ name: entity.name, aliases: entity.aliases, importance: entity.importance, summary: entity.summary,
     attributes: entity.attributes, relationships: entity.relationships });
 }
+/** Aliases compared like names: the sheet's own name and case/spacing repeats are dropped, never an error. */
+function cleanAliases(name: string, aliases: readonly string[]): string[] {
+  const seen = new Set([fold(name)]);
+  return aliases.map(alias => alias.trim()).filter(alias => {
+    const key = fold(alias);
+    if (!alias || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
+/** Event titles match regardless of case, accents, punctuation and spacing («La fuga.» = «la fuga»). */
+const titleKey = (value: string) => value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase("it")
+  .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 function pushHistory<T extends { version: number; history?: Array<{ version: number; at: string; reason: string; snapshot: S }> }, S>(
   item: T, snapshot: S, at: string, reason: string): void {
   item.history = [...(item.history ?? []), { version: item.version, at, reason: reason.slice(0, 300), snapshot }].slice(-LIMITS.history);
@@ -237,7 +250,7 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       .filter(([key, value]) => /^[a-z][a-z0-9_]{0,39}$/.test(key) && value.trim()).slice(0, LIMITS.attributes));
     if (existing) {
       const before = snapshotOf(existing);
-      const next = { ...existing, aliases: [...new Set([...existing.aliases, ...(item.aliases ?? [])])].slice(0, 8),
+      const next = { ...existing, aliases: cleanAliases(existing.name, [...existing.aliases, ...(item.aliases ?? [])]),
         importance: item.importance ?? existing.importance, summary: item.summary?.trim() || existing.summary,
         attributes: { ...existing.attributes, ...cleanAttributes } };
       const changed = JSON.stringify(snapshotOf(next as KnowledgeEntity)) !== JSON.stringify(before);
@@ -247,9 +260,9 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       }
       touched.push({ entity: existing, reply: item, before, versioned: changed });
     } else {
-      if (kb.entities.length >= LIMITS.entities) throw new Error("Knowledge base piena: massimo " + LIMITS.entities + " schede.");
+      if (kb.entities.length >= LIMITS.entities) throw new Error("Knowledge base piena: massimo " + LIMITS.entities + " schede. Elimina le schede superate nella pagina Mondo, poi riprendi.");
       const entity: KnowledgeEntity = { id: uniqueId(item.type, item.name, taken), type: item.type, name: item.name.trim(),
-        aliases: [...new Set(item.aliases ?? [])].filter(a => fold(a) !== fold(item.name)).slice(0, 8),
+        aliases: cleanAliases(item.name, item.aliases ?? []),
         importance: item.importance ?? "secondary", summary: item.summary?.trim() ?? "", attributes: cleanAttributes,
         relationships: [], version: 1, status: "draft", origin: options.origin, updatedAt: options.now };
       kb.entities.push(entity);
@@ -257,6 +270,12 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
     }
   }
   for (const { entity, reply: item, before, versioned } of touched) {
+    // A name already used by another sheet of the same type would make every later lookup ambiguous: say which.
+    for (const alias of entity.aliases) {
+      const other = kb.entities.find(e => e.id !== entity.id && e.type === entity.type &&
+        [e.name, ...e.aliases].some(n => fold(n) === fold(alias)));
+      if (other) throw new Error("L'alias «" + alias + "» di «" + entity.name + "» è già il nome o un alias di «" + other.name + "»: togli l'alias o usa la scheda esistente.");
+    }
     const previousRelations = JSON.stringify(entity.relationships);
     for (const relation of item.relationships ?? []) {
       const target = findEntity(kb, undefined, relation.target);
@@ -273,7 +292,7 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       entity.updatedAt = options.now;
     }
   }
-  const findEvent = (label: string) => kb.events.find(e => e.id === label || fold(e.title) === fold(label));
+  const findEvent = (label: string) => kb.events.find(e => e.id === label || titleKey(e.title) === titleKey(label));
   const resolveEntity = (label: string) => {
     const found = findEntity(kb, undefined, label);
     if (!found) throw new Error("L'evento cita «" + label + "», che non è una scheda: aggiungila o usa un nome esistente.");
@@ -321,7 +340,7 @@ export function mergeKnowledgeReply(previous: KnowledgeBase, raw: unknown, optio
       }
       pendingCauses.push({ event: existing, causes: item.causes ?? [], before, versioned: changed });
     } else {
-      if (kb.events.length >= LIMITS.events) throw new Error("Knowledge base piena: massimo " + LIMITS.events + " eventi.");
+      if (kb.events.length >= LIMITS.events) throw new Error("Knowledge base piena: massimo " + LIMITS.events + " eventi. Elimina o unisci gli eventi superati nella pagina Mondo, poi riprendi.");
       const event: KnowledgeEvent = { id: uniqueId("event", item.title, taken), title: item.title.trim(), summary: "",
         storyOrder: item.storyOrder ?? ++order, narration: "scene", involves: [], causes: [], sceneIds,
         secret: false, perspectives: [], timelineIds: [], version: 1, origin: options.origin, updatedAt: options.now, ...fields };
@@ -373,6 +392,39 @@ export function syncKnowledgeWithMemory(kb: KnowledgeBase, memory: MemoryCards, 
   return next;
 }
 
+/** Names and aliases, per type, that a reply defines as sheets (compared like sheet names). */
+function replySheetNames(raw: unknown): Map<EntityType, Set<string>> {
+  const out = new Map<EntityType, Set<string>>();
+  const entities = (raw as { entities?: unknown } | null)?.entities;
+  if (!Array.isArray(entities)) return out;
+  for (const item of entities) {
+    if (!item || typeof item !== "object") continue;
+    const { type, name, aliases } = item as { type?: unknown; name?: unknown; aliases?: unknown };
+    if (typeof type !== "string" || !(ENTITY_TYPES as readonly string[]).includes(type)) continue;
+    const names = out.get(type as EntityType) ?? new Set<string>();
+    for (const label of [name, ...(Array.isArray(aliases) ? aliases : [])])
+      if (typeof label === "string" && label.trim()) names.add(fold(label));
+    out.set(type as EntityType, names);
+  }
+  return out;
+}
+
+/** A reply's sheets merged together with the memory. Memory entries get their sheet first, so the reply's
+ * events can cite a name its own memory delta introduced; an entry the reply itself defines as a sheet name or
+ * alias («Mara» for «Mara Venturi») waits for the merge, and the sync after it links the two instead of creating
+ * a second sheet whose name would collide with that alias. Without a reply it is the plain sync. */
+export function mergeKnowledgeWithMemory(kb: KnowledgeBase, memory: MemoryCards, raw: unknown,
+  options: Parameters<typeof mergeKnowledgeReply>[2] & { previousMemory?: MemoryCards }): KnowledgeBase {
+  const { previousMemory, ...mergeOptions } = options;
+  if (raw === undefined) return syncKnowledgeWithMemory(kb, memory, options.now, previousMemory);
+  const defined = replySheetNames(raw);
+  const early = Object.fromEntries(ENTITY_TYPES.map(type => [MEMORY_FOLDER[type],
+    Object.fromEntries(Object.entries(memory[MEMORY_FOLDER[type]] ?? {})
+      .filter(([key]) => !defined.get(type)?.has(fold(key))))])) as MemoryCards;
+  const merged = mergeKnowledgeReply(syncKnowledgeWithMemory(kb, early, options.now, previousMemory), raw, mergeOptions);
+  return syncKnowledgeWithMemory(merged, memory, options.now, previousMemory);
+}
+
 /** Compact, private prompt text for writers and specialists — never blind readers. */
 export function describeEntities(entities: readonly KnowledgeEntity[], all: KnowledgeBase, limit = 6000): string {
   const label = (id: string) => all.entities.find(e => e.id === id)?.name ?? id;
@@ -404,6 +456,6 @@ export const KNOWLEDGE_REPLY_SHAPE =
   '{"entities":[{"type":"character|location|item|faction","name":"...","aliases":[],"importance":"main|secondary|minor","summary":"funzione nella storia in 1-2 frasi",' +
   '"attributes":{"role":"...","personality":"...","speech":"...","background":"..."},"relationships":[{"target":"nome di un\'altra scheda","type":"alleato|nemico|famiglia|...","note":"..."}]}],' +
   '"events":[{"title":"...","summary":"cosa accade","storyOrder":10,"when":"momento nella storia","narration":"scene|flashback|foreshadowing|offscreen|backstory",' +
-  '"involves":["nomi delle schede"],"causes":["titolo di un evento precedente da cui dipende"],"chapter":1,"sceneIds":["scene:001:001"],"secret":false,' +
+  '"involves":["nomi delle schede"],"causes":["titolo di un evento precedente da cui dipende"],"chapter":1,"sceneIds":["ID esatto di una scena del piano"],"secret":false,' +
   '"perspectives":[{"who":"nome","stance":"knows|unaware|believes_false|conceals","note":"..."}],"timelines":["titolo della timeline"]}],' +
   '"timelines":[{"title":"...","kind":"global|arc|event","summary":"...","subjects":["nomi delle schede che la timeline segue, per un arco"]}]}';

@@ -430,10 +430,12 @@ export function buildEditorialRecommendationDisagreements(
   };
 }
 
+/** A decision's correction is at most this long; a reviewer's proposal can be longer (1800). */
+const DECISION_REMEDIATION_MAX = 1600;
 const decisionShape = {
   findingId: z.string().min(1), action: z.enum(["accept","reject"]),
   rationale: z.string().min(16).max(1600),
-  remediation: z.string().max(1600).default(""),
+  remediation: z.string().max(DECISION_REMEDIATION_MAX).default(""),
   narrativeReview: narrativeReviewSchema.optional(),
   knowledgeReview: knowledgeReviewSchema.optional(),
   informationTransferReview: informationTransferReviewSchema.optional(),
@@ -483,7 +485,7 @@ const JUDGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "decisions.findingId": "ID esatto del rilievo.",
   "decisions.action": "accept se la correzione va applicata, reject se il rilievo non regge.",
   "decisions.rationale": "Motivazione della decisione (16-1600 caratteri).",
-  "decisions.remediation": "Con accept: la correzione da applicare; con reject: stringa vuota.",
+  "decisions.remediation": `Con accept: la correzione da applicare (al massimo ${DECISION_REMEDIATION_MAX} caratteri); con reject: stringa vuota.`,
   "decisions.narrativeReview": "Obbligatorio per i rilievi con narrativeConflict o priorSceneConflict.",
   "decisions.knowledgeReview": "Obbligatorio per i conflitti di conoscenza (dimension knowledge).",
   "decisions.informationTransferReview": "Obbligatorio per i conflitti di conoscenza quando ti sono mostrate piste di trasmissione: una valutazione per ogni candidateId.",
@@ -504,7 +506,8 @@ export function judgeToolSchema(book: BookProject, cycle: ChapterEditorialCycle)
   const groups = chapter ? buildEditorialRecommendationDisagreements(cycle, chapter).groups.length : 0;
   const decision = z.object({
     findingId: ids.length ? z.enum(ids as [string, ...string[]]) : decisionShape.findingId,
-    action: decisionShape.action, rationale: decisionShape.rationale, remediation: decisionShape.remediation,
+    // Required in the function (empty string for a reject): a constrained call drops fields with a default.
+    action: decisionShape.action, rationale: decisionShape.rationale, remediation: z.string(),
     ...(witnessed ? { narrativeReview: decisionShape.narrativeReview } : {}),
     ...(knowledge ? { knowledgeReview: decisionShape.knowledgeReview, informationTransferReview: decisionShape.informationTransferReview } : {}),
     ...(historical ? { conflictReview: decisionShape.conflictReview } : {}),
@@ -558,9 +561,20 @@ export interface ChapterEditorialCycle {
 function parseJson(raw: string): unknown {
   return parseJsonReply(raw);
 }
-function bound(text: string, limit: number, label: string): string {
-  if (text.length > limit)
-    throw new Error(label + " troppo lungo: serve compattare la memoria; non è consentito troncare il canon.");
+/** A prompt block over its limit. Only canon memory can be compacted by the runner: any other block
+ * (brief, constraints, sources, prose) must be shortened at its source, never by compacting memory. */
+export class PromptBlockTooLarge extends Error {
+  readonly memoryDerived: boolean;
+  constructor(label: string, length: number, limit: number, memoryDerived: boolean, message?: string) {
+    super(message ?? (memoryDerived
+      ? `${label} troppo lungo (${length} caratteri, massimo ${limit}): serve compattare la memoria; non è consentito troncare il canon.`
+      : `${label} troppo lungo per la redazione (${length} caratteri, massimo ${limit}): non viene troncato. Accorcialo all'origine (brief, vincoli, fonti o capitolo), poi riprendi.`));
+    this.name = "PromptBlockTooLarge";
+    this.memoryDerived = memoryDerived;
+  }
+}
+function bound(text: string, limit: number, label: string, memoryDerived = false): string {
+  if (text.length > limit) throw new PromptBlockTooLarge(label, text.length, limit, memoryDerived);
   return text;
 }
 export interface ChapterSegment { sceneId: string; sceneTitle: string; text: string; index: number }
@@ -620,13 +634,19 @@ export function chapterSegments(chapter: Chapter): ChapterSegment[] {
   }
   return segments;
 }
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Whole-word, case-insensitive mention: «Eva» is not in «aveva», «Ugo» not in «sugo». */
+function mentions(text: string, name: string): boolean {
+  return new RegExp("(?<![\\p{L}\\p{N}_])" + escapeRegExp(name.trim()) + "(?![\\p{L}\\p{N}_])", "iu").test(text);
+}
 function relevant(entries: Record<string,string>, text: string, scene: Scene): Record<string,string> {
   const refs = new Set([...(scene.characters ?? []), ...(scene.locations ?? []),
     ...(scene.factions ?? []), ...(scene.items ?? []), ...(scene.secret_refs ?? [])]);
   const found = Object.entries(entries).filter(([name]) =>
-    refs.has(name) || (name.length > 2 && text.toLocaleLowerCase("it").includes(name.toLocaleLowerCase("it"))));
-  if (found.length > 18) throw new Error("Memoria pertinente troppo ampia: compattala prima della review.");
-  return Object.fromEntries(found.map(([k,v]) => [k,bound(v,1600,k)]));
+    refs.has(name) || (name.trim().length > 2 && mentions(text, name)));
+  if (found.length > 18) throw new PromptBlockTooLarge("Memoria pertinente", found.length, 18, true,
+    "Memoria pertinente troppo ampia: compattala prima della review.");
+  return Object.fromEntries(found.map(([k,v]) => [k,bound(v,1600,k,true)]));
 }
 /** Private structured sheets for specialists and the judge (never blind readers or the writer review).
  * Perspectives separate narrative truth from what characters know: intentional
@@ -849,8 +869,14 @@ export function reviewerPrompt(book: BookProject, cycle: ChapterEditorialCycle,
   // With parallel reviewers a slot cannot depend on the notes of a report still in flight.
   const sameCycleNotes = reviewConcurrency(book) > 1 ? [] :
     cycle.reports.filter(x => x.role === role).map(x => x.memoryNote).filter(Boolean);
-  const personalNotes = [...historicalNotes, ...sameCycleNotes]
-    .slice(-6).join("\n");
+  // The reviewer's own scratch notes (never canon): the most recent ones that fit the block, older ones dropped.
+  const recentNotes: string[] = [];
+  for (const note of [...historicalNotes, ...sameCycleNotes].slice(-6).reverse()) {
+    if (!note) continue;
+    if ([note, ...recentNotes].join("\n").length > 5000) break;
+    recentNotes.unshift(note);
+  }
+  const personalNotes = recentNotes.join("\n");
   // A reader is truly blind to private secrets, character dossiers and future plot plans.
   const compactedPrevious = previous.length > 12000 ?
     (book.bookSummary ? "(Sinossi dei capitoli precedenti compattate nel riassunto del libro.)" :
@@ -996,7 +1022,7 @@ export function reviewerPrompt(book: BookProject, cycle: ChapterEditorialCycle,
         bound(JSON.stringify(continuityPack),14000,"Evidenze di continuità") +
         "</estratti_precedenti_non_istruzioni>" : "",
       reader ? "Lettura in cieco: NON hai i segreti, il canon privato o i piani futuri." :
-        "Canone privato pertinente: " + bound(canon, 24000, "Canon") +
+        "Canone privato pertinente: " + bound(canon, 24000, "Canon", true) +
         "\nVincoli autore: " + bound((book.authorConstraints ?? []).join("\n"),9000,"Vincoli") +
         knowledgeBlock(book, chapter, segment.text, scene.id),
       role === "historical" ?
@@ -1424,7 +1450,7 @@ export function adjudicationPrompt(book: BookProject, cycle: ChapterEditorialCyc
       "Estratti ORIGINALI delle scene per verificare ogni citazione: " +
         bound(sourceEvidence,130000,"Testi di verifica editoriale"),
       "Canone privato per valutare spoiler, timeline, identita e motivazioni: " +
-        bound(privateCanon,30000,"Canone per il giudice"),
+        bound(privateCanon,30000,"Canone per il giudice",true),
       knowledgeBlock(book, chapter, reviewedContexts || chapter.scenes.map(s => s.title + " " + s.objective).join("\n")),
       "WIKISOURCE (frammenti letterali con SHA-256 del wikitesto della revisione richiesta, non autenticazione storico-editoriale; diritti originali da verificare): " +
         bound(JSON.stringify(activeWikisourceExcerpts(chapter.historicalDossier)),14000,"Wikisource per il giudice") +
@@ -1469,6 +1495,15 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
   if (chapter) assertCurrentHistoricalReviewSources(chapter, cycle);
   const parsed = judgmentSchema.parse(parseJson(raw));
   const findingsById = new Map(allFindings(cycle).map(x => [x.id, x]));
+  // An accept with an EMPTY correction adopts the reviewer's concrete proposal for that finding
+  // (always at least 8 characters): function calls often omit or blank a field they believe optional.
+  // A proposal longer than a decision may hold is never adopted (nor cut): the saved judgment would fail
+  // its own schema at the next step. A correction the director did write but too short stays an error.
+  for (const decision of parsed.decisions) {
+    if (decision.action !== "accept" || decision.remediation.trim()) continue;
+    const proposal = findingsById.get(decision.findingId)?.remediation;
+    if (proposal && proposal.trim().length >= 8 && proposal.length <= DECISION_REMEDIATION_MAX) decision.remediation = proposal;
+  }
   const inScope = (id: string) => !scope || scope.findingIds.has(id);
   const fullDisagreements=chapter
     ?buildEditorialRecommendationDisagreements(cycle,chapter)
@@ -1546,7 +1581,7 @@ export function validateJudgment(cycle: ChapterEditorialCycle, raw: string,
     if (!expected.has(decision.findingId) || decided.has(decision.findingId))
       throw new Error("Giudizio duplicato o riferito a finding inesistente.");
     if (decision.action === "accept" && decision.remediation.trim().length < 8)
-      throw new Error("Correzione accettata senza remediation concreta.");
+      throw new Error(`Correzione accettata senza remediation concreta: scrivi la correzione da applicare (8-${DECISION_REMEDIATION_MAX} caratteri).`);
     // Runtime supplies the live chapter. Older reports remain readable and
     // rejectable, but cannot authorize a repair without an exact quote.
     if (decision.action === "accept" && chapter) {
@@ -1664,8 +1699,13 @@ export function judgeBatchesOf(cycle: ChapterEditorialCycle): JudgeBatchResult[]
       if (typeof id !== "string" || !known.has(id) || seen.has(id)) return [];
       seen.add(id);
     }
+    // A stored batch the merge could not parse would make every later batch fail: start over instead.
+    if (!parsesAsJudgment(item.raw)) return [];
   }
   return raw as JudgeBatchResult[];
+}
+function parsesAsJudgment(raw: string): boolean {
+  try { return judgmentSchema.safeParse(JSON.parse(raw)).success; } catch { return false; }
 }
 
 interface JudgmentAtom { ids: string[]; knowledge: boolean }
@@ -1869,8 +1909,11 @@ export function assertSavedEditorialFreezeJudgmentIntegrity(
       cursor >= segments.length)
     throw new Error("Checkpoint di congelamento: cursore delle sinossi mancante o fuori intervallo.");
   if (cursor > 0) {
+    // The book synopsis is written only with the chapter's last segment; a checkpoint saved by an
+    // older version may still carry an intermediate one, which must then be valid too.
     if (!isValidEditorialSummary(cycle.runningChapterSummary, EDITORIAL_CHAPTER_SUMMARY_MAX_CHARS) ||
-        !isValidEditorialSummary(cycle.runningBookSummary, EDITORIAL_BOOK_SUMMARY_MAX_CHARS))
+        (cycle.runningBookSummary !== undefined &&
+          !isValidEditorialSummary(cycle.runningBookSummary, EDITORIAL_BOOK_SUMMARY_MAX_CHARS)))
       throw new Error("Checkpoint di congelamento: sinossi progressive mancanti o non valide.");
   }
   // Do not reimplement a weaker 1:1 check: validateJudgment already checks
